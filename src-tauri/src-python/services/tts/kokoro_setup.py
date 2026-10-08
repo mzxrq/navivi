@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from services import runtime_paths, tuning
+from services import runtime_paths, system_runtime, tuning
 from services.logger.logger import setup_logger
 from services.tts.ttsengine import KokoroTTSClient
 
@@ -44,6 +44,9 @@ def _imports_work(python: Path) -> bool:
 
 
 def install_kokoro() -> Dict[str, Any]:
+    needed = system_runtime.missing_runtime_message("The fast voice")
+    if needed:
+        return {"success": False, "error": needed}
     directory, python = KokoroTTSClient._SERVER_DIR, KokoroTTSClient._SERVER_VENV_PYTHON
     directory.mkdir(parents=True, exist_ok=True)
     try:
@@ -56,7 +59,7 @@ def install_kokoro() -> Dict[str, Any]:
             _run([uv, "pip", "install", "--python", str(python), "--index-url", TORCH_INDEX, "torch", "numpy<2"], "installing torch (CPU)")
             _run([uv, "pip", "install", "--python", str(python), *PACKAGES], "installing Kokoro and the Japanese text tools")
             if not _imports_work(python):
-                raise RuntimeError("The packages installed, but Kokoro could not be imported. See the log above.")
+                raise RuntimeError(system_runtime.import_failure(python, "import torch, kokoro, pyopenjtalk, soundfile", "Kokoro"))
         files = MODEL_FILES + [f"voices/{name}.pt" for name in tuning.KOKORO_VOICES]
         _run(
             [str(python), "-c",

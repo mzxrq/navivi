@@ -25,6 +25,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { ProjectSettingsModal } from "./ProjectSettingsModal";
 import { AssistantChat } from "../../features/assistant/AssistantChat";
+import { useAiReady } from "../../hooks/useAiReady";
 import { duplicateProject, listRecents, removeRecent, renameRecent } from "../../services/projectStore";
 import { runStage } from "../../services/sidecar";
 import { MenuEntry, openContextMenu, separator } from "../ui/menuItems";
@@ -35,6 +36,7 @@ type ModalActionType = "rename" | "duplicate" | "remove" | "settings" | null;
 const VIEW_MODE_KEY = "navivi_project_view";
 
 export function ProjectManager() {
+  const aiReady = useAiReady();
   const { setCurrentView, showToast } = useUI();
   const {
     loadProject,
@@ -364,9 +366,11 @@ export function ProjectManager() {
               </div>
             </header>
 
-            <section className="my-10 mx-auto max-w-3xl">
-              <AssistantChat variant="hero" />
-            </section>
+            {aiReady && (
+              <section className="my-10 mx-auto max-w-3xl">
+                <AssistantChat variant="hero" />
+              </section>
+            )}
 
             <section className="mb-8">
               <button

@@ -29,6 +29,7 @@ import {
   Check,
   CheckCircle2,
   Film,
+  SlidersHorizontal,
   Key,
   MapPin,
   Download,
@@ -60,13 +61,16 @@ import { OnlineProviderSettings, ProviderPicker } from "./OnlineAiSettings";
 import { ComponentsChecklist } from "./ComponentsChecklist";
 import { AboutPanel } from "./AboutPanel";
 import { CaptionPreview } from "./CaptionPreview";
-import { inputClass, Row, secondaryButton, Section, selectClass } from "./SettingsParts";
+import { inputClass, Row, secondaryButton, Section } from "./SettingsParts";
+import { Select } from "./Select";
+import { OpenProjectSettings } from "../view/ProjectSettingsModal";
 import { isOnlineProvider, type OnlineProvider } from "../../services/ai/providers";
 
 type SettingsTab =
   | "general"
   | "appearance"
   | "api"
+  | "project"
   | "video"
   | "ai"
   | "voice"
@@ -141,7 +145,7 @@ export function AppSettings() {
   useEffect(() => {
     if (activeTab === "ai" && !settings.ai_features_enabled)
       setActiveTab("general");
-    if (!inEditor && (activeTab === "video" || activeTab === "voice"))
+    if (!inEditor && (activeTab === "project" || activeTab === "video" || activeTab === "voice"))
       setActiveTab("general");
   }, [activeTab, settings.ai_features_enabled, inEditor]);
 
@@ -194,6 +198,7 @@ export function AppSettings() {
     { id: "api", icon: Key, label: t`API keys` },
     ...(inEditor
       ? [
+          { id: "project" as const, icon: SlidersHorizontal, label: t`Project` },
           { id: "video" as const, icon: Film, label: t`Video` },
           { id: "voice" as const, icon: Volume2, label: t`Voice` },
         ]
@@ -229,9 +234,9 @@ export function AppSettings() {
         role="dialog"
         aria-modal="true"
         aria-label={t`Settings`}
-        className={`flex w-184 max-w-full h-144 max-h-full rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-2xl ${isAnimatingOut ? "animate-out zoom-out-95 duration-150" : "animate-in zoom-in-95 duration-150"}`}
+        className={`flex w-[clamp(46rem,78vw,72rem)] max-w-full h-[clamp(34rem,82vh,52rem)] max-h-full rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 shadow-2xl ${isAnimatingOut ? "animate-out zoom-out-95 duration-150" : "animate-in zoom-in-95 duration-150"}`}
       >
-        <nav className="w-48 max-[700px]:w-40 shrink-0 flex flex-col p-2 bg-zinc-50 dark:bg-black/20 border-r border-zinc-200/80 dark:border-white/5">
+        <nav className="w-48 min-[1100px]:w-52 max-[700px]:w-40 shrink-0 flex flex-col p-2 bg-zinc-50 dark:bg-black/20 border-r border-zinc-200/80 dark:border-white/5">
           <h2 className="px-2.5 pt-2 pb-3 text-[13px] font-semibold text-zinc-900 dark:text-zinc-100">
             <Trans>Settings</Trans>
           </h2>
@@ -282,8 +287,9 @@ export function AppSettings() {
 
           <div
             key={activeTab}
-            className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-6 animate-in fade-in duration-150"
+            className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 animate-in fade-in duration-150"
           >
+            <div className="space-y-6">
             {activeTab === "general" && (
               <>
                 <Section title={t`Application`}>
@@ -291,38 +297,37 @@ export function AppSettings() {
                     title={t`Language`}
                     description={t`Choose your preferred language for the application`}
                   >
-                    <select
+                    <Select
+                      label={t`Language`}
                       value={i18n.locale}
-                      onChange={(e) => {
-                        const newLocale = e.target.value;
+                      onChange={(newLocale) => {
                         localStorage.setItem("navivi_locale", newLocale);
                         dynamicActivate(newLocale);
                       }}
-                      className={`${selectClass} w-40`}
-                    >
-                      <option value="en">English</option>
-                      <option value="ja">日本語</option>
-                    </select>
+                      options={[
+                        { value: "en", label: "English" },
+                        { value: "ja", label: "日本語" },
+                      ]}
+                      className="w-40"
+                    />
                   </Row>
                   <Row
                     title={t`Auto-save`}
                     description={t`Controls auto save of editors that have unsaved changes`}
                   >
-                    <select
-                      value={autoSaveInterval}
-                      onChange={(e) =>
-                        updateSettings({
-                          auto_save_interval: parseInt(e.target.value),
-                        })
-                      }
-                      className={`${selectClass} w-40`}
-                    >
-                      <option value={0}>{t`Off`}</option>
-                      <option value={3}>{t`3 seconds`}</option>
-                      <option value={30}>{t`30 seconds`}</option>
-                      <option value={60}>{t`1 minute`}</option>
-                      <option value={600}>{t`10 minutes`}</option>
-                    </select>
+                    <Select
+                      label={t`Auto-save`}
+                      value={String(autoSaveInterval)}
+                      onChange={(v) => updateSettings({ auto_save_interval: parseInt(v) })}
+                      options={[
+                        { value: "0", label: t`Off` },
+                        { value: "3", label: t`3 seconds` },
+                        { value: "30", label: t`30 seconds` },
+                        { value: "60", label: t`1 minute` },
+                        { value: "600", label: t`10 minutes` },
+                      ]}
+                      className="w-40"
+                    />
                   </Row>
                   <Row
                     title={t`AI features`}
@@ -560,6 +565,8 @@ export function AppSettings() {
               </Section>
             )}
 
+            {activeTab === "project" && <OpenProjectSettings />}
+
             {activeTab === "video" && (
               <>
                 <Section title={t`Output`}>
@@ -601,19 +608,17 @@ export function AppSettings() {
                     title={t`Hardware mode`}
                     description={t`Which pipeline to use when regenerating assets`}
                   >
-                    <select
+                    <Select
+                      label={t`Hardware mode`}
                       value={settings.hardware_spec_override || "auto"}
-                      onChange={(e) =>
-                        updateProject({
-                          hardware_spec_override: e.target.value as any,
-                        })
-                      }
-                      className={`${selectClass} w-56`}
-                    >
-                      <option value="auto">{t`Auto-Detect (Recommended)`}</option>
-                      <option value="low">{t`Low-spec Mode`}</option>
-                      <option value="high">{t`High-spec Mode`}</option>
-                    </select>
+                      onChange={(v) => updateProject({ hardware_spec_override: v as any })}
+                      options={[
+                        { value: "auto", label: t`Auto-Detect (Recommended)` },
+                        { value: "low", label: t`Low-spec Mode` },
+                        { value: "high", label: t`High-spec Mode` },
+                      ]}
+                      className="w-56"
+                    />
                   </Row>
                 </Section>
 
@@ -699,6 +704,7 @@ export function AppSettings() {
             {activeTab === "ai" && settings.ai_features_enabled && (
               <AiModelsTab />
             )}
+            </div>
           </div>
         </div>
       </div>
@@ -1111,26 +1117,20 @@ function AiModelsTab() {
           title={t`Active model`}
           description={t`Select which model to use for narration synthesis, only downloaded models are shown`}
         >
-          <select
+          <Select
+            label={t`Active model`}
             value={activeModel}
-            onChange={(e) => {
-              updateSettings({ ai_model: e.target.value });
+            onChange={(model) => {
+              updateSettings({ ai_model: model });
               setIsDirty(true);
             }}
-            className={`${selectClass} w-52`}
-          >
-            {localModels.length === 0 ? (
-              <option value="" disabled>
-                {t`No models installed`}
-              </option>
-            ) : (
-              localModels.map((modelId) => (
-                <option key={modelId} value={modelId}>
-                  {modelId}
-                </option>
-              ))
-            )}
-          </select>
+            options={
+              localModels.length === 0
+                ? [{ value: "", label: t`No models installed` }]
+                : localModels.map((modelId) => ({ value: modelId, label: modelId }))
+            }
+            className="w-52"
+          />
         </Row>
         {fit?.tooBig && (
           <div className="px-4 py-3">

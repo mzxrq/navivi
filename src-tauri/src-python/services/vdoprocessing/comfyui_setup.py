@@ -20,7 +20,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
-from services import tuning
+from services import system_runtime, tuning
 from services.logger.logger import setup_logger
 from services.tts.irodori_setup import pick_backend
 from services.tts.kokoro_setup import _run, find_uv
@@ -180,6 +180,9 @@ def install_comfyui(fetch: Optional[Fetch] = None, download: Optional[Callable[[
     fetch = fetch or fetch_zip
     download = download or download_model
     try:
+        needed = system_runtime.missing_runtime_message("Moving attraction videos")
+        if needed:
+            raise RuntimeError(needed)
         check_requirements(directory, free_gb)
         if not source_present(directory):
             unpack_source(fetch(COMFYUI_ZIP), directory)

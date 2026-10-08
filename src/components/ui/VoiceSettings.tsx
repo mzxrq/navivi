@@ -55,6 +55,7 @@ const iconButton =
 export function VoiceTab() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
   const [voices, setVoices] = useState<Voice[] | null>(null);
+  const [voicesDir, setVoicesDir] = useState("");
   const [busy, setBusy] = useState<null | "list" | "add" | "delete" | "preview" | "install" | "cache">(null);
   const [cache, setCache] = useState<CacheInfo | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -82,7 +83,7 @@ export function VoiceTab() {
   const refresh = useCallback(async () => {
     setBusy("list");
     // One after the other: the app runs one Python call at a time and a new call kills the running one.
-    const res = await callSidecarShared<{ voices: Voice[] }>("tts_voices_list");
+    const res = await callSidecarShared<{ voices: Voice[]; voices_dir: string }>("tts_voices_list");
     const engines = res.success
       ? await callSidecarShared<{ kokoro: KokoroInfo; qwen3: { ready: boolean }; irodori: { ready: boolean } }>("tts_engines")
       : null;
@@ -96,6 +97,7 @@ export function VoiceTab() {
     }
     if (res.success) {
       setVoices(res.voices);
+      setVoicesDir(res.voices_dir);
       setMessage((m) => (m?.tone === "error" ? null : m));
     } else if (!res.cancelled) {
       setMessage({ tone: "error", text: res.error });
@@ -139,8 +141,18 @@ export function VoiceTab() {
     if (info.success) setCache({ files: info.files, bytes: info.bytes, max_bytes: info.max_bytes });
   };
 
+  const engineReady = engine === "kokoro" ? !!kokoro?.ready : engine === "qwen3" ? !!qwen3Ready : !!irodoriReady;
+
   const preview = async (id: string) => {
     audioRef.current?.pause();
+    const source = voices?.find((v) => v.id === id);
+    if (!engineReady && source?.filename && voicesDir) {
+      const audio = new Audio(convertFileSrc(`${voicesDir}/${source.filename}`));
+      audioRef.current = audio;
+      setMessage({ tone: "info", text: t`Playing the original recording. Set up this voice engine to hear it read your text.` });
+      audio.play().catch((e) => setMessage({ tone: "error", text: String(e) }));
+      return;
+    }
     setBusy("preview");
     setPreviewId(id);
     setMessage(null);

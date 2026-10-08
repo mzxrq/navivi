@@ -5,11 +5,15 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const sidecar = vi.hoisted(() => ({ callSidecar: vi.fn(), callSidecarShared: vi.fn() }));
-const ollama = vi.hoisted(() => ({ getLocalModels: vi.fn() }));
+const ollama = vi.hoisted(() => ({ getOllamaState: vi.fn() }));
+const setup = vi.hoisted(() => ({ installVcRuntime: vi.fn() }));
 const online = vi.hoisted(() => ({ hasApiKey: vi.fn() }));
 vi.mock("../../services/sidecar", () => sidecar);
 vi.mock("../../services/ollamaApi", () => ollama);
 vi.mock("../../services/ai/online", () => online);
+vi.mock("../../services/setup", () => setup);
+vi.mock("../../hooks/useWorkspace", () => ({ useWorkspace: () => ({ settings: { ai_features_enabled: true }, updateSettings: vi.fn(), setIsDirty: vi.fn() }) }));
+vi.mock("./OnlineAiSettings", () => ({ ProviderPicker: () => null, OnlineProviderSettings: () => null }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve()) }));
 
 import { ComponentsChecklist } from "./ComponentsChecklist";
@@ -23,7 +27,10 @@ const engines = (ready: Partial<Record<"irodori" | "qwen3" | "kokoro" | "comfyui
   qwen3: { ready: !!ready.qwen3 },
   kokoro: { ready: !!ready.kokoro },
   comfyui: { ready: !!ready.comfyui, nvidia },
+  vc_runtime: true,
 });
+
+const down = { running: false, models: [] as string[] };
 
 const show = () =>
   render(
@@ -33,7 +40,8 @@ const show = () =>
   );
 
 beforeEach(() => {
-  ollama.getLocalModels.mockResolvedValue([]);
+  ollama.getOllamaState.mockResolvedValue(down);
+  setup.installVcRuntime.mockResolvedValue(undefined);
   online.hasApiKey.mockResolvedValue(false);
   sidecar.callSidecarShared.mockResolvedValue(engines({}));
   sidecar.callSidecar.mockResolvedValue({ success: true });
@@ -81,17 +89,42 @@ describe("ComponentsChecklist", () => {
     await waitFor(() => expect(screen.getByText("uv is missing")).toBeTruthy());
   });
 
-  it("says Ollama is ready when it has models and a provider is ready when its key is saved", async () => {
-    ollama.getLocalModels.mockResolvedValue(["gemma"]);
-    online.hasApiKey.mockImplementation(async (provider: string) => provider === "anthropic");
+  it("says Ollama is ready when it has models", async () => {
+    ollama.getOllamaState.mockResolvedValue({ running: true, models: ["gemma"] });
     show();
-    await waitFor(() => expect(screen.getAllByText("Ready")).toHaveLength(2));
-    expect(screen.getByText(/Key saved for Anthropic/)).toBeTruthy();
+    await waitFor(() => expect(screen.getAllByText("Ready")).toHaveLength(1));
+    expect(screen.getByText(/Running, with 1 model/)).toBeTruthy();
   });
 
-  it("points to the Ollama download page when it is not found", async () => {
+  it("offers to install Ollama when it is not found, and asks before running the installer", async () => {
     show();
-    await waitFor(() => expect(screen.getByRole("button", { name: /Get Ollama/ })).toBeTruthy());
+    const install = await waitFor(() => screen.getByRole("button", { name: "Install now" }));
+    expect(screen.getByRole("button", { name: /Get Ollama/ })).toBeTruthy();
+    fireEvent.click(install);
+    expect(sidecar.callSidecar).not.toHaveBeenCalledWith("ollama_install", {});
+    expect(screen.getByText("irm https://ollama.com/install.ps1 | iex")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Install" }));
+    await waitFor(() => expect(sidecar.callSidecar).toHaveBeenCalledWith("ollama_install", {}));
+  });
+
+  it("notices Ollama appearing after the first look", async () => {
+    show();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Install now" })).toBeTruthy());
+    ollama.getOllamaState.mockResolvedValue({ running: true, models: ["gemma"] });
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(screen.getByText(/Running, with 1 model/)).toBeTruthy());
+  });
+
+  it("offers the Visual C++ runtime only when it is missing", async () => {
+    show();
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Set up" })).toHaveLength(3));
+    expect(screen.queryByText("Microsoft Visual C++ runtime")).toBeNull();
+    cleanup();
+    sidecar.callSidecarShared.mockResolvedValue({ ...engines({}), vc_runtime: false });
+    show();
+    await waitFor(() => expect(screen.getByText("Microsoft Visual C++ runtime")).toBeTruthy());
+    fireEvent.click(screen.getAllByRole("button", { name: "Install now" })[0]);
+    await waitFor(() => expect(setup.installVcRuntime).toHaveBeenCalled());
   });
 
   it("names the model behind each voice so it can be credited", async () => {
@@ -128,7 +161,7 @@ describe("ComponentsChecklist", () => {
     expect(screen.getByText(/Optional: a script writer/)).toBeTruthy();
     cleanup();
     sidecar.callSidecarShared.mockResolvedValue(engines({ kokoro: true, comfyui: true }, true));
-    ollama.getLocalModels.mockResolvedValue(["gemma4:26b"]);
+    ollama.getOllamaState.mockResolvedValue({ running: true, models: ["gemma4:26b"] });
     show();
     await waitFor(() => expect(screen.getByText("Everything you need is set up.")).toBeTruthy());
   });

@@ -16,7 +16,8 @@ import {
 } from "../../services/ai/providers";
 import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, RefreshCw, Trash2 } from "./icons";
 import { ComboBox } from "./ComboBox";
-import { inputClass, Row, secondaryButton, primaryButton, Section, selectClass } from "./SettingsParts";
+import { inputClass, Row, secondaryButton, primaryButton, Section } from "./SettingsParts";
+import { Select } from "./Select";
 import { Switch } from "./Switch";
 
 type Check = { state: "idle" } | { state: "working" } | { state: "ok" } | { state: "failed"; message: string };
@@ -34,21 +35,19 @@ export function ProviderPicker() {
         title={t`Provider`}
         description={t`Where scripts are written. A provider on the internet is usually faster than a local model and does not need a powerful PC.`}
       >
-        <select
+        <Select<AiProviderId>
+          label={t`Provider`}
           value={provider}
-          onChange={(e) => {
-            updateSettings({ ai_provider: e.target.value as AiProviderId });
+          onChange={(next) => {
+            updateSettings({ ai_provider: next });
             setIsDirty(true);
           }}
-          className={`${selectClass} w-64`}
-        >
-          <option value="ollama">{t`This PC (Ollama)`}</option>
-          {ONLINE_PROVIDERS.map((id) => (
-            <option key={id} value={id}>
-              {PROVIDERS[id].label}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: "ollama", label: t`This PC (Ollama)` },
+            ...ONLINE_PROVIDERS.map((id) => ({ value: id as AiProviderId, label: PROVIDERS[id].label })),
+          ]}
+          className="w-64"
+        />
       </Row>
     </Section>
   );

@@ -1,6 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { useAssistant } from "../../hooks/useAssistant";
+import { useAiReady } from "../../hooks/useAiReady";
 import { useUI } from "../../hooks/useUI";
 import { X } from "../../components/ui/icons";
 import { AssistantChat } from "./AssistantChat";
@@ -9,7 +10,8 @@ import { AssistantChat } from "./AssistantChat";
 export function AssistantPanel() {
   const { panelOpen, setPanelOpen } = useAssistant();
   const { currentView } = useUI();
-  if (currentView !== "editor" || !panelOpen) return null;
+  const aiReady = useAiReady();
+  if (currentView !== "editor" || !panelOpen || !aiReady) return null;
   return (
     <aside className="fixed top-12 right-3 bottom-10 w-[26rem] max-w-[calc(100vw-1.5rem)] z-9000 flex flex-col rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900 shadow-xl animate-in fade-in duration-150">
       <div className="flex items-center justify-between px-4 h-11 shrink-0 border-b border-zinc-100 dark:border-white/5">

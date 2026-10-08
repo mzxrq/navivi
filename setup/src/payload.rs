@@ -83,6 +83,16 @@ pub struct Manifest {
     pub exe: String,
 }
 
+/// Where a PE file keeps its Authenticode signature entry: (position of the entry, file offset of the signature, size). Read from the first bytes.
+pub fn security_entry(head: &[u8]) -> Option<(usize, u32, u32)> {
+    let word = |at: usize| head.get(at..at + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()));
+    let pe = word(0x3c)? as usize;
+    let opt = pe + 24;
+    let plus = u16::from_le_bytes(head.get(opt..opt + 2)?.try_into().ok()?) == 0x20b;
+    let at = opt + if plus { 144 } else { 128 };
+    Some((at, word(at)?, word(at + 4)?))
+}
+
 pub struct Payload {
     pub path: PathBuf,
     /// Where the zip starts, which is also how long the plain setup exe is.
@@ -92,20 +102,31 @@ pub struct Payload {
 
 impl Payload {
     /// The payload appended to `exe`, if it has one (the uninstaller and a bare build do not).
+    /// A code-signed setup has the signature after the footer (padded to 8 bytes), so the footer is looked for before it.
     pub fn find(exe: &Path) -> io::Result<Option<Payload>> {
         let mut file = File::open(exe)?;
         let size = file.metadata()?.len();
         if size < FOOTER_LEN {
             return Ok(None);
         }
-        file.seek(SeekFrom::Start(size - FOOTER_LEN))?;
-        let mut footer = [0u8; 16];
-        file.read_exact(&mut footer)?;
-        let Some(len) = decode_footer(&footer) else { return Ok(None) };
-        if len == 0 || len + FOOTER_LEN > size {
-            return Ok(None);
+        let mut head = vec![0u8; size.min(4096) as usize];
+        file.read_exact(&mut head)?;
+        let end = match security_entry(&head) {
+            Some((_, offset, _)) if offset > 0 && u64::from(offset) <= size => u64::from(offset),
+            _ => size,
+        };
+        for pad in 0..8 {
+            let Some(at) = end.checked_sub(FOOTER_LEN + pad) else { break };
+            file.seek(SeekFrom::Start(at))?;
+            let mut footer = [0u8; 16];
+            file.read_exact(&mut footer)?;
+            let Some(len) = decode_footer(&footer) else { continue };
+            if len == 0 || len > at {
+                return Ok(None);
+            }
+            return Ok(Some(Payload { path: exe.to_path_buf(), start: at - len, len }));
         }
-        Ok(Some(Payload { path: exe.to_path_buf(), start: size - FOOTER_LEN - len, len }))
+        Ok(None)
     }
 
     pub fn archive(&self) -> Result<ZipArchive<Section>, String> {
@@ -231,6 +252,38 @@ mod tests {
         assert!(Payload::find(&exe).unwrap().is_none());
         fs::write(&exe, b"tiny").unwrap();
         assert!(Payload::find(&exe).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_signed_setup_still_finds_its_payload() {
+        let dir = temp("signed");
+        let zip = {
+            let mut zip = Vec::new();
+            let mut writer = ZipWriter::new(io::Cursor::new(&mut zip));
+            writer.start_file("a.txt", SimpleFileOptions::default()).unwrap();
+            writer.write_all(b"hello").unwrap();
+            writer.finish().unwrap();
+            zip
+        };
+        let mut bytes = vec![0u8; 0x200];
+        bytes[0..2].copy_from_slice(b"MZ");
+        bytes[0x3c..0x40].copy_from_slice(&0x80u32.to_le_bytes());
+        bytes[0x80 + 24..0x80 + 26].copy_from_slice(&0x20bu16.to_le_bytes());
+        bytes.extend_from_slice(&zip);
+        bytes.extend_from_slice(&encode_footer(zip.len() as u64));
+        let pad = (8 - bytes.len() % 8) % 8; // signtool pads to 8 bytes
+        bytes.extend_from_slice(&vec![0u8; pad]);
+        let cert_at = bytes.len() as u32;
+        assert_eq!(cert_at % 8, 0);
+        bytes[0x80 + 24 + 144..0x80 + 24 + 148].copy_from_slice(&cert_at.to_le_bytes());
+        bytes[0x80 + 24 + 148..0x80 + 24 + 152].copy_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&[7u8; 16]);
+        let exe = dir.join("signed.exe");
+        fs::write(&exe, &bytes).unwrap();
+        let payload = Payload::find(&exe).unwrap().expect("a payload");
+        assert_eq!((payload.start, payload.len), (0x200, zip.len() as u64));
+        assert!(payload.archive().is_ok());
+        assert!(security_entry(&bytes).is_some_and(|(_, offset, _)| offset == cert_at));
     }
 
     #[test]

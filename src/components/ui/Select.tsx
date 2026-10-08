@@ -16,12 +16,16 @@ export function Select<T extends string>({
   options,
   label,
   className = "w-full",
+  disabled,
+  placeholder,
 }: {
   value: T;
   onChange: (value: T) => void;
   options: SelectOption<T>[];
   label: string;
   className?: string;
+  disabled?: boolean;
+  placeholder?: string;
 }) {
   const id = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -102,9 +106,10 @@ export function Select<T extends string>({
         aria-controls={open ? `${id}-list` : undefined}
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={onKeyDown}
-        className="h-8 w-full min-w-0 pl-2.5 pr-2 rounded-lg flex items-center gap-2 text-left bg-white dark:bg-zinc-950/40 border border-zinc-200 dark:border-white/10 text-[12px] text-zinc-900 dark:text-zinc-100 hover:border-zinc-300 dark:hover:border-white/20 outline-none focus-visible:border-navi focus-visible:ring-2 focus-visible:ring-navi/20 transition"
+        disabled={disabled || options.length === 0}
+        className="h-8 w-full min-w-0 pl-2.5 pr-2 rounded-lg flex items-center gap-2 text-left bg-white dark:bg-zinc-950/40 border border-zinc-200 dark:border-white/10 text-[12px] text-zinc-900 dark:text-zinc-100 hover:border-zinc-300 dark:hover:border-white/20 outline-none focus-visible:border-navi focus-visible:ring-2 focus-visible:ring-navi/20 transition disabled:opacity-50 disabled:pointer-events-none"
       >
-        <span className="flex-1 truncate">{shown?.label ?? value}</span>
+        <span className={`flex-1 truncate ${shown || value ? "" : "text-zinc-400"}`}>{shown?.label ?? (value || placeholder)}</span>
         <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 

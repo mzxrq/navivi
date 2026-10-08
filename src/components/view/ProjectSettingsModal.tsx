@@ -9,6 +9,7 @@ import {
 } from "@tauri-apps/plugin-fs";
 import { join, dirname } from "@tauri-apps/api/path";
 import { useUI } from "../../hooks/useUI";
+import { useWorkspace } from "../../hooks/useWorkspace";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { MapPin } from "../ui/icons";
@@ -21,16 +22,19 @@ import { db } from "../../services/db";
 import { VideoLookSettings } from "../ui/VideoLookSettings";
 import { applyOption, lookPatch } from "../../utils/videoLook";
 
+const dialogWidth = "w-[clamp(36rem,52vw,48rem)]";
+
 interface ProjectSettingsModalProps {
   project: any;
   onClose: () => void;
 }
 
+/** Project Manager: edits a project that is not open, straight in its job_config.json and the database. */
 export function ProjectSettingsModal({
   project,
   onClose,
 }: ProjectSettingsModalProps) {
-  const { showToast, setShowAppSettings } = useUI();
+  const { showToast } = useUI();
   const [config, setConfig] = useState<any>(null);
   const [configPath, setConfigPath] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -83,8 +87,6 @@ export function ProjectSettingsModal({
   if (isLoading) return null;
   if (!config) return null;
 
-  const currentMarker = config.settings?.routeMarker || "";
-
   const handleSave = async () => {
     try {
       if (configPath) {
@@ -110,14 +112,61 @@ export function ProjectSettingsModal({
     }
   };
 
+  const setOption = (patch: Record<string, unknown>) =>
+    setConfig((prev: any) => ({ ...prev, settings: applyOption(prev.settings ?? {}, patch) }));
+
+  return (
+    <Dialog
+      title={<Trans>Project Settings</Trans>}
+      subtitle={project.name}
+      onClose={onClose}
+      width={dialogWidth}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={dialogButton.secondary}>
+            <Trans>Cancel</Trans>
+          </button>
+          <button type="button" onClick={handleSave} className={dialogButton.primary}>
+            <Trans>Save Settings</Trans>
+          </button>
+        </>
+      }
+    >
+      <ProjectSettingsForm options={config.settings ?? {}} setOption={setOption} onLeave={onClose} />
+    </Dialog>
+  );
+}
+
+/** Editor: the open project's settings live in the workspace, so changes apply at once and save with the project (the Project tab of App Settings). */
+export function OpenProjectSettings() {
+  const { settings, updateSettings, setIsDirty } = useWorkspace();
+
+  const setOption = (patch: Record<string, unknown>) => {
+    updateSettings(patch as Parameters<typeof updateSettings>[0]);
+    setIsDirty(true);
+  };
+
+  return <ProjectSettingsForm options={settings as Record<string, any>} setOption={setOption} inProject />;
+}
+
+function ProjectSettingsForm({
+  options,
+  setOption,
+  onLeave,
+  inProject,
+}: {
+  options: Record<string, any>;
+  setOption: (patch: Record<string, unknown>) => void;
+  onLeave?: () => void;
+  inProject?: boolean;
+}) {
+  const { setShowAppSettings } = useUI();
+  const currentMarker: string = options.routeMarker || "";
+
   const markerSrc = (marker: string) =>
     marker.match(/^[a-zA-Z]:\\/) || (marker.startsWith("/") && !marker.startsWith("/defaults/"))
       ? convertFileSrc(marker)
       : marker;
-
-  const options = config.settings ?? {};
-  const setOption = (patch: Record<string, unknown>) =>
-    setConfig((prev: any) => ({ ...prev, settings: applyOption(prev.settings ?? {}, patch) }));
 
   const editorStyle = editorStyleForVideo();
   const editorLabel = editorStyleLabel();
@@ -135,36 +184,22 @@ export function ProjectSettingsModal({
     ...(savedStyle && !videoMapStyles.some((s) => s.id === savedStyle) ? [{ value: savedStyle, label: savedStyle }] : []),
     ...(editorStyle ? [{ value: "editor", label: t`Same as the editor` }] : []),
   ];
-  const styleChoice = savedStyle;
   const chooseStyle = (value: string) => {
     const id = value === "editor" ? editorStyle : value;
     setOption({ mapbox_style_id: id || undefined });
   };
 
-  const setMarker = (routeMarker: string) =>
-    setConfig((prev: any) => ({
-      ...prev,
-      settings: { ...prev.settings, routeMarker },
-    }));
+  const setMarker = (routeMarker: string) => setOption({ routeMarker });
+
+  const openAppSettings = (tab: string) => {
+    setShowAppSettings(true);
+    setTimeout(() => window.dispatchEvent(new CustomEvent("open-app-settings-tab", { detail: tab })), 0);
+    onLeave?.();
+  };
 
   return (
-    <Dialog
-      title={<Trans>Project Settings</Trans>}
-      subtitle={project.name}
-      onClose={onClose}
-      width="w-[36rem]"
-      footer={
-        <>
-          <button type="button" onClick={onClose} className={dialogButton.secondary}>
-            <Trans>Cancel</Trans>
-          </button>
-          <button type="button" onClick={handleSave} className={dialogButton.primary}>
-            <Trans>Save Settings</Trans>
-          </button>
-        </>
-      }
-    >
-      <div className="space-y-5">
+    <div className="space-y-5">
+      {!inProject && (
       <div className="space-y-2.5">
         <div>
           <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
@@ -212,8 +247,9 @@ export function ProjectSettingsModal({
           )}
         </div>
       </div>
+      )}
 
-      <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-white/5">
+      <div className={`space-y-3 ${inProject ? "" : "pt-4 border-t border-zinc-100 dark:border-white/5"}`}>
         <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
           <Trans>Rendering</Trans>
         </p>
@@ -291,7 +327,7 @@ export function ProjectSettingsModal({
           <Select
             className="w-44"
             label={t`Map style`}
-            value={styleChoice}
+            value={savedStyle}
             onChange={chooseStyle}
             options={styleOptions}
           />
@@ -308,27 +344,24 @@ export function ProjectSettingsModal({
         </OptionRow>
       </div>
 
-      <div className="pt-4 border-t border-zinc-100 dark:border-white/5">
-        <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
-          <Trans>Pronunciation dictionary</Trans>
-        </p>
-        <p className="mt-0.5 mb-2 text-[12px] text-zinc-500 dark:text-zinc-400">
-          <Trans>Words every project shares live in App Settings, which you can open from here without opening a project.</Trans>
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            setShowAppSettings(true);
-            setTimeout(() => window.dispatchEvent(new CustomEvent("open-app-settings-tab", { detail: "tts_dictionary" })), 0);
-            onClose();
-          }}
-          className="h-8 px-3 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 text-[12px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/10 transition-colors"
-        >
-          <Trans>Open dictionary…</Trans>
-        </button>
-      </div>
-      </div>
-    </Dialog>
+      {!inProject && (
+        <div className="pt-4 border-t border-zinc-100 dark:border-white/5">
+          <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
+            <Trans>Pronunciation dictionary</Trans>
+          </p>
+          <p className="mt-0.5 mb-2 text-[12px] text-zinc-500 dark:text-zinc-400">
+            <Trans>Words every project shares live in App Settings, which you can open from here without opening a project.</Trans>
+          </p>
+          <button
+            type="button"
+            onClick={() => openAppSettings("tts_dictionary")}
+            className="h-8 px-3 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 text-[12px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/10 transition-colors"
+          >
+            <Trans>Open dictionary…</Trans>
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

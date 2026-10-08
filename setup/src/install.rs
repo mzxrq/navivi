@@ -114,6 +114,12 @@ fn write_uninstaller(setup_exe: &Path, plain_len: u64, to: &Path) -> Result<(), 
     use std::io::Read;
     let mut bytes = Vec::with_capacity(plain_len as usize);
     fs::File::open(setup_exe).map_err(|e| e.to_string())?.take(plain_len).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    // A signed setup's signature lies beyond what is copied; clear its entry so the copy is a plain unsigned exe.
+    if let Some((at, offset, _)) = crate::payload::security_entry(&bytes) {
+        if offset > 0 {
+            bytes[at..at + 8].fill(0);
+        }
+    }
     fs::write(to, bytes).map_err(|e| format!("{}: {e}", to.display()))
 }
 

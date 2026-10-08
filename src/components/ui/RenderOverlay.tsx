@@ -45,7 +45,7 @@ import { Switch } from "./Switch";
 import { PronunciationFix, ReviewEdits, ReviewRow, ReviewSelection, ReviewStep } from "./ReviewStep";
 import { db } from "../../services/db";
 import { runStage } from "../../services/sidecar";
-import { announceSetupRequired, isSetupRequired } from "../../services/setup";
+import { announceSetupRequired, announceVcRuntimeMissing, isSetupRequired, isVcRuntimeMissing } from "../../services/setup";
 import { GLOBAL_DICTIONARY_KEY } from "../../config/constants";
 
 type WizardStep = "generating" | "verifying" | "exporting" | "finished";
@@ -242,6 +242,7 @@ export function RenderOverlay() {
       if (disposed) return;
       invoke("start_render", { configPath, force: takeForcedRender() || undefined }).catch((err) => {
         if (isSetupRequired(err)) announceSetupRequired();
+        if (isVcRuntimeMissing(err)) announceVcRuntimeMissing();
         setStatus("error");
         pushSystemLog(t`Failed to invoke Python render: ${err}`, "error");
       });
