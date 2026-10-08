@@ -546,6 +546,14 @@ def _intro_prompt(brief: dict, stops: List[str], limit: int, area: str = "", end
     )
 
 
+def spoken_area(location: str) -> str:
+    """The intro label as it is said: "和歌山・和歌山市" -> "和歌山市" (the voice garbles the repeated name)."""
+    parts = [p.strip() for p in re.split(r"[・･]", location or "") if p.strip()]
+    if len(parts) == 2 and parts[1].startswith(parts[0]):
+        return parts[1]
+    return (location or "").strip()
+
+
 def _intro_fallback(start: str, end: str, area: str, places: int, km, limit: int) -> str:
     """The longest factual opening that fits about `limit` characters."""
     where = f"{area}の{start}" if area and area not in start else start
@@ -839,7 +847,7 @@ _CAUTION = re.compile(r"必要|許可|予約|注意|禁止|立ち?入|ただし|
 
 def stopby_text(project: dict) -> str:
     """The unconnected stop-bys (brown pins) as optional extras, with their own
-    cautions: "茶色で示した地点は、ルート沿いにある追加の見どころです。A、そしてBです。…"."""
+    cautions: "黒色で示した地点は、ルート沿いにある追加の見どころです。A、そしてBです。…"."""
     from services.localization.route_brief import _length_km, _short_fact, clean_label, on_route
 
     waypoints = [w for w in project.get("waypoints", []) if isinstance(w, dict) and "lat" in w]
@@ -862,7 +870,7 @@ def stopby_text(project: dict) -> str:
     phrases = [f"{near}の近くにある、{'と'.join(items)}" for near, items in by_near.items()]
     listed = phrases[0] if len(phrases) == 1 else "、".join(phrases[:-1]) + "、そして" + phrases[-1]
     return (
-        "茶色で示した地点は、ルート沿いにある追加の見どころです。"
+        "黒色で示した地点は、ルート沿いにある追加の見どころです。"
         f"{listed}です。時間に余裕があれば、あわせて訪ねてみてください。" + "".join(notes)
     )
 
@@ -968,7 +976,7 @@ def build_course_script(
         opening = re.sub(r"\{[^}]*\}", "", own).strip()
         report.append({"kind": "intro", "text": opening, "used": "user", "raw": None, "budget_chars": opening_chars})
     else:
-        area = (settings.get("intro_location") or "").strip()
+        area = spoken_area(settings.get("intro_location"))
         title = (project.get("video_title") or project.get("project_name") or "").strip()
         if title and title.isascii():
             title = ""  # an English working title ("Untitled Project") is not spoken
@@ -1085,7 +1093,7 @@ def build_tour_script(
     place_count = len(places)  # every place on the route, stopped at or passed
     intro_chars = chars(budget["intro"])
     km = round(brief["total_km"]) if brief["total_km"] >= 1 else brief["total_km"]
-    area = (project.get("settings", {}).get("intro_location") or "").strip()
+    area = spoken_area(project.get("settings", {}).get("intro_location"))
     end = trips[-1]["to"] if trips else ""
     if intro_text is not None:
         intro = re.sub(r"\{[^}]*\}", "", intro_text).strip()

@@ -6,6 +6,7 @@ from services.localization.overview_script import (
     ROUTE_PIVOT_TEXT,
     build_tour_script,
     plan_budget,
+    spoken_area,
     stopby_text,
     totals_text,
 )
@@ -91,6 +92,18 @@ def test_a_model_opening_is_checked():
     good = "加太駅は海辺の町の玄関口です。島の砲台跡を巡ります。このコースは、島をめぐる旅です。"
     script, report = build_tour_script(project, cache, generate=lambda p, n: good if "冒頭" in p else None)
     assert report[0]["used"] == "model" and script.startswith(good)
+
+
+def test_a_city_named_after_its_prefecture_is_said_once():
+    assert spoken_area("和歌山・和歌山市") == "和歌山市"
+    assert spoken_area("兵庫・神戸市") == "兵庫・神戸市"
+    assert spoken_area("") == ""
+    project, cache = _island_course()
+    project["settings"]["intro_location"] = "和歌山・和歌山市"
+    spoken = clean_text(build_tour_script(project, cache)[0])
+    assert "和歌山市" in spoken and "和歌山・" not in spoken
+    project["settings"]["overview_style"] = "walk"
+    assert "和歌山・" not in clean_text(build_tour_script(project, cache)[0])
 
 
 def test_the_opening_takes_the_time_left_over():
