@@ -960,6 +960,9 @@ ATTRACTION_REGENERATE_FOR_LONGER_NARRATION = False
 # A finished clip whose narration changed by more than this is fitted again
 # from its kept photo clips (each photo trimmed or extended to its equal share).
 ATTRACTION_REFIT_SLACK_SECONDS = 0.2
+# An attraction clip runs this long past the end of its narration, so the voice
+# doesn't stop right on the cut to the next leg.
+ATTRACTION_NARRATION_TAIL_SECONDS = 1.0
 # After the Wan motion runs out, a moving preset's clip continues as a slow
 # push-in/drift over its last frame (vdoprocessing/slow_move.py) instead of
 # freezing, in a random direction per clip: the frame grows by about this
