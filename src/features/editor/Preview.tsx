@@ -243,19 +243,19 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
     const fading = fade > 0 && local < fade;
     const fadeIn = fading ? local / fade : 1;
     if (fadeVideo) {
-      const prev = placed[index - 1]?.seg;
-      if (fading && prev) {
-        const src = mediaUrl(projectDir, prev.video);
+      // The outgoing clip's last frame is loaded while that clip still plays, so it is on screen
+      // the instant the dissolve starts instead of after a load gap.
+      const from = fading ? placed[index - 1]?.seg : (fades[index + 1] ?? 0) > 0 ? seg : undefined;
+      if (from) {
+        const src = mediaUrl(projectDir, from.video);
         if (loaded.current.fade !== src) {
           fadeVideo.src = src;
           loaded.current.fade = src;
         }
-        const last = Math.max(0, prev.trimIn + trimmedLength(prev) - 0.04);
+        const last = Math.max(0, from.trimIn + trimmedLength(from) - 0.04);
         if (Math.abs(fadeVideo.currentTime - last) > 0.05) fadeVideo.currentTime = last;
-        fadeVideo.style.opacity = String(1 - fadeIn);
-      } else {
-        fadeVideo.style.opacity = "0";
       }
+      fadeVideo.style.opacity = fading && from ? String(1 - fadeIn) : "0";
     }
 
     const videoSrc = mediaUrl(projectDir, seg.video);

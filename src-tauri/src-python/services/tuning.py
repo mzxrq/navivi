@@ -523,6 +523,9 @@ ENDING_HIGHLIGHT_WAIT_SECONDS = 0.9
 # card) before the video ends. It used to be that waypoint's own
 # freeze_seconds (3s by default) - a long stare at the last frame; kept short.
 ENDING_HIGHLIGHT_PIP_HOLD_SECONDS = 1.5
+# On the GL ending the card pops in once the zoom has settled, over the first
+# part of that hold (so the ending's length is unchanged).
+ENDING_HIGHLIGHT_POP_SECONDS = 0.6
 # Lead-in: how long to push in on the CURRENT wide map (clean, no cards)
 # toward the same point BEFORE that hard cut, and how far.
 BIG_MAP_ZOOM_LEAD_SECONDS = 0.8
@@ -1757,6 +1760,13 @@ OUTRO_PHOTO_BADGE_TEXT: Tuple[int, int, int, int] = (19, 28, 46, 255)
 # frame until the narration ends plus this many seconds (so the picture never
 # ends while the voice is still speaking).
 AUDIO_END_HOLD_SECONDS = 0.5
+
+# [NOTE] [Ending] The last spoken clip (お疲れさまでした) holds its last frame this
+# much longer at export, then dissolves into the outro card instead of cutting;
+# the very last clip of the video fades to black, its sound with it.
+ENDING_HOLD_SECONDS = 1.0
+ENDING_FADE_SECONDS = 1.0
+VIDEO_END_FADE_SECONDS = 1.0
 
 # --- TTS narration (Irodori-TTS) --------------------------------------------
 # Fallback defaults for services.tts.ttsengine.TTSConfig — job_config.json

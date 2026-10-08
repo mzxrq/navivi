@@ -430,6 +430,9 @@ def build_timeline(
                 and Path(source).name != tuning.INTRO_OUTPUT_FILENAME
             ):
                 tracks[k]["fade_into_next_seconds"] = attraction_fade_seconds
+    # The goodbye dissolves into the outro card instead of cutting to it.
+    if len(ordered) > 1 and Path(ordered[-1][2]).name == tuning.OUTRO_OUTPUT_FILENAME:
+        tracks[-2]["fade_into_next_seconds"] = tuning.ENDING_FADE_SECONDS
 
     # Whole-video cues for the editor/exporter, burned at export (render_timeline).
     timeline_data = {
