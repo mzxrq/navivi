@@ -1554,6 +1554,15 @@ INTRO_IMAGE_COUNT = 3
 # of it — total intro length = COUNT*PER_IMAGE - (COUNT-1)*CROSSFADE.
 INTRO_PER_IMAGE_SECONDS = 3.5
 INTRO_CROSSFADE_SECONDS = 0.8
+# The overview narration starts on the intro (settings.overview_voice_over_intro):
+# its opening (up to {start}) plays over the photos, so the intro lasts
+# INTRO_VOICE_LEAD_SECONDS (the fade from black) + the {start} cue, within
+# MIN..MAX, using up to INTRO_MAX_IMAGE_COUNT photos.
+DEFAULT_OVERVIEW_VOICE_OVER_INTRO = True
+INTRO_VOICE_LEAD_SECONDS = 0.5
+INTRO_MIN_SECONDS = 4.0
+INTRO_MAX_SECONDS = 26.0
+INTRO_MAX_IMAGE_COUNT = 5
 # Font/outline are in intro pixels; scaled x1080/704 from the old 1280x704 intro to look the same.
 # These are defaults; settings.intro_title_style / intro_subtitle_style override per project.
 INTRO_TITLE_FONT_FAMILY = "Yu Gothic UI"

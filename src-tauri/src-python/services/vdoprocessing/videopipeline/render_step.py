@@ -333,7 +333,11 @@ def _checkpoint_parts(
 # route.photos: a new or upscaled pop-up photo has to reach the overview and legs.
 # route.markers: a new pin picture too (absent, so unchanged, for a project with none).
 # route.map_style: the video's map style or tile sharpness (absent, so unchanged, until a project sets one).
-ROUTE_CHECKPOINT_PARTS = ("route.waypoints", "route.overview_flags", "route.photos", "route.markers", "route.map_style")
+# route.overview_voice: the overview's cue times and voice length (set by render_route_video).
+ROUTE_CHECKPOINT_PARTS = (
+    "route.waypoints", "route.overview_flags", "route.photos", "route.markers", "route.map_style",
+    "route.overview_voice",
+)
 
 
 def _describe_changed_parts(old: dict, new: dict, limit: int = 25) -> str:
@@ -515,6 +519,12 @@ def render_route_video(
     checkpoint_parts = _checkpoint_parts(
         project_config_path, cleaned_route, audio_durations, audio_pauses
     )
+    if overview_cue_times:
+        # Where the overview voice lands (it moves with the intro's length).
+        checkpoint_parts["route.overview_voice"] = _short_hash(
+            {"cues": {k: round(float(v), 2) for k, v in overview_cue_times.items()},
+             "audio": round(float(overview_audio_duration or 0.0), 2)}
+        )
     overview_stale = False
     if is_full_pipeline_render and not force and manifest_path.exists():
         try:

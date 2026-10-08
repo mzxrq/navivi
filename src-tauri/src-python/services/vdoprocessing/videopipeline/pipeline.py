@@ -25,7 +25,7 @@ from .helpers import (
     project_video_dir,
     skip_rich_media,
 )
-from .intro_step import intro_text_item, render_intro_clip
+from .intro_step import intro_text_item, plan_intro_seconds, render_intro_clip
 from .leg_pieces import compute_leg_narration_splits
 from .narration_step import add_default_cues, add_overview_cues, record_cue_times
 from .outro_step import render_outro_clip
@@ -226,6 +226,26 @@ def run_full_pipeline(
 
     # --- STEP 4 ---
     tracker.stage("Rendering overview & residential video...")
+    # The overview voice starts on the intro: its opening (up to {start}) plays
+    # over the photos, so the intro is built first, as long as that opening,
+    # and the overview gets the voice from where the intro leaves it.
+    overview_cues = audio_data.get("overview_cue_times") if use_cues else None
+    overview_audio = audio_data.get("overview_audio_duration") or 0.0
+    intro_seconds = plan_intro_seconds(settings, overview_cues, overview_audio)
+    tracker.show("Building intro clip...")
+    intro_path = render_intro_clip(str(config_file_path), duration_sec=intro_seconds)
+    voice_start = tuning.INTRO_VOICE_LEAD_SECONDS if intro_path and intro_seconds else None
+    if voice_start is not None:
+        from services.tts.ttsengine import FFmpegManager
+
+        try:
+            intro_seconds = float(FFmpegManager.get_media_duration(intro_path)) or intro_seconds
+        except Exception as exc:  # the planned length is close enough
+            logger.warning("Intro: could not probe %s (%s); using the planned length.", intro_path, exc)
+        shift = max(0.0, intro_seconds - voice_start)
+        overview_cues = {k: max(0.0, float(v) - shift) for k, v in (overview_cues or {}).items()} or overview_cues
+        overview_audio = max(0.0, overview_audio - shift)
+
     tuning.ensure_free_ram("video rendering", min_free_ram, relief=_stop_gpu_servers)
     video_paths = render_route_video(
         cleaned_route=cleaned_route,
@@ -233,8 +253,8 @@ def run_full_pipeline(
         output_video_dir=route_video_dir,
         audio_durations=audio_data.get("audio_durations"),
         audio_pauses=audio_data.get("audio_pauses"),
-        overview_audio_duration=audio_data.get("overview_audio_duration"),
-        overview_cue_times=audio_data.get("overview_cue_times") if use_cues else None,
+        overview_audio_duration=overview_audio,
+        overview_cue_times=overview_cues,
         force=force_regenerate,
     )
 
@@ -257,7 +277,7 @@ def run_full_pipeline(
     final_videos = list(all_videos)
 
     # --- STEP 5b ---
-    # Intro/outro carry no narration, so they're attached here, directly to
+    # Intro (built in Step 4) and outro are attached here, directly to
     # the final clip order. Prepending intro to BOTH video_paths and final_videos (rather
     # than just final_videos) keeps build_timeline's own indexing correct,
     # since it uses len(video_paths) as the boundary between "route" and
@@ -266,7 +286,6 @@ def run_full_pipeline(
     # falls back to the clip's own filename once the index runs past
     # attraction_videos, so it needs no such adjustment.
     tracker.stage("Building intro/outro clips...")
-    intro_path = render_intro_clip(str(config_file_path))
     outro_path = render_outro_clip(str(config_file_path))
     if intro_path:
         video_paths = [intro_path] + video_paths
@@ -293,6 +312,7 @@ def run_full_pipeline(
         ),
         intro_text=intro_text_item(str(config_file_path)) if intro_path else None,
         place_label_look=job_config.get("settings", {}).get("place_label_look"),
+        overview_voice_start=voice_start,
     )
     recorder.finish()
     tracker.on_stage = None
@@ -334,6 +354,26 @@ def recover_narration_paths(timeline_data: dict) -> int:
             track["audio_path"] = voice["source"]
             fixed += 1
     return fixed
+
+
+def move_timed_narration(timeline_data: dict) -> int:
+    """A track whose narration has its own timeline time (audio_start: the
+    overview voice starting on the intro) is exported like the editor's
+    unlinked narration: mixed in at that time, not muxed onto its clip."""
+    moved = 0
+    for track in timeline_data.get("video_tracks", []):
+        if track.get("audio_start") is None or not track.get("audio_path"):
+            continue
+        if not track.get("muted"):
+            timeline_data.setdefault("unlinked_audio", []).append({
+                "path": track["audio_path"],
+                "start": float(track["audio_start"]),
+                "volume": float(track.get("volume", 1.0)),
+            })
+        track["audio_path"] = None
+        track["audio_offset"] = 0.0
+        moved += 1
+    return moved
 
 
 def _project_caption_style(project_dir: Path) -> dict:
@@ -379,6 +419,7 @@ def render_from_timeline(
     for item in timeline_data.get("unlinked_audio") or []:
         if item.get("path") and not Path(item["path"]).is_absolute():
             item["path"] = str(project_dir / item["path"])
+    move_timed_narration(timeline_data)
 
     if not output_video_path:
         output_video_path = str(project_video_dir(project_dir) / "01_overview_rerendered.mp4")

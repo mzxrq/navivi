@@ -283,4 +283,22 @@ describe("timeline.json", () => {
     expect(built.segments).toHaveLength(1);
     expect(built.segments[0]).toMatchObject({ kind: "route", videoDuration: 12, trimOut: 12, audioDuration: 7, audioOffset: 0.5, fadeIntoNext: 0.8 });
   });
+
+  it("keeps the overview voice that starts on the intro at its own time", async () => {
+    const raw = {
+      video_tracks: [
+        { file_path: "assets/video/route/00_intro.mp4" },
+        { file_path: "assets/video/route/01_overview.mp4", audio_path: "assets/audio/overview.wav", audio_start: 0.5 },
+      ],
+    };
+    const probe = async (_: string, kind: "video" | "audio") => (kind === "video" ? 10 : 18);
+    const built = await timelineFromPipeline(raw, probe);
+    const overview = built.segments[1];
+    expect(overview.audioStart).toBe(0.5);
+    // the overview keeps its video length; the voice is not muxed onto it
+    expect(layout(built).total).toBe(20);
+    const manifest = toManifest("Trip", built);
+    expect(manifest.video_tracks[1].audio_path).toBeNull();
+    expect(manifest.unlinked_audio).toEqual([{ path: "assets/audio/overview.wav", start: 0.5, volume: 1 }]);
+  });
 });
