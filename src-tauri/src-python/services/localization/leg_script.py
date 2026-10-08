@@ -209,6 +209,68 @@ def _is_return(project_route: List[dict]) -> bool:
     return near or "return" in (last.get("label") or last.get("name") or "").lower()
 
 
+def _directions(origin: str, to: str, set_mode: str, points: List[List[float]], variant: int) -> str:
+    mode = tuning.MODE_ALIASES.get(set_mode, set_mode)
+    if mode != "walking":
+        return transit_directions(origin, to, mode, [], points)
+    pieces = split_crossings(points, mode) if set_mode == mode else []
+    if len(pieces) > 1:
+        return transit_directions(origin, to, mode, pieces, points)
+    return walking_directions(origin, to, points, variant=variant)
+
+
+def _cut_at(points: List[List[float]], lat: float, lng: float) -> tuple:
+    """(segment index + fraction, [lat, lng]) of the leg's point nearest (lat, lng)."""
+    *line, (px, py) = _xy(points + [[lat, lng]])
+    best = (math.inf, 0.0, points[0])
+    for i, ((ax, ay), (bx, by)) in enumerate(zip(line, line[1:])):
+        dx, dy = bx - ax, by - ay
+        seg = dx * dx + dy * dy
+        u = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / seg)) if seg else 0.0
+        d = math.hypot(ax + dx * u - px, ay + dy * u - py)
+        if d < best[0]:
+            a, b = points[i], points[i + 1]
+            best = (d, i + u, [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u])
+    return best[1], best[2]
+
+
+def _between(points: List[List[float]], start: tuple, end: tuple) -> List[List[float]]:
+    (s, first), (e, last) = start, end
+    out = [first]
+    for p in [*points[int(s) + 1:math.ceil(e)], last]:
+        if p != out[-1]:
+            out.append(p)
+    return out if len(out) > 1 else [first, last]
+
+
+def _arrivals(project: dict, waypoints: List[dict], route: List[dict], cache: dict) -> Dict[int, str]:
+    """{id(waypoint): arriving text}. An unconnected stop-by is told from the
+    previous stop to where the leg passes nearest it; when the walk pauses
+    there (stopby_visits: the course style, with a photo), the next stop is
+    told from the stop-by, as after a connected one."""
+    from services.localization.overview_script import overview_style
+
+    course = overview_style(project) == "course"
+    order = {id(w): i for i, w in enumerate(waypoints)}
+    out: Dict[int, str] = {}
+    for k in range(1, len(route)):
+        a, b = route[k - 1], route[k]
+        lo = order[id(a)] + 1 if k > 1 else 0
+        hi = order[id(b)] if k < len(route) - 1 else len(waypoints)
+        points = _leg_points(a, b, cache)
+        set_mode = _leg_mode(a, b, cache)
+        loose = [w for w in waypoints[lo:hi] if not on_route(w) and not w.get("skipAssetGeneration")]
+        cuts = sorted(((_cut_at(points, w["lat"], w["lng"]), w) for w in loose), key=lambda c: c[0][0])
+        origin, start = clean_label(a), (0.0, points[0])
+        for at, w in cuts:
+            out[id(w)] = _directions(origin, clean_label(w), set_mode, _between(points, start, at), k)
+            if course and w.get("popup_image"):
+                origin, start = clean_label(w), at
+        end = (float(len(points) - 1), points[-1])
+        out[id(b)] = _directions(origin, clean_label(b), set_mode, _between(points, start, end), k)
+    return out
+
+
 def build_leg_scripts(project: dict, cache: Optional[dict] = None) -> List[Dict]:
     """[{"id", "name", "arriving", "attraction"}] for every waypoint: the
     suggested text, None where nothing should change. Nothing is written."""
@@ -218,25 +280,15 @@ def build_leg_scripts(project: dict, cache: Optional[dict] = None) -> List[Dict]
     if len(route) < 2:
         return []
     position = {id(w): k for k, w in enumerate(route)}
+    arrivals = _arrivals(project, waypoints, route, cache)
     returns = _is_return(route)
     start_name = clean_label(route[0])
     out = []
     for w in waypoints:
         name = clean_label(w)
         text = w.get("attractionNarration") or ""
-        arriving = None
+        arriving = arrivals.get(id(w))
         k = position.get(id(w))
-        if k is not None and k > 0:
-            a = route[k - 1]
-            set_mode = _leg_mode(a, w, cache)
-            mode = tuning.MODE_ALIASES.get(set_mode, set_mode)
-            points = _leg_points(a, w, cache)
-            if mode == "walking":
-                pieces = split_crossings(points, mode) if set_mode == mode else []
-                arriving = (transit_directions(clean_label(a), name, mode, pieces, points)
-                            if len(pieces) > 1 else walking_directions(clean_label(a), name, points, variant=k))
-            else:
-                arriving = transit_directions(clean_label(a), name, mode, [], points)
         if k == 0:
             attraction = _opening(text, name, START_LINE.format(name=name))
         elif k == len(route) - 1:

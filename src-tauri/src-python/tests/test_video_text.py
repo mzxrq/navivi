@@ -282,8 +282,8 @@ class TestCacheKeys:
 
 class TestStopbyNotice:
     def test_japanese_text_is_what_tuning_always_had(self):
-        assert tuning.STOPBY_NOTICE_TITLE == "追加の見どころ（まるのマーカー）"
-        assert tuning.STOPBY_NOTICE_BODY.split("\n")[1] == "追加の見どころです。立ち寄るかどうかは自由。"
+        assert tuning.STOPBY_NOTICE_TITLE == "追加の見どころ"
+        assert tuning.STOPBY_NOTICE_BODY.split("\n")[1] == "立ち寄るかどうかは自由。"
         assert tuning.SUMMARY_CARD_FIXED_DURATION_SAMPLE == "8時間88分"
 
     def test_english_notice_wraps_on_words_and_renders(self, tmp_path):

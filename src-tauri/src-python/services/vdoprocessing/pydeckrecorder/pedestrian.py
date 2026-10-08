@@ -1665,6 +1665,7 @@ async def _play_stopby_photo_pause(
                 const img = document.getElementById('stopby-preview'); if (img) img.remove();
             }"""
         )
+        await cut_to_new_clip()
         return idx
 
     # Pop-in: card + leader line fade/ease in together at their fixed,
@@ -1729,9 +1730,9 @@ async def _play_stopby_photo_pause(
     # viewer never actually got to register it fullscreen.
     grown_png = await page.screenshot(**_FRAME_SHOT)
     dissolve = has_attraction and bool(stopby.get("dissolve_into_attraction"))
-    # With a dissolve into the attraction video the photo is not held: the clip
-    # ends as it reaches fullscreen and the dissolve starts right from there.
-    for _ in range(1 if dissolve else max(1, int(freeze_sec * fps))):
+    # With a dissolve (or any cut to an attraction video), the photo is not held:
+    # the clip ends as it reaches fullscreen and hands off to the video.
+    for _ in range(1 if has_attraction else max(1, int(freeze_sec * fps))):
         await write_frame(grown_png)
 
     if has_attraction and dissolve:

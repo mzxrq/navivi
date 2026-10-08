@@ -239,14 +239,8 @@ class _CardMixin:
         icon_d = int(26 * s)
         ix = body[0] + int(22 * s)
         iy = body[1] + int(18 * s) + int(body_font.size * 1.45 - icon_d) // 2 + int(4 * s)
-        # Same look as draw_marker's stop-by circle: ring, white hole, center dot.
-        mc = tuple(reversed(marker_color)) + (255,)
-        cx, cy, r = ix + icon_d / 2, iy + icon_d / 2, icon_d / 2
-        hole = r * 0.65
-        dot = max(1.0, r * 0.12)
-        d.ellipse([ix, iy, ix + icon_d, iy + icon_d], fill=mc)
-        d.ellipse([cx - hole, cy - hole, cx + hole, cy + hole], fill=(255, 255, 255, 255))
-        d.ellipse([cx - dot, cy - dot, cx + dot, cy + dot], fill=mc)
+        # The pin will be drawn via self.draw_marker on the BGR frame afterwards
+        cx, cy = ix + icon_d / 2, iy + icon_d / 2
         tx = ix + icon_d + int(14 * s)
         ty = body[1] + int(18 * s) + int(4 * s)
         for line in lines:
@@ -270,7 +264,16 @@ class _CardMixin:
             layer.putalpha(a)
         base = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA))
         base.alpha_composite(layer)
-        return cv2.cvtColor(np.asarray(base), cv2.COLOR_RGBA2BGR)
+        out = cv2.cvtColor(np.asarray(base), cv2.COLOR_RGBA2BGR)
+        
+        if alpha < 1.0:
+            overlay = out.copy()
+            self.draw_marker(overlay, int(cx), int(cy + icon_d / 2 - 2 * s), number="・", color=marker_color, is_circle=False, scale=s * 0.7)
+            cv2.addWeighted(overlay, alpha, out, 1.0 - alpha, 0, dst=out)
+        else:
+            self.draw_marker(out, int(cx), int(cy + icon_d / 2 - 2 * s), number="・", color=marker_color, is_circle=False, scale=s * 0.7)
+            
+        return out
 
     def create_summary_card(
         self,

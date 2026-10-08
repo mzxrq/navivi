@@ -553,8 +553,7 @@ class RouteAnimator:
             connected_landmark_ids = [
                 m.get("waypoint_id")
                 for m in res_data.get("mid_markers", [])
-                if m.get("connect_to_route")
-                and m.get("lat") is not None
+                if m.get("lat") is not None
                 and m.get("lng", m.get("lon")) is not None
             ]
             leg_destination_id = res_data.get("end_waypoint_id")
