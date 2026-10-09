@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { boundsAround, distanceKm, geocodePlace, geocodeRoute, geocodeUrl, GeoPoint, Lookup, nameVariants, regionOf, spikes, stripRegion } from "./geocode";
+import { boundsAround, distanceKm, geocodePlace, geocodeRoute, geocodeUrl, GeoPoint, Lookup, nameVariants, regionHintOf, regionOf, spikes, stripRegion } from "./geocode";
 
 const WAKAYAMA: GeoPoint = { lat: 34.0, lng: 135.19, country: "jp" };
 
@@ -115,7 +115,7 @@ describe("geocodeRoute", () => {
     expect(out.found.map((f) => f.uncertain)).toEqual([false, false]);
   });
 
-  it("in Japan asks for local names up front, tries them first, and keeps both names for display", async () => {
+  it("in Japan asks for local names up front, tries them after the document's own spelling, and keeps both names for display", async () => {
     const asked: string[] = [];
     const lookup: Lookup = async (place) => {
       asked.push(place);
@@ -129,8 +129,15 @@ describe("geocodeRoute", () => {
     };
     const out = await geocodeRoute(["Sainen-ji Temple, Wakayama"], { lookup, rename });
     expect(renameCalls).toBe(1);
-    expect(asked.indexOf("西念寺")).toBeLessThan(asked.indexOf("Sainen-ji Temple") === -1 ? Infinity : asked.indexOf("Sainen-ji Temple"));
+    expect(asked.indexOf("西念寺")).toBeGreaterThan(asked.indexOf("Sainen-ji Temple"));
     expect(out.found[0]).toMatchObject({ name: "Sainen-ji Temple, Wakayama", shortName: "Sainen-ji Temple", localName: "西念寺", uncertain: false });
+  });
+
+  it("does not let a guessed local name beat a spelling that already found the place", async () => {
+    const lookup: Lookup = async (place) =>
+      place === "Wakayama" ? WAKAYAMA : place === "Kyoshi Station" ? { lat: 34.291, lng: 135.151, country: "jp" } : place === "京石駅" ? { lat: 34.5, lng: 135.43, country: "jp" } : null;
+    const out = await geocodeRoute(["Kyoshi Sta., Wakayama"], { lookup, rename: async () => ({ "Kyoshi Sta.": "京石駅" }) });
+    expect(out.found[0].point.lat).toBeCloseTo(34.291, 3);
   });
 
   it("does not ask for local names up front outside Japan", async () => {
@@ -159,6 +166,40 @@ describe("geocodeRoute", () => {
     const out = await geocodeRoute(["Sainen-ji", "Mt. Kabuto"], { lookup });
     expect(out.found).toHaveLength(2);
     expect(seen.some((c) => c.bounds)).toBe(true);
+  });
+
+  it("anchors on where most unbounded hits cluster, not the median of far namesakes", async () => {
+    const wakayama = { lat: 34.28, lng: 135.19, country: "jp" };
+    const hits: Record<string, GeoPoint> = {
+      "Mt. Takano": wakayama,
+      "Mt. Fudatate": { lat: 34.29, lng: 135.2, country: "jp" },
+      "Mt. Fudo": { lat: 36.5, lng: 137.8, country: "jp" },
+      "Kosen-ji Temple": { lat: 36.6, lng: 138.6, country: "jp" },
+    };
+    const lookup: Lookup = async (place, c) => {
+      if (!c.bounds) return hits[place] ?? null;
+      return distanceKm(c.near!, wakayama) < 60 ? wakayama : null;
+    };
+    const out = await geocodeRoute(["Mt. Takano", "Mt. Fudatate", "Mt. Fudo", "Kosen-ji Temple"], { lookup });
+    expect(out.failed).toHaveLength(0);
+  });
+
+  it("searches again near the middle of the route for stops that two namesakes put far away", async () => {
+    const near = { lat: 34.29, lng: 135.15, country: "jp" };
+    const lookup: Lookup = async (place, c) => {
+      if (place === "Wakayama") return { lat: 33.8, lng: 135.6, country: "jp" };
+      if (!c.bounds) return null;
+      const around = distanceKm(c.near!, near) < 40;
+      if (place === "Kosen-ji") return around ? null : { lat: 33.73, lng: 135.38, country: "jp" };
+      if (place === "Takano") return around ? { lat: 34.3, lng: 135.17, country: "jp" } : { lat: 33.86, lng: 135.34, country: "jp" };
+      return { lat: near.lat + Math.random() * 0.01, lng: near.lng + Math.random() * 0.01, country: "jp" };
+    };
+    const out = await geocodeRoute(["Kyoshi", "Kosen-ji", "Takano", "Iimori", "Fudatate"], { lookup, hopKm: 15, regionHint: "Wakayama" });
+    const takano = out.found.find((f) => f.name === "Takano")!;
+    expect(distanceKm(takano.point, near)).toBeLessThan(5);
+    const kosen = out.found.find((f) => f.name === "Kosen-ji")!;
+    expect(kosen.uncertain).toBe(true);
+    expect(distanceKm(kosen.point, near)).toBeLessThan(10);
   });
 
   it("searches each stop only near the stop before it, so a far namesake is never taken", async () => {
@@ -208,5 +249,13 @@ describe("nameVariants", () => {
     expect(nameVariants("Sutra Mound #2 (Former Shinpuku-ji Temple)")).toContain("Sutra Mound");
     expect(nameVariants("Sarusaka-toge Pass")).toEqual(["Sarusaka-toge Pass", "Sarusaka"]);
     expect(nameVariants("Mt. Kabuto")).toContain("Mount Kabuto");
+  });
+});
+
+describe("regionHintOf", () => {
+  it("takes the most mentioned prefecture of a document", () => {
+    expect(regionHintOf("Wakayama Pref.\nWakayama City\nOsaka Pref.\nWakayamashi Sta.")).toBe("Wakayama");
+    expect(regionHintOf("和歌山県の山道。和歌山県と大阪府の境。")).toBe("和歌山県");
+    expect(regionHintOf("A walk in Paris")).toBeNull();
   });
 });

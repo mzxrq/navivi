@@ -5,8 +5,15 @@ import { Trans } from "@lingui/react/macro";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { aiEngine, isOnlineEngine } from "../../services/ai/engine";
 import { deleteApiKey, saveApiKey } from "../../services/ai/keys";
-import { cancelSignIn, signInWithOpenRouter } from "../../services/ai/openrouterAuth";
-import { hasApiKey, listOnlineModels, testOnline } from "../../services/ai/online";
+import {
+  cancelSignIn,
+  signInWithOpenRouter,
+} from "../../services/ai/openrouterAuth";
+import {
+  hasApiKey,
+  listOnlineModels,
+  testOnline,
+} from "../../services/ai/online";
 import {
   isOnlineProvider,
   ONLINE_PROVIDERS,
@@ -14,22 +21,47 @@ import {
   type AiProviderId,
   type OnlineProvider,
 } from "../../services/ai/providers";
-import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, RefreshCw, Trash2 } from "./icons";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ExternalLink,
+  Loader2,
+  RefreshCw,
+  Trash2,
+} from "./icons";
 import { ComboBox } from "./ComboBox";
-import { inputClass, Row, secondaryButton, primaryButton, Section } from "./SettingsParts";
+import {
+  inputClass,
+  Row,
+  secondaryButton,
+  primaryButton,
+  Section,
+} from "./SettingsParts";
 import { Select } from "./Select";
 import { Switch } from "./Switch";
 
-type Check = { state: "idle" } | { state: "working" } | { state: "ok" } | { state: "failed"; message: string };
+type Check =
+  | { state: "idle" }
+  | { state: "working" }
+  | { state: "ok" }
+  | { state: "failed"; message: string };
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-// Settings > AI models: who writes the scripts. Local Ollama (the default) or a provider on the internet with the user's own key.
-// `allowNone` adds "None" (the first-run checklist), which turns the AI features off; `children` sit inside the same box under the picker.
-export function ProviderPicker({ allowNone, children }: { allowNone?: boolean; children?: React.ReactNode }) {
+// Settings > AI models
+export function ProviderPicker({
+  allowNone,
+  children,
+}: {
+  allowNone?: boolean;
+  children?: React.ReactNode;
+}) {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
-  const chosen: AiProviderId = isOnlineProvider(settings.ai_provider) ? settings.ai_provider : "ollama";
-  const provider: AiProviderId | "none" = allowNone && settings.ai_features_enabled === false ? "none" : chosen;
+  const chosen: AiProviderId = isOnlineProvider(settings.ai_provider)
+    ? settings.ai_provider
+    : "ollama";
+  const provider: AiProviderId | "none" =
+    allowNone && settings.ai_features_enabled === false ? "none" : chosen;
 
   return (
     <Section title={t`AI assistant`}>
@@ -42,13 +74,17 @@ export function ProviderPicker({ allowNone, children }: { allowNone?: boolean; c
           value={provider}
           onChange={(next) => {
             if (next === "none") updateSettings({ ai_features_enabled: false });
-            else updateSettings({ ai_provider: next, ai_features_enabled: true });
+            else
+              updateSettings({ ai_provider: next, ai_features_enabled: true });
             setIsDirty(true);
           }}
           options={[
             ...(allowNone ? [{ value: "none" as const, label: t`None` }] : []),
             { value: "ollama", label: t`This PC (Ollama)` },
-            ...ONLINE_PROVIDERS.map((id) => ({ value: id as AiProviderId, label: PROVIDERS[id].label })),
+            ...ONLINE_PROVIDERS.map((id) => ({
+              value: id as AiProviderId,
+              label: PROVIDERS[id].label,
+            })),
           ]}
           className="w-64"
         />
@@ -58,7 +94,11 @@ export function ProviderPicker({ allowNone, children }: { allowNone?: boolean; c
   );
 }
 
-export function OnlineProviderSettings({ provider }: { provider: OnlineProvider }) {
+export function OnlineProviderSettings({
+  provider,
+}: {
+  provider: OnlineProvider;
+}) {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
   const info = PROVIDERS[provider];
   const engine = aiEngine(settings);
@@ -152,7 +192,10 @@ export function OnlineProviderSettings({ provider }: { provider: OnlineProvider 
 
   const options = models.length ? models : info.suggested;
   const needsAddress = !!info.askBaseUrl;
-  const ready = saved === true && model.trim() !== "" && (!needsAddress || baseUrl.trim() !== "");
+  const ready =
+    saved === true &&
+    model.trim() !== "" &&
+    (!needsAddress || baseUrl.trim() !== "");
 
   return (
     <>
@@ -172,9 +215,14 @@ export function OnlineProviderSettings({ provider }: { provider: OnlineProvider 
             {saved ? (
               <>
                 <span className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> <Trans>Key saved</Trans>
+                  <CheckCircle2 className="w-3.5 h-3.5" />{" "}
+                  <Trans>Key saved</Trans>
                 </span>
-                <button type="button" onClick={removeKey} className={secondaryButton}>
+                <button
+                  type="button"
+                  onClick={removeKey}
+                  className={secondaryButton}
+                >
                   <Trash2 className="w-3.5 h-3.5" /> <Trans>Remove</Trans>
                 </button>
               </>
@@ -182,11 +230,22 @@ export function OnlineProviderSettings({ provider }: { provider: OnlineProvider 
               <>
                 {provider === "openrouter" && (
                   <>
-                    <button type="button" onClick={signIn} disabled={signingIn} className={primaryButton}>
-                      {signingIn ? t`Waiting for the browser…` : t`Sign in with OpenRouter`}
+                    <button
+                      type="button"
+                      onClick={signIn}
+                      disabled={signingIn}
+                      className={primaryButton}
+                    >
+                      {signingIn
+                        ? t`Waiting for the browser…`
+                        : t`Sign in with OpenRouter`}
                     </button>
                     {signingIn && (
-                      <button type="button" onClick={cancelSignIn} className={secondaryButton}>
+                      <button
+                        type="button"
+                        onClick={cancelSignIn}
+                        className={secondaryButton}
+                      >
                         <Trans>Cancel</Trans>
                       </button>
                     )}
@@ -198,11 +257,18 @@ export function OnlineProviderSettings({ provider }: { provider: OnlineProvider 
                   spellCheck={false}
                   value={draftKey}
                   onChange={(e) => setDraftKey(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && draftKey.trim() && saveKey()}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && draftKey.trim() && saveKey()
+                  }
                   placeholder={t`API key`}
                   className={`${inputClass} flex-1`}
                 />
-                <button type="button" onClick={saveKey} disabled={!draftKey.trim()} className={primaryButton}>
+                <button
+                  type="button"
+                  onClick={saveKey}
+                  disabled={!draftKey.trim()}
+                  className={primaryButton}
+                >
                   <Trans>Save</Trans>
                 </button>
               </>
@@ -210,10 +276,15 @@ export function OnlineProviderSettings({ provider }: { provider: OnlineProvider 
             {info.keyPage && (
               <button
                 type="button"
-                onClick={() => invoke("plugin:opener|open_url", { url: info.keyPage }).catch(console.error)}
+                onClick={() =>
+                  invoke("plugin:opener|open_url", { url: info.keyPage }).catch(
+                    console.error,
+                  )
+                }
                 className={secondaryButton}
               >
-                <ExternalLink className="w-3.5 h-3.5" /> <Trans>Get a key</Trans>
+                <ExternalLink className="w-3.5 h-3.5" />{" "}
+                <Trans>Get a key</Trans>
               </button>
             )}
           </div>
@@ -237,14 +308,24 @@ export function OnlineProviderSettings({ provider }: { provider: OnlineProvider 
           </Row>
         )}
 
-        <Row title={t`Model`} description={t`Pick one from the list or type its name. Refresh asks the provider what your key can use.`}>
+        <Row
+          title={t`Model`}
+          description={t`Pick one from the list or type its name. Refresh asks the provider what your key can use.`}
+        >
           <div className="flex items-center gap-2">
             <ComboBox
               label={t`Model`}
               value={model}
               options={options}
               allowCustom
-              onChange={(v) => update({ ai_online_models: { ...settings.ai_online_models, [provider]: v.trim() } })}
+              onChange={(v) =>
+                update({
+                  ai_online_models: {
+                    ...settings.ai_online_models,
+                    [provider]: v.trim(),
+                  },
+                })
+              }
               className="w-56"
             />
             <button
@@ -255,13 +336,24 @@ export function OnlineProviderSettings({ provider }: { provider: OnlineProvider 
               aria-label={t`Refresh the model list`}
               className={secondaryButton}
             >
-              {listing.state === "working" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              {listing.state === "working" ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5" />
+              )}
             </button>
           </div>
         </Row>
-        {listing.state === "failed" && <p className="px-4 py-2 text-[12px] text-red-500 break-words">{listing.message}</p>}
+        {listing.state === "failed" && (
+          <p className="px-4 py-2 text-[12px] text-red-500 break-words">
+            {listing.message}
+          </p>
+        )}
 
-        <Row title={t`Send photos`} description={t`Lets the model see a stop's photos (up to 4, shrunk first) when it writes the script.`}>
+        <Row
+          title={t`Send photos`}
+          description={t`Lets the model see a stop's photos (up to 4, shrunk first) when it writes the script.`}
+        >
           <Switch
             checked={settings.ai_online_send_photos !== false}
             onChange={(v) => update({ ai_online_send_photos: v })}
@@ -269,20 +361,34 @@ export function OnlineProviderSettings({ provider }: { provider: OnlineProvider 
           />
         </Row>
 
-        <Row title={t`Test`} description={t`Sends a one-word request to check the key and the model.`}>
+        <Row
+          title={t`Test`}
+          description={t`Sends a one-word request to check the key and the model.`}
+        >
           <div className="flex items-center gap-2">
             {test.state === "ok" && (
               <span className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-600 dark:text-emerald-400">
                 <CheckCircle2 className="w-3.5 h-3.5" /> <Trans>Works</Trans>
               </span>
             )}
-            <button type="button" onClick={runTest} disabled={!ready || test.state === "working"} className={secondaryButton}>
-              {test.state === "working" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            <button
+              type="button"
+              onClick={runTest}
+              disabled={!ready || test.state === "working"}
+              className={secondaryButton}
+            >
+              {test.state === "working" && (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              )}
               <Trans>Test connection</Trans>
             </button>
           </div>
         </Row>
-        {test.state === "failed" && <p className="px-4 py-2 text-[12px] text-red-500 break-words">{test.message}</p>}
+        {test.state === "failed" && (
+          <p className="px-4 py-2 text-[12px] text-red-500 break-words">
+            {test.message}
+          </p>
+        )}
       </Section>
 
       <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[12px] leading-snug text-amber-700 dark:text-amber-400">

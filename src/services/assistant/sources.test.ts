@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/plugin-http", () => ({ fetch: vi.fn() }));
 vi.mock("../sidecar", () => ({ callSidecar: vi.fn() }));
 
 import { callSidecar } from "../sidecar";
-import { htmlToText, isSupportedDocument, isWebAddress, readSource } from "./sources";
+import { denoise, htmlToText, isSupportedDocument, isWebAddress, readSource } from "./sources";
 
 describe("htmlToText", () => {
   it("drops scripts, styles and navigation and keeps the article", () => {
@@ -56,5 +56,11 @@ describe("readSource", () => {
     vi.mocked(callSidecar).mockResolvedValue({ success: false, error: "This PDF is password protected." });
     await expect(readSource("x.pdf")).rejects.toThrow("password protected");
     await expect(readSource("x.exe")).rejects.toThrow("not a supported file");
+  });
+});
+
+describe("denoise", () => {
+  it("drops numbers and symbol lines and collapses labels printed twice", () => {
+    expect(denoise(["0.25", "1.20ˠ", "Kyoshi Sta.Kyoshi Sta.", "Mt. Iimori", "ˡ", "00"].join("\n"))).toBe("Kyoshi Sta.\nMt. Iimori");
   });
 });

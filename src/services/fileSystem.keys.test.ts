@@ -48,7 +48,7 @@ describe("saving a project", () => {
     await saveProjectData([], [], { project_id: "kyoto", project_name: "Kyoto", directory_path: "C:/p" }, settings, {});
 
     expect(mocks.settingsPut).toHaveBeenCalledTimes(1);
-    expect(mocks.settingsPut.mock.calls[0][1]).toEqual({ fps: 30 });
+    expect(mocks.settingsPut.mock.calls[0][1]).toEqual({ fps: 30, follow_editor_map_style: true, mapbox_style_id: "mapbox/outdoors-v12" });
 
     const config = mocks.written["C:/p/job_config.json"];
     expect(config).toBeDefined();

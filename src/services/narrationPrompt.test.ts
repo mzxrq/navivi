@@ -83,6 +83,38 @@ describe("buildWaypointPrompt", () => {
   });
 });
 
+describe("English narration", () => {
+  const en = { place: "Kosen-ji Temple", theme: "", userPrompt: "", facts: "", isFirstWaypoint: false };
+
+  it("writes the whole prompt in English and forbids Japanese characters", () => {
+    const prompt = buildWaypointPrompt({ ...en, scriptType: "attraction", hasPhotos: false, route: { language: "en", previous: "Kyoshi Sta.", index: 1, total: 4 } });
+    expect(prompt).toContain("You are a local guide");
+    expect(prompt).toContain("Use no Japanese characters");
+    expect(prompt).not.toMatch(/[\u3040-\u30ff\u3400-\u9fff]/);
+  });
+
+  it("gives the arriving line the document's directions and travel time", () => {
+    const prompt = buildWaypointPrompt({ ...en, scriptType: "arriving", route: { language: "en", previous: "Kyoshi Sta.", index: 1, total: 4, directions: "Turn left along the tracks.", minutes: 15 } });
+    expect(prompt).toContain("The source document's directions for this leg: Turn left along the tracks.");
+    expect(prompt).toContain("about 15 minutes");
+    expect(prompt).toContain("1-2 sentences");
+  });
+
+  it("says only the name when there is nothing to go on", () => {
+    expect(buildWaypointPrompt({ ...en, scriptType: "attraction", route: { language: "en" } })).toContain('write only "Kosen-ji Temple."');
+  });
+
+  it("keeps the Japanese prompt for Japanese", () => {
+    expect(buildWaypointPrompt({ ...base, scriptType: "attraction", route: { language: "ja" } })).toContain("日本語");
+  });
+
+  it("does not take \"Mt.\" for the end of a sentence when it looks for copied sentences", () => {
+    const other = "Mt. Takano is here. It is a straight climb.";
+    expect(dropRepeatedSentences("Mt. Takano is here. The view is wide.", other, "attraction")).toBe("The view is wide.");
+    expect(dropRepeatedSentences("You have arrived at the temple. It has a gate.", undefined, "attraction")).toBe("It has a gate.");
+  });
+});
+
 describe("usedWords", () => {
   const stops = ["高仙寺の本堂は静かな佇まいです。", "海辺は静かで、雰囲気があります。"];
 

@@ -11,10 +11,18 @@ import { PHOTO_EXTENSIONS, isHeic, isPhoto, preparePhotos } from "../services/im
 import * as exifr from "exifr";
 import { t } from "@lingui/core/macro";
 import { placeNameOf } from "../utils/placeName";
+import { SOURCE_EXTENSIONS, isSupportedDocument, readSource } from "../services/assistant/sources";
 
 export function useFileActions() {
   const { setRoutePoints, waypoints, setWaypoints, setIsDirty } = useWorkspace();
-  const { showToast, setAutoDirectorData } = useUI();
+  const { showToast, setAutoDirectorData, currentView } = useUI();
+
+  // Imports add to the open project: without one (Project Manager) they would land in an invisible workspace.
+  const needsProject = () => {
+    if (currentView === "editor") return false;
+    showToast(t`Open or create a project first, then import into it.`, "warning");
+    return true;
+  };
 
   const handleDroppedFiles = async (paths: string[]) => {
     try {
@@ -76,9 +84,8 @@ export function useFileActions() {
         } else if (path.toLowerCase().endsWith(".gpx")) {
           await importRouteFile(path);
           return;
-        } else if (path.toLowerCase().endsWith(".txt") || path.toLowerCase().endsWith(".md")) {
-          const fileContent = await readTextFile(path);
-          setAutoDirectorData({ state: "processing", content: fileContent });
+        } else if (isSupportedDocument(path)) {
+          await importDocument(path);
           return;
         }
       }
@@ -130,10 +137,10 @@ export function useFileActions() {
   // The window keeps HTML5 drag and drop for the map markers, so dropped files arrive as File objects without a path.
   // They are written under Documents/Navivi/Imports first and then go through the same import as a chosen file.
   const handleDroppedBrowserFiles = async (files: File[]) => {
-    const supported = /\.(jpe?g|png|heic|heif|gpx|txt|md)$/i;
+    const supported = /\.(jpe?g|png|heic|heif|gpx|txt|md|markdown|csv|pdf|docx)$/i;
     const usable = files.filter((f) => supported.test(f.name));
     const skipped = files.length - usable.length;
-    if (skipped > 0) showToast(skipped === 1 ? t`1 file was skipped: only photos, GPX files and text files can be dropped here.` : t`${skipped} files were skipped: only photos, GPX files and text files can be dropped here.`, "warning");
+    if (skipped > 0) showToast(skipped === 1 ? t`1 file was skipped: only photos, GPX files and documents can be dropped here.` : t`${skipped} files were skipped: only photos, GPX files and documents can be dropped here.`, "warning");
     if (usable.length === 0) return;
     try {
       const dir = await join(await documentDir(), fileSystem.rootFolder, "Imports", String(Date.now()));
@@ -151,7 +158,25 @@ export function useFileActions() {
     }
   };
 
+  const importDocument = async (filePath?: string) => {
+    if (needsProject()) return;
+    try {
+      const selectedPath = filePath || await open({
+        multiple: false,
+        filters: [{ name: t`Documents`, extensions: [...SOURCE_EXTENSIONS] }],
+      });
+      if (!selectedPath || typeof selectedPath !== "string") return;
+      showToast(t`Reading the document...`, "info");
+      const source = await readSource(selectedPath);
+      setAutoDirectorData({ state: "processing", content: source.text, title: t`Import document`, fileName: source.name });
+    } catch (e: any) {
+      console.error(e);
+      showToast(e?.message ?? t`Could not read the document.`, "error");
+    }
+  };
+
   const importRouteFile = async (filePath?: string) => {
+    if (needsProject()) return;
     try {
       const selectedPath = filePath || await open({
         multiple: false,
@@ -162,7 +187,7 @@ export function useFileActions() {
       
       if (selectedPath.toLowerCase().endsWith(".txt") || selectedPath.toLowerCase().endsWith(".md")) {
         const fileContent = await readTextFile(selectedPath);
-        setAutoDirectorData({ state: "processing", content: fileContent });
+        setAutoDirectorData({ state: "processing", content: fileContent, title: t`Import document`, fileName: selectedPath.split(/[\\/]/).pop() });
         return;
       }
 
@@ -297,6 +322,7 @@ export function useFileActions() {
   };
 
   const importPhotos = async () => {
+    if (needsProject()) return;
     try {
       const selected = await open({
         multiple: true,
@@ -315,5 +341,5 @@ export function useFileActions() {
     }
   };
 
-  return { importRouteFile, handleDroppedFiles, handleDroppedBrowserFiles, importPhotos };
+  return { importRouteFile, importDocument, handleDroppedFiles, handleDroppedBrowserFiles, importPhotos };
 }

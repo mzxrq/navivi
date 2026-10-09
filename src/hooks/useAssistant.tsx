@@ -1,4 +1,6 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { i18n } from "@lingui/core";
+import { resolveNarrationLanguage } from "../utils/narrationLanguage";
 import { t } from "@lingui/core/macro";
 import { aiEngine } from "../services/ai/engine";
 import { EMPTY_BRIEF, mergeBrief, missingForBuild, ProjectBrief } from "../services/assistant/brief";
@@ -263,9 +265,12 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     const mine = generation.current;
     const live = () => generation.current === mine;
     try {
+      // A language named in the chat wins; else the narration language setting, else what the sources are written in.
+      const sourceText = sources.map((s) => `${s.name}\n${s.text}`).join("\n\n").slice(0, MAX_SOURCE_CHARS);
+      const languages = brief.languages.length ? brief.languages : [resolveNarrationLanguage(settings.narration_language, [sourceText, brief.scope, brief.purpose], i18n.locale)];
       const built = await buildProject({
-        brief,
-        sourceText: sources.map((s) => `${s.name}\n${s.text}`).join("\n\n").slice(0, MAX_SOURCE_CHARS),
+        brief: { ...brief, languages },
+        sourceText,
         engine,
         mapboxToken: settings.mapbox_api_key || import.meta.env.VITE_MAPBOX_TOKEN,
         signal: abort.current.signal,

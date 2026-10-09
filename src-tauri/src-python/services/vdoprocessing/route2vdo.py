@@ -60,7 +60,7 @@ LEG_RENDER_VERSION = 7
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
-_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text")
+_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text", "kw.leg_elevations")
 
 
 def _reported_speed_kmh(mode_speed_kmh: Dict[str, float], mode: str) -> float:
@@ -749,6 +749,8 @@ class RouteAnimator:
             )
             if self.config.get("mapbox_style_id"):  # only a chosen style, so a finished leg's fingerprint stays as it was
                 leg_kwargs["map_style"] = resolve_map_style(self.config, "mapbox/outdoors-v12")
+            if res_data.get("elevations"):  # only with the heatmap on, so a finished leg's fingerprint stays as it was
+                leg_kwargs["leg_elevations"] = res_data["elevations"]
             if self.config.get("overview_style") == "course":  # likewise: the walker slows down before each stop
                 leg_kwargs["arrival_slow_seconds"] = tuning.COURSE_ARRIVAL_SLOW_SECONDS
             # Everything this leg's clip is made from. Existing files are

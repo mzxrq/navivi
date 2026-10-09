@@ -96,6 +96,44 @@ export async function geocodePlace(place: string, opts: GeocodeOptions = {}): Pr
   return (await ask(place, opts, undefined)) ?? mapbox;
 }
 
+export interface PlaceCandidate {
+  name: string;
+  lat: number;
+  lng: number;
+}
+
+// Several answers for one search, for a person to choose from: Mapbox first, then OpenStreetMap (which knows small shrines,
+// passes and trails Mapbox does not). Close results of the two services are the same place and shown once.
+export async function searchPlaces(query: string, opts: { mapboxToken?: string; near?: GeoPoint; signal?: AbortSignal } = {}): Promise<PlaceCandidate[]> {
+  const q = encodeURIComponent(query.trim());
+  if (!q) return [];
+  const out: PlaceCandidate[] = [];
+  const add = (c: PlaceCandidate) => {
+    if (Number.isFinite(c.lat) && Number.isFinite(c.lng) && !out.some((o) => distanceKm(o, c) < 0.1)) out.push(c);
+  };
+  if (opts.mapboxToken) {
+    try {
+      const prox = opts.near ? `&proximity=${opts.near.lng},${opts.near.lat}` : "";
+      const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${q}.json?limit=5${prox}&access_token=${opts.mapboxToken}`, { signal: opts.signal });
+      const data = await res.json();
+      for (const f of data?.features ?? []) add({ name: String(f.place_name ?? f.text ?? query), lat: f.center?.[1], lng: f.center?.[0] });
+    } catch (e: any) {
+      if (e?.name === "AbortError") throw e;
+    }
+  }
+  try {
+    await nominatimTurn(opts.signal);
+    const around = opts.near ? boundsAround(opts.near, 1) : undefined;
+    const view = around ? `&viewbox=${around.west},${around.north},${around.east},${around.south}` : "";
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=6&q=${q}${view}`, { signal: opts.signal });
+    const data = await res.json();
+    for (const h of Array.isArray(data) ? data : []) add({ name: String(h.display_name ?? query), lat: parseFloat(h.lat), lng: parseFloat(h.lon) });
+  } catch (e: any) {
+    if (e?.name === "AbortError") throw e;
+  }
+  return out;
+}
+
 // ── Finding a whole route ──
 
 const TOLERANCE_KM = 0.05; // a hit this close to the region's own point is the region itself, not the place
@@ -130,11 +168,44 @@ export function nameVariants(name: string): string[] {
   return [name, expanded, plain, core].filter((n, i, all) => n && all.indexOf(n) === i);
 }
 
+// The prefecture a document says it is in ("Wakayama Pref.", "和歌山県"), the most mentioned one: it anchors a route whose
+// place names carry no region. null when the text names none.
+export function regionHintOf(text: string): string | null {
+  const counts = new Map<string, number>();
+  const add = (name: string) => counts.set(name, (counts.get(name) ?? 0) + 1);
+  for (const m of text.matchAll(/\b([A-Z][a-z]+)\s+(?:Pref\.?|Prefecture)/g)) add(m[1]);
+  for (const m of text.matchAll(/(北海道|[\u3400-\u9fff]{2,3}[都府県])/g)) add(m[1]);
+  let best: string | null = null;
+  let bestScore = 0;
+  for (const name of counts.keys()) {
+    const stem = name.replace(/[都府県]$/, "");
+    const score = (counts.get(name) ?? 0) * 100 + text.split(stem).length - 1;
+    if (score > bestScore) [best, bestScore] = [name, score];
+  }
+  return best;
+}
+
 export const stripRegion =(place: string, region: string | null) => (region && place.endsWith(`, ${region}`) ? place.slice(0, -(region.length + 2)).trim() : place);
 
 export function medianPoint(points: GeoPoint[]): GeoPoint {
   const middle = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
   return { lat: middle(points.map((p) => p.lat)), lng: middle(points.map((p) => p.lng)) };
+}
+
+const CLUSTER_KM = 50;
+
+// Unbounded lookups of small places often land on namesakes across the country; the real route is where most hits are close together.
+export function densestCluster(points: GeoPoint[]): GeoPoint[] {
+  let best: GeoPoint[] = points;
+  let bestCount = 0;
+  for (const p of points) {
+    const near = points.filter((q) => distanceKm(p, q) <= CLUSTER_KM);
+    if (near.length > bestCount) {
+      best = near;
+      bestCount = near.length;
+    }
+  }
+  return best;
 }
 
 export type Lookup = (place: string, constraints: Omit<GeocodeOptions, "signal">) => Promise<GeoPoint | null>;
@@ -147,6 +218,7 @@ export interface RouteGeocode {
   failed: string[];
 }
 
+const OUTLIER_MIN_KM = 25; // a stop farther than this (or twice the hop) from the middle of the route is a namesake
 const SPIKE_MIN_KM = 15; // a detour shorter than this is ordinary routing, not a wrong namesake
 
 // Indexes of found points that sit far off the line between the found points before and after them.
@@ -167,14 +239,16 @@ export function spikes(points: (GeoPoint | null)[]): number[] {
 // uncertain, so a stop never lands on a famous namesake far away.
 export async function geocodeRoute(
   places: string[],
-  opts: { mapboxToken?: string; signal?: AbortSignal; onProgress?: (done: number, name: string) => void; lookup?: Lookup; rename?: Rename; hopKm?: number },
+  opts: { mapboxToken?: string; signal?: AbortSignal; onProgress?: (done: number, name: string) => void; lookup?: Lookup; rename?: Rename; hopKm?: number; regionHint?: string | null },
 ): Promise<RouteGeocode> {
   const { mapboxToken, signal, onProgress } = opts;
   const hopDegrees = (opts.hopKm ?? DEFAULT_HOP_KM) / KM_PER_DEGREE;
   const lookup: Lookup = opts.lookup ?? ((place, c) => geocodePlace(place, { ...c, mapboxToken, signal }));
   const region = regionOf(places);
 
-  let anchor: GeoPoint | null = region ? await lookup(region, {}) : null;
+  const anchorName = region ?? opts.regionHint ?? null;
+  const hinted = !region && !!opts.regionHint;
+  let anchor: GeoPoint | null = anchorName ? await lookup(anchorName, {}) : null;
   const anchorIsRegion = anchor !== null;
   if (!anchor) {
     const rough: GeoPoint[] = [];
@@ -182,11 +256,16 @@ export async function geocodeRoute(
     const sample = places.filter((_, i) => i % step === 0);
     for (const place of [...sample, ...places.filter((p) => !sample.includes(p))]) {
       if (rough.length > 0 && !sample.includes(place)) break;
-      const hit = await lookup(place, {});
+      let hit: GeoPoint | null = null;
+      for (const name of nameVariants(place).slice(0, 2)) {
+        hit = await lookup(name, {});
+        if (hit) break;
+      }
       if (hit) rough.push(hit);
     }
     if (rough.length === 0) return { found: [], failed: [...places] };
-    anchor = { ...medianPoint(rough), country: rough.find((p) => p.country)?.country };
+    const cluster = densestCluster(rough);
+    anchor = { ...medianPoint(cluster), country: cluster.find((p) => p.country)?.country };
   }
   const center: GeoPoint = anchor;
 
@@ -212,8 +291,13 @@ export async function geocodeRoute(
     }
     return null;
   };
-  const namesFor = (place: string, local?: string) =>
-    [local, ...nameVariants(stripRegion(place, region)), place].filter((n, k, all): n is string => !!n && all.indexOf(n) === k).slice(0, MAX_NAMES);
+  // The document's own spelling is tried first and the AI's local-script guess last: a small model invents a plausible
+  // name ("京石駅" for 孝子駅) that matches a real place elsewhere with full confidence, while the document's spelling
+  // either finds the place or finds nothing.
+  const namesFor = (place: string, local?: string) => {
+    const own = [...nameVariants(stripRegion(place, region)), place].filter((n, k, all) => !!n && all.indexOf(n) === k);
+    return (local ? [...own.slice(0, MAX_NAMES - 1), local] : own.slice(0, MAX_NAMES)).filter((n, k, all) => all.indexOf(n) === k);
+  };
 
   // In Japan the search indexes know small places only under their Japanese names (English spellings find nothing or a namesake
   // elsewhere), so there the local names are asked for up front and tried first; elsewhere only a miss is retried under one.
@@ -224,7 +308,8 @@ export async function geocodeRoute(
   for (const [i, place] of places.entries()) {
     if (signal?.aborted) throw aborted();
     onProgress?.(i, place);
-    points[i] = await search(i, namesFor(place, localOf(place)));
+    // Names carry no region, so a wrong first hit would leave every later stop searching around the wrong place: retry in the whole region.
+    points[i] = (await search(i, namesFor(place, localOf(place)))) ?? (hinted ? await search(i, namesFor(place, localOf(place)), { at: center, degrees: REGION_DEGREES }) : null);
   }
 
   // A stop far off the line between the stops on either side of it is a namesake elsewhere ("西念寺" is a common name): the
@@ -235,6 +320,20 @@ export async function geocodeRoute(
     const gap = distanceKm(before, after);
     const mid = { lat: (before.lat + after.lat) / 2, lng: (before.lng + after.lng) / 2, country: before.country };
     points[i] = await search(i, namesFor(places[i], localOf(places[i])), { at: mid, degrees: Math.max(gap, SPIKE_MIN_KM) / KM_PER_DEGREE });
+  }
+
+  // Two wrong namesakes can agree with each other, so the neighbors never expose them: a stop far from where most of the
+  // route is gets searched again close to the route's middle, and is treated as unknown (placed between its neighbors,
+  // marked uncertain) when nothing is there.
+  const placed = points.filter((q): q is GeoPoint => q !== null);
+  if (placed.length >= 4) {
+    const middle = medianPoint(placed);
+    const reach = Math.max(OUTLIER_MIN_KM, 2 * (opts.hopKm ?? DEFAULT_HOP_KM));
+    for (const [i, q] of points.entries()) {
+      if (!q || distanceKm(q, middle) <= reach) continue;
+      if (signal?.aborted) throw aborted();
+      points[i] = await search(i, namesFor(places[i], localOf(places[i])), { at: middle, degrees: reach / KM_PER_DEGREE });
+    }
   }
 
   let missing = places.map((_, i) => i).filter((i) => !points[i]);

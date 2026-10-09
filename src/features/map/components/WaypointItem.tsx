@@ -253,7 +253,7 @@ export function WaypointItem({
         )}
       </div>
 
-      {!isLast && !isListEditMode && (
+      {!isLast && !isListEditMode && !(wp.isStopBy && !wp.connectToRoute) && (
         <div
           onContextMenu={(e) => openContextMenu(e, legMenu(wp))}
           className="relative flex items-center gap-2.5 pl-1.5 pr-1.5 py-1"

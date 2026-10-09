@@ -41,6 +41,20 @@ export function htmlToText(html: string): { title: string; text: string } {
   return { title: collapse(doc.title ?? ""), text: collapse(root?.textContent ?? "") };
 }
 
+// A PDF of a map or brochure also yields scale numbers, legend glyphs and labels printed twice ("Kyoshi Sta.Kyoshi Sta."):
+// dropping them keeps the model from listing them as places.
+export function denoise(text: string): string {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => (line.match(/[A-Za-z\u3040-\u30ff\u3400-\u9fff]/g) ?? []).length >= 2)
+    .map((line) => {
+      const half = line.length / 2;
+      return Number.isInteger(half) && line.slice(0, half) === line.slice(half) ? line.slice(0, half) : line;
+    });
+  return lines.join("\n");
+}
+
 const cut = (name: string, text: string, alreadyCut = false): SourceText => ({
   name,
   text: text.slice(0, MAX_CHARS),
@@ -93,5 +107,5 @@ export async function readSource(input: string, signal?: AbortSignal): Promise<S
   }
   if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
   if (!reply.success) throw new Error(reply.cancelled ? `Reading ${name} was interrupted. Try attaching it again.` : reply.error);
-  return cut(name, reply.text, reply.truncated);
+  return cut(name, extension === "pdf" ? denoise(reply.text) : reply.text, reply.truncated);
 }

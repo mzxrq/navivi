@@ -17,7 +17,7 @@ import { Dialog, dialogButton, dialogInput } from "../ui/Dialog";
 import { StepButtons } from "../ui/StepButtons";
 import { Select } from "../ui/Select";
 import { Switch } from "../ui/Switch";
-import { editorStyleForVideo, editorStyleLabel, videoMapStyles } from "../../config/constants";
+import { editorStyleForVideo, editorStyleLabel, resolveVideoStyle, videoMapStyles } from "../../config/constants";
 import { db } from "../../services/db";
 import { VideoLookSettings } from "../ui/VideoLookSettings";
 import { applyOption, lookPatch } from "../../utils/videoLook";
@@ -90,6 +90,8 @@ export function ProjectSettingsModal({
   const handleSave = async () => {
     try {
       if (configPath) {
+        const videoStyle = resolveVideoStyle(config.settings ?? {});
+        config.settings = applyOption(config.settings ?? {}, { follow_editor_map_style: videoStyle.follow, mapbox_style_id: videoStyle.id });
         await writeTextFile(configPath, JSON.stringify(config, null, 2));
         // The database is what the app reads when it opens the project, so the file alone would be overwritten.
         if (project.projectId) {
@@ -101,6 +103,7 @@ export function ProjectSettingsModal({
             attraction_fade_seconds: s.attraction_fade_seconds,
             ...lookPatch(s),
             mapbox_style_id: s.mapbox_style_id ?? null,
+            follow_editor_map_style: s.follow_editor_map_style,
             mapbox_retina: s.mapbox_retina ?? null,
           });
         }
@@ -178,15 +181,18 @@ function ProjectSettingsForm({
     "mapbox/light-v11": t`Light`,
   };
   const savedStyle: string = options.mapbox_style_id ?? "";
+  const followsEditor = resolveVideoStyle(options).follow;
   const styleOptions = [
     { value: "", label: t`Default` },
     ...videoMapStyles.map((s) => ({ value: s.id, label: styleLabels[s.id] ?? s.label })),
     ...(savedStyle && !videoMapStyles.some((s) => s.id === savedStyle) ? [{ value: savedStyle, label: savedStyle }] : []),
-    ...(editorStyle ? [{ value: "editor", label: t`Same as the editor` }] : []),
+    { value: "editor", label: t`Same as the editor` },
   ];
+  // Picking "Same as the editor" (or pressing the sync button) makes the video follow the editor's map again; any other
+  // choice is a manual one and the video stops following.
   const chooseStyle = (value: string) => {
-    const id = value === "editor" ? editorStyle : value;
-    setOption({ mapbox_style_id: id || undefined });
+    if (value === "editor") setOption({ follow_editor_map_style: true, mapbox_style_id: editorStyle ?? undefined });
+    else setOption({ follow_editor_map_style: false, mapbox_style_id: value || undefined });
   };
 
   const setMarker = (routeMarker: string) => setOption({ routeMarker });
@@ -322,16 +328,36 @@ function ProjectSettingsForm({
         </p>
         <OptionRow
           title={t`Map style`}
-          description={editorStyle ? t`What the video's map looks like. Default keeps the look the video always had.` : t`The editor shows ${editorLabel}, which is not a Mapbox style, so the video cannot use it.`}
+          description={
+            !editorStyle
+              ? t`The editor shows ${editorLabel}, which is not a Mapbox style, so the video cannot use it.`
+              : followsEditor
+                ? t`The video's map follows the map in the editor (${editorLabel}) until you pick a style here.`
+                : t`What the video's map looks like. Default keeps the look the video always had.`
+          }
         >
           <Select
             className="w-44"
             label={t`Map style`}
-            value={savedStyle}
+            value={followsEditor ? "editor" : savedStyle}
             onChange={chooseStyle}
             options={styleOptions}
           />
         </OptionRow>
+        {editorStyle && !followsEditor && (
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-[12px] text-zinc-500 dark:text-zinc-400">
+              <Trans>The editor's map is {editorLabel}.</Trans>
+            </p>
+            <button
+              type="button"
+              onClick={() => chooseStyle("editor")}
+              className="shrink-0 h-8 px-3 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 text-[12px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-white/10 transition-colors"
+            >
+              <Trans>Sync with the editor's map</Trans>
+            </button>
+          </div>
+        )}
         <OptionRow
           title={t`Sharper map tiles`}
           description={t`Larger map tiles for a crisper picture. They take longer to download.`}

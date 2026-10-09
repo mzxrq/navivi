@@ -55,7 +55,7 @@ export function TitleBar() {
     setMetadata,
   } = useWorkspace();
 
-  const { importRouteFile, importPhotos } = useFileActions();
+  const { importRouteFile, importDocument, importPhotos } = useFileActions();
   const { panelOpen, setPanelOpen } = useAssistant();
   const aiReady = useAiReady();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -326,23 +326,35 @@ export function TitleBar() {
                   <Trans>Open Project Folder...</Trans>
                 </MenuItem>
 
-                <MenuSeparator />
-                <MenuItem
-                  onClick={async () => {
-                    setIsMenuOpen(false);
-                    await importPhotos();
-                  }}
-                >
-                  <Trans>Import Photos...</Trans>
-                </MenuItem>
-                <MenuItem
-                  onClick={async () => {
-                    setIsMenuOpen(false);
-                    await importRouteFile();
-                  }}
-                >
-                  <Trans>Import GPX...</Trans>
-                </MenuItem>
+                {currentView === "editor" && (
+                  <>
+                    <MenuSeparator />
+                    <MenuItem
+                      onClick={async () => {
+                        setIsMenuOpen(false);
+                        await importPhotos();
+                      }}
+                    >
+                      <Trans>Import Photos...</Trans>
+                    </MenuItem>
+                    <MenuItem
+                      onClick={async () => {
+                        setIsMenuOpen(false);
+                        await importRouteFile();
+                      }}
+                    >
+                      <Trans>Import GPX...</Trans>
+                    </MenuItem>
+                    <MenuItem
+                      onClick={async () => {
+                        setIsMenuOpen(false);
+                        await importDocument();
+                      }}
+                    >
+                      <Trans>Import document...</Trans>
+                    </MenuItem>
+                  </>
+                )}
 
                 <MenuSeparator />
                 <MenuItem danger onClick={() => handleWindow("close")}>
