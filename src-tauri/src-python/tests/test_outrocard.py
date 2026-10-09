@@ -187,7 +187,7 @@ class TestRouteInfo:
     def test_summary_sits_under_the_title(self, tmp_path):
         page = outrocard._build_scroll_page("My Trip", self._waypoints(tmp_path), SIZE, BRIEF)
         x = outrocard.tuning.OUTRO_SCROLL_SIDE_PADDING + 4
-        assert page.getpixel((x, 120)) == outrocard.tuning.OUTRO_PANEL_COLOR
+        assert page.getpixel((x, 160)) == outrocard.tuning.OUTRO_PANEL_COLOR
 
     def test_intro_subtitle_is_drawn_under_the_title(self, tmp_path):
         wps = self._waypoints(tmp_path)
