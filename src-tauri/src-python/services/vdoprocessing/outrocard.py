@@ -119,7 +119,7 @@ def _draw_badge(
 
 
 def _draw_photo_badge(
-    page: Image.Image, x: int, y: int, number: int, font: FreeTypeFont, px,
+    page: Image.Image, x: int, y: int, number: int | str, font: FreeTypeFont, px,
 ) -> None:
     """A white pill with a soft shadow and the number centred, over a photo."""
     from PIL import ImageFilter
@@ -483,8 +483,25 @@ def _build_route_page(
     panel_h = _summary_height(brief, px)
     legs_top = panel_top + panel_h + px(32)
     cols = tuning.OUTRO_ROUTE_COLS
-    rows = math.ceil(len(legs) / cols)
-    page_h = max(height, legs_top + rows * (row_h + row_gap) - row_gap + px(70))
+    sb_title_h = px(12) + px(tuning.OUTRO_STOPBY_TITLE_FONT_SIZE) + px(12)
+
+    # Leg cards OUTRO_ROUTE_COLS to a row; after the last one, a title and
+    # every stop-by in route order (the start pin's first) as shorter cards.
+    rows: List[Tuple[str, List[Any]]] = [
+        ("legs", list(range(n, min(n + cols, len(legs))))) for n in range(0, len(legs), cols)
+    ]
+    stopbys = _stopbys(brief, "start_batch", "start_batch_at")
+    for leg in legs:
+        stopbys += _stopbys(leg, "batch", "batch_at")
+    if stopbys:
+        rows.append(("title", []))
+        rows.extend(("stopbys", stopbys[n:n + cols]) for n in range(0, len(stopbys), cols))
+
+    row_tops, y = [], legs_top
+    for kind, _ in rows:
+        row_tops.append(y)
+        y += sb_title_h if kind == "title" else row_h + row_gap
+    page_h = max(height, y - row_gap + px(70))
 
     page = Image.new("RGB", (width, page_h), tuning.OUTRO_BG_COLOR)
     draw = ImageDraw.Draw(page)
@@ -530,10 +547,26 @@ def _build_route_page(
     line_gap = px(8)
     stats_h = chip_ascent + line_gap + dist_ascent + line_gap + chip_ascent
 
-    for i, (leg, (modes, mode_label, dist, dur)) in enumerate(zip(legs, stats)):
-        row, col = divmod(i, cols)
-        top = legs_top + row * (row_h + row_gap)
-        cx0 = x0 + col * (card_w + col_gap)
+    title_font = _load_font(bold, px(tuning.OUTRO_STOPBY_TITLE_FONT_SIZE))
+    slots = []
+    number = 0  # stop-bys are numbered +1, +2 ... after the leg cards
+    for (kind, items), top in zip(rows, row_tops):
+        if kind == "title":
+            draw.text(
+                (x0, top + px(12)), video_text.current_labels()["outro_stopby_title"],
+                font=title_font, fill=tuning.OUTRO_LABEL_COLOR,
+            )
+        for col, item in enumerate(items):
+            cx0 = x0 + col * (card_w + col_gap)
+            if kind == "stopbys":
+                number += 1
+                _draw_stopby_card(page, waypoints, item, cx0, top, card_w, px, f"+{number}", badge_font)
+            else:
+                slots.append((item, cx0, top))
+
+    for i, cx0, top in slots:
+        leg = legs[i]
+        modes, mode_label, dist, dur = stats[i]
         stats_right = cx0 + card_w - px(18)
         divider_x = stats_right - stats_w - px(16)
         color = _mode_rgb(engine, modes[0])
@@ -603,6 +636,65 @@ def _build_route_page(
         draw.text((stats_right, y), dur, font=chip_font, fill=tuning.OUTRO_LABEL_COLOR, anchor="ra")
 
     return page
+
+
+def _stopbys(source: Dict[str, Any], names_key: str, at_key: str) -> List[Tuple[str, Any, str]]:
+    """(name, [lat, lng], short fact) of each stop-by a brief entry hosts."""
+    names = source.get(names_key) or []
+    places = source.get(at_key) or []
+    facts = source.get(f"{names_key}_facts") or []
+    return [
+        (name, places[n] if n < len(places) else None, facts[n] if n < len(facts) else "")
+        for n, name in enumerate(names)
+    ]
+
+
+def _draw_stopby_card(
+    page: Image.Image, waypoints: List[Dict[str, Any]], stopby: Tuple[str, Any, str],
+    x: int, y: int, card_w: int, px, number: str, badge_font: FreeTypeFont,
+) -> None:
+    """A stop-by's card, sized like a leg card: numbered photo, name, its short fact."""
+    name, at, fact = stopby
+    draw = ImageDraw.Draw(page)
+    row_h = px(tuning.OUTRO_ROUTE_ROW_HEIGHT)
+    name_size = px(tuning.OUTRO_ROUTE_NAME_FONT_SIZE)
+    bold = _GraphicsEngineBase.FONT_CANDIDATES_BOLD
+    fact_size = px(tuning.OUTRO_ROUTE_FROM_FONT_SIZE)
+    fact_font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_REGULAR, fact_size)
+    muted = tuning.OUTRO_SUBTITLE_COLOR
+    pad = px(12)
+    thumb_h = row_h - 2 * pad
+    thumb_w = int(thumb_h * tuning.OUTRO_ROUTE_THUMB_ASPECT)
+    draw.rounded_rectangle([x, y, x + card_w, y + row_h], radius=px(16), fill=tuning.OUTRO_PANEL_COLOR)
+
+    image_path = _image_at(waypoints, at) if at else None
+    tile = _rounded_thumbnail(image_path, (thumb_w, thumb_h), px(_CORNER_RADIUS)) if image_path else None
+    if tile is not None:
+        page.paste(tile, (x + pad, y + pad), tile)
+    else:
+        well = _mix(tuning.OUTRO_PANEL_COLOR, muted, 0.15)
+        draw.rounded_rectangle(
+            [x + pad, y + pad, x + pad + thumb_w, y + pad + thumb_h], radius=px(_CORNER_RADIUS), fill=well,
+        )
+        _draw_pin_icon(draw, x + pad + thumb_w / 2, y + pad + thumb_h / 2, thumb_h * 0.5, muted, well)
+    _draw_photo_badge(page, x + pad + px(8), y + pad + px(8), number, badge_font, px)
+
+    text_x = x + pad + thumb_w + px(16)
+    text_w = x + card_w - px(18) - text_x
+    font, size = _load_font(bold, name_size), name_size
+    while draw.textlength(name, font=font) > text_w and size > px(16):
+        size -= 1
+        font = _load_font(bold, size)
+    block = size + (px(10) + fact_size if fact else 0)
+    ty = y + (row_h - block) / 2 - px(2)
+    draw.text(
+        (text_x, ty), _truncate_to_width(draw, name, font, text_w), font=font, fill=tuning.OUTRO_TITLE_COLOR,
+    )
+    if fact:
+        draw.text(
+            (text_x, ty + size + px(10)), _truncate_to_width(draw, fact, fact_font, text_w),
+            font=fact_font, fill=muted,
+        )
 
 
 def _draw_pin_icon(draw: ImageDraw.ImageDraw, cx: float, cy: float, size: float, color, hole) -> None:

@@ -227,6 +227,26 @@ class TestRouteInfo:
         r, g, b = thumb.getpixel((10, 10))
         assert r > 200 and g < 60
 
+    def test_stopbys_come_after_the_last_leg_card(self, tmp_path):
+        wps = self._waypoints(tmp_path)
+        legs = (BRIEF["legs"] * 4)[:6]
+        plain = outrocard._build_scroll_page("T", wps, SIZE, {**BRIEF, "legs": legs})
+        hosted = [{**legs[0], "batch": ["X", "Y"], "batch_at": [[1, 2], [3, 4]]}, *legs[1:]]
+        page = outrocard._build_scroll_page("T", wps, SIZE, {**BRIEF, "legs": hosted})
+        t = outrocard.tuning
+        # rows [0, 1] / [2, 3] / [4, 5] / title / [X, Y]
+        title = 12 + t.OUTRO_STOPBY_TITLE_FONT_SIZE + 12
+        assert page.height - plain.height == t.OUTRO_ROUTE_ROW_GAP + title + t.OUTRO_ROUTE_ROW_HEIGHT
+
+    def test_start_stopbys_are_listed_too(self, tmp_path):
+        wps = self._waypoints(tmp_path)
+        legs = (BRIEF["legs"] * 4)[:6]
+        plain = outrocard._build_scroll_page("T", wps, SIZE, {**BRIEF, "legs": legs})
+        page = outrocard._build_scroll_page(
+            "T", wps, SIZE, {**BRIEF, "legs": legs, "start_batch": ["X"], "start_batch_at": [[1, 2]]},
+        )
+        assert page.height > plain.height
+
     def test_grid_frame_accepts_a_brief(self, tmp_path):
         frame = outrocard._build_frame("My Trip", self._waypoints(tmp_path), BRIEF)
         assert frame.size == (outrocard._CANVAS_W, outrocard._CANVAS_H)

@@ -75,3 +75,10 @@ def test_a_misread_kanji_name_is_spelled_out_for_the_retake(tmp_path, monkeypatc
     monkeypatch.setattr(name_check, "transcribe", lambda audio: "三輪神社へ。" if audio == OTHER else "みら神社へ。")
     assert asyncio.run(c._speak_chunk("三輪神社へ。")) == [OTHER]
     assert sent == ["三輪神社へ。", "ミワ神社へ。"]
+
+
+def test_a_misread_katakana_name_is_retaken_in_hiragana_and_still_checked():
+    name_check.remember("サルサカ峠", "猿坂峠")
+    text = name_check.spell_out("サルサカ峠が見えてきます。", ["サルサカ峠"])
+    assert text == "さるさか峠が見えてきます。"
+    assert ("さるさか峠", "さるさかとうげ") in name_check.expected_names(text)

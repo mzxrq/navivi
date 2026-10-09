@@ -2,7 +2,8 @@
 shown at once, then traced from the start while each stop's photo card pops in
 beside it and stays, a stats card slides in with the totals, and the stop-bys
 appear last. Timed by the course script's cues: {route} (the trace starts),
-{n} (stop n reached), {end} (trace done, stats card) and {extras} (stop-bys).
+{n} (stop n reached; with {go} cues, only {go} stops are timed, at their {go}),
+{end} (trace done, stats card) and {extras} (stop-bys).
 """
 
 import math
@@ -27,23 +28,25 @@ def _smoothstep(t: float) -> float:
 
 
 def trace_anchors(
-    stop_dists: List[Tuple[Optional[float], float]],
+    stop_dists: List[Tuple],
     total_dist: float,
     route_at: float,
     end_at: Optional[float],
     legs: int,
-) -> List[Tuple[float, float]]:
+) -> List[Tuple]:
     """(seconds, distance along the route) the trace passes through, in order.
-    `stop_dists` is (cue seconds or None, distance) per stop in route order;
-    stops without a cue are passed on the way. Without any cue the trace runs
+    `stop_dists` is (cue seconds or None, distance[, stops]) per place in route
+    order; places without a cue are passed on the way. A cued place with
+    stops=False (named mid-sentence, no {go}) becomes (seconds, distance, False):
+    the trace goes through it without slowing. Without any cue the trace runs
     COURSE_SECONDS_PER_LEG per leg, within COURSE_TRACE_MIN..MAX_SECONDS."""
-    anchors = [(route_at, 0.0)]
-    for cue, dist in stop_dists:
+    anchors: List[Tuple] = [(route_at, 0.0)]
+    for cue, dist, *rest in stop_dists:
         if cue is None or dist <= anchors[-1][1]:
             continue
         if cue < anchors[-1][0] + _MIN_ANCHOR_GAP_SECONDS:
             continue
-        anchors.append((float(cue), float(dist)))
+        anchors.append((float(cue), float(dist)) if not rest or rest[0] else (float(cue), float(dist), False))
     if end_at is not None and end_at > anchors[-1][0] + _MIN_ANCHOR_GAP_SECONDS:
         anchors.append((float(end_at), total_dist))
     elif anchors[-1][1] < total_dist:
@@ -58,14 +61,26 @@ def trace_anchors(
     return anchors
 
 
-def distance_at(anchors: List[Tuple[float, float]], t: float) -> float:
-    """How far the trace has got at `t` seconds: eased between anchors, so it
-    settles on each cued stop and sets off again."""
+def _ease(s: float, settle_from: bool, settle_to: bool) -> float:
+    s = min(1.0, max(0.0, s))
+    if settle_from and settle_to:
+        return _smoothstep(s)
+    if settle_from:
+        return s * s * (2 - s)  # sets off from rest, arrives at speed
+    if settle_to:
+        return 1 - (1 - s) * (1 - s) * (1 + s)  # arrives at speed, settles
+    return s
+
+
+def distance_at(anchors: List[Tuple], t: float) -> float:
+    """How far the trace has got at `t` seconds: it settles on each stop and
+    sets off again, and goes straight through a passed place (a 3-tuple anchor)."""
     if t <= anchors[0][0]:
         return anchors[0][1]
-    for (t0, d0), (t1, d1) in zip(anchors, anchors[1:]):
+    for a, b in zip(anchors, anchors[1:]):
+        (t0, d0), (t1, d1) = a[:2], b[:2]
         if t <= t1:
-            return d0 + (d1 - d0) * _smoothstep((t - t0) / max(1e-6, t1 - t0))
+            return d0 + (d1 - d0) * _ease((t - t0) / max(1e-6, t1 - t0), len(a) == 2, len(b) == 2)
     return anchors[-1][1]
 
 
@@ -146,8 +161,19 @@ class _CourseOverviewMixin:
             tuning.COURSE_PIVOT_HOLD_SECONDS if cues else 1.5
         )
         numbered = [ap for ap in on_route if ap["index"] != 0 and ap is not stop_popup]
+        any_go = any(str(k).startswith("go") for k in cues)
+
+        def arrive_cue(ap: Dict) -> Optional[float]:
+            # A group's names are listed in a few seconds, then its walk time is
+            # read; the trace reaches its {go} stop as the next sentence starts.
+            name = cues.get(str(ap.get("order")))
+            if not any_go:
+                return name
+            go = cues.get(f"go{ap.get('order')}")
+            return None if go is None else max(float(go), float(name if name is not None else go))
+
         anchors = trace_anchors(
-            [(cues.get(str(ap.get("order"))), ap["course_dist"]) for ap in numbered],
+            [(arrive_cue(ap), ap["course_dist"]) for ap in numbered],
             total, route_at, cues.get("end"), max(1, len(numbered) + 1),
         )
         trace_end = anchors[-1][0]
@@ -186,7 +212,7 @@ class _CourseOverviewMixin:
         cards = {ap["index"]: ap for ap in laid_out}
 
         def reveal_time(dist: float) -> float:
-            for (t0, d0), (t1, d1) in zip(anchors, anchors[1:]):
+            for (t0, _d0, *_), (t1, d1, *_) in zip(anchors, anchors[1:]):
                 if dist <= d1 + 1e-6:
                     lo, hi = t0, t1
                     for _ in range(30):  # distance_at is monotonic: bisect

@@ -33,6 +33,7 @@ _BUILTIN_JA: Dict[str, Any] = {
     "duration_sample": "8時間88分", "stopby_notice_title": "追加の見どころ（まるのマーカー）",
     "stopby_notice_body": "まるのマーカーは、ルートの近くにある\n追加の見どころです。立ち寄るかどうかは自由。\n時間や体力に合わせて決めてください。",
     "place_count": "{n} か所", "outro_subtitle": "訪れた{count}か所", "outro_route_from": "{name} から",
+    "outro_stopby_title": "立ち寄りスポット",
     "outro_summary": {
         "distance": "総距離", "legs": "{count}区間", "time": "移動時間", "time_note": "目安",
         "places": "訪れた場所", "places_value": "{count}か所", "longest": "最長区間",

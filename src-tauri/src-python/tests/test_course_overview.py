@@ -25,6 +25,14 @@ class TestTrace:
         samples = [distance_at(anchors, t / 10) for t in range(0, 320)]
         assert samples == sorted(samples)  # never goes back
 
+    def test_a_passed_place_is_crossed_at_speed(self):
+        anchors = trace_anchors([(6.0, 100.0, False), (10.0, 200.0, True)], 200.0, 2.0, None, 3)
+        assert anchors[1] == (6.0, 100.0, False)
+        assert distance_at(anchors, 6.0) == 100.0  # reached on its cue
+        before, after = distance_at(anchors, 5.9), distance_at(anchors, 6.1)
+        assert after - before > 1.0  # still moving there, not settling
+        assert distance_at(anchors, 9.9) > 199.0  # but it settles on the stop
+
     def test_without_cues_it_runs_per_leg(self):
         anchors = trace_anchors([(None, 50.0)], 100.0, 1.5, None, 4)
         assert anchors[-1] == (1.5 + 4 * tuning.COURSE_SECONDS_PER_LEG, 100.0)

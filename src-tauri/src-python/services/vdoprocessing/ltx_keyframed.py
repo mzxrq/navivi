@@ -10,6 +10,7 @@ them: in one job the text encoder, model and VAE together pushed RAM past 30 GB.
 """
 
 import hashlib
+import json
 import os
 import shutil
 import time
@@ -376,7 +377,10 @@ def sharp_enough_preset(preset: str, photo_path: str) -> str:
 
 def shot_list(preset: str, seed: str = "", photo_path: Optional[str] = None) -> List[str]:
     """The chosen move, then the second shot - unless the photo is too small
-    for a close crop to stay sharp."""
+    for a close crop to stay sharp. With the "photo" tail the still photo
+    takes the second shot's place."""
+    if tuning.ATTRACTION_SLOW_MOVE_STYLE == "photo":
+        return [preset]
     if tuning.ATTRACTION_SECOND_SHOT and photo_path:
         try:
             px = close_crop_source_px(photo_path)
@@ -591,6 +595,59 @@ def _shot_cache(output_path: str, seed: str, move: str, prompt: str) -> Path:
     return cache / f"{move}_{digest}.mp4"
 
 
+def shots_sidecar(clip_path: str) -> Path:
+    return Path(str(clip_path) + ".shots.json")
+
+
+def _write_first_shot_end(clip_path: str, seconds: float) -> None:
+    try:
+        shots_sidecar(clip_path).write_text(json.dumps({"first_shot_end": round(seconds, 3)}), encoding="utf-8")
+    except OSError as exc:
+        logger.warning("Could not record the shots of %s: %s", clip_path, exc)
+
+
+def first_shot_end(clip_path: str, photo_path: str) -> Optional[float]:
+    """Where the clip's first shot ends (the dissolve into the close shot
+    starts); None when it is one shot. Clips made before the sidecar: the close
+    shot is the last LTXV_FRAMES, found by the picture change across its
+    dissolve (2026-10-09 on project sdf: two-shot clips 1.17-2.53, walks alone <=0.98)."""
+    from services.tts.ttsengine import FFmpegManager
+
+    try:
+        end = json.loads(shots_sidecar(clip_path).read_text(encoding="utf-8")).get("first_shot_end")
+        duration = FFmpegManager.get_media_duration(clip_path)
+        return float(end) if end and float(end) < duration - 0.05 else None
+    except (OSError, ValueError):
+        pass
+    if not tuning.ATTRACTION_SECOND_SHOT:
+        return None
+    try:
+        if close_crop_source_px(photo_path) < tuning.ATTRACTION_SECOND_SHOT_MIN_SOURCE_PX:
+            return None
+    except OSError:
+        pass
+    cap = cv2.VideoCapture(clip_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or tuning.LTXV_FPS
+    frames = []
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        frames.append(cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (160, 90)).astype(np.float32))
+    cap.release()
+    fade = tuning.LTXV_CROSSFADE_SECONDS
+    cut = len(frames) / fps - tuning.LTXV_FRAMES / tuning.LTXV_FPS
+    if cut < 0.8:
+        return None
+
+    def at(t: float) -> np.ndarray:
+        return frames[min(len(frames) - 1, max(0, int(round(t * fps))))]
+
+    across = np.abs(at(cut - 0.04) - at(cut + fade + 0.04)).mean()
+    within = max(np.abs(at(cut - 0.62) - at(cut - 0.04)).mean(), np.abs(at(cut + fade + 0.04) - at(cut + fade + 0.62)).mean())
+    return cut if across / (within + 1e-3) > 1.1 else None
+
+
 def generate_ltx_move(
     photo_path: str, output_path: str, camera_pan_hint, duration_sec: float = 0.0, place: Optional[str] = None,
 ) -> str:
@@ -649,6 +706,10 @@ def generate_ltx_move(
                 logger.warning("LTXV %s shot failed (%s: %s) - keeping the first shot only.",
                                move, type(exc).__name__, exc)
         result = crossfade(shots, output_path)
+        from services.tts.ttsengine import FFmpegManager
+
+        first = FFmpegManager.get_media_duration(shots[0])
+        _write_first_shot_end(output_path, first - tuning.LTXV_CROSSFADE_SECONDS if len(shots) > 1 else first)
         for keep in cached:  # the photo clip is the checkpoint now
             keep.unlink(missing_ok=True)
         return result

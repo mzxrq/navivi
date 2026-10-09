@@ -55,10 +55,39 @@ def test_the_script_follows_the_course_guide_shape():
     assert "フェリーは往復2回の乗船です。" in spoken
     assert "コースのゴールは、出発地と同じ加太駅です。" in spoken
     assert "こんにちは" not in spoken and "ようこそ" not in spoken
-    # grouped island stops: the walker stops at the end of the sentence, not at each name
-    numbered = [t for t in tags if t.isdigit()]
-    assert len(numbered) < 7
+    # every place is cued as it is named, but the trace only stops at the end of a sentence
+    assert "{3}砲台跡や{4}タカノス山をめぐり、{5}南垂水広場から{6}第四砲台跡へ。" in script
+    assert len([t for t in tags if t.startswith("go")]) < 7
     assert {r["used"] for r in report} == {"template"}
+
+
+def _island_trip(via_km):
+    """Four places on one walk; the last is where the sentence stops."""
+    names = ["砲台跡", "タカノス山", "南垂水広場", "第四砲台跡"]
+    cumulative = [*via_km, 4.0]
+    return {
+        "from": "野奈浦桟橋", "to": names[-1], "to_number": 6, "mode": "walking", "km": 4.0,
+        "minutes": 60, "pieces": [{"mode": "walking", "km": 4.0, "minutes": 60}], "is_return": False,
+        "via": names[:-1], "via_numbers": [3, 4, 5], "via_km": via_km,
+        "leg_facts": [("東", max(1, int(round((b - a) * 15))), b - a)
+                      for a, b in zip([0.0, *cumulative], cumulative)],
+    }
+
+
+def test_names_are_spaced_by_distance_along_the_trip():
+    from services.localization.cues import strip_cues
+    from services.localization.overview_script import _route_sentence
+
+    # even spacing keeps the reference wording
+    even = _route_sentence(_island_trip([1.0, 2.0, 3.0]), 2, "加太駅", 1, True)
+    assert even == "渡った先では、{3}砲台跡や{4}タカノス山をめぐり、{5}南垂水広場から{6}第四砲台跡へ。"
+    # the first place is far out: the sentence takes its time before naming it
+    far = _route_sentence(_island_trip([2.8, 3.2, 3.6]), 2, "加太駅", 1, True)
+    clean, cues = strip_cues(far)
+    at = {c.tag: c.char_index for c in cues}
+    assert list(at) == ["3", "4", "5", "6"]
+    assert at["3"] / at["6"] > 0.35  # the reference wording names it at about 0.15
+    assert clean.startswith("渡った先では、東へ")  # filled from the first leg's own facts
 
 
 def test_the_stop_bys_get_their_own_paragraph_with_their_cautions():
@@ -129,4 +158,12 @@ def test_the_users_example_gets_route_and_extras_tags():
     assert "{start}これが全体のルートです。{route}加太駅から" in tagged
     assert "{extras}茶色で示した地点は" in tagged
     assert tagged.index("{1}") < tagged.index("{extras}")  # the extras' 砲台跡 is not the stop
+    assert clean_text(tagged) == text
+
+
+def test_a_hand_written_route_sentence_is_cued_at_each_name():
+    text = ("これが全体のルートです。加太駅から加太の町を抜けて、港へと向かいます。"
+            "島では、砲台跡やタカノス山をめぐり、南垂水広場から第四砲台跡へ。")
+    tagged = auto_tag_overview(text, ["砲台跡", "タカノス山", "南垂水広場", "第四砲台跡"])
+    assert "島では、{1}砲台跡や{2}タカノス山をめぐり、{3}南垂水広場から{4}第四砲台跡へ。{go}" in tagged
     assert clean_text(tagged) == text

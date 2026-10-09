@@ -539,9 +539,9 @@ def _fit_view_for_path(
 
 
 # Top clearance for a leg's locked framing, measured to a pin's POINT: the
-# corner banners (#hud-banner/#hud-chain: 24px down, ~54px tall), a 16px gap,
+# corner banners (#hud-banner/#hud-chain: 24px down, ~70px tall), a 16px gap,
 # then the 60px pin standing above its point.
-_LEG_TOP_MARGIN_PX = 24.0 + 54.0 + 16.0 + 60.0
+_LEG_TOP_MARGIN_PX = 24.0 + 70.0 + 16.0 + 60.0
 
 
 def _leg_bottom_margin_px(bottom_reserve_px: float) -> float:
@@ -859,8 +859,8 @@ _HUD_CSS_TEMPLATE = string.Template("""
 #hud-banner {
     position: fixed; top: 24px; right: 24px;
     background: $pill_bg; color: $pill_text;
-    font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 22px;
-    padding: 12px 28px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 30px;
+    padding: 14px 34px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
     white-space: nowrap; z-index: 1000;
 }
 #hud-card {
@@ -897,15 +897,13 @@ _HUD_CSS_TEMPLATE = string.Template("""
     padding: 4px 12px; border-radius: 999px; box-shadow: 0 3px 10px rgba(0,0,0,0.3);
     white-space: nowrap; font-variant-numeric: tabular-nums;
 }
-#hud-banner .icon { font-size: 20px; line-height: 1; }
-/* Sized to match #hud-banner, the pill it sits opposite in the other top
-   corner -- at its old 16px against the banner's 22px the two read as
-   different tiers of information rather than as a pair. */
+#hud-banner .icon { font-size: 28px; line-height: 1; }
+/* Same size as #hud-banner, the pill opposite it. */
 #hud-chain {
     position: fixed; top: 24px; left: 24px;
     background: $pill_bg; color: $pill_text;
-    font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 22px;
-    padding: 12px 28px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 30px;
+    padding: 14px 34px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
     white-space: nowrap; z-index: 1000;
 }
 #hud-chain .arrow { opacity: 0.6; margin: 0 6px; }
@@ -1155,7 +1153,7 @@ def render_residential_leg_pydeck(
     dest_image_display: str = "cover",
     start_pin: Optional[Dict] = None,
     dest_pin: Optional[Dict] = None,
-    hud_card_png: Optional[Callable[[float, float], bytes]] = None,
+    hud_card_png: Optional[Callable[[float, float, bool, float], bytes]] = None,
     theme: Optional[str] = None,
     bottom_reserve_px: float = 0.0,
     arrival_slow_seconds: float = 0.0,
@@ -1853,7 +1851,7 @@ async def _record_leg(
     start_popup_image=None, start_popup_freeze_seconds=None, start_cue_seconds=None,
     arrival_photo_hold_seconds=None, arrival_wait_seconds=None, dest_image_display="cover",
     dest_pin_url=_DEST_PIN_URL,
-    hud_card_png: Optional[Callable[[float, float], bytes]] = None,
+    hud_card_png: Optional[Callable[[float, float, bool, float], bytes]] = None,
     theme: Optional[str] = None,
     bottom_reserve_px: float = 0.0,
 ):
@@ -2410,18 +2408,21 @@ async def _record_leg(
                      hud_labels["distance_label"]],
                 )
 
-                hud_card_cache: Dict[Tuple[int, int], str] = {}
+                hud_card_cache: Dict[Tuple[int, int, bool], str] = {}
                 hud_card_shown: List[Optional[str]] = [None]
 
-                async def _set_hud_card(rem_m: float, rem_min: int) -> None:
+                async def _set_hud_card(rem_m: float, rem_min: int, arrived: bool = False) -> None:
                     """Swaps in the summary-card image for these numbers (rendered
                     once per distinct value) and waits for it to decode."""
                     if hud_card_png is None:
                         return
-                    key = (int(round(rem_m)), int(rem_min))
+                    key = (int(round(rem_m)), int(rem_min), arrived)
                     src = hud_card_cache.get(key)
                     if src is None:
-                        png = hud_card_png(key[0] / 1000.0, key[1] * 60.0)
+                        # Walking frames count down the smoothed path, the arrival frame is the raw leg.
+                        path_m = (total_leg_km if arrived else float(remaining_km.iloc[0])) * 1000.0
+                        share = min(1.0, key[0] / path_m) if path_m > 0 else 1.0
+                        png = hud_card_png(key[0] / 1000.0, key[1] * 60.0, arrived, share)
                         src = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
                         hud_card_cache[key] = src
                     if hud_card_shown[0] == src:
@@ -2946,7 +2947,7 @@ async def _record_leg(
                         }""",
                         [total_dist_text, hud_minutes.format(n=total_min)],
                     )
-                    await _set_hud_card(total_m, total_min)
+                    await _set_hud_card(total_m, total_min, arrived=True)
                     await _wait_for_paint(page)
                     last_png_bytes = await page.screenshot(**_FRAME_SHOT)
 

@@ -229,6 +229,7 @@ def stopby_holds(project: dict) -> Tuple[Dict[int, float], float]:
     groups: Dict[int, int] = {}
     names: Dict[int, List[str]] = {}
     facts: Dict[int, List[str]] = {}
+    places: Dict[int, List[List[float]]] = {}
     host, first_of_run = None, False
     for w in waypoints:
         if w.get("skipAssetGeneration") and w is not waypoints[0] and w is not waypoints[-1]:
@@ -247,8 +248,10 @@ def stopby_holds(project: dict) -> Tuple[Dict[int, float], float]:
             groups[id(host)] += 1
             names.setdefault(id(host), []).append(clean_label(w))
             facts.setdefault(id(host), []).append(_short_fact(w))
+            places.setdefault(id(host), []).append([w.get("lat"), w.get("lng")])
     stopby_holds.names = names  # the stop-bys each host shows (see build_brief)
     stopby_holds.facts = facts  # each one's own short fact, "" when none written
+    stopby_holds.places = places  # each one's [lat, lng] (the outro finds its photo by it)
     holds: Dict[int, float] = {}
     start = 0.0
     for w in waypoints:
@@ -326,6 +329,9 @@ def build_brief(project: dict, routing_cache: Optional[dict] = None) -> dict:
             "hold_at_to": round(holds.get(id(b), 0.0), 2),
             "batch": list(stopby_holds.names.get(id(b), [])),
             "batch_facts": list(stopby_holds.facts.get(id(b), [])),
+            "batch_at": list(stopby_holds.places.get(id(b), [])),
+            "from_id": a.get("id"),
+            "to_id": b.get("id"),
             "from_at": [a["lat"], a["lng"]],
             "to_at": [b["lat"], b["lng"]],
             "_points": points,
@@ -341,6 +347,9 @@ def build_brief(project: dict, routing_cache: Optional[dict] = None) -> dict:
     return {
         "start": clean_label(route[0]) if route else "",
         "start_hold": start_hold,
+        # the stop-bys shown at the start pin, which no leg arrives at
+        "start_batch": list(stopby_holds.names.get(id(route[0]), [])) if route else [],
+        "start_batch_at": list(stopby_holds.places.get(id(route[0]), [])) if route else [],
         "legs": legs,
         "total_km": round(sum(l["km"] for l in legs), 2),
         "total_minutes": sum(l["minutes"] for l in legs),
@@ -402,6 +411,10 @@ def journeys(brief: dict, stops: Optional[set] = None) -> List[dict]:
             "winding": any(l["winding"] for l in legs),
             "passes": [p for l in legs for p in l["passes"]],
             "via": [l["to"] for l in legs[:-1]],
+            "via_numbers": [l["to_number"] for l in legs[:-1]],
+            # km into the trip at which each via place is reached
+            "via_km": [round(sum(x["km"] for x in legs[:k + 1]), 2) for k in range(len(legs) - 1)],
+            "leg_facts": [(l["heading"], l["minutes"], l["km"]) for l in legs],
             "via_hold": round(
                 sum(l.get("hold_at_to", 0.0) for l in legs[:-1])
                 + (brief.get("start_hold", 0.0) if not out else 0.0), 2

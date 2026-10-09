@@ -131,7 +131,7 @@ class AttractionVideoGenerator:
         """`requested`: seconds each photo clip (by key) was generated for;
         `target`: the narration length the deliverable was fitted to."""
         path = self._inputs_path(output_filename)
-        record = {"keys": keys, "pans": pans, "requested": requested or {}}
+        record = {"keys": keys, "pans": pans, "requested": requested or {}, "tail": self._tail_signature()}
         if target is not None:
             record["target"] = round(float(target), 3)
         try:
@@ -140,6 +140,13 @@ class AttractionVideoGenerator:
                 json.dump(record, f)
         except OSError as exc:
             logger.warning("Could not record clip inputs for %s: %s", output_filename, exc)
+
+    @staticmethod
+    def _tail_signature() -> str:
+        style = tuning.ATTRACTION_SLOW_MOVE_STYLE
+        if style != "photo":
+            return style
+        return f"photo|{tuning.ATTRACTION_TAIL_PHOTO_FADE_SECONDS}|full-animation|first-shot"
 
     @staticmethod
     def _clip_key(image_path: str, pan: str) -> str:
@@ -470,6 +477,7 @@ class AttractionVideoGenerator:
         place_label: Optional[str] = None,
         camera_pan=None,
         generation_cap: bool = True,
+        photo_path: Optional[str] = None,
     ) -> str:
         """Trims/stretches video_path to within tolerance of
         target_audio_duration, upscales it, and (if place_label is given)
@@ -495,14 +503,20 @@ class AttractionVideoGenerator:
         from services.vdoprocessing.slow_move import extend_with_slow_move, is_moving_preset
 
         moved_path = self.output_dir / f"moved_{Path(output_filename).stem}.mp4"
-        if (
+        on_photo = self._end_on_photo(video_path, target_audio_duration, camera_pan, photo_path, moved_path)
+        if on_photo:
+            video_path = on_photo
+            trim_to, hold_to = self._resolve_duration_fit(
+                video_path, target_audio_duration, overshoot_tolerance, generation_cap=False
+            )
+        elif (
             hold_to is not None and target_audio_duration > 0 and is_moving_preset(camera_pan)
             and self._fill_with_slow_move(
                 target_audio_duration - FFmpegManager.get_media_duration(video_path)
             )
         ):
             moved = extend_with_slow_move(
-                video_path, target_audio_duration, camera_pan, str(moved_path),
+                video_path, target_audio_duration, camera_pan, str(moved_path), photo_path=photo_path,
             )
             if moved:
                 video_path = moved
@@ -722,8 +736,40 @@ class AttractionVideoGenerator:
             or tuning.COMFYUI_EXTEND_MAX_SEGMENTS is not None
         )
 
+    def _end_on_photo(
+        self, clip_path: str, target: float, camera_pan, photo_path: Optional[str], out_path: Path,
+    ) -> Optional[str]:
+        """With the "photo" tail: the whole animation, then the original photo
+        until `target`. None when it doesn't apply, or when the animation
+        alone reaches `target` (the plain fit then cuts it there)."""
+        from services.tts.ttsengine import FFmpegManager
+        from services.vdoprocessing.camera_pan import normalize_camera_pan
+        from services.vdoprocessing.slow_move import extend_with_slow_move, is_moving_preset
+
+        if (tuning.ATTRACTION_SLOW_MOVE_STYLE != "photo" or not photo_path or target <= 0
+                or not is_moving_preset(camera_pan)):
+            return None
+        duration = FFmpegManager.get_media_duration(clip_path)
+        anim = duration
+        if normalize_camera_pan(camera_pan) in tuning.ATTRACTION_LTX_PRESETS:
+            from services.vdoprocessing.ltx_keyframed import first_shot_end
+
+            # The still replaces the close second shot of clips made with one.
+            anim = min(anim, first_shot_end(clip_path, photo_path) or anim)
+        if anim >= target - 0.05:
+            return None
+        trimmed = out_path.with_suffix(".anim.mp4")
+        try:
+            src = self.editor.trim_video_duration(clip_path, anim, str(trimmed)) if duration - anim > 0.05 else clip_path
+            return extend_with_slow_move(src, target, camera_pan, str(out_path), photo_path=photo_path)
+        except Exception as exc:
+            logger.warning("Ending %s on its photo failed (%s) - plain fit instead.", clip_path, exc)
+            return None
+        finally:
+            trimmed.unlink(missing_ok=True)
+
     def _fit_clip_to_share(
-        self, clip_path: str, share: float, camera_pan, out_path: Path,
+        self, clip_path: str, share: float, camera_pan, out_path: Path, photo_path: Optional[str] = None,
     ) -> str:
         """One photo's clip made exactly `share` seconds long: trimmed if
         longer; if shorter, continued with the slow move for a moving preset,
@@ -732,13 +778,16 @@ class AttractionVideoGenerator:
         from services.tts.ttsengine import FFmpegManager
         from services.vdoprocessing.slow_move import extend_with_slow_move, is_moving_preset
 
+        on_photo = self._end_on_photo(clip_path, share, camera_pan, photo_path, out_path)
+        if on_photo:
+            return on_photo
         duration = FFmpegManager.get_media_duration(clip_path)
         if abs(duration - share) <= 0.05:
             return clip_path
         if duration > share:
             return self.editor.trim_video_duration(clip_path, share, str(out_path))
         if is_moving_preset(camera_pan) and self._fill_with_slow_move(share - duration):
-            moved = extend_with_slow_move(clip_path, share, camera_pan, str(out_path))
+            moved = extend_with_slow_move(clip_path, share, camera_pan, str(out_path), photo_path=photo_path)
             if moved:
                 return moved
         return self.editor.hold_last_frame(clip_path, share, str(out_path))
@@ -764,6 +813,7 @@ class AttractionVideoGenerator:
         target_audio_duration: float,
         output_filename: str,
         place_label: Optional[str],
+        photos: Optional[List[str]] = None,
     ) -> Optional[str]:
         """A multi-photo waypoint's clips as one deliverable: each fitted to
         an equal share of the narration (_fit_clip_to_share), joined in
@@ -778,7 +828,8 @@ class AttractionVideoGenerator:
                     fitted.append(clip)
                     continue
                 path = self._fit_clip_to_share(
-                    clip, share, preset, self.output_dir / f"share_{stem}_{i:02d}.mp4"
+                    clip, share, preset, self.output_dir / f"share_{stem}_{i:02d}.mp4",
+                    photo_path=photos[i] if photos else None,
                 )
                 if path != clip:
                     temps.append(path)
@@ -890,7 +941,9 @@ class AttractionVideoGenerator:
         final_path = self.output_dir / output_filename
         refit = False
         if not force and not inputs_changed and output_is_valid(final_path):
-            if self._fits_narration(final_path, recorded, target_audio_duration):
+            # A changed tail style refits from the kept clips (CPU only), like a narration change.
+            tail_changed = "keys" in recorded and recorded.get("tail") != self._tail_signature()
+            if not tail_changed and self._fits_narration(final_path, recorded, target_audio_duration):
                 if "keys" not in recorded:
                     self._write_inputs(output_filename, keys, pans)
                 logger.info(
@@ -900,7 +953,7 @@ class AttractionVideoGenerator:
                 return str(final_path)
             refit = True
             logger.info(
-                "The narration for %s is now %.1fs — fitting the kept photo clips to it "
+                "Refitting %s to its %.1fs narration from the kept photo clips "
                 "(nothing is generated again).", output_filename, target_audio_duration,
             )
 
@@ -978,6 +1031,9 @@ class AttractionVideoGenerator:
             )
             if clip and os.path.exists(clip):
                 Path(str(raw_clip_path) + ".signlock").unlink(missing_ok=True)
+                Path(str(raw_clip_path) + ".shots.json").unlink(missing_ok=True)
+                if os.path.exists(clip + ".shots.json"):
+                    os.replace(clip + ".shots.json", str(raw_clip_path) + ".shots.json")
                 os.replace(clip, raw_clip_path)
                 clip = str(raw_clip_path)
             else:
@@ -1002,6 +1058,7 @@ class AttractionVideoGenerator:
         if len(generated_clips) > 1:
             final_output = self._combine_clips(
                 generated_clips, clip_presets, target_audio_duration, output_filename, place_label,
+                photos=[image_list[keys.index(k)] for k in built_keys],
             )
         else:
             # 3. Single image: fit duration, place at output_filename, upscale.
@@ -1013,6 +1070,7 @@ class AttractionVideoGenerator:
                 overshoot_tolerance=self._AUDIO_DURATION_TOLERANCE_SECONDS,
                 place_label=place_label,
                 camera_pan=clip_presets[0],
+                photo_path=image_list[keys.index(built_keys[0])],
             )
             logger.info(f"Waypoint video deliverable complete: {final_output}")
 
