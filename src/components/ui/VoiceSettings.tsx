@@ -247,6 +247,30 @@ export function VoiceTab() {
       </p>
 
       <section>
+        <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Narration language</Trans></h4>
+        <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-2.5">
+          <Segmented
+            value={settings.narration_language ?? "auto"}
+            onChange={(language) => {
+              updateSettings({ narration_language: language });
+              setIsDirty(true);
+            }}
+            options={[
+              { id: "auto", label: t`Auto` },
+              { id: "ja", label: t`Japanese` },
+              { id: "en", label: t`English` },
+            ]}
+          />
+          <p className="text-[12px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+            <Trans>
+              The language the AI writes stop scripts in (Auto-Write, imported documents, the assistant). Auto follows the language of the
+              project's own text. English narration is read by an English voice: Kokoro, with its English voices added below.
+            </Trans>
+          </p>
+        </div>
+      </section>
+
+      <section>
         <h4 className="mb-2 px-0.5 text-[12px] font-semibold text-zinc-500 dark:text-zinc-400"><Trans>Voice engine</Trans></h4>
         <div className="rounded-xl border border-zinc-200 dark:border-white/10 p-3 space-y-2.5">
           <Segmented

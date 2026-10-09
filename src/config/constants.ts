@@ -190,3 +190,9 @@ export function editorStyleLabel(): string {
     } catch {}
     return (mapStyles.find((s) => s.id === saved) ?? mapStyles[0]).label;
 }
+
+/** Whether the video's map follows the editor's, and the Mapbox style id the video then uses (undefined: the default look). */
+export function resolveVideoStyle(s: { mapbox_style_id?: string; follow_editor_map_style?: boolean }): { follow: boolean; id: string | undefined } {
+    const follow = s.follow_editor_map_style ?? !s.mapbox_style_id;
+    return { follow, id: follow ? editorStyleForVideo() ?? undefined : s.mapbox_style_id };
+}

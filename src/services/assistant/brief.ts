@@ -73,3 +73,10 @@ export function mergeBrief(brief: ProjectBrief, patch: Partial<ProjectBrief>): P
 export function missingForBuild(brief: ProjectBrief): string[] {
   return brief.places.length === 0 ? ["places"] : [];
 }
+
+// The language a document is written in, so its script is narrated in that language: mostly Japanese characters means "ja".
+export function detectLanguage(text: string): BriefLanguage {
+  const japanese = (text.match(/[぀-ヿ㐀-鿿]/g) ?? []).length;
+  const latin = (text.match(/[A-Za-z]/g) ?? []).length;
+  return japanese > latin * 0.3 ? "ja" : "en";
+}

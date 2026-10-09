@@ -82,6 +82,8 @@ export function DrawBar({
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [showPoints, setShowPoints] = useState(false);
   const [selectedAnchorIdx, setSelectedAnchorIdx] = useState<number | null>(null);
+  const [marked, setMarked] = useState<Set<number>>(new Set());
+  const lastMarked = useRef<number | null>(null);
   const legMenuRef = useDismiss(isLegMenuOpen, () => setIsLegMenuOpen(false));
   const moreRef = useDismiss(isMoreOpen, () => setIsMoreOpen(false));
 
@@ -109,6 +111,46 @@ export function DrawBar({
     setIsDirty(true);
   };
 
+  const clearMarked = () => {
+    setMarked(new Set());
+    lastMarked.current = null;
+  };
+
+  // Ctrl/Cmd-click toggles one point, Shift-click marks the range from the last one clicked.
+  const markPoint = (idx: number, e: React.MouseEvent) => {
+    const next = new Set(marked);
+    if (e.shiftKey && lastMarked.current !== null) {
+      const [from, to] = [Math.min(lastMarked.current, idx), Math.max(lastMarked.current, idx)];
+      for (let i = from; i <= to; i++) next.add(i);
+    } else {
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      lastMarked.current = idx;
+    }
+    setMarked(next);
+  };
+
+  const removeMarked = () => {
+    if (marked.size === 0) return;
+    setPoints(points.filter((_, i) => !marked.has(i)));
+    selectAnchor(null);
+    clearMarked();
+  };
+  const removeMarkedRef = useRef(removeMarked);
+  removeMarkedRef.current = removeMarked;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (e.key === "Delete" || e.key === "Backspace") removeMarkedRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(clearMarked, [activeWp?.id, points.length]);
+
   const handlePointDragEnd = (result: DropResult) => {
     if (!result.destination || result.source.index === result.destination.index) return;
     const next = Array.from(points);
@@ -120,7 +162,7 @@ export function DrawBar({
   const legLabel = hasLeg ? `${activeWp!.name} → ${nextWp!.name}` : t`Choose a leg`;
 
   return (
-    <div className="w-[min(40rem,calc(100vw-2rem))] max-w-full rounded-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-top-1 duration-150">
+    <div className="select-none w-[min(40rem,calc(100vw-2rem))] max-w-full rounded-xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-top-1 duration-150">
       <div className="flex flex-wrap items-center gap-1 p-1">
         <div ref={legMenuRef} className="relative min-w-0 flex-1 basis-44">
           <button
@@ -339,6 +381,19 @@ export function DrawBar({
               <Trans>No points yet</Trans>
             </p>
           ) : (
+            <>
+            {marked.size > 0 && (
+              <div className="flex items-center gap-2 h-7 px-2 mb-1 rounded-md bg-navi/10 text-[11px] text-navi">
+                <span className="flex-1 font-medium">{t`${marked.size} selected`}</span>
+                <button type="button" onClick={removeMarked} className="flex items-center gap-1 px-1.5 h-5 rounded hover:bg-red-500/10 hover:text-red-500">
+                  <Trash2 className="w-3 h-3" />
+                  <Trans>Delete</Trans>
+                </button>
+                <button type="button" onClick={clearMarked} className="px-1.5 h-5 rounded hover:bg-navi/10">
+                  <Trans>Clear</Trans>
+                </button>
+              </div>
+            )}
             <DragDropContext onDragEnd={handlePointDragEnd}>
               <Droppable droppableId="draw-points">
                 {(provided) => (
@@ -353,11 +408,17 @@ export function DrawBar({
                           <div
                             ref={provided.innerRef}
                             {...provided.draggableProps}
-                            onClick={() => selectAnchor(selectedAnchorIdx === idx ? null : idx)}
+                            onClick={(e) => {
+                              if (e.ctrlKey || e.metaKey || e.shiftKey) return markPoint(idx, e);
+                              clearMarked();
+                              selectAnchor(selectedAnchorIdx === idx ? null : idx);
+                            }}
                             className={`group flex items-center gap-2 h-7 px-1 rounded-md cursor-pointer transition-colors ${
                               snapshot.isDragging
                                 ? "bg-white dark:bg-zinc-800 shadow-md"
-                                : selectedAnchorIdx === idx
+                                : marked.has(idx)
+                                  ? "bg-navi/20 ring-1 ring-navi/40"
+                                  : selectedAnchorIdx === idx
                                   ? "bg-navi/10"
                                   : "hover:bg-zinc-100 dark:hover:bg-white/5"
                             }`}
@@ -378,6 +439,7 @@ export function DrawBar({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (marked.has(idx) && marked.size > 1) return removeMarked();
                                 const next = [...points];
                                 next.splice(idx, 1);
                                 setPoints(next);
@@ -397,6 +459,7 @@ export function DrawBar({
                 )}
               </Droppable>
             </DragDropContext>
+            </>
           )}
         </div>
       )}

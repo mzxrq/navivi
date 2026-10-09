@@ -205,8 +205,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   >({});
   const [versions, setVersions] = useState<ProjectVersion[]>([]);
   const [projectThumbnail, setProjectThumbnail] = useState<string | null>(null);
-  const thumbnailGetterRef = useRef<(() => string | null) | null>(null);
-  const registerThumbnailGetter = useCallback((fn: () => string | null) => {
+  const thumbnailGetterRef = useRef<(() => string | null | Promise<string | null>) | null>(null);
+  const registerThumbnailGetter = useCallback((fn: () => string | null | Promise<string | null>) => {
     thumbnailGetterRef.current = fn;
   }, []);
 
@@ -415,7 +415,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     let freshThumbnail = projectThumbnail;
     if (thumbnailGetterRef.current) {
       try {
-        const t = thumbnailGetterRef.current();
+        const t = await thumbnailGetterRef.current();
         if (t) freshThumbnail = t;
       } catch (e) {}
     }
