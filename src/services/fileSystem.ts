@@ -9,7 +9,7 @@ import { routeCacheKey } from "../utils/routeCacheKey";
 import { stripApiKeys } from "../utils/apiKeys";
 import { planFileNames } from "../utils/fileNames";
 import { renameCredits } from "../utils/photoCredits";
-import { emptyTimeline, type ExportOptions, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
+import { carryOverLooks, emptyTimeline, type ExportOptions, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
 import { i18n } from "@lingui/core";
 import { db } from "./db";
 
@@ -722,13 +722,19 @@ export function probeDuration(url: string, kind: "video" | "audio", fallback: nu
   });
 }
 
-// The editor's own state if timeline.json has one, otherwise built from what the pipeline wrote.
-export async function loadTimelineData(projectDir: string): Promise<TimelineData> {
+// The editor's own state if timeline.json has one, otherwise built from what the pipeline wrote,
+// keeping the looks set on `previous` (the same project's timeline before the pipeline rewrote it).
+export async function loadTimelineData(projectDir: string, previous?: TimelineData): Promise<TimelineData> {
+  const loaded = await readTimelineData(projectDir);
+  return previous && loaded.fromPipeline ? carryOverLooks(previous, loaded.timeline) : loaded.timeline;
+}
+
+async function readTimelineData(projectDir: string): Promise<{ timeline: TimelineData; fromPipeline: boolean }> {
   const manifestPath = await join(projectDir, "timeline.json");
-  if (!(await exists(manifestPath))) return emptyTimeline();
+  if (!(await exists(manifestPath))) return { timeline: emptyTimeline(), fromPipeline: false };
   const raw = JSON.parse(await readTextFile(manifestPath));
   const saved = timelineFromEditorState(raw);
-  if (saved) return saved;
+  if (saved) return { timeline: saved, fromPipeline: false };
 
   const rel = (p: string) => toRelativeProjectPath(p, projectDir);
   for (const track of raw.video_tracks ?? []) {
@@ -740,7 +746,7 @@ export async function loadTimelineData(projectDir: string): Promise<TimelineData
   for (const clip of raw.ui_state?.clips ?? []) if (clip.source) clip.source = rel(clip.source);
 
   const durations = new Map<string, number>();
-  return timelineFromPipeline(raw, async (relPath, kind) => {
+  const timeline = await timelineFromPipeline(raw, async (relPath, kind) => {
     const key = `${kind}:${relPath}`;
     if (!durations.has(key)) {
       const abs = await toAbsoluteProjectPath(relPath, projectDir);
@@ -748,6 +754,7 @@ export async function loadTimelineData(projectDir: string): Promise<TimelineData
     }
     return durations.get(key) ?? 0;
   });
+  return { timeline, fromPipeline: true };
 }
 
 export async function loadTimelineManifest(projectDir: string): Promise<any | null> {
