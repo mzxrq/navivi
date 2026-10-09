@@ -237,7 +237,8 @@ def test_capped_wan_clip_is_finished_with_the_slow_zoom_out(generator, tmp_path,
     assert out and FFmpegManager.get_media_duration(out) == pytest.approx(15.0, abs=0.3)
 
 
-def test_small_gap_is_held_not_zoomed(generator, tmp_path, slow_moves):
+def test_small_gap_is_held_not_zoomed(generator, tmp_path, slow_moves, monkeypatch):
+    monkeypatch.setattr("services.tuning.ATTRACTION_SLOW_MOVE_STYLE", "zoomout")
     out = generator.process_attraction_video(
         popup_image_entry=_photos(tmp_path, 1), prompt_text=["pan-down"],
         target_audio_duration=2.6, output_filename="04_attraction_14_gap.mp4",

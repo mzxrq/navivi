@@ -78,10 +78,19 @@ def test_auto_flagged_entries_are_applied_like_any_other():
     assert apply_pronunciation_dictionary("三段壁へ", entries) == "サンダンベキへ"
 
 
-def test_an_auto_place_name_the_analyser_reads_right_keeps_its_kanji_and_is_checked():
+def test_every_dictionary_word_is_spelled_out_by_default():
+    from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary
+
+    entries = [{"word": "慈眼院", "reading": "じげんいん", "auto": True}, {"word": "西念寺", "reading": "さいねんじ", "auto": True}]
+    assert apply_pronunciation_dictionary("慈眼院と西念寺", entries) == "ジゲン院とサイネン寺"
+
+
+def test_an_auto_place_name_the_analyser_reads_right_keeps_its_kanji_and_is_checked(monkeypatch):
+    from services import tuning
     from services.tts import name_check
     from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary
 
+    monkeypatch.setattr(tuning, "TTS_KANJI_FIRST", True)
     entries = [{"word": "三輪神社", "reading": "みわじんじゃ", "auto": True}, {"word": "札立山", "reading": "ふだたてやま", "auto": True}]
     text = apply_pronunciation_dictionary("三輪神社から札立山へ", entries)
     assert text == "三輪神社からフダタテヤマへ"

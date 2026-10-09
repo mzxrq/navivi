@@ -91,6 +91,8 @@ def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[
     limit = extras if extras is not None else len(sentences)
     if has_numbers and has_go:
         return _with_marks(sentences, marks)
+    if pivot is not None and not has_numbers:
+        return _with_marks(_tag_route_names(sentences, pivot + 1, limit, labels, not has_go), marks)
 
     # sentence index -> the stop number whose description starts there
     starts = {}
@@ -143,6 +145,36 @@ def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[
             s = s[:lead] + "{%d}" % starts[i] + s[lead:]
         out.append(s)
     return _with_marks(_sentences("".join(out)), marks)
+
+
+def _tag_route_names(sentences: List[str], first: int, limit: int, labels: Sequence[str], add_go: bool) -> List[str]:
+    """The course layout's route sentences (sentences[first:limit]) with {n}
+    right before each stop's name, found in route order (the trace reaches a
+    place as its name is said), and {go} after each sentence that names one."""
+    out = list(sentences)
+    i, cursor = first, 0
+    for n, label in enumerate(labels, start=1):
+        hit = None
+        for variants in (name_variants(label)[:1], name_variants(label)):
+            found = [
+                (j, k, -len(v)) for j in range(i, limit) for v in variants
+                for k in [out[j].find(v, cursor if j == i else 0)] if k >= 0
+            ]
+            if found:
+                hit = min(found)
+                break
+        if hit is None:
+            continue
+        j, k, minus_len = hit
+        tag = "{%d}" % n
+        out[j] = out[j][:k] + tag + out[j][k:]
+        i, cursor = j, k + len(tag) - minus_len
+    if add_go:
+        for j in range(first, limit):
+            if any(t.isdigit() for t in cue_tags(out[j])):
+                body = out[j].rstrip()
+                out[j] = body + "{go}" + out[j][len(body):]
+    return out
 
 
 def _with_marks(sentences: List[str], marks: dict) -> str:

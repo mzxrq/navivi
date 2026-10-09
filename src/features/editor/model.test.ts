@@ -5,6 +5,7 @@ import {
   anchorCue,
   autoArrange,
   autoTimeBlocks,
+  carryOverLooks,
   cuesFromTimed,
   cuesToSrt,
   emptyTimeline,
@@ -300,5 +301,36 @@ describe("timeline.json", () => {
     const manifest = toManifest("Trip", built);
     expect(manifest.video_tracks[1].audio_path).toBeNull();
     expect(manifest.unlinked_audio).toEqual([{ path: "assets/audio/overview.wav", start: 0.5, volume: 1 }]);
+  });
+});
+
+describe("carryOverLooks", () => {
+  const line = (text: string, font_size?: number) => ({ text, ...(font_size ? { style: { font_size } } : {}) });
+
+  it("keeps the editor's looks when the pipeline rebuilds the timeline", () => {
+    const prev: TimelineData = {
+      segments: [seg("old-a", { label: "intro", video: "assets/video/intro.mp4", volume: 0.4 }), seg("old-b", { label: "leg" })],
+      subtitles: [
+        { id: "c1", segmentId: "old-b", start: 0, end: 1, text: "hello", style: { font_size: 90 } },
+        { id: "c2", segmentId: "old-b", start: 1, end: 2, text: "bye", style: { font_size: 90 } },
+      ],
+      texts: [
+        { id: "t1", segmentId: "old-a", start: 0, end: 3, kind: "intro", position: "top", title: line("Trip", 120), subtitle: line("") },
+        { id: "t2", segmentId: "old-b", start: 1, end: 2, title: line("Mine"), subtitle: line("") },
+      ],
+      music: { path: "m.mp3", label: "m", volume: 0.3 },
+    };
+    const next: TimelineData = {
+      segments: [seg("a", { label: "intro", video: "assets/video/intro.mp4" }), seg("b", { label: "leg", video: "other.mp4" })],
+      subtitles: [{ id: "n1", segmentId: "b", start: 0, end: 1, text: "new line" }],
+      texts: [{ id: "n2", segmentId: "a", start: 0, end: 3, kind: "intro", title: line("New trip"), subtitle: line("") }],
+      music: null,
+    };
+    const out = carryOverLooks(prev, next);
+    expect(out.segments[0].volume).toBe(0.4);
+    expect(out.subtitles[0].style).toEqual({ font_size: 90 });
+    expect(out.texts[0]).toMatchObject({ position: "top", title: { text: "New trip", style: { font_size: 120 } } });
+    expect(out.texts[1]).toMatchObject({ segmentId: "b", title: { text: "Mine" } });
+    expect(out.music?.path).toBe("m.mp3");
   });
 });

@@ -364,6 +364,7 @@ export function WaypointEditor({
           next: waypoints[wpIndex + 1]?.name,
           index: wpIndex,
           total: waypoints.length,
+          stops: waypoints.map((w) => w.name),
           otherScript: type === "arriving" ? wp.attractionNarration : wp.arrivingNarration,
           otherStops: waypoints.filter((w) => w.id !== wp.id).map((w) => (type === "arriving" ? w.arrivingNarration : w.attractionNarration) ?? ""),
           language: resolveNarrationLanguage(settings.narration_language, waypoints.flatMap((w) => [w.name, w.arrivingNarration ?? "", w.attractionNarration ?? ""]), i18n.locale),

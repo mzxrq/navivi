@@ -278,7 +278,7 @@ export interface WorkspaceState {
   // Timeline History (2026-08-26 15:52:49)
   timeline: TimelineData;
   setTimeline: (action: SetStateAction<TimelineData>) => void;
-  autoLoadTimeline: (projectDir: string) => Promise<void>;
+  autoLoadTimeline: (projectDir: string) => Promise<TimelineData>;
   adoptRenderedOverview: (projectDir: string) => Promise<void>;
   undoTimeline: () => void;
   redoTimeline: () => void;

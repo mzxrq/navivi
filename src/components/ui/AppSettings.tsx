@@ -816,12 +816,16 @@ function PronunciationEditor({
                     className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
                   />
                   {entry.auto && (
-                    <span
-                      title={t`Reading guessed automatically from the scripts. Edit it to keep your own.`}
-                      className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400"
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onChange(entries.map((e, i) => (i === idx ? { word: e.word, reading: e.reading } : e)))
+                      }
+                      title={t`Reading guessed automatically. Click to keep it as yours: the voice is then always given this reading instead of guessing from the kanji.`}
+                      className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20"
                     >
                       <Trans>auto</Trans>
-                    </span>
+                    </button>
                   )}
                   <button
                     type="button"

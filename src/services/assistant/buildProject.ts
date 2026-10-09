@@ -271,15 +271,15 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
             next: waypoints[i + 1]?.name,
             index: i,
             total: waypoints.length,
+            stops: waypoints.map((w) => w.name),
             otherScript: kind === "attraction" ? wp.arrivingNarration : undefined,
             otherStops: waypoints.slice(0, i).map((w) => (kind === "arriving" ? w.arrivingNarration : w.attractionNarration) ?? ""),
-          ...(brief.languages.length === 1 ? { language: brief.languages[0] } : {}),
+            ...(brief.languages.length === 1 ? { language: brief.languages[0] } : {}),
             // What the document itself says about getting here from the previous stop (not for the first stop).
             ...(kind === "arriving" && i > 0 ? { directions: details.get(found[i].name.trim())?.directions, minutes: details.get(found[i].name.trim())?.minutes } : {}),
             // A guessed spot would give a wrong direction.
             ...(found[i].uncertain || found[i === 0 ? 1 : i - 1]?.uncertain ? {} : legOf(waypoints, i)),
           },
-
         );
       await run(request);
       // A small model sometimes answers an English video in Japanese: ask once more, firmly.

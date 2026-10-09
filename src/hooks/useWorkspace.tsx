@@ -133,6 +133,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     canRedo: canRedoTimeline,
     reset: resetTimelineHistory,
   } = useHistory<TimelineData>(getDefaultTimeline(), 50);
+  const timelineRef = useRef(timeline);
+  timelineRef.current = timeline;
+  // The project the timeline in memory belongs to, so a reload after a render keeps its looks.
+  const timelineDirRef = useRef<string | null>(null);
 
   const setTimeline = useCallback(
     (action: React.SetStateAction<TimelineData>) => {
@@ -586,6 +590,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         })),
       );
       resetTimelineHistory(getDefaultTimeline());
+      timelineDirRef.current = null;
       await autoLoadTimeline(data.directory_path);
 
       setVersions(
@@ -614,6 +619,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setActiveWaypointId(null);
     resetWaypointHistory([]);
     resetTimelineHistory(getDefaultTimeline());
+    timelineDirRef.current = null;
     setRouteSegments([]);
     setRoutePoints([]);
     setMetadata({
@@ -658,12 +664,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [editorMode, undoMap, redoMap, undoTimeline, redoTimeline, isRendering, isBackgroundRender]);
 
   const autoLoadTimeline = async (projectDir: string) => {
+    const previous = timelineDirRef.current === projectDir ? timelineRef.current : undefined;
+    timelineDirRef.current = projectDir;
+    let loaded: TimelineData;
     try {
-      resetTimelineHistory(await loadTimelineData(projectDir));
+      loaded = await loadTimelineData(projectDir, previous);
     } catch (error) {
       console.error("Failed to load timeline:", error);
-      resetTimelineHistory(getDefaultTimeline());
+      loaded = getDefaultTimeline();
     }
+    resetTimelineHistory(loaded);
+    return loaded;
   };
 
   // A script the user wrote stays; an empty or automatic one takes what the render spoke.

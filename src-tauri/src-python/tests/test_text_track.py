@@ -11,6 +11,11 @@ from services.vdoprocessing.videopipeline.timeline_step import build_timeline
 from services import tuning
 
 ITEM = {"title": {"text": "Bangkok", "style": {"color": "#ffd166"}}, "subtitle": {"text": "A walking tour"}}
+# Sizes the layout tests were worked out with, independent of the tuned defaults.
+SIZED = {
+    "title": {"text": "Bangkok", "style": {"color": "#ffd166", "font_size": 74}},
+    "subtitle": {"text": "A walking tour", "style": {"font_size": 36}},
+}
 
 
 def _touch(p: Path) -> str:
@@ -86,7 +91,7 @@ def test_place_count_can_be_turned_off(tmp_path):
 
 
 def test_kicker_burns_above_the_title(tmp_path):
-    item = {"start": 0, "end": 4, **ITEM, "kicker": {"text": "和歌山県"}}
+    item = {"start": 0, "end": 4, **SIZED, "kicker": {"text": "和歌山県", "style": {"font_size": 30}}}
     text = write_caption_ass([], None, (1920, 1080), tmp_path / "t.ass", check_font=False, texts=[item]).read_text(encoding="utf-8")
     kicker, title, sub = _events(text)
     # Gap 0.6 * (30 + 74) = 62, block shifted down 31: kicker 540-21-31, title 540-21+31.
@@ -140,7 +145,7 @@ def test_text_block_top_and_bottom_keep_their_distance_from_the_edge():
 
 
 def test_positioned_text_item_burns_at_its_place(tmp_path):
-    item = {"start": 0, "end": 4, **ITEM, "position": "bottom", "margin_v": 100}
+    item = {"start": 0, "end": 4, **SIZED, "position": "bottom", "margin_v": 100}
     text = write_caption_ass([], None, (1920, 1080), tmp_path / "t.ass", check_font=False, texts=[item]).read_text(encoding="utf-8")
     title, sub = _events(text)
     assert r"\pos(960,899)" in title  # 920 - int(36 * 0.6)

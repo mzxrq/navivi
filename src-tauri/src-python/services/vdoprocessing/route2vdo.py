@@ -53,12 +53,61 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # Bump when the leg rendering code changes what it draws (v2: stop-by
 # photos always go fullscreen, image_display ignored; v3: legs open on the
 # departure photo, not the destination's; v4: HUD card is the overview's
-# summary card; v5: framing clears the corner banners and the caption).
-LEG_RENDER_VERSION = 5
+# summary card; v5: framing clears the corner banners and the caption;
+# v6: the card's Total counts down the whole trip, not just the leg;
+# v7: leg card numbers are the overview card's own per-leg numbers).
+LEG_RENDER_VERSION = 7
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
 _LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text", "kw.leg_elevations")
+
+
+def _reported_speed_kmh(mode_speed_kmh: Dict[str, float], mode: str) -> float:
+    """Same speed the overview's summary card uses for this mode (render_step.py)."""
+    return mode_speed_kmh.get(mode) or mode_speed_kmh.get("car") or 70.0
+
+
+def _measured_leg_km(res_data: Dict[str, Any]) -> float:
+    from services.vdoprocessing.pydeckrecorder.geomath import haversine_km
+
+    lats, lons = res_data.get("lats"), res_data.get("lons")
+    if lats is None or lons is None:
+        return 0.0
+    pts = list(zip(lats, lons))
+    return sum(haversine_km(a[1], a[0], b[1], b[0]) for a, b in zip(pts, pts[1:]))
+
+
+def _brief_leg_stats(res_data: Dict[str, Any], brief_legs: List[Dict[str, Any]]) -> Optional[Tuple[float, float]]:
+    """(km, seconds) the overview card counts for this leg: its brief legs from
+    the start waypoint to the end one (several when a connected stop-by splits it)."""
+    by_from = {l.get("from_id"): l for l in brief_legs if l.get("from_id")}
+    wp, end = res_data.get("start_waypoint_id"), res_data.get("end_waypoint_id")
+    km = minutes = 0.0
+    for _ in range(len(brief_legs)):
+        leg = by_from.get(wp)
+        if leg is None:
+            return None
+        km += leg["km"]
+        minutes += leg["minutes"]
+        wp = leg.get("to_id")
+        if wp == end:
+            return km, minutes * 60.0
+    return None
+
+
+def _leg_distance_and_seconds(
+    res_data: Dict[str, Any], mode_speed_kmh: Dict[str, float], brief_legs: List[Dict[str, Any]],
+) -> Tuple[float, float]:
+    """A leg's (km, seconds) as the overview card counts them; legs it has no
+    match for (a synthetic start/end leg) are measured at the same speeds."""
+    stats = _brief_leg_stats(res_data, brief_legs)
+    if stats:
+        return stats
+    km = _measured_leg_km(res_data)
+    mode = str(res_data.get("mode") or "walking").lower()
+    mode = tuning.MODE_ALIASES.get(mode, mode)
+    return km, km / _reported_speed_kmh(mode_speed_kmh, mode) * 3600.0
 
 
 def _leg_fingerprint(leg_latlon, dest_label, leg_kwargs: Dict[str, Any]) -> str:
@@ -367,17 +416,25 @@ class RouteAnimator:
             map_style=resolve_map_style(self.config, "mapbox/streets-v12"),
         )
 
-    def _leg_hud_card_png(self, mode: str):
+    def _leg_hud_card_png(self, mode: str, leg: Tuple[float, float], after: Tuple[float, float]):
         """PNG renderer for the pydeck leg's distance/time card, drawn with
-        the same summary card the overview uses."""
+        the same summary card the overview uses. The walker's remaining share
+        of the line is shown as that share of `leg` (km, seconds), the
+        overview card's own numbers for this leg. Total = what is left of
+        this leg plus every later leg (`after`), so it counts down over the trip."""
         import cv2
 
-        def render(distance_km: float, duration_seconds: float) -> bytes:
+        def render(distance_km: float, duration_seconds: float, arrived: bool = False, share: float = 1.0) -> bytes:
+            distance_km, duration_seconds = share * leg[0], share * leg[1]
+            left_km, left_s = (0.0, 0.0) if arrived else (distance_km, duration_seconds)
             card = self.graphics.render_summary_card(
                 distance_km=distance_km,
                 duration_seconds=duration_seconds,
                 mode_breakdown={mode: distance_km},
                 mode_duration={mode: duration_seconds},
+                out_scale=tuning.RESIDENTIAL_HUD_CARD_SCALE,
+                total_km=left_km + after[0],
+                total_seconds=left_s + after[1],
             )
             ok, buf = cv2.imencode(".png", card)
             if not ok:
@@ -449,6 +506,16 @@ class RouteAnimator:
             candidate = attraction_dir / attraction_output_filename(idx, label or f"waypoint_{idx}")
             return str(candidate) if candidate.exists() else None
 
+        mode_speed_kmh = self.spatial_renderer.mode_speed_kmh
+        brief_legs: List[Dict[str, Any]] = []
+        if self.config.get("overview_style") == "course" and self.config.get("res_route_path"):
+            # The course overview's card adds up the brief's legs, not the GPS track.
+            from services.localization.route_brief import load_brief
+            try:
+                brief_legs = load_brief(self.config["res_route_path"])["legs"]
+            except (OSError, ValueError, KeyError) as e:
+                logger.warning(f"Could not load the route brief for the leg cards: {e}")
+        leg_totals = [_leg_distance_and_seconds(r, mode_speed_kmh, brief_legs) for r in res_sequence]
         output_paths = []
         # Was only ever set once, well before this loop ("Rendering
         # residential video...") -- gps_commands.py's test_residential_video
@@ -653,6 +720,7 @@ class RouteAnimator:
             leg_glob_prefix = f"02_waypoint_{leg_file_num:02d}_"
             leg_kwargs = dict(
                 mode=leg_mode,
+                travel_speed_kmh=_reported_speed_kmh(mode_speed_kmh, leg_mode),
                 # Keep pins out of the burned caption's band (legs render at 1080p).
                 bottom_reserve_px=subtitle_band_px(
                     1080, caption_subtitle_style(self.config.get("caption_style"), check_font=False)
@@ -754,7 +822,10 @@ class RouteAnimator:
             # narration restarting on every piece.
             leg_paths = render_residential_leg_pydeck(
                 leg_latlon, dest_label, output_path,
-                hud_card_png=self._leg_hud_card_png(leg_mode),
+                hud_card_png=self._leg_hud_card_png(
+                    leg_mode, leg_totals[i],
+                    after=(sum(km for km, _ in leg_totals[i + 1:]), sum(s for _, s in leg_totals[i + 1:])),
+                ),
                 # Not in leg_kwargs: a token change must not re-render finished legs (see the fingerprint above).
                 mapbox_key=self._mapbox_token(), **leg_kwargs,
             )

@@ -800,22 +800,108 @@ def _route_sentence(trip: dict, i: int, start: str, ferries: int, after_crossing
 
         return transition_text(trip, variant=i)
     if i == 0:
-        arrive = "へと戻ります" if back else "へと向かいます"
-        return f"{trip['from']}から{_names(via)}を抜けて、{to}{arrive}。" if via else f"{trip['from']}から、{to}{arrive}。"
-    if final:
-        head = f"{_names(via)}を経て、" if via else ""
-        return f"最後は、{head}{to}へと戻ります。" if back else f"最後は、{head}{to}へ向かいます。"
-    lead = "渡った先では、" if after_crossing else ("続いて、" if i % 2 else "")
-    if not via:
-        return f"{lead}{to}へと歩きます。"
-    if len(via) == 1:
-        return f"{lead}{via[0]}を経て、{to}へ。"
-    return f"{lead}{_names(via[:-1])}をめぐり、{via[-1]}から{to}へ。"
+        lead, ending = f"{trip['from']}から", ("へと戻ります。" if back else "へと向かいます。")
+        reference = ([lead, *_listed(via), "を抜けて、", to, ending] if via and len(via) <= 3
+                     else [lead + "、", to, ending] if not via else None)
+    elif final:
+        lead, ending = "最後は、", ("へと戻ります。" if back else "へ向かいます。")
+        reference = [lead, *_listed(via), "を経て、", to, ending] if via and len(via) <= 3 else None
+        if not via:
+            reference = [lead, to, ending]
+    else:
+        lead, ending = ("渡った先では、" if after_crossing else ("続いて、" if i % 2 else "")), "へ。"
+        if not via:
+            reference = [lead, to, "へと歩きます。"]
+        elif len(via) == 1:
+            reference = [lead, via[0], "を経て、", to, ending]
+        elif len(via) <= 4:
+            reference = [lead, *_listed(via[:-1]), "をめぐり、", via[-1], "から", to, ending]
+        else:
+            reference = None
+    return _paced(trip, lead, ending, reference)
 
 
-def _names(names: List[str], most: int = 3) -> str:
-    """"AやBやC", or "AやBなど" past `most` names."""
-    return "や".join(names) if len(names) <= most else "や".join(names[: most - 1]) + "など"
+def _listed(names: List[str]) -> List[str]:
+    """["A", "や", "B", ...]: names joined so each stays its own part."""
+    out: List[str] = []
+    for k, name in enumerate(names):
+        out += (["や"] if k else []) + [name]
+    return out
+
+
+# A route sentence keeps the reference wording while every name falls within
+# this share of the sentence of where its distance puts it.
+PACE_TOLERANCE = 0.2
+_VIA_JOINERS = ("を通り、", "を経て、")
+
+
+def _pace_error(text: str, places: List[str], shares: List[float], start: int = 0) -> float:
+    """How far (share of the sentence up to the destination's name) the worst
+    name is from its share of the trip's distance. The trace reaches a place as
+    its name is said, so an even error means an even pace."""
+    at, cursor = [], start
+    for name in places:
+        k = text.find(name, cursor)
+        if k < 0:
+            return 1.0
+        at.append(k)
+        cursor = k + len(name)
+    whole = max(1, at[-1])
+    return max((abs(a / whole - s) for a, s in zip(at[:-1], shares)), default=0.0)
+
+
+def _fillers(fact: Tuple[str, int, float]) -> List[str]:
+    """What can be said of a leg before its place is named, shortest first."""
+    from services.localization.route_brief import _minutes_phrase
+
+    head, minutes, _ = fact
+    return ["", f"{_minutes_phrase(minutes)}歩いて、", f"{head}へ{_minutes_phrase(minutes)}歩いて、"]
+
+
+def _paced(trip: dict, lead: str, ending: str, reference: Optional[List[str]]) -> str:
+    """The walking route sentence, its places named in proportion to their
+    distance along the trip, with {n} right before every numbered place's name
+    (the course trace reaches each place as its name is spoken). The reference
+    wording is kept when it already paces well; otherwise each leg gets as much
+    of its own facts (heading, minutes) before its place as the distance needs."""
+    import itertools
+
+    via = list(trip.get("via") or [])
+    places = via + [trip["to"]]
+    numbers = list(trip.get("via_numbers") or [None] * len(via)) + [trip["to_number"]]
+    km = max(1e-6, float(trip.get("km") or 0.0))
+    shares = [min(1.0, v / km) for v in (trip.get("via_km") or [])]
+    facts = trip.get("leg_facts") or []
+    best = "".join(reference) if reference else None
+    error = lambda t: round(_pace_error(t, places, shares, len(lead)), 2)  # noqa: E731
+    if best is None or (shares and error(best) > PACE_TOLERANCE):
+        def chain(choice):
+            parts = [lead]
+            for k, name in enumerate(places):
+                parts.append(choice[k] + name)
+                parts.append(_VIA_JOINERS[k % 2] if k < len(via) else ending)
+            return "".join(parts)
+
+        options = [_fillers(f) for f in facts] if len(facts) == len(places) else [[""]] * len(places)
+        combos = itertools.product(*options) if len(places) <= 5 else [tuple(o[0] for o in options)]
+        candidates = [chain(c) for c in combos]
+        if best is not None:
+            candidates.append(best)
+        best = min(candidates, key=lambda t: (error(t), len(t)))
+    return _tag_places(best, places, numbers, len(lead))
+
+
+def _tag_places(text: str, places: List[str], numbers: List[Optional[int]], start: int = 0) -> str:
+    """`text` with {n} before each numbered place's name, found in route order
+    from `start` (past a lead that names where the trip sets off)."""
+    out, cursor = text[:start], start
+    for name, n in zip(places, numbers):
+        k = text.find(name, cursor)
+        if k < 0:
+            continue
+        out += text[cursor:k] + ("{%d}" % n if n is not None else "") + name
+        cursor = k + len(name)
+    return out + text[cursor:]
 
 
 def totals_text(brief: dict) -> str:
@@ -958,9 +1044,11 @@ def build_course_script(
     """The course-guide layout:
     <opening>{start}これが全体のルートです。<route sentences>{end}<totals>{distance}<goal>.
     The opening plays over the intro photos (the intro lasts until {start}); each
-    route sentence ends at a stop ({n}{go}); places in between are passed. The
+    route sentence ends at a stop ({go}); every numbered place in it, passed or
+    stopped at, has its {n} right before its name (see _paced). The
     opening is the project's own settings.overview_intro, else the model's (checked),
     else a template; everything after it is built from the route facts."""
+    from services.localization.cues import CUE_RE, clean_text
     from services.localization.route_brief import _minutes_phrase, _short_fact
 
     trips = budget["trips"]
@@ -1015,17 +1103,25 @@ def build_course_script(
     ferries, after_crossing = 0, False
     for i, trip in enumerate(trips):
         line = _route_sentence(trip, i, brief["start"], ferries, after_crossing, trips[0]["from_at"])
+        n = trip["to_number"]
+        if not CUE_RE.search(line):  # ferry / car wording: tag the places it names
+            via = list(trip.get("via") or [])
+            numbers = list(trip.get("via_numbers") or [None] * len(via)) + [n]
+            line = _tag_places(line, via + [trip["to"]], numbers,
+                               len(trip["from"]) if line.startswith(trip["from"]) else 0)
+        if n is not None and "{%d}" % n not in line:
+            line += "{%d}" % n
         boats = sum(1 for p in trip["pieces"] if p["mode"] in _BOAT_MODES) or int(trip["mode"] in _BOAT_MODES)
         # The trace needs this long on the map: a line that runs short tells the time too.
         need = chars(budget["ways"][i])
-        if len(line) < need and trip["mode"] == "walking" and not boats:
+        if len(clean_text(line)) < need and trip["mode"] == "walking" and not boats:
             line += f"歩いて{_minutes_phrase(trip['minutes'])}の道のりです。"
         report.append({"kind": f"way{i}", "text": line, "used": "template", "raw": None, "budget_chars": need})
         parts.append(line)
         ferries += boats
         after_crossing = bool(boats)
-        if trip["to_number"] is not None:
-            parts.append("{%d}{go}" % trip["to_number"])
+        if n is not None:
+            parts.append("{go}")
 
     totals, goal, extras = totals_text(brief), goal_text(brief), stopby_text(project)
     # {extras}: the stop-bys appear on the map (they are only shown at the end).
