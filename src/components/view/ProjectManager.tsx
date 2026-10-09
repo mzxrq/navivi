@@ -501,7 +501,7 @@ export function ProjectManager() {
                         <div className="relative aspect-video bg-zinc-100 dark:bg-zinc-800/60 border-b border-zinc-100 dark:border-white/5 flex items-center justify-center overflow-hidden">
                           {project.thumbnailPath ? (
                             <img
-                              src={convertFileSrc(project.thumbnailPath)}
+                              src={`${convertFileSrc(project.thumbnailPath)}?v=${project.lastOpened}`}
                               alt=""
                               className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
                             />
@@ -574,7 +574,7 @@ export function ProjectManager() {
                             <span className="w-8 h-8 rounded-md overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
                               {project.thumbnailPath ? (
                                 <img
-                                  src={convertFileSrc(project.thumbnailPath)}
+                                  src={`${convertFileSrc(project.thumbnailPath)}?v=${project.lastOpened}`}
                                   alt=""
                                   className="w-full h-full object-cover"
                                 />

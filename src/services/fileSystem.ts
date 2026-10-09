@@ -2,7 +2,7 @@ import { documentDir, join, basename, dirname } from "@tauri-apps/api/path";
 import { writeTextFile, writeFile, mkdir, exists, copyFile, readTextFile, readDir, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { appConfig, fileSystem, GLOBAL_DICTIONARY_KEY } from "../config/constants";
+import { appConfig, fileSystem, GLOBAL_DICTIONARY_KEY, resolveVideoStyle } from "../config/constants";
 import { buildAssetManifest } from "../utils/manifestBuilder";
 import { TimelineData, RecentProjects, TextStyle, ProjectMetadata } from "../types";
 import { routeCacheKey } from "../utils/routeCacheKey";
@@ -323,7 +323,10 @@ export const saveProjectData = async (
     createdAt: metadata.created_at || undefined,
   });
   // The map keys are app-wide; neither the database row nor job_config.json (and so no shared archive) gets them.
-  const savedSettings = stripApiKeys(await db.settings.put(row.id, stripApiKeys(settings)));
+  // The video's map follows the editor's style unless the person chose one: the render reads the id from the file.
+  const videoStyle = resolveVideoStyle(settings ?? {});
+  const withVideoStyle = { ...settings, follow_editor_map_style: videoStyle.follow, mapbox_style_id: videoStyle.id };
+  const savedSettings = stripApiKeys(await db.settings.put(row.id, stripApiKeys(withVideoStyle)));
 
   const jobConfig = {
     project_id: row.id,
@@ -383,7 +386,7 @@ export const saveProjectData = async (
   const routeCachePath = await join(metaDir, "routecache.json");
   await writeTextFile(routeCachePath, JSON.stringify(cleanCache));
 
-  return { projectDir, projId, projName, nvvPath: null as string | null, thumbnailPath };
+  return { projectDir, projId, projName, nvvPath: null as string | null, thumbnailPath: thumbnailPath && !isAbsolutePath(thumbnailPath) ? await join(projectDir, thumbnailPath) : thumbnailPath };
 };
 
 // One-time cleanup of a folder made by an older version (duplicate project file, generated files into .navivi,

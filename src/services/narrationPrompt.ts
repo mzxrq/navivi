@@ -14,6 +14,11 @@ export interface RouteContext {
     from?: { lat: number; lng: number };
     to?: { lat: number; lng: number };
     mode?: string;
+    // The language the script is written in (unset: Japanese, the prompt's own).
+    language?: "ja" | "en";
+    // What the source document says about getting to this stop from the previous one, and how long it takes.
+    directions?: string;
+    minutes?: number;
 }
 
 const COMPASS = ["北", "北東", "東", "南東", "南", "南西", "西", "北西"];
@@ -109,12 +114,88 @@ export interface WaypointPromptInput {
     route: RouteContext;
 }
 
-export function buildWaypointPrompt({ place, theme, userPrompt, facts, scriptType, isFirstWaypoint, hasPhotos, route }: WaypointPromptInput): string {
+const COMPASS_EN = ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"];
+const MODE_EN: Record<string, string> = { walking: "on foot", driving: "by car", ferry: "by ferry" };
+
+// The English twin of the prompt below: same facts, same rules (only what is given, no invented history, the direction only
+// while travelling), written in English so a small model answers in English instead of translating Japanese instructions.
+export function buildEnglishWaypointPrompt({ place, theme, userPrompt, facts, scriptType, isFirstWaypoint, hasPhotos, route }: WaypointPromptInput): string {
+    const previous = route.previous ? tidyPlaceName(route.previous) : "";
+    const next = route.next ? tidyPlaceName(route.next) : "";
+    const isLast = route.index !== undefined && route.total !== undefined && route.total > 1 && route.index === route.total - 1;
+    const arriving = scriptType === "arriving";
+    const { from, to } = route;
+    let direction = "";
+    if (arriving && from && to && (from.lat || from.lng) && (to.lat || to.lng)) {
+        const rad = Math.PI / 180;
+        const dLng = (to.lng - from.lng) * rad;
+        const y = Math.sin(dLng) * Math.cos(to.lat * rad);
+        const x = Math.cos(from.lat * rad) * Math.sin(to.lat * rad) - Math.sin(from.lat * rad) * Math.cos(to.lat * rad) * Math.cos(dLng);
+        const bearing = (Math.atan2(y, x) / rad + 360) % 360;
+        const meters = distanceMeters([from.lat, from.lng], [to.lat, to.lng]);
+        const near = meters < 300 ? "very close" : meters < 1500 ? "a short way ahead" : "some distance away";
+        const mode = MODE_EN[route.mode ?? ""];
+        direction = [`direction: ${COMPASS_EN[Math.round(bearing / 45) % 8]}`, `distance: ${near}`, mode && `travelled ${mode}`].filter(Boolean).join(", ");
+    }
+    const directions = arriving ? route.directions?.trim() ?? "" : "";
+    const info = [
+        `Place: ${place}`,
+        previous && `Previous stop: ${previous}`,
+        next && `Next stop: ${next}`,
+        direction && `This leg: ${direction}`,
+        directions && `The source document's directions for this leg: ${directions}`,
+        directions && route.minutes && `The source document's travel time: about ${route.minutes} minutes`,
+        userPrompt && `Requests from the user (highest priority):\n${userPrompt}`,
+        facts && `Facts you may use:\n${facts}`,
+        route.otherScript?.trim() && `${arriving ? "The narration read after arriving" : "The narration read just before"} (do not repeat its facts or wording):\n${route.otherScript.trim()}`,
+    ]
+        .filter(Boolean)
+        .join("\n");
+
+    let task: string;
+    let length: string;
+    if (arriving) {
+        length = directions ? "1-2 sentences, 15-45 words" : "1 sentence, 8-25 words";
+        const only = directions
+            ? "Tell only how to get there, using the document's directions. No scenery, feelings, history or explanation (the next narration covers them)."
+            : "Tell only which way and how to go. No scenery, feelings, history or explanation (the next narration covers them).";
+        task = isFirstWaypoint
+            ? `Write a short narration that announces the start of the trip: leaving ${place}${next ? ` for ${next}` : ""}. ${only}`
+            : `Write a short narration spoken while travelling ${previous ? `from ${previous} ` : ""}to ${isLast ? "the last stop, " : ""}${place}. ${only}`;
+    } else {
+        length = "2-3 sentences, 30-70 words";
+        task = `Write the narration a local guide speaks to people walking the course at ${place}. The first sentence says the name of ${place}. Then 1-2 short sentences describe what can be seen here, from the facts or photo given. One fact per sentence.${route.index === 0 ? " This is the start of the course." : isLast ? " This is the end of the course." : ""} Do not write stock feelings such as "wonderful" or "breathtaking".`;
+        if (!facts.trim() && !userPrompt.trim() && !hasPhotos) task += ` There is no information about this place, so write only "${place}."`;
+    }
+    const rules = [
+        "Use only the information above and what the attached photos show. Do not add dates, numbers, names, specialties or opening hours from guesswork.",
+        arriving
+            ? "Give the direction and the means of travel only if they are written above. Give directions and times only if they are written above as the document's. Do not write distances."
+            : "If you are not sure, do not make up facts; say only the name. Mention a photo's contents only if they are really visible, and never use the word \"photo\".",
+        arriving ? "No welcome greeting (the start of the trip already had one)." : "Do not talk about the journey here: the previous narration did that. Talk about this place only.",
+        "Write natural spoken English that is easy to listen to. Use no Japanese characters.",
+        `Length: ${length}, one paragraph.`,
+        "The text is read aloud by a voice: no headings, lists, symbols, emoji, stage directions in brackets, or URLs.",
+        "Output only the narration: no preface, title, speaker name or quotation marks.",
+    ];
+    return `${arriving ? "You are the professional narrator of a travel video." : "You are a local guide who knows this area well."}${theme ? ` The theme of this trip is "${theme}".` : ""}
+${task}
+
+${info}
+
+Rules:
+${rules.map((r, i) => `${i + 1}. ${r}`).join("\n")}`;
+}
+
+export function buildWaypointPrompt(input: WaypointPromptInput): string {
+    if (input.route.language === "en") return buildEnglishWaypointPrompt(input);
+    const { place, theme, userPrompt, facts, scriptType, isFirstWaypoint, hasPhotos, route } = input;
     const previous = route.previous ? tidyPlaceName(route.previous) : "";
     const next = route.next ? tidyPlaceName(route.next) : "";
     const isLast = route.index !== undefined && route.total !== undefined && route.total > 1 && route.index === route.total - 1;
     const direction = scriptType === "arriving" ? legDirection(route) : "";
-    const routeLines = [previous && `前の立ち寄り場所: ${previous}`, next && `次の立ち寄り場所: ${next}`, direction && `この移動の${direction}`]
+    const directions = scriptType === "arriving" ? route.directions?.trim() ?? "" : "";
+    const routeLines = [previous && `前の立ち寄り場所: ${previous}`, next && `次の立ち寄り場所: ${next}`, direction && `この移動の${direction}`, directions && `資料にあるこの区間の道順: ${directions}`, directions && route.minutes && `資料にある所要時間: 約${route.minutes}分`]
         .filter(Boolean)
         .join("\n");
     const from = previous ? `「${previous}」から` : "前の場所から";
@@ -124,8 +205,10 @@ export function buildWaypointPrompt({ place, theme, userPrompt, facts, scriptTyp
     let task = "";
     let length = "";
     if (scriptType === "arriving") {
-        length = "1文、20〜50文字";
-        const brief = "どの方角へ、どうやって向かうかだけを短く伝えてください。景色、気持ち、歴史や解説は書かないでください(次のナレーションに任せます)。";
+        length = directions ? "1〜2文、30〜80文字" : "1文、20〜50文字";
+        const brief = directions
+            ? "資料にある道順をもとに、どう向かうかだけを短く伝えてください。景色、気持ち、歴史や解説は書かないでください(次のナレーションに任せます)。"
+            : "どの方角へ、どうやって向かうかだけを短く伝えてください。景色、気持ち、歴史や解説は書かないでください(次のナレーションに任せます)。";
         if (isFirstWaypoint) {
             task = `旅の出発を告げる短いナレーションです。ここ「${place}」から${next ? `次の場所「${next}」へ` : ""}出発します。${brief}`;
         } else {
@@ -160,7 +243,7 @@ ${task}
 ${routeLines ? routeLines + "\n" : ""}${userPrompt ? `【ユーザーからの要望(最優先で反映する)】\n${userPrompt}\n` : ""}${facts ? `【参考にしてよい情報】\n${facts}\n` : ""}${other ? `【${otherHeading}(内容を重ねないこと)】\n${other}\n` : ""}${used.length ? `【ほかの場所で使った言葉】${used.join("、")}\n` : ""}
 【内容のルール】
 1. 上の情報、ユーザーの要望、添付された写真に書かれている・写っていることだけを根拠にすること。年代、数字、人名、名物、営業時間などを推測や想像で書き足さないこと。
-2. ${scriptType === "attraction" ? `確かな情報が少ないときは、事実を作らず「${place}です。」だけにすること。写真が添付されているときだけ、実際に写っているものを一言添えてよい(「写真」という言葉は使わない)。` : "方角と移動手段は上に書かれているものだけを使うこと。書かれていなければ方角は言わないこと。所要時間や距離の数字は書かないこと。"}
+2. ${scriptType === "attraction" ? `確かな情報が少ないときは、事実を作らず「${place}です。」だけにすること。写真が添付されているときだけ、実際に写っているものを一言添えてよい(「写真」という言葉は使わない)。` : "方角と移動手段は上に書かれているものだけを使うこと。書かれていなければ方角は言わないこと。道順や所要時間は「資料にある」と書かれているものだけを使い、ないものは書かないこと。距離の数字は書かないこと。"}
 3. 写真がある場合は、実際に写っている景色や特徴だけを自然に触れること。写っていないものや、写真から場所の名前を断定することはしないこと。
 4. 前の場所・次の場所の名前は、上に書かれているものだけを使うこと。
 5. ${noRepeat}${noRepeatOther}
@@ -179,8 +262,10 @@ ${ATTRACTION_EXAMPLES.join("\n")}`}`;
 }
 
 // "落ち着いた" (calm) is not an arrival.
-const ARRIVAL = /到着|(?<!落ち)着(?:きました|いた)|やって[来き]ました/;
-const sentencesOf = (text: string) => text.match(/[^。！？!?\n]+[。！？!?]*\s*/g) ?? [];
+const ARRIVAL = /到着|(?<!落ち)着(?:きました|いた)|やって[来き]ました|\b(?:you(?:'ve| have)? arrived|we(?:'ve| have)? arrived|you arrive|welcome to)\b/i;
+// English sentences end at . ! ? but not after "Mt.", "Sta." and the like, nor inside a number.
+const EN_SENTENCE = /(?:\b(?:Mt|Sta|St|Dr|Mr|Mrs|Ms|Jr|Sr|vs|No)\.|\d\.\d|[^.!?])+(?:[.!?]+\s*|$)/g;
+const sentencesOf = (text: string) => (text.match(/[^。！？!?\n]+[。！？!?]*\s*/g) ?? []).flatMap((piece) => piece.match(EN_SENTENCE) ?? [piece]);
 const bigrams = (text: string) => {
     const t = text.replace(/[\s、。！？!?]/g, "");
     return new Set(Array.from({ length: Math.max(0, t.length - 1) }, (_, i) => t.slice(i, i + 2)));

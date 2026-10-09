@@ -2,19 +2,13 @@
   "_about": "Voices shipped inside the installer (copied into the user's voice library on first use, see services/tts/voices.py). scripts/stage-installer.mjs takes each file from src-tauri/src-python/bin/Irodori-TTS-Server/voices and only includes entries with verified: true. Set verified only once you have checked that the voice's license allows redistributing the audio file itself; put the credit line its license asks for in `credit` (it goes into CREDITS.txt next to the voices).",
   "voices": [
     {
-      "id": "test1",
-      "file": "test1.wav",
-      "verified": true,
-      "credit": "Trained from in-house company video"
-    },
-    {
-      "id": "amitaro",
-      "file": "amitaro.wav",
+      "id": "Amitaro",
+      "file": "Amitaro.wav",
       "verified": true,
       "credit": "Amitaro's Voice Material Studio (https://amitaro.net/)"
     },
     {
-      "id": "jvs004",
+      "id": "JVS corpus 004",
       "file": "jvs004.wav",
       "verified": true,
       "credit": "Shinnosuke Takamichi, Kentaro Mitsui, Yuki Saito, Tomoki Koriyama, Naoko Tanji, and Hiroshi Saruwatari, \"JVS corpus: free Japanese multi-speaker voice corpus,\" arXiv preprint, 1908.06248, Aug. 2019. https://sites.google.com/site/shinnosuketakamichi/research-topics/jvs_corpus, Voice: JVS004 parallel100 voiceactress100_088"

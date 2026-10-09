@@ -108,6 +108,10 @@ export interface ProjectSettings {
   export_save_srt?: boolean;
   /** "owner/id" of the Mapbox style the video is drawn on. Unset keeps each step's own (outdoors for legs, streets elsewhere). */
   mapbox_style_id?: string;
+  /** The video's map follows the map style picked in the editor, until the person chooses a style in the video settings. Unset: follows unless a style was already chosen. */
+  follow_editor_map_style?: boolean;
+  /** What the AI writes stop scripts in. Auto (or unset) follows the language of the project's own text, else the app's. */
+  narration_language?: "auto" | "ja" | "en";
   mapbox_retina?: boolean; // unset = on
   default_ducking_level?: number;
   subtitle_font?: string; // default Meiryo
@@ -291,7 +295,7 @@ export interface WorkspaceState {
   setDrawnRoute: Dispatch<SetStateAction<[number, number][]>>;
   projectThumbnail: string | null;
   setProjectThumbnail: (thumbnail: string | null) => void;
-  registerThumbnailGetter: (fn: () => string | null) => void;
+  registerThumbnailGetter: (fn: () => string | null | Promise<string | null>) => void;
   // Project Config
   metadata: ProjectMetadata;
   setMetadata: Dispatch<SetStateAction<ProjectMetadata>>;

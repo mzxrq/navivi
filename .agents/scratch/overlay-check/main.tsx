@@ -36,12 +36,14 @@ const DEMO_PROJECTS = [
 ];
 
 function Driver() {
-  const { setCurrentView, setIsRendering, showToast, setEditorMode, setShowAppSettings } = useUI() as any;
+  const ui = useUI() as any;
+  const { setCurrentView, setIsRendering, showToast, setEditorMode, setShowAppSettings } = ui;
   const ws = useWorkspace() as any;
   (window as any).__ws = ws;
   const { setWaypoints, updateMetadata, setRecentProjects, setTimeline } = ws;
   useEffect(() => {
     (window as any).__toast = showToast;
+    (window as any).__ui = ui;
     if (params.get("ai") === "1") ws.updateSettings({ ai_features_enabled: true });
     (window as any).__openSettings = (tab: string) => { setShowAppSettings(true); window.dispatchEvent(new CustomEvent("open-app-settings-tab", { detail: tab })); };
     if (params.get("view") === "new") {

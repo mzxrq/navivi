@@ -40,6 +40,8 @@ import {
 import { aiEngine, isOnlineEngine } from "../../../services/ai/engine";
 import { PROVIDERS } from "../../../services/ai/providers";
 import { stopLabel } from "../../../utils/stopLabel";
+import { resolveNarrationLanguage } from "../../../utils/narrationLanguage";
+import { i18n } from "@lingui/core";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { probeDuration, toAbsoluteProjectPath } from "../../../services/fileSystem";
 import { fetchLegScripts } from "../../../services/legScripts";
@@ -140,7 +142,7 @@ export function WaypointEditor({
   const isDest = wpIndex === waypoints.length - 1 && waypoints.length > 1;
   const isEndpoint = isStart || isDest;
   const isStopBy = !!wp.isStopBy && !isEndpoint;
-  const isLinked = wp.connectToRoute !== false;
+  const isLinked = !!wp.connectToRoute;
   const label = stopLabel(waypoints, wpIndex);
 
   const hasArrivalVoice = !!wp.arrivingNarration?.trim();
@@ -364,6 +366,7 @@ export function WaypointEditor({
           total: waypoints.length,
           otherScript: type === "arriving" ? wp.attractionNarration : wp.arrivingNarration,
           otherStops: waypoints.filter((w) => w.id !== wp.id).map((w) => (type === "arriving" ? w.arrivingNarration : w.attractionNarration) ?? ""),
+          language: resolveNarrationLanguage(settings.narration_language, waypoints.flatMap((w) => [w.name, w.arrivingNarration ?? "", w.attractionNarration ?? ""]), i18n.locale),
           ...legOf(waypoints, wpIndex),
         },
       );

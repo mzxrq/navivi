@@ -28,6 +28,7 @@ import { t } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react";
 import { Trans } from "@lingui/react/macro";
 import { placeNameOf } from "../../../utils/placeName";
+import { stopLabel } from "../../../utils/stopLabel";
 
 export function MapArea() {
   const { i18n } = useLingui();
@@ -37,6 +38,7 @@ export function MapArea() {
     setWaypoints,
     activeWaypointId,
     settings,
+    metadata,
     setIsDirty,
     routePoints,
     routeSegments,
@@ -87,8 +89,36 @@ export function MapArea() {
 
   const thumbnailCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  // Saving must not depend on the debounced capture below: a save right after an edit (or right before quitting) would
+  // write an old picture. The getter draws the map as it is now, on the next frame, and falls back to the last snapshot.
+  const snapshotMap = (): Promise<void> =>
+    new Promise((resolve) => {
+      const map = mapRef.current?.getMap();
+      if (!map || isContextLostRef.current) return resolve();
+      const timer = setTimeout(resolve, 600);
+      map.once("render", () => {
+        clearTimeout(timer);
+        const source = map.getCanvas();
+        if (source.width && source.height) {
+          const width = Math.min(640, source.width);
+          const snap = thumbnailCanvasRef.current ?? document.createElement("canvas");
+          snap.width = width;
+          snap.height = Math.round((source.height / source.width) * width);
+          try {
+            snap.getContext("2d")?.drawImage(source, 0, 0, snap.width, snap.height);
+            thumbnailCanvasRef.current = snap;
+          } catch (error) {
+            console.warn("Unable to capture map thumbnail:", error);
+          }
+        }
+        resolve();
+      });
+      map.triggerRepaint();
+    });
+
   useEffect(() => {
-    registerThumbnailGetter(() => {
+    registerThumbnailGetter(async () => {
+      await snapshotMap();
       const snap = thumbnailCanvasRef.current;
       if (!snap) return null;
       try {
@@ -126,6 +156,29 @@ export function MapArea() {
       map.triggerRepaint();
     }, 1500);
   };
+
+  const fitToWaypoints = (map: mapboxgl.Map) => {
+    if (waypoints.length === 0) return;
+    const lngs = waypoints.map((wp) => wp.lng);
+    const lats = waypoints.map((wp) => wp.lat);
+    const [minLng, maxLng, minLat, maxLat] = [Math.min(...lngs), Math.max(...lngs), Math.min(...lats), Math.max(...lats)];
+    if (minLng === maxLng && minLat === maxLat) map.flyTo({ center: [minLng, minLat], zoom: 14, duration: 1000 });
+    else map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 80, duration: 1000 });
+  };
+
+  // The map starts at the project's start point; opening a project (or the stops arriving a moment after the map mounts)
+  // must still bring its stops into view. Only the few seconds after the project changes count, so a first click on a
+  // blank map does not make it jump.
+  const projectKey = `${metadata.project_id}|${metadata.directory_path}`;
+  const fitWindow = useRef<{ key: string; until: number }>({ key: "", until: 0 });
+  if (fitWindow.current.key !== projectKey) fitWindow.current = { key: projectKey, until: Date.now() + 4000 };
+  useEffect(() => {
+    if (waypoints.length === 0 || Date.now() > fitWindow.current.until) return;
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    fitWindow.current.until = 0;
+    fitToWaypoints(map);
+  }, [waypoints, projectKey, isMapLoaded]);
 
   // Called by <Map onLoad>: canvas now exists, safe to attach WebGL handlers
   // A reused map fires "load" while the component mounts, before mapRef is attached: use the event's own map.
@@ -173,34 +226,7 @@ export function MapArea() {
 
     captureMapThumbnail();
 
-    // Auto-fit bounds if we have existing waypoints
-    if (waypoints.length > 0) {
-      let minLng = Infinity;
-      let minLat = Infinity;
-      let maxLng = -Infinity;
-      let maxLat = -Infinity;
-
-      waypoints.forEach((wp) => {
-        minLng = Math.min(minLng, wp.lng);
-        minLat = Math.min(minLat, wp.lat);
-        maxLng = Math.max(maxLng, wp.lng);
-        maxLat = Math.max(maxLat, wp.lat);
-      });
-
-      if (minLng !== Infinity) {
-        if (minLng === maxLng && minLat === maxLat) {
-          map.flyTo({ center: [minLng, minLat], zoom: 14, duration: 1000 });
-        } else {
-          map.fitBounds(
-            [
-              [minLng, minLat],
-              [maxLng, maxLat],
-            ],
-            { padding: 80, duration: 1000 },
-          );
-        }
-      }
-    }
+    fitToWaypoints(map);
   };
 
   useEffect(() => {
@@ -938,12 +964,7 @@ export function MapArea() {
               label = t`E`;
             } else if (wp.isStopBy) {
               pinType = "stopby";
-              let stopByIndex = 0;
-              for (let i = index; i >= 0; i--) {
-                if (waypoints[i].isStopBy) stopByIndex++;
-                else break;
-              }
-              label = `+${stopByIndex}`;
+              label = stopLabel(waypoints, index);
             } else {
               let normalIndex = 1;
               for (let i = 1; i < index; i++) {
@@ -958,12 +979,23 @@ export function MapArea() {
                   key={wp.id}
                   longitude={wp.lng}
                   latitude={wp.lat}
+                  draggable
+                  onDragStart={() => {
+                    pinDraggedRef.current = true;
+                  }}
+                  onDragEnd={(e) => {
+                    const { lat, lng } = e.lngLat;
+                    setWaypoints((prev) => prev.map((w) => (w.id === wp.id ? { ...w, lat, lng } : w)));
+                    setTimeout(() => {
+                      pinDraggedRef.current = false;
+                    }, 0);
+                  }}
                   anchor="bottom"
                   className="hover:z-20"
                   style={isSelected ? { zIndex: 5 } : undefined}
                 >
                   <div
-                    className={`relative flex flex-col items-center group cursor-pointer transition-transform ${isSelected ? "-translate-y-1" : "hover:-translate-y-1"}`}
+                    className={`relative flex flex-col items-center group cursor-grab active:cursor-grabbing transition-transform ${isSelected ? "-translate-y-1" : "hover:-translate-y-1"}`}
                     onClick={(e) => handlePinClick(e, wp.id)}
                     onContextMenu={(e) => handleMarkerContextMenu(e, wp.id)}
                   >
