@@ -658,12 +658,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [editorMode, undoMap, redoMap, undoTimeline, redoTimeline, isRendering, isBackgroundRender]);
 
   const autoLoadTimeline = async (projectDir: string) => {
+    let loaded: TimelineData;
     try {
-      resetTimelineHistory(await loadTimelineData(projectDir));
+      loaded = await loadTimelineData(projectDir);
     } catch (error) {
       console.error("Failed to load timeline:", error);
-      resetTimelineHistory(getDefaultTimeline());
+      loaded = getDefaultTimeline();
     }
+    resetTimelineHistory(loaded);
+    return loaded;
   };
 
   // A script the user wrote stays; an empty or automatic one takes what the render spoke.

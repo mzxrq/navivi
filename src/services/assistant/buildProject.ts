@@ -228,6 +228,7 @@ export async function buildProject({ brief, sourceText, engine, mapboxToken, sig
           next: waypoints[i + 1]?.name,
           index: i,
           total: waypoints.length,
+          stops: waypoints.map((w) => w.name),
           otherScript: kind === "attraction" ? wp.arrivingNarration : undefined,
           otherStops: waypoints.slice(0, i).map((w) => (kind === "arriving" ? w.arrivingNarration : w.attractionNarration) ?? ""),
           // A guessed spot would give a wrong direction.

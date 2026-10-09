@@ -10,13 +10,21 @@ export interface RouteContext {
     otherScript?: string;
     // Scripts already written for the other stops, so every stop doesn't reuse the same words.
     otherStops?: string[];
+    // All stop names in route order: the last stop's summary retraces them (names only, never their facts).
+    stops?: string[];
     // The leg the arriving line talks about: where it starts and ends, and how it is travelled.
     from?: { lat: number; lng: number };
     to?: { lat: number; lng: number };
     mode?: string;
 }
 
-const COMPASS = ["北", "北東", "東", "南東", "南", "南西", "西", "北西"];
+export function courseEnd(route: RouteContext): "start" | "end" | "" {
+    if (route.index === 0) return "start";
+    if (route.index !== undefined && route.total !== undefined && route.total > 1 && route.index === route.total - 1) return "end";
+    return "";
+}
+
+const COMPASS =["北", "北東", "東", "南東", "南", "南西", "西", "北西"];
 const MODE_WORDS: Record<string, string> = { walking: "歩いて", driving: "車で", ferry: "船で" };
 
 type LegStop = { lat: number; lng: number; routeMode?: string };
@@ -84,6 +92,12 @@ const ATTRACTION_EXAMPLES = [
     "加太港です。友ヶ島行きのフェリーは、ここから出航します。",
 ];
 
+// The first and last stop have their own job; examples without other places' facts, so none get copied in.
+const COURSE_END_EXAMPLES = {
+    start: "ここは南海加太線の終点、加太駅。このコースの出発点です。",
+    end: "出発地の加太駅に戻ってきました。友ヶ島・加太をめぐる道 - 葛城修験の最初の一歩は、これで結願です。お疲れさまでした。",
+};
+
 // Stock travel-show words a small model leans on at every stop.
 const STOCK_WORDS = [
     "静か", "穏やか", "落ち着いた", "佇まい", "雰囲気", "魅力", "癒やし", "心地よ", "楽しむ", "楽しめ", "感じ", "広が",
@@ -112,7 +126,12 @@ export interface WaypointPromptInput {
 export function buildWaypointPrompt({ place, theme, userPrompt, facts, scriptType, isFirstWaypoint, hasPhotos, route }: WaypointPromptInput): string {
     const previous = route.previous ? tidyPlaceName(route.previous) : "";
     const next = route.next ? tidyPlaceName(route.next) : "";
-    const isLast = route.index !== undefined && route.total !== undefined && route.total > 1 && route.index === route.total - 1;
+    const end = courseEnd(route);
+    const isLast = end === "end";
+    const stops = isLast && scriptType === "attraction" ? (route.stops ?? []).map((s) => tidyPlaceName(s) || s).filter(Boolean) : [];
+    const loop = stops.length > 2 && stops[0] === stops[stops.length - 1];
+    // The start and a count, not every name: a small model reads the whole list out.
+    const course = stops.length > 1 ? `出発地: ${stops[0]}、巡った場所の数: ${loop ? stops.length - 1 : stops.length}か所` : "";
     const direction = scriptType === "arriving" ? legDirection(route) : "";
     const routeLines = [previous && `前の立ち寄り場所: ${previous}`, next && `次の立ち寄り場所: ${next}`, direction && `この移動の${direction}`]
         .filter(Boolean)
@@ -132,10 +151,28 @@ export function buildWaypointPrompt({ place, theme, userPrompt, facts, scriptTyp
             task = `${from}${isLast ? "最後の場所" : ""}「${place}」へ向かう移動中の短いナレーションです。${brief}`;
         }
     } else {
-        length = "2〜3文、60〜120文字";
-        task = `「${place}」で、コースを歩く人に地元の案内人が語りかけるナレーションです。最初の文で、例のようにこの場所に合った形で「${place}」の名前を言ってください。名前の前の説明は短く一つまでにしてください。続く1〜2文で、与えられた情報や写真をもとに、ここで何が見られるか、どんな場所かを具体的に描写してください。事実は一文に一つずつ、短い文に分けてください。${route.index === 0 ? "ここはこのコースの出発点です。" : isLast ? "ここはこのコースの終点です。" : ""}「素晴らしい」「心が癒される」のような決まり文句の感想や気持ちは書かないでください。`;
-        // Nothing to go on: anything past the name would be invented.
-        if (!facts.trim() && !userPrompt.trim() && !hasPhotos) task += `この場所についての情報がないので、「${place}です。」とだけ書いてください。`;
+        const intro = `「${place}」で、コースを歩く人に地元の案内人が語りかけるナレーションです。`;
+        const describe = "与えられた情報や写真をもとに、ここで何が見られるか、どんな場所かを具体的に描写してください。事実は一文に一つずつ、短い文に分けてください。";
+        const noCliche = "「素晴らしい」「心が癒される」のような決まり文句の感想や気持ちは書かないでください。";
+        const noFacts = !facts.trim() && !userPrompt.trim() && !hasPhotos;
+        if (end === "start") {
+            length = "2〜3文、60〜120文字";
+            task = `${intro}ここはこのコースの出発点です。最初の文で「${place}」の名前を言い、ここがこのコースの出発点(スタート)であることをはっきり伝えてください。続く1文で、${describe}${noCliche}`;
+            // Nothing to go on: anything past the name would be invented.
+            if (noFacts) task += `この場所についての情報がないので、「${place}です。このコースの出発点です。」とだけ書いてください。`;
+        } else if (isLast) {
+            length = "ちょうど3文、40〜90文字";
+            const recap = theme
+                ? `「${theme}」のコースがこれで終わることを伝えてください。`
+                : course
+                  ? `【このコース】の出発地の名前と場所の数だけを使って、今日のコースを短く振り返ってください(例: 「〇〇駅から〇か所を歩いてきました」)。`
+                  : "今日のコースがこれで終わることを伝えてください。";
+            task = `${intro}ここはこのコースの終点(ゴール)です。文は次の3つだけにしてください。1文目: 「${place}」の名前を言い、${loop ? "出発地に戻ってきたこと" : "ここがゴールであること"}を伝える。2文目: ${recap}3文目: 「おつかれさまでした」のような短いひと言で締めくくる。この場所やほかの場所の説明、景色の描写、途中の場所の名前の列挙は書かないでください。「到着」という言葉は使わないでください。${noCliche}`;
+        } else {
+            length = "2〜3文、60〜120文字";
+            task = `${intro}最初の文で、例のようにこの場所に合った形で「${place}」の名前を言ってください。名前の前の説明は短く一つまでにしてください。続く1〜2文で、${describe}${noCliche}`;
+            if (noFacts) task += `この場所についての情報がないので、「${place}です。」とだけ書いてください。`;
+        }
     }
 
     const noRepeat =
@@ -157,12 +194,12 @@ export function buildWaypointPrompt({ place, theme, userPrompt, facts, scriptTyp
 ${task}
 
 【場所】${place}
-${routeLines ? routeLines + "\n" : ""}${userPrompt ? `【ユーザーからの要望(最優先で反映する)】\n${userPrompt}\n` : ""}${facts ? `【参考にしてよい情報】\n${facts}\n` : ""}${other ? `【${otherHeading}(内容を重ねないこと)】\n${other}\n` : ""}${used.length ? `【ほかの場所で使った言葉】${used.join("、")}\n` : ""}
+${routeLines ? routeLines + "\n" : ""}${userPrompt ? `【ユーザーからの要望(最優先で反映する)】\n${userPrompt}\n` : ""}${facts ? `【参考にしてよい情報】\n${facts}\n` : ""}${course ? `【このコース】${course}\n` : ""}${other ? `【${otherHeading}(内容を重ねないこと)】\n${other}\n` : ""}${used.length ? `【ほかの場所で使った言葉】${used.join("、")}\n` : ""}
 【内容のルール】
 1. 上の情報、ユーザーの要望、添付された写真に書かれている・写っていることだけを根拠にすること。年代、数字、人名、名物、営業時間などを推測や想像で書き足さないこと。
-2. ${scriptType === "attraction" ? `確かな情報が少ないときは、事実を作らず「${place}です。」だけにすること。写真が添付されているときだけ、実際に写っているものを一言添えてよい(「写真」という言葉は使わない)。` : "方角と移動手段は上に書かれているものだけを使うこと。書かれていなければ方角は言わないこと。所要時間や距離の数字は書かないこと。"}
+2. ${scriptType === "attraction" ? `確かな情報が少ないときは、この場所について事実を作らず${end ? "名前と、出発点・ゴールであることだけ" : `「${place}です。」だけ`}にすること。写真が添付されているときだけ、実際に写っているものを一言添えてよい(「写真」という言葉は使わない)。` : "方角と移動手段は上に書かれているものだけを使うこと。書かれていなければ方角は言わないこと。所要時間や距離の数字は書かないこと。"}
 3. 写真がある場合は、実際に写っている景色や特徴だけを自然に触れること。写っていないものや、写真から場所の名前を断定することはしないこと。
-4. 前の場所・次の場所の名前は、上に書かれているものだけを使うこと。
+4. 前の場所・次の場所${course ? "・出発地" : ""}の名前は、上に書かれているものだけを使うこと。
 5. ${noRepeat}${noRepeatOther}
 
 【書き方のルール】
@@ -173,7 +210,7 @@ ${routeLines ? routeLines + "\n" : ""}${userPrompt ? `【ユーザーからの�
 
 ${scriptType === "arriving" ? `例(書き方の参考だけ。内容や言い回しは使わないこと):
 ${STYLE_EXAMPLES[isFirstWaypoint ? "start" : "arriving"].join("\n")}` : `人が書いた別のコースの例(文の形の参考だけ。地名や事実は使わないこと):
-${ATTRACTION_EXAMPLES.join("\n")}`}`;
+${end ? COURSE_END_EXAMPLES[end] : ATTRACTION_EXAMPLES.join("\n")}`}`;
 
     return prompt;
 }

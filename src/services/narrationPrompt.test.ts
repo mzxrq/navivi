@@ -48,6 +48,39 @@ describe("buildWaypointPrompt", () => {
     expect(prompt.split("例(書き方の参考")[0]).not.toMatch(/到着/);
     expect(prompt).not.toContain("着きました");
   });
+
+  const stops = ["加太駅", "加太淡嶋神社", "加太港"];
+
+  it("has the first stop say it is the start of the course", () => {
+    const prompt = buildWaypointPrompt({ ...base, scriptType: "attraction", route: { index: 0, total: 3, stops } });
+    expect(prompt).toContain("このコースの出発点(スタート)であることをはっきり伝えて");
+    expect(prompt).toContain("「高仙寺です。このコースの出発点です。」とだけ");
+    expect(prompt).not.toContain("【このコースで巡った場所】");
+  });
+
+  it("keeps the last stop to three sentences with the start and a count, not every name", () => {
+    const prompt = buildWaypointPrompt({ ...base, scriptType: "attraction", route: { index: 2, total: 3, stops } });
+    expect(prompt).toContain("【このコース】出発地: 加太駅、巡った場所の数: 3か所\n");
+    expect(prompt).not.toContain("加太淡嶋神社");
+    expect(prompt).toContain("ちょうど3文、40〜90文字");
+    expect(prompt).toContain("景色の描写、途中の場所の名前の列挙は書かないで");
+  });
+
+  it("lets a loop's last stop say it is back at the start and name the course", () => {
+    const loop = ["加太駅", "加太淡嶋神社", "加太駅"];
+    const prompt = buildWaypointPrompt({ ...base, theme: "友ヶ島・加太をめぐる道", scriptType: "attraction", route: { index: 2, total: 3, stops: loop } });
+    expect(prompt).toContain("出発地に戻ってきたことを伝える");
+    expect(prompt).toContain("巡った場所の数: 2か所");
+    expect(prompt).toContain("「友ヶ島・加太をめぐる道」のコースがこれで終わることを伝えて");
+    expect(prompt).toContain("出発地の加太駅に戻ってきました。");
+  });
+
+  it("keeps a middle stop plain", () => {
+    const prompt = buildWaypointPrompt({ ...base, scriptType: "attraction", route: { index: 1, total: 3, stops } });
+    expect(prompt.split("人が書いた別のコースの例")[0]).not.toContain("出発点");
+    expect(prompt).not.toContain("【このコースで巡った場所】");
+    expect(prompt).toContain("「高仙寺です。」とだけ");
+  });
 });
 
 describe("usedWords", () => {
@@ -81,6 +114,12 @@ describe("dropRepeatedSentences", () => {
 
   it("drops an arrival from the attraction script but keeps 落ち着いた", () => {
     expect(dropRepeatedSentences("高仙寺に着きました。落ち着いた本堂が見えます。", undefined, "attraction")).toBe("落ち着いた本堂が見えます。");
+  });
+
+  it("keeps a summary that names the other stops when their scripts aren't passed", () => {
+    const summary = "加太駅から加太淡嶋神社へと巡ってきました。";
+    expect(dropRepeatedSentences(summary, "加太淡嶋神社です。", "attraction")).toBe("");
+    expect(dropRepeatedSentences(summary, undefined, "attraction")).toBe(summary);
   });
 
   it("leaves the arriving script's own arrival alone", () => {
