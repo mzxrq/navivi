@@ -157,14 +157,53 @@ def _extend_with_zoom_out(video_path: str, gap: float, output_path: str) -> Opti
     return output_path
 
 
+def _extend_with_photo(video_path: str, photo_path: str, gap: float, output_path: str) -> Optional[str]:
+    """video_path dissolving into the original photo (cover-framed to the clip),
+    held still for the remaining `gap` seconds."""
+    from services.tts.ttsengine import FFmpegManager
+
+    cap = cv2.VideoCapture(video_path)
+    try:
+        w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    finally:
+        cap.release()
+    if not w or not h:
+        return None
+    fps = _fps(video_path)
+    current = FFmpegManager.get_media_duration(video_path)
+    fade = min(tuning.ATTRACTION_TAIL_PHOTO_FADE_SECONDS, current / 2, gap)
+    norm = f"fps={fps:.3f},setsar=1,format=yuv420p"
+    still = f"[1:v]scale={w}:{h}:force_original_aspect_ratio=increase:flags=lanczos,crop={w}:{h},{norm}[b]"
+    join = (
+        f"[a][b]xfade=transition=fade:duration={fade:.3f}:offset={current - fade:.3f}[v]" if fade > 0.01
+        else "[a][b]concat=n=2:v=1:a=0[v]"
+    )
+    result = subprocess.run(
+        [
+            FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_log_args(),
+            "-i", video_path, "-loop", "1", "-t", f"{gap + fade:.3f}", "-i", photo_path,
+            "-filter_complex", f"[0:v]{norm}[a];{still};{join}", "-map", "[v]",
+            "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast",
+            "-pix_fmt", "yuv420p", output_path,
+        ],
+        capture_output=True, encoding="utf-8", errors="replace",
+    )
+    if result.returncode != 0:
+        logger.warning("Photo tail failed: %s", result.stderr.strip())
+        return None
+    logger.info("Filled %.1fs after %s with the original photo (%.1fs dissolve).", gap, video_path, fade)
+    return output_path
+
+
 def extend_with_slow_move(
     video_path: str, target_duration: float, camera_pan, output_path: str,
-    rng: Optional[random.Random] = None,
+    rng: Optional[random.Random] = None, photo_path: Optional[str] = None,
 ) -> Optional[str]:
-    """video_path followed by a slow move over its last frame, lasting until
-    target_duration. Returns output_path, or None when there is nothing to
-    add, the preset doesn't move, or anything fails (the caller then keeps
-    the old last-frame hold)."""
+    """video_path followed by a slow move over its last frame (or, with style
+    "photo", the original photo held still), lasting until target_duration.
+    Returns output_path, or None when there is nothing to add, the preset
+    doesn't move, or anything fails (the caller then keeps the old last-frame
+    hold)."""
     key = normalize_camera_pan(camera_pan)
     if key not in _MOVING:
         return None
@@ -175,6 +214,9 @@ def extend_with_slow_move(
         gap = target_duration - current
         if gap <= 0.05:
             return None
+        if tuning.ATTRACTION_SLOW_MOVE_STYLE == "photo":
+            # No photo (a refit of a finished clip, which already ends on it): hold.
+            return _extend_with_photo(video_path, photo_path, gap, output_path) if photo_path else None
         # A dolly-in or walk keeps pushing in; a zoom-out tail would reverse it.
         if tuning.ATTRACTION_SLOW_MOVE_STYLE == "zoomout" and key not in ("zoomin", "walkin"):
             return _extend_with_zoom_out(video_path, gap, output_path)

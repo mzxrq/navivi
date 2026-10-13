@@ -664,6 +664,9 @@ class _CardMixin:
         duration_seconds: float,
         mode_breakdown: Optional[Dict[str, float]] = None,
         mode_duration: Optional[Dict[str, float]] = None,
+        out_scale: float = 1.0,
+        total_km: Optional[float] = None,
+        total_seconds: Optional[float] = None,
     ) -> np.ndarray:
         """Fourth summary-card template: still split into columns like
         create_summary_card's own multi-column layout, colored per mode like
@@ -682,8 +685,11 @@ class _CardMixin:
         in plain text color; more than one mode gets one column per mode
         plus a Total column, colored via _mode_accent / self.ui["card_text"]
         — same reasoning create_summary_card's own single-vs-multi split
-        uses."""
+        uses. `total_km`/`total_seconds` override the Total column (a leg's
+        card shows the whole trip still ahead there)."""
         scale = 2
+        total_dist = distance_km if total_km is None else total_km
+        total_dur = duration_seconds if total_seconds is None else total_seconds
         font_label = self._load_font(
             self.FONT_CANDIDATES_REGULAR, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
         )
@@ -708,7 +714,7 @@ class _CardMixin:
                 for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1])
             ]
             columns.append((
-                self.summary_card_labels["total_label"], "total", distance_km, duration_seconds,
+                self.summary_card_labels["total_label"], "total", total_dist, total_dur,
                 self.ui["card_text"],
             ))
         elif mode_breakdown and len(mode_breakdown) == 1:
@@ -720,7 +726,7 @@ class _CardMixin:
                     self._mode_accent(single_mode),
                 ),
                 (
-                    self.summary_card_labels["total_label"], "total", distance_km, duration_seconds,
+                    self.summary_card_labels["total_label"], "total", total_dist, total_dur,
                     self.ui["card_text"],
                 ),
             ]
@@ -811,7 +817,7 @@ class _CardMixin:
             )
 
         canvas = self._add_card_shadow(canvas, card_radius_px, border_rgba[:3], scale)
-        w, h = canvas.size[0] // scale, canvas.size[1] // scale
+        w, h = round(canvas.size[0] * out_scale / scale), round(canvas.size[1] * out_scale / scale)
         canvas = canvas.resize((w, h), Image.Resampling.LANCZOS)
         return np.array(canvas)[:, :, [2, 1, 0, 3]]
 
@@ -1124,6 +1130,21 @@ class _CardMixin:
         method directly, so a project can opt into a different template
         without every call site needing its own if/else."""
         style = getattr(self, "summary_card_style", tuning.DEFAULT_SUMMARY_CARD_STYLE)
+        out_scale = kwargs.pop("out_scale", 1.0)
+        if style == "columns":
+            kwargs.pop("title", None)
+            kwargs.pop("max_title_width", None)
+            return self.create_summary_card_columns(out_scale=out_scale, **kwargs)
+        kwargs.pop("total_km", None)
+        kwargs.pop("total_seconds", None)
+        card =self._render_summary_card_style(style, card_size, **kwargs)
+        if out_scale != 1.0:
+            h, w = card.shape[:2]
+            card = np.array(Image.fromarray(card).resize(
+                (round(w * out_scale), round(h * out_scale)), Image.Resampling.LANCZOS))
+        return card
+
+    def _render_summary_card_style(self, style: str, card_size, **kwargs) -> np.ndarray:
         if style == "taskbar":
             if card_size is not None:
                 kwargs.setdefault("min_card_width", card_size[0])
@@ -1132,10 +1153,6 @@ class _CardMixin:
             kwargs.pop("title", None)
             kwargs.pop("max_title_width", None)
             return self.create_summary_card_stacked(**kwargs)
-        if style == "columns":
-            kwargs.pop("title", None)
-            kwargs.pop("max_title_width", None)
-            return self.create_summary_card_columns(**kwargs)
         # create_summary_card (the pill/column style) has no concept of a
         # custom header title — a caller passing `title` (e.g. a per-leg
         # "{from} → {to}" route line) only meant it for the taskbar

@@ -34,12 +34,24 @@ def remember_kanji(word: str, reading: str, spoken: str) -> None:
     _kanji_names[word] = (reading, spoken)
 
 
+_respelled: Dict[str, str] = {}  # a misread katakana name's hiragana retake spelling -> its reading
+
+
 def spell_out(text: str, names: List[str]) -> str:
-    """`text` with the kanji names among `names` spelled out, for a retake after the voice misread them."""
+    """`text` with the names among `names` spelled another way, for a retake after the voice misread them: a kanji name
+    spelled out, a katakana one in hiragana (Irodori says サルサカ峠 さらさか every take, but さるさか峠 right)."""
     for name in sorted(names, key=len, reverse=True):
         if name in _kanji_names:
             spoken = _kanji_names[name][1]
             remember(spoken, name)
+            text = text.replace(name, spoken)
+            continue
+        m = _NAME.fullmatch(name)
+        if m and name in text:
+            head = japanese_words.to_hiragana(m.group(1))
+            spoken = head + (m.group(2) or "")
+            remember(spoken, _originals.get(name, name))
+            _respelled[spoken] = head + japanese_words.PLAIN_SUFFIXES.get(m.group(2) or "", "")
             text = text.replace(name, spoken)
     return text
 
@@ -61,7 +73,8 @@ def expected_names(text: str) -> List[tuple]:
         reading = japanese_words.to_hiragana(m.group(1)) + japanese_words.PLAIN_SUFFIXES.get(m.group(2) or "", "")
         if (m.group(0), reading) not in names:
             names.append((m.group(0), reading))
-    for word, (reading, _) in sorted(_kanji_names.items(), key=lambda item: -len(item[0])):
+    for word, reading in [*sorted(_kanji_names.items(), key=lambda item: -len(item[0])), *_respelled.items()]:
+        reading = reading[0] if isinstance(reading, tuple) else reading
         if word in text and not any(word in name for name, _ in names):
             names.append((word, reading))
     return names

@@ -2,7 +2,7 @@ import { fetch } from '@tauri-apps/plugin-http';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { invoke } from '@tauri-apps/api/core';
 import { tidyPlaceName } from '../utils/gpxTrack';
-import { buildWaypointPrompt, cleanNarration, dropRepeatedSentences, RouteContext } from './narrationPrompt';
+import { buildWaypointPrompt, cleanNarration, courseEnd, dropRepeatedSentences, RouteContext } from './narrationPrompt';
 import { AiEngine, isOnlineEngine } from './ai/engine';
 import { hasApiKey, streamOnline } from './ai/online';
 import { shrinkForUpload, MAX_ONLINE_PHOTOS } from './ai/photos';
@@ -393,7 +393,9 @@ export async function generateWaypointScriptStream(
 
     // The arriving line only gives the direction: facts and photos would only invite scenery.
     const arriving = scriptType === "arriving";
-    if (!arriving && lat !== 0 && lng !== 0) {
+    // The last stop's closing line doesn't describe the place either.
+    const summary = !arriving && courseEnd(route) === "end";
+    if (!arriving && !summary && lat !== 0 && lng !== 0) {
         const { geo, searchTerms } = await fetchLocationContext(lat, lng);
         const webContext = await fetchKeylessWebContext(searchTerms);
         facts = [geo && `地理情報: ${geo}`, webContext && `参考情報: ${webContext}`].filter(Boolean).join("\n");
@@ -401,7 +403,7 @@ export async function generateWaypointScriptStream(
 
     const online = isOnlineEngine(engine);
     const base64Images: string[] = [];
-    for (const p of arriving || (online && !engine.sendPhotos) ? [] : imagePaths.slice(0, online ? MAX_ONLINE_PHOTOS : undefined)) {
+    for (const p of arriving || summary || (online && !engine.sendPhotos) ? [] : imagePaths.slice(0, online ? MAX_ONLINE_PHOTOS : undefined)) {
         try {
             const bytes = await readFile(p);
             const encoded = online ? await shrinkForUpload(bytes) : uint8ArrayToBase64(bytes);
@@ -411,7 +413,8 @@ export async function generateWaypointScriptStream(
         }
     }
 
-    const copied = (context: RouteContext) => [context.otherScript, ...(context.otherStops ?? [])].filter(Boolean).join("\n");
+    // The last stop's summary may name other stops, so their scripts would look copied.
+    const copied = (context: RouteContext) => [context.otherScript, ...(summary ? [] : context.otherStops ?? [])].filter(Boolean).join("\n");
     // Lower temperature keeps a small model close to the facts it was given.
     const run = async (context: RouteContext, temperature: number) => {
         let raw = "";

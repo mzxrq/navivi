@@ -13,6 +13,29 @@ from services.vdoprocessing import img2vdo, ltx_keyframed, parallax_generator
 from services.vdoprocessing.img2vdo import AttractionVideoGenerator
 
 
+@pytest.fixture(autouse=True)
+def _second_shots_on(monkeypatch):
+    """The "photo" tail drops the second shot; these tests cover it."""
+    monkeypatch.setattr(tuning, "ATTRACTION_SLOW_MOVE_STYLE", "zoomout")
+
+
+class TestPhotoTailShots:
+    def test_photo_tail_renders_one_shot(self, monkeypatch):
+        monkeypatch.setattr(tuning, "ATTRACTION_SLOW_MOVE_STYLE", "photo")
+        assert ltx_keyframed.shot_list("panright", "s") == ["panright"]
+
+    def test_first_shot_end_from_the_sidecar(self, tmp_path):
+        clip = tmp_path / "c.mp4"
+        writer = cv2.VideoWriter(str(clip), cv2.VideoWriter_fourcc(*"mp4v"), 24, (64, 36))
+        for _ in range(96):
+            writer.write(np.zeros((36, 64, 3), np.uint8))
+        writer.release()
+        ltx_keyframed._write_first_shot_end(str(clip), 2.5)
+        assert ltx_keyframed.first_shot_end(str(clip), "unused.png") == pytest.approx(2.5)
+        ltx_keyframed._write_first_shot_end(str(clip), 4.0)
+        assert ltx_keyframed.first_shot_end(str(clip), "unused.png") is None
+
+
 def _marked_photo(path):
     photo = np.full((900, 1600, 3), 128, np.uint8)
     photo[:, :200] = (0, 0, 255)    # red strip at the far left

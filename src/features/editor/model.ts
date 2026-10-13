@@ -487,6 +487,79 @@ export function timelineFromEditorState(raw: any): TimelineData | null {
   };
 }
 
+const sameStyle = (a?: TextStyle, b?: TextStyle) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+// One style every cue in the list shares, if any.
+function sharedStyle(cues: SubtitleCue[]): TextStyle | undefined {
+  const first = cues[0]?.style;
+  return first && cues.every((c) => sameStyle(c.style, first)) ? first : undefined;
+}
+
+const carryLine = (fresh: TextLine, old?: TextLine): TextLine =>
+  old
+    ? {
+        ...fresh,
+        ...(old.style ? { style: old.style } : {}),
+        ...(old.animation ? { animation: old.animation } : {}),
+        ...(old.delay !== undefined ? { delay: old.delay } : {}),
+      }
+    : fresh;
+
+/** After the pipeline rebuilt timeline.json, keeps what the user set in the editor: subtitle and
+ * text looks, hand-added text items, clip volume/mute and the music bed. Clips match by file, then name. */
+export function carryOverLooks(prev: TimelineData, next: TimelineData): TimelineData {
+  if (!prev.segments.length || !next.segments.length) return next;
+  const oldFor = new Map<string, Segment>();
+  for (const s of next.segments) {
+    const old = prev.segments.find((o) => o.video === s.video) ?? prev.segments.find((o) => o.label === s.label);
+    if (old) oldFor.set(s.id, old);
+  }
+
+  const segments = next.segments.map((s) => {
+    const old = oldFor.get(s.id);
+    return old ? { ...s, volume: old.volume, muted: old.muted } : s;
+  });
+
+  const wholeStyle = sharedStyle(prev.subtitles);
+  const subtitles = next.subtitles.map((c) => {
+    if (c.style) return c;
+    const old = oldFor.get(c.segmentId);
+    const oldCues = old ? prev.subtitles.filter((o) => o.segmentId === old.id) : [];
+    const style = oldCues.find((o) => o.text === c.text)?.style ?? sharedStyle(oldCues) ?? wholeStyle;
+    return style ? { ...c, style } : c;
+  });
+
+  const texts = next.texts.map((x) => {
+    const old = oldFor.get(x.segmentId);
+    if (!old) return x;
+    const siblings = next.texts.filter((y) => y.segmentId === x.segmentId && y.kind === x.kind);
+    const match = prev.texts.filter((y) => y.segmentId === old.id && y.kind === x.kind)[siblings.indexOf(x)];
+    if (!match) return x;
+    const { id: _id, segmentId: _seg, start: _s, end: _e, title, subtitle, kicker, kind: _k, ...look } = match;
+    return {
+      ...x,
+      ...look,
+      title: carryLine(x.title, title),
+      subtitle: carryLine(x.subtitle, subtitle),
+      ...(x.kicker ? { kicker: carryLine(x.kicker, kicker) } : {}),
+    };
+  });
+
+  // Text items added by hand stay on their clip.
+  const lengths = new Map(segments.map((s) => [s.id, segmentLength(s)]));
+  for (const s of segments) {
+    const old = oldFor.get(s.id);
+    if (!old) continue;
+    const limit = lengths.get(s.id)!;
+    for (const x of prev.texts.filter((y) => y.segmentId === old.id && !y.kind)) {
+      const start = Math.min(x.start, Math.max(0, limit - MIN_CUE));
+      texts.push({ ...x, id: newId(), segmentId: s.id, start, end: Math.min(limit, Math.max(x.end, start + MIN_CUE)) });
+    }
+  }
+
+  return { ...next, segments, subtitles, texts, music: next.music ?? prev.music };
+}
+
 // Reads the pipeline's (or the older editor's) timeline.json. `probe` returns a media file's length in seconds.
 export async function timelineFromPipeline(
   raw: any,

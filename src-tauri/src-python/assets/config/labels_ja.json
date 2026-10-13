@@ -38,6 +38,7 @@
   "place_count": "{n} か所",
   "outro_subtitle": "訪れた{count}か所",
   "outro_route_from": "{name} から",
+  "outro_stopby_title": "立ち寄りスポット",
   "outro_summary": {
     "distance": "総距離",
     "legs": "{count}区間",

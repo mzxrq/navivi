@@ -391,6 +391,8 @@ RESIDENTIAL_TILE_FETCH_WORKERS = 4
 # don't make it twitch.
 RESIDENTIAL_SHOW_COMPASS = True
 RESIDENTIAL_COMPASS_SIZE_PX = 104
+# Leg HUD summary card size vs. the overview's card.
+RESIDENTIAL_HUD_CARD_SCALE = 1.3
 RESIDENTIAL_COMPASS_HEADING_WINDOW_M = 20.0
 # Whether a stop-by waypoint (job_config.json's "isStopBy": true) merges
 # into the surrounding real-to-real leg (True — just shows its pin as the
@@ -981,9 +983,14 @@ ATTRACTION_SLOW_MOVE_ZOOM_PER_SEC = 0.012
 # picture, centred, ending right as the narration ends; to have picture to
 # zoom out into, the whole clip is shown zoomed in by that same amount (never
 # more than ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT), so the join doesn't jump.
-# "drift" is the earlier slow push-in in a random direction.
-ATTRACTION_SLOW_MOVE_STYLE = "zoomout"
+# "drift" is the earlier slow push-in in a random direction. "photo" (user's
+# pick, 2026-10-09) dissolves from the animation's end to the original photo
+# and holds it still until the narration ends. The animation always plays to
+# its end first; one longer than the narration is cut there, with no photo.
+ATTRACTION_SLOW_MOVE_STYLE = "photo"
 ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT = 0.12
+# The dissolve into that photo; 0 = a hard cut.
+ATTRACTION_TAIL_PHOTO_FADE_SECONDS = 0.5
 # Wan grades its clips (contrast, saturation and brightness climb, and jump
 # again at each extension segment), so every Wan clip gets its colours pulled
 # back to its photo afterwards (vdoprocessing/color_match.py): each frame's
@@ -1611,19 +1618,19 @@ INTRO_MAX_IMAGE_COUNT = 5
 # Font/outline are in intro pixels; scaled x1080/704 from the old 1280x704 intro to look the same.
 # These are defaults; settings.intro_title_style / intro_subtitle_style override per project.
 INTRO_TITLE_FONT_FAMILY = "Yu Gothic UI"
-INTRO_TITLE_FONT_SIZE = 74
+INTRO_TITLE_FONT_SIZE = 150
 INTRO_TITLE_OUTLINE = 2
 INTRO_TITLE_BOLD = True
 INTRO_TITLE_COLOR: Tuple[int, int, int] = (255, 255, 255)
 # Second line under the title (only drawn when a subtitle is set).
 INTRO_SUBTITLE_FONT_FAMILY = "Yu Gothic UI"
-INTRO_SUBTITLE_FONT_SIZE = 36
+INTRO_SUBTITLE_FONT_SIZE = 70
 INTRO_SUBTITLE_OUTLINE = 0
 INTRO_SUBTITLE_BOLD = True
 INTRO_SUBTITLE_COLOR: Tuple[int, int, int] = (255, 255, 255)
 # Small line above the title: where the walk is (settings.intro_location, e.g. "和歌山県 和歌山市").
 INTRO_KICKER_FONT_FAMILY = "Yu Gothic UI"
-INTRO_KICKER_FONT_SIZE = 30
+INTRO_KICKER_FONT_SIZE = 90
 INTRO_KICKER_OUTLINE = 0
 INTRO_KICKER_BOLD = False
 INTRO_KICKER_COLOR: Tuple[int, int, int] = (205, 210, 220)
@@ -1665,11 +1672,6 @@ INTRO_LABEL_SCALE_START_PCT = 65
 INTRO_SUBTITLE_DELAY_SECONDS = 0.8
 INTRO_SUBTITLE_FADE_SECONDS = 0.7
 INTRO_SUBTITLE_RISE_PX = 28
-
-# Spoken (and subtitled) after the last visited waypoint's attraction
-# narration, so the video winds down before the outro instead of cutting
-# off mid-thought. "" turns it off.
-CLOSING_NARRATION = "お疲れ様でした。"
 
 # --- Outro card grid (end-of-video "places visited" summary) ---------------
 # A single composited frame (project title + a thumbnail grid of every
@@ -1749,6 +1751,9 @@ OUTRO_HEADING_LINE_GAP = 10  # px between title and subtitle
 OUTRO_ROUTE_COLS = 2
 OUTRO_ROUTE_COL_GAP = 16
 OUTRO_ROUTE_THUMB_ASPECT = 1.0
+# After the last leg card: a bold title, then every stop-by in route order as
+# a leg-sized card (photo numbered +1, +2 ..., name, fact), OUTRO_ROUTE_COLS to a row.
+OUTRO_STOPBY_TITLE_FONT_SIZE = 22
 OUTRO_LEG_FONT_SIZE = 16
 OUTRO_SUMMARY_VALUE_FONT_SIZE = 30
 OUTRO_PANEL_COLOR: Tuple[int, int, int] = (31, 42, 64)
@@ -1826,6 +1831,10 @@ TTS_STRAY_BURST_ENGINES = ("irodori",)
 # さらさか). Off, or without faster-whisper installed, takes are not checked. The fewest-misses take is kept after the retakes.
 TTS_NAME_CHECK = True
 TTS_NAME_RETAKES = 2
+# Send auto dictionary words the analyser already reads right in kanji (better intonation), relying on the name check to retake a
+# misread one. Off: Irodori guesses kanji itself and Whisper can write the right kanji for a misread take (慈眼院 said じがんいん,
+# heard as 次元院), so the check misses it; every dictionary word is spelled out (ジゲン院) instead.
+TTS_KANJI_FIRST = False
 TTS_NAME_CHECK_MIN_CHARS = 3  # kana, not counting ー: shorter runs (ゴール) are left alone unless a plain ending follows (ミワ神社)
 TTS_NAME_CHECK_MODEL = "kotoba-tech/kotoba-whisper-v2.0-faster"  # Japanese Whisper for faster-whisper, ~1.5 GB, downloaded on first use
 TTS_SENTENCE_GAP_MIN_SECONDS = 0.25

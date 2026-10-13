@@ -30,10 +30,14 @@ import { useUI } from "../../hooks/useUI";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import {
   loadTimelineManifest,
+  probeDuration,
   saveTimelineManifest,
+  toAbsoluteProjectPath,
 } from "../../services/fileSystem";
 import { detectHardwareSpec } from "../../utils/hardwareDetection";
 import { exportOptionsFrom } from "../../features/editor/model";
+import type { TimelineData } from "../../features/editor/model";
+import { refreshStopMedia } from "../../services/stopRegen";
 import {
   appendPipelineOutput,
   appendSystemMessage,
@@ -82,6 +86,7 @@ export function RenderOverlay() {
     saveProject,
     setActiveWaypointId,
     timeline,
+    setTimeline,
     canUndoTimeline,
   } = useWorkspace();
 
@@ -105,6 +110,7 @@ export function RenderOverlay() {
   const [redoInBackground, setRedoInBackground] = useState(true);
   const [backgroundLabel, setBackgroundLabel] = useState("");
   // The finish handler lives in an effect closure, so it reads what the editor looks like now through this.
+  const redoneVoices = useRef<ReviewRow[]>([]);
   const live = useRef({ timeline, settings, canUndoTimeline, background: isBackgroundRender, collapsed: isRenderCollapsed });
   live.current = { timeline, settings, canUndoTimeline, background: isBackgroundRender, collapsed: isRenderCollapsed };
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -474,7 +480,21 @@ export function RenderOverlay() {
     } catch (e) {
       console.warn("Subtitles were not rebuilt:", e);
     }
-    await autoLoadTimeline(dir);
+    const loaded = await autoLoadTimeline(dir);
+    const next = await withNewVoiceMedia(dir, loaded, rows);
+    if (next !== loaded) setTimeline(next);
+  };
+
+  // A timeline the editor saved keeps its own cues, so the redone stops' new subtitles and voice lengths are read in here.
+  const withNewVoiceMedia = async (dir: string, base: TimelineData, rows: ReviewRow[]) => {
+    const io = {
+      probe: async (rel: string, kind: "video" | "audio") => probeDuration(convertFileSrc(await toAbsoluteProjectPath(rel, dir)), kind, 0),
+      readText: async (rel: string) => readTextFile(await toAbsoluteProjectPath(rel, dir)),
+    };
+    const indexes = new Set(rows.map((r) => waypoints.findIndex((w) => w.id === r.wpId)).filter((i) => i >= 0));
+    let next = base;
+    for (const index of indexes) next = (await refreshStopMedia(next, index, "voice", io)) ?? next;
+    return next;
   };
 
   const removeClipFiles = async (rows: ReviewRow[]) => {
@@ -556,10 +576,13 @@ export function RenderOverlay() {
     if (dir) {
       // The pipeline rewrote timeline.json. Edits made meanwhile live only in the editor, so they are written back.
       if (now.canUndoTimeline && now.timeline.segments.length > 0) {
-        kept = await saveTimelineManifest(dir, metadata.project_name, now.timeline, now.settings.caption_style, exportOptionsFrom(now.settings));
+        const next = await withNewVoiceMedia(dir, now.timeline, redoneVoices.current);
+        if (next !== now.timeline) setTimeline(next);
+        kept = await saveTimelineManifest(dir, metadata.project_name, next, now.settings.caption_style, exportOptionsFrom(now.settings));
       }
       if (!kept) await autoLoadTimeline(dir);
     }
+    redoneVoices.current = [];
     await buildReviewRows();
     setStep("verifying");
     setStatus("success");
@@ -570,6 +593,7 @@ export function RenderOverlay() {
   const redoInTheBackground = async (voiceRows: ReviewRow[], videoRows: ReviewRow[]) => {
     audioRef.current?.pause();
     if (voiceRows.length) await prepareVoices(voiceRows);
+    redoneVoices.current = voiceRows;
     if (videoRows.length) await removeClipFiles(videoRows);
     const voices = voiceRows.length;
     const clips = videoRows.length;
