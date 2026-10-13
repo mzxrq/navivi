@@ -1773,7 +1773,7 @@ OUTRO_SUMMARY_HOLD_SECONDS = 4.0
 # (centred, alone, after every card has scrolled away), each on its own white
 # plate (the logos are dark-on-light). GAP is between plates; PLATE_COLOR None =
 # no plates. A row wider than MAX_WIDTH of the frame is scaled down to fit.
-OUTRO_LOGO_HEIGHT = 96
+OUTRO_LOGO_HEIGHT = 52
 OUTRO_LOGO_MAX_WIDTH = 0.8
 OUTRO_LOGO_FADE_SECONDS = 0.8
 OUTRO_LOGO_HOLD_SECONDS = 3.0
