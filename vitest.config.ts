@@ -8,7 +8,8 @@ export default defineConfig({
     // Plain Node is enough for the logic tests; a test that renders a component or hook opts in with
     // `// @vitest-environment jsdom` on its first line.
     environment: "node",
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["tests/**/*.test.{ts,tsx}"],
+    exclude: ["tests/e2e/**", "node_modules/**"],
     restoreMocks: true,
   },
 });
