@@ -21,7 +21,7 @@ from services.logger.logger import setup_logger
 from services.logger.progress import tracker
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
-from services.mapfetcher.maplanguage import resolve_map_style
+from services.mapfetcher.maplanguage import resolve_map_style, streets_lang
 from services.vdoprocessing.stopby_visits import visits_stopby
 
 # Logging configuration
@@ -64,7 +64,13 @@ class MapFetcher:
         # dependency. See pydeck_overview.py's own module docstring for why
         # this is a separate top-down-only capture rather than reusing the
         # residential mode's tilted pydeck camera.
-        if str(settings.get("overview_background", "")).lower() == "pydeck":
+        # [NOTE] [Map] Raster tiles can't be relabeled; a non-English map language without its own Studio style
+        # goes through the GL path, whose page script rewrites the labels (pydeck_overview.py).
+        lang = streets_lang(self.config.get("map_language") if self.config else None)
+        needs_gl_labels = bool(
+            lang and lang != "en" and not settings.get(f"mapbox_style_id_{lang}") and resolve_mapbox_token(settings)
+        )
+        if str(settings.get("overview_background", "")).lower() == "pydeck" or needs_gl_labels:
             from services.mapfetcher.pydeck_overview import fetch_overview_image_pydeck
 
             logger.info("Fetching overview map background via pydeck...")
