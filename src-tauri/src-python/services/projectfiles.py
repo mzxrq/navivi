@@ -15,6 +15,7 @@ META_DIR = ".navivi"
 ROUTE_CACHE = ("routecache.json", ".routecache.json")
 NARRATION_CUES = ("narration_cues.json", ".narration_cues.json")
 OVERVIEW_NARRATION = ("overview_narration.json", ".overview_narration.json")
+CLIP_INPUTS = ("clip_inputs.json", ".clip_inputs.json")
 
 PathLike = Union[str, os.PathLike]
 
