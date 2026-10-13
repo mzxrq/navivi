@@ -1658,9 +1658,9 @@ INTRO_FADE_SECONDS = 0.5
 # from assets/image/logo under the label `outro_logo_title`. None = no badge.
 # Sizes are px on the 1920x1080 intro.
 INTRO_LOGO_FILE: Optional[str] = "NDR.png"
-INTRO_LOGO_HEIGHT = 52
-INTRO_LOGO_TITLE_FONT_SIZE = 20
-INTRO_LOGO_PADDING = 14
+INTRO_LOGO_HEIGHT = 42
+INTRO_LOGO_TITLE_FONT_SIZE = 17
+INTRO_LOGO_PADDING = 12
 INTRO_LOGO_MARGIN = 20
 INTRO_LOGO_TITLE_COLOR: Tuple[int, int, int] = (70, 76, 90)
 # Darkens each source picture before the title is burned on top — plain
