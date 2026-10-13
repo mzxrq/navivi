@@ -3,6 +3,7 @@ import { Source, Layer } from "react-map-gl/mapbox";
 import { useWorkspace } from "../../../../hooks/useWorkspace";
 import { rgbToHex } from "../../../../components/ui/ColorSwatches";
 import { legGradients, type LegElevation } from "../../../../utils/elevation";
+import { usePreviewedWaypointId } from "../../drawPreview";
 
 interface RouteLayerProps {
   uploadedRouteLine: number[][];
@@ -33,12 +34,18 @@ export function RouteLayer({
   const borderWidth = settings?.route_line_border_thickness || 0;
 
   const heatmapOn = Boolean(settings?.show_route_heatmap);
+  // A leg being reshaped is drawn by the draw preview instead, so it does not show twice.
+  const previewed = usePreviewedWaypointId();
+  const hiddenLeg = previewed
+    ? waypoints.filter((wp) => !wp.isStopBy || wp.connectToRoute).findIndex((wp) => wp.id === previewed)
+    : -1;
 
   const gradients = useMemo(() => (heatmapOn ? legs.map(legGradients) : []), [heatmapOn, legs]);
 
   const heatmapGeoJSON = useMemo(() => {
     const features: any[] = [];
     gradients.forEach((g, legIndex) => {
+      if (legIndex === hiddenLeg) return;
       g?.segments.forEach((seg) => {
         features.push({
           type: "Feature",
@@ -54,7 +61,7 @@ export function RouteLayer({
       });
     });
     return { type: "FeatureCollection", features };
-  }, [gradients]);
+  }, [gradients, hiddenLeg]);
 
   const legColors = waypoints
     .filter((wp) => !wp.isStopBy || wp.connectToRoute)
@@ -64,7 +71,7 @@ export function RouteLayer({
   const dynamicRouteGeoJSON = useMemo(() => {
     const colors = legColors.split(",");
     const features = routeSegments.flatMap((segment, i) => {
-      if (gradients[i]) return []; // painted by the heatmap instead
+      if (gradients[i] || i === hiddenLeg) return []; // painted by the heatmap or the draw preview instead
       return [{
         type: "Feature",
         properties: {
@@ -79,7 +86,7 @@ export function RouteLayer({
     });
 
     return { type: "FeatureCollection", features };
-  }, [routeSegments, legColors, gradients]);
+  }, [routeSegments, legColors, gradients, hiddenLeg]);
 
   const rawRouteGeoJSON = useMemo(() => {
     const features: any[] = [];

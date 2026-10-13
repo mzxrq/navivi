@@ -270,6 +270,7 @@ export const saveProjectData = async (
         customRoute: wp.customRoute || [],
         customRouteEle: wp.customRouteEle?.length ? wp.customRouteEle : undefined,
         drawStyle: wp.drawStyle || "linear",
+        customRouteCurve: wp.customRouteCurve?.length ? wp.customRouteCurve : undefined,
         lineColor: wp.lineColor || undefined,
         viaPoints: wp.viaPoints?.length ? wp.viaPoints : undefined,
         curveOffset: wp.curveOffset ?? undefined,

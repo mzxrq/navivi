@@ -32,8 +32,6 @@ test.describe('Navivi Tauri App', () => {
     // E.g., "Navivi" or "Project"
     await expect(page.locator('body')).toContainText(/Navivi|Project/i);
     
-    // Take a screenshot to verify what it actually looks like in standard Chrome
-    await page.screenshot({ path: 'e2e/screenshot.png' });
   });
 });
 

@@ -30,6 +30,7 @@ import { MenuEntry, separator } from "../../../components/ui/menuItems";
 import { useWaypointActions } from "../../../hooks/useWaypointActions";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { RouteMode, Waypoint } from "../../../types/index";
+import { pathOf, reversedPathOf } from "../../../utils/drawnPath";
 
 export type ModeOption = { id: RouteMode; icon: typeof Car; label: string };
 
@@ -113,8 +114,8 @@ export function useStopMenus() {
     setIsDirty(true);
   };
 
-  const setPath = (wpId: string, customRoute: [number, number][]) => {
-    updateWaypoint(wpId, { customRoute, routeMode: "draw" });
+  const setPath = (wpId: string, path: Pick<Waypoint, "customRoute" | "customRouteCurve" | "drawStyle">) => {
+    updateWaypoint(wpId, { ...path, routeMode: "draw" });
     setIsDirty(true);
   };
 
@@ -149,7 +150,7 @@ export function useStopMenus() {
         icon: Copy,
         submenu: drawnElsewhere.map((w) => ({
           label: w.name || t`Waypoint`,
-          onSelect: () => setPath(wp.id, [...w.customRoute!]),
+          onSelect: () => setPath(wp.id, pathOf(w)),
         })),
       },
       current === "draw" &&
@@ -157,7 +158,7 @@ export function useStopMenus() {
       !!previousPath?.length && {
         label: t`Retrace previous path`,
         icon: CornerDownLeft,
-        onSelect: () => setPath(wp.id, [...previousPath].reverse()),
+        onSelect: () => setPath(wp.id, reversedPathOf(waypoints[index - 1])),
       },
       VIA_MODES.includes(wp.routeMode) && {
         label: t`Adjust route`,
