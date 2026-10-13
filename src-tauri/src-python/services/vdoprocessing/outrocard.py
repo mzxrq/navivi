@@ -3,7 +3,8 @@ every waypoint that has a popup image, as the video's closing clip. Two
 styles (tuning.DEFAULT_OUTRO_STYLE / settings.outro_style):
 
 - "scroll": cards three to a row in a centred column that slowly scrolls up,
-  credits-style, until every card has left the screen.
+  credits-style, under the pinned title until every card has faded out, then
+  the logos alone, centred.
 - "grid": one composited frame, every card squeezed onto a single screen,
   held for a fixed duration.
 
@@ -14,6 +15,7 @@ than duplicating font-candidate lists.
 
 from __future__ import annotations
 
+import itertools
 import math
 import subprocess
 from pathlib import Path
@@ -137,6 +139,60 @@ def _draw_photo_badge(
     ld.rounded_rectangle([s, s, s + w - 1, s + h - 1], radius=h // 2, fill=tuning.OUTRO_PHOTO_BADGE_FILL)
     ld.text((s + w / 2, s + h / 2), text, font=font, fill=tuning.OUTRO_PHOTO_BADGE_TEXT, anchor="mm")
     page.paste(layer, (int(x) - s, int(y) - s), layer)
+
+
+LOGO_DIR = Path(__file__).resolve().parents[2] / "assets" / "image" / "logo"
+
+
+def trimmed_logo(path: Path, height: int) -> Optional[Image.Image]:
+    """The logo cropped to its ink (near-white margins dropped) and scaled to
+    `height`; None when it can't be read or is blank."""
+    try:
+        src = Image.open(path).convert("RGBA")
+    except Exception as exc:
+        logger.warning("Could not read logo '%s': %s", path, exc)
+        return None
+    flat = Image.new("RGBA", src.size, (255, 255, 255, 255))
+    flat.alpha_composite(src)
+    box = flat.convert("L").point(lambda v: 255 if v < 245 else 0).getbbox()
+    if not box:
+        return None
+    src = src.crop(box)
+    return src.resize((max(1, round(src.width * height / src.height)), height), Image.LANCZOS)
+
+
+def _logo_plate(px, max_width: Optional[int] = None) -> Optional[Image.Image]:
+    """Every logo in LOGO_DIR, trimmed and scaled to one height, side by side,
+    each on its own rounded plate if OUTRO_LOGO_PLATE_COLOR is set; None when
+    there are none. Scaled down as a whole when wider than `max_width`."""
+    plate = _logo_row(px)
+    if plate is not None and max_width and plate.width > max_width:
+        plate = plate.resize(
+            (max_width, max(1, round(plate.height * max_width / plate.width))), Image.LANCZOS,
+        )
+    return plate
+
+
+def _logo_row(px) -> Optional[Image.Image]:
+    height = px(tuning.OUTRO_LOGO_HEIGHT)
+    paths = sorted(LOGO_DIR.glob("*.png")) if LOGO_DIR.is_dir() else []
+    logos = [logo for logo in (trimmed_logo(p, height) for p in paths) if logo is not None]
+    if not logos:
+        return None
+    pad, gap = px(tuning.OUTRO_LOGO_PLATE_PADDING), px(tuning.OUTRO_LOGO_GAP)
+    w = sum(logo.width + 2 * pad for logo in logos) + gap * (len(logos) - 1)
+    plate = Image.new("RGBA", (w, height + 2 * pad), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(plate)
+    x = 0
+    for logo in logos:
+        if tuning.OUTRO_LOGO_PLATE_COLOR is not None:
+            draw.rounded_rectangle(
+                [x, 0, x + logo.width + 2 * pad - 1, plate.height - 1],
+                radius=px(16), fill=tuning.OUTRO_LOGO_PLATE_COLOR,
+            )
+        plate.alpha_composite(logo, (x + pad, pad))
+        x += logo.width + 2 * pad + gap
+    return plate
 
 
 def _first_image(wp: Dict[str, Any]) -> Optional[str]:
@@ -324,6 +380,7 @@ def _build_scroll_page(
     page_h = header_h + rows * row_h + height
 
     page = Image.new("RGB", (width, page_h), tuning.OUTRO_BG_COLOR)
+    page.info["header_h"] = header_h - px(10)
     draw = ImageDraw.Draw(page)
     _center_text(draw, project_name, title_font, width / 2, px(34), tuning.OUTRO_TITLE_COLOR)
     _center_text(
@@ -504,6 +561,7 @@ def _build_route_page(
     page_h = max(height, y - row_gap + px(70))
 
     page = Image.new("RGB", (width, page_h), tuning.OUTRO_BG_COLOR)
+    page.info["header_h"] = panel_top - px(10)
     draw = ImageDraw.Draw(page)
     name_font = _load_font(bold, px(tuning.OUTRO_ROUTE_NAME_FONT_SIZE))
     from_font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_REGULAR, px(tuning.OUTRO_ROUTE_FROM_FONT_SIZE))
@@ -845,23 +903,78 @@ def _scroll_offsets(
     return offsets
 
 
-def _write_scroll_clip(
-    page: Image.Image, output_path: Path, fps: int, size: Tuple[int, int],
-    end_hold: Optional[float] = None, start_hold: Optional[float] = None,
-) -> bool:
-    """Crops the tall page frame by frame at each _scroll_offsets offset,
-    softens the top/bottom screen edges into the background, and pipes the
-    raw frames straight into ffmpeg."""
+def _end_card(size: Tuple[int, int]) -> Optional[np.ndarray]:
+    """The logos under a small "Powered by" title, centred on the background;
+    None without logos."""
     width, height = size
     k = height / _CANVAS_H
-    page_px = np.asarray(page, dtype=np.uint8)
-    offsets = _scroll_offsets(page_px.shape[0] - height, fps, k, end_hold, start_hold)
 
-    # Per-row blend weight toward the background: 1 at the very edge, 0 once
-    # OUTRO_SCROLL_EDGE_FADE_PX in.
+    def px(value: float) -> int:
+        return int(round(value * k))
+
+    logos = _logo_plate(px, int(width * tuning.OUTRO_LOGO_MAX_WIDTH))
+    if logos is None:
+        return None
+    font_size = px(tuning.OUTRO_LOGO_TITLE_FONT_SIZE)
+    font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, font_size)
+    gap = px(tuning.OUTRO_LOGO_TITLE_GAP)
+    top = (height - (font_size + gap + logos.height)) // 2
+    card = Image.new("RGB", size, tuning.OUTRO_BG_COLOR)
+    _center_text(
+        ImageDraw.Draw(card), video_text.current_labels()["outro_logo_title"], font,
+        width / 2, top, tuning.OUTRO_SUBTITLE_COLOR,
+    )
+    card.paste(logos, ((width - logos.width) // 2, top + font_size + gap), logos)
+    return np.asarray(card, dtype=np.float32)
+
+
+def _write_scroll_clip(
+    page: Image.Image, output_path: Path, fps: int, size: Tuple[int, int],
+    start_hold: Optional[float] = None,
+) -> bool:
+    """Crops the tall page frame by frame at each _scroll_offsets offset, with
+    the title (the page's top `header_h` rows) pinned in a box that the cards
+    fade out under, and pipes the raw frames straight into ffmpeg. Once every
+    card is gone the title fades into the logo end card."""
+    width, height = size
+    k = height / _CANVAS_H
+    header_h = int(page.info.get("header_h", 0))
+    page_px = np.asarray(page, dtype=np.uint8)
+    bg = np.asarray(tuning.OUTRO_BG_COLOR, dtype=np.float32)
+
+    # Scroll until the last non-background row has passed under the box.
+    content = np.flatnonzero((page_px[header_h:] != bg.astype(np.uint8)).any(axis=(1, 2)))
+    distance = int(content[-1]) + 1 if content.size else 0
+    if page_px.shape[0] < distance + height:
+        pad = np.empty((distance + height - page_px.shape[0], width, 3), dtype=np.uint8)
+        pad[:] = bg.astype(np.uint8)
+        page_px = np.concatenate([page_px, pad])
+    end_card = _end_card(size)
+    offsets = _scroll_offsets(distance, fps, k, 0.0 if end_card is not None else None, start_hold)
+
+    # Per-row blend weight toward the background: 1 at the box / bottom edge,
+    # 0 once OUTRO_SCROLL_EDGE_FADE_PX in.
     fade = max(1, int(round(tuning.OUTRO_SCROLL_EDGE_FADE_PX * k)))
     ramp = np.clip(1.0 - np.arange(fade, dtype=np.float32) / fade, 0.0, 1.0)
-    bg = np.asarray(tuning.OUTRO_BG_COLOR, dtype=np.float32)
+    header = page_px[:header_h].astype(np.float32)
+
+    def frame_at(top: int) -> np.ndarray:
+        frame = page_px[top: top + height].astype(np.float32)
+        # The fade grows in over the first `fade` px of scrolling, so nothing
+        # is dimmed while the page sits on its first screen.
+        band = frame[header_h: header_h + fade]
+        band += (bg - band) * (ramp[: len(band)] * min(1.0, top / fade))[:, None, None]
+        frame[-fade:] += (bg - frame[-fade:]) * ramp[::-1][:, None, None]
+        frame[:header_h] = header
+        return frame
+
+    frames = (frame_at(top) for top in offsets)
+    if end_card is not None:
+        last = frame_at(offsets[-1])
+        steps = max(1, int(round(tuning.OUTRO_LOGO_FADE_SECONDS * fps)))
+        fades = (last + (end_card - last) * ((i + 1) / steps) for i in range(steps))
+        hold = (end_card for _ in range(int(round(tuning.OUTRO_LOGO_HOLD_SECONDS * fps))))
+        frames = itertools.chain(frames, fades, hold)
 
     ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
     cmd = [
@@ -873,13 +986,7 @@ def _write_scroll_clip(
     ]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
-        for top in offsets:
-            frame = page_px[top: top + height].astype(np.float32)
-            # The top fade grows in over the first `fade` px of scrolling, so
-            # the title is never dimmed while the page sits on its first screen.
-            top_weight = ramp * min(1.0, top / fade)
-            frame[:fade] += (bg - frame[:fade]) * top_weight[:, None, None]
-            frame[-fade:] += (bg - frame[-fade:]) * ramp[::-1][:, None, None]
+        for frame in frames:
             proc.stdin.write(frame.astype(np.uint8).tobytes())
         proc.stdin.close()
         stderr = proc.stderr.read().decode("utf-8", errors="replace")
@@ -928,11 +1035,8 @@ def generate_outro_clip(
         if style == "scroll":
             size = size or (_CANVAS_W, _CANVAS_H)
             page = _build_scroll_page(project_name or "", waypoints_with_image, size, brief, heading)
-            holds = (
-                (tuning.OUTRO_ROUTE_END_HOLD_SECONDS, tuning.OUTRO_SUMMARY_HOLD_SECONDS)
-                if has_route else (None, None)
-            )
-            if not _write_scroll_clip(page, output_path, tuning.INTRO_FPS, size, *holds):
+            start_hold = tuning.OUTRO_SUMMARY_HOLD_SECONDS if has_route else None
+            if not _write_scroll_clip(page, output_path, tuning.INTRO_FPS, size, start_hold):
                 return None
             logger.info(
                 "Outro clip generated: %s (%d places, scroll)", output_path, len(waypoints_with_image)
