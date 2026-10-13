@@ -41,6 +41,7 @@
   "outro_subtitle_one": "{count} place visited",
   "outro_route_from": "From {name}",
   "outro_stopby_title": "Stop-bys nearby",
+  "outro_logo_title": "Powered by",
   "outro_summary": {
     "distance": "Total distance",
     "legs": "{count} legs",

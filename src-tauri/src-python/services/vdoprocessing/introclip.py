@@ -25,12 +25,15 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
+from PIL import Image, ImageDraw
 
 from services.localization.subtitle import SubtitleStyle
 from services.localization.text_style import TextStyle
 from services.logger.logger import setup_logger
+from services.mapfetcher.graphicengine.base import _GraphicsEngineBase
 from services.tts.ttsengine import FFmpegManager
-from services import tuning
+from services.vdoprocessing.outrocard import LOGO_DIR, _load_font, trimmed_logo
+from services import tuning, video_text
 
 logger = setup_logger("IntroClip")
 
@@ -403,6 +406,30 @@ def _pick_random_images(waypoints: List[Dict[str, Any]], count: int) -> List[str
     return random.sample(candidates, k=min(count, len(candidates)))
 
 
+def _write_logo_badge(video_dir: Path, run_id: str) -> Optional[Path]:
+    """INTRO_LOGO_FILE under a small "Powered by" line on a white rounded
+    badge, as a PNG for ffmpeg to overlay; None when unset or unreadable."""
+    if not tuning.INTRO_LOGO_FILE:
+        return None
+    logo = trimmed_logo(LOGO_DIR / tuning.INTRO_LOGO_FILE, tuning.INTRO_LOGO_HEIGHT)
+    if logo is None:
+        return None
+    pad, size = tuning.INTRO_LOGO_PADDING, tuning.INTRO_LOGO_TITLE_FONT_SIZE
+    font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, size)
+    text = video_text.current_labels()["outro_logo_title"]
+    gap = round(size * 0.4)
+    measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    w = int(max(logo.width, measure.textlength(text, font=font))) + 2 * pad
+    badge = Image.new("RGBA", (w, size + gap + logo.height + 2 * pad), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(badge)
+    draw.rounded_rectangle([0, 0, badge.width - 1, badge.height - 1], radius=pad, fill=(255, 255, 255))
+    draw.text((w / 2, pad), text, font=font, fill=tuning.INTRO_LOGO_TITLE_COLOR, anchor="mt")
+    badge.alpha_composite(logo, ((w - logo.width) // 2, pad + size + gap))
+    path = video_dir / f".intro_logo_{run_id}.png"
+    badge.save(path)
+    return path
+
+
 def fitted_layout(duration_sec: float, available: int) -> Tuple[int, float]:
     """(photos, seconds per photo) for an intro of `duration_sec` from up to
     `available` photos: about INTRO_PER_IMAGE_SECONDS each, at most
@@ -452,6 +479,7 @@ def generate_intro_clip(
     per_clip_raw_paths: List[str] = []
     combined_path = video_dir_path / f".intro_combined_{run_id}.mp4"
     title_path: Optional[Path] = None
+    logo_path: Optional[Path] = None
 
     crossfade_sec = tuning.INTRO_CROSSFADE_SECONDS
     total_sec = (
@@ -480,10 +508,11 @@ def generate_intro_clip(
         _crossfade_chain(per_clip_raw_paths, per_clip_sec, crossfade_sec, str(combined_path))
 
         fade_sec = tuning.INTRO_FADE_SECONDS
-        vf_filter = (
+        fades = (
             f"fade=t=in:st=0:d={fade_sec:.2f},"
             f"fade=t=out:st={max(0.0, total_sec - fade_sec):.2f}:d={fade_sec:.2f}"
         )
+        base = "null"
         if burn_text:
             title_path = _write_title_ass(
                 title or "", subtitle or "", total_sec, video_dir_path,
@@ -495,16 +524,21 @@ def generate_intro_clip(
             # [HACK] [Subtitle] Absolute, forward-slashed, colon-escaped path — libass's
             # subtitles filter needs this exact escaping, same as combine_video_and_audio.
             escaped_title_path = str(title_path.resolve()).replace("\\", "/").replace(":", r"\:")
-            vf_filter = (
-                f"subtitles=filename='{escaped_title_path}':force_style='{_TITLE_STYLE.to_force_style()}',"
-                + vf_filter
-            )
+            base = f"subtitles=filename='{escaped_title_path}':force_style='{_TITLE_STYLE.to_force_style()}'"
+
+        inputs = ["-i", str(combined_path)]
+        graph = f"[0:v]{base}[base];[base]{fades}"
+        logo_path = _write_logo_badge(video_dir_path, run_id)
+        if logo_path is not None:
+            inputs += ["-i", str(logo_path)]
+            m = tuning.INTRO_LOGO_MARGIN
+            graph = f"[0:v]{base}[base];[base][1:v]overlay=W-w-{m}:H-h-{m},{fades}"
 
         ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
         cmd = [
             ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(),
-            "-i", str(combined_path),
-            "-vf", vf_filter,
+            *inputs,
+            "-filter_complex", graph,
             "-an",
             "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
             str(output_path),
@@ -521,6 +555,8 @@ def generate_intro_clip(
     finally:
         if title_path is not None:
             title_path.unlink(missing_ok=True)
+        if logo_path is not None:
+            logo_path.unlink(missing_ok=True)
         combined_path.unlink(missing_ok=True)
         for p in per_clip_raw_paths:
             Path(p).unlink(missing_ok=True)

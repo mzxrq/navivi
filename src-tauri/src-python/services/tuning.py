@@ -1654,6 +1654,15 @@ INTRO_ZOOM_END = 0.88
 # Fade to/from black at the very start/end of the WHOLE slideshow, so the
 # intro doesn't hard-cut into the rest of the video.
 INTRO_FADE_SECONDS = 0.5
+# A small white "Powered by" badge in the intro's bottom-right corner: this file
+# from assets/image/logo under the label `outro_logo_title`. None = no badge.
+# Sizes are px on the 1920x1080 intro.
+INTRO_LOGO_FILE: Optional[str] = "NDR.png"
+INTRO_LOGO_HEIGHT = 52
+INTRO_LOGO_TITLE_FONT_SIZE = 20
+INTRO_LOGO_PADDING = 14
+INTRO_LOGO_MARGIN = 20
+INTRO_LOGO_TITLE_COLOR: Tuple[int, int, int] = (70, 76, 90)
 # Darkens each source picture before the title is burned on top — plain
 # multiply on pixel values (1.0 = untouched, 0.0 = black) so the white
 # centered title stays readable over a bright/busy photo.
@@ -1718,16 +1727,16 @@ OUTRO_SCROLL_BADGE_FONT_SIZE = 18
 OUTRO_SCROLL_BADGE_RADIUS = 18
 # Scroll speed in px per second, given for the 704-high outro canvas (scaled
 # with the real frame size, then rounded to a whole number of px per frame),
-# and the holds on the first screen and at the end. The page scrolls until
-# every card has left the top of the screen, so the end hold is on the empty
-# background.
+# and the holds on the first screen and at the end. The title stays pinned in
+# a box at the top and the page scrolls until every card has faded out under
+# it; the logo end card (OUTRO_LOGO_*) follows, or this end hold without logos.
 OUTRO_SCROLL_SPEED_PX = 100
 OUTRO_SCROLL_START_HOLD_SECONDS = 1.0
 OUTRO_SCROLL_END_HOLD_SECONDS = 0.5
 # Longest the scroll itself may take; a very long page scrolls faster instead.
 OUTRO_SCROLL_MAX_SECONDS = 30.0
-# Height of the soft fade at the top and bottom screen edges, so cards ease
-# in and out of view instead of being cut by the frame edge.
+# Height of the soft fade under the title box and at the bottom edge, so cards
+# ease in and out of view instead of being cut off.
 OUTRO_SCROLL_EDGE_FADE_PX = 56
 # With route info the scroll is a timeline instead of the photo grid: the
 # title and a trip summary (held OUTRO_SUMMARY_HOLD_SECONDS to be read), then
@@ -1760,7 +1769,19 @@ OUTRO_PANEL_COLOR: Tuple[int, int, int] = (31, 42, 64)
 OUTRO_CHIP_COLOR: Tuple[int, int, int] = (45, 58, 86)
 OUTRO_ARROW_COLOR: Tuple[int, int, int] = (110, 120, 140)
 OUTRO_SUMMARY_HOLD_SECONDS = 4.0
-OUTRO_ROUTE_END_HOLD_SECONDS = 2.0
+# Every image in assets/image/logo, side by side on the scroll outro's end card
+# (centred, alone, after every card has scrolled away), each on its own white
+# plate (the logos are dark-on-light). GAP is between plates; PLATE_COLOR None =
+# no plates. A row wider than MAX_WIDTH of the frame is scaled down to fit.
+OUTRO_LOGO_HEIGHT = 96
+OUTRO_LOGO_MAX_WIDTH = 0.8
+OUTRO_LOGO_FADE_SECONDS = 0.8
+OUTRO_LOGO_HOLD_SECONDS = 3.0
+OUTRO_LOGO_GAP = 40
+OUTRO_LOGO_TITLE_FONT_SIZE = 26  # the "Powered by" line above the plates
+OUTRO_LOGO_TITLE_GAP = 22
+OUTRO_LOGO_PLATE_PADDING = 28
+OUTRO_LOGO_PLATE_COLOR: Optional[Tuple[int, int, int]] = (255, 255, 255)
 OUTRO_SUMMARY_LABELS: Dict[str, str] = LABELS_JA["outro_summary"]
 # The number on each leg card's photo: a white pill with a soft shadow and a
 # dark number, readable on light and dark photos alike.
