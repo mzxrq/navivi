@@ -456,3 +456,39 @@ class TestClimb:
         a = _wp("A", 35.0, 139.0, mode="draw", customRoute=nodes, customRouteEle=ele)
         b = _wp("B", 35.0, 139.006)
         assert _leg_ascent_m(a, b) < 30  # smoothing keeps a small residue (17 m here), not the raw 120 m
+
+
+class TestTerrainClimb:
+    """A routed leg has no recorded elevation; the app saves the climb it read from the terrain tiles (legAscentM) with
+    the leg's route cache key, and the brief uses it only while that key still names the leg."""
+
+    @staticmethod
+    def _brief(ascent_key="match", ascent=300, mode="walking"):
+        a = _wp("山の下", 35.0, 139.0, mode=mode)
+        b = _wp("山の上", 35.0, 139.04)
+        key = _key(a, b, mode)
+        cache = {key: _line(35.0, 139.0, 35.0, 139.04, 80)}
+        a["legAscentM"] = ascent
+        a["legAscentKey"] = key if ascent_key == "match" else ascent_key
+        return build_brief({"waypoints": [a, b], "settings": {}}, cache)["legs"][0]
+
+    def test_saved_terrain_climb_adds_time(self):
+        flat = self._brief(ascent=None)
+        steep = self._brief(ascent=300)
+        assert steep["ascent_m"] == 300 and "ascent_m" not in flat
+        assert steep["minutes"] - flat["minutes"] == 30  # 300 m / 600 m per hour
+
+    def test_a_stale_key_is_ignored(self):
+        leg = self._brief(ascent_key="35.00000,139.00000|35.00000,139.04000|driving|")
+        assert "ascent_m" not in leg
+
+    def test_a_walk_with_a_boat_takes_no_climb(self):
+        a = _wp("A", 35.0, 139.0)
+        b = _wp("B", 35.0, 139.06)
+        key = _key(a, b, "walking")
+        walk1 = _line(35.0, 139.0, 35.0, 139.011, 50)
+        boat = _line(35.0, 139.011, 35.0, 139.044, 10)[1:]
+        walk2 = _line(35.0, 139.044, 35.0, 139.06, 50)[1:]
+        a.update(legAscentM=300, legAscentKey=key)
+        leg = build_brief({"waypoints": [a, b], "settings": {}}, {key: walk1 + boat + walk2})["legs"][0]
+        assert "ascent_m" not in leg and len(leg["pieces"]) == 3

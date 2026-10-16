@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import Map, { Marker, MapRef, Source } from "react-map-gl/mapbox";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { UploadCloud } from "../../../components/ui/icons";
@@ -46,6 +46,7 @@ export function MapArea() {
     routePoints,
     routeSegments,
     updateWaypoint,
+    updateSettings,
     setActiveWaypointId,
     registerThumbnailGetter,
   } = useWorkspace();
@@ -66,7 +67,8 @@ export function MapArea() {
   const [addType, setAddType] = useState<AddType>("normal");
   const [selectedAnchor, setSelectedAnchor] = useState<number | null>(null);
 
-  const [is3D, setIs3D] = useState(false);
+  const is3D = !!settings.map_3d;
+  const setIs3D = useCallback((on: boolean) => updateSettings({ map_3d: on }), [updateSettings]);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isProcessing] = useState(false);
   const [uploadedRouteLine] = useState<[number, number][]>([]);

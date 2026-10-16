@@ -152,6 +152,7 @@ export interface ProjectSettings {
     subtitle_style?: TextStyle;
   };
   show_route_heatmap?: boolean;
+  map_3d?: boolean; // the editor map's 3D terrain switch, remembered per project
   // "Look of the video" (Project settings). Every key is optional: unset = what the renderer always did (videoLookDefaults).
   summary_card_style?: SummaryCardStyle;
   theme?: "light" | "dark"; // the video's HUD and card theme, not the app's

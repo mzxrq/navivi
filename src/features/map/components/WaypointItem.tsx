@@ -24,6 +24,7 @@ import {
   VIA_MODES,
 } from "../hooks/useStopMenus";
 import { LegColorButton } from "./LegColorButton";
+import { LegStats } from "./LegStats";
 import { stopLabel } from "../../../utils/stopLabel";
 
 interface WaypointItemProps {
@@ -322,6 +323,7 @@ export function WaypointItem({
             </div>
 
             {legColorable(wp) && <LegColorButton wp={wp} />}
+            <LegStats wp={wp} />
 
             {wp.routeMode === "draw" && (
               <>

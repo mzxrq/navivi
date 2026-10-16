@@ -198,19 +198,29 @@ def split_crossings(points: List[List[float]], mode: str) -> List[dict]:
     return pieces
 
 
-def _leg_ascent_m(from_wp: dict, to_wp: dict) -> Optional[float]:
-    """Metres climbed on the leg, from the elevation recorded with its drawn line (Waypoint.customRouteEle, parallel to
-    [from, *customRoute, to]); None when there is none or it does not match the line. Smoothed first, so GPS jitter
-    does not add up to a climb."""
+def _terrain_ascent_m(from_wp: dict, to_wp: dict, cache: dict) -> Optional[float]:
+    """Metres climbed on a leg whose elevation the app read from the map's terrain tiles when it saved (legAscentM), which
+    is how a routed leg gets one. Trusted only while the leg is the one it was measured on: legAscentKey is the leg's
+    route cache key, and the leg's key in .routecache.json must still be that one (a moved stop or a new mode changes it)."""
+    from services.vdoprocessing.videopipeline.helpers import _find_leg_cache_key
+
+    metres, key = from_wp.get("legAscentM"), from_wp.get("legAscentKey")
+    if isinstance(metres, bool) or not isinstance(metres, (int, float)) or not isinstance(key, str) or metres < 0:
+        return None
+    return float(metres) if _find_leg_cache_key(from_wp, to_wp, cache) == key else None
+
+
+def _leg_ascent_m(from_wp: dict, to_wp: dict, cache: Optional[dict] = None) -> Optional[float]:
+    """Metres climbed on the leg: from the elevation recorded with its drawn line (Waypoint.customRouteEle, parallel to
+    [from, *customRoute, to]), else from the terrain lookup saved with the project (_terrain_ascent_m); None when neither
+    fits. Recorded elevation is smoothed first, so GPS jitter does not add up to a climb."""
     from services.vdoprocessing.pydeckrecorder.elevation import cumulative_m, fill_gaps, smooth
 
     nodes = from_wp.get("customRoute") or []
     raw = from_wp.get("customRouteEle")
-    if not isinstance(raw, list) or len(raw) != len(nodes) + 2:
-        return None
-    ele = fill_gaps(raw)
+    ele = fill_gaps(raw) if isinstance(raw, list) and len(raw) == len(nodes) + 2 else None
     if ele is None:
-        return None
+        return _terrain_ascent_m(from_wp, to_wp, cache or {})
     line = [[from_wp["lat"], from_wp["lng"]], *[[float(p[0]), float(p[1])] for p in nodes], [to_wp["lat"], to_wp["lng"]]]
     ele = smooth(cumulative_m(line), ele)
     return sum(max(0.0, b - a) for a, b in zip(ele, ele[1:]))
@@ -318,8 +328,8 @@ def build_brief(project: dict, routing_cache: Optional[dict] = None) -> dict:
         # Only a routed line can hide a crossing: a hand-drawn one ("draw")
         # is as sparse as the user clicked it, and "direct" is a straight line.
         raw_pieces = split_crossings(points, mode) if set_mode == mode else [{"mode": mode, "km": km}]
-        # Climb is only known for a drawn line, and counted only for a plain walk (no boat pieces to share it with).
-        ascent = _leg_ascent_m(a, b) if set_mode == "draw" and mode == "walking" and len(raw_pieces) == 1 else None
+        # Climb is counted only for a plain walk (no boat pieces to share it with).
+        ascent = _leg_ascent_m(a, b, cache) if mode == "walking" and len(raw_pieces) == 1 else None
         pieces = []
         for piece in raw_pieces:
             hours = piece["km"] / (speeds.get(piece["mode"]) or speeds.get("walking", 3.0))

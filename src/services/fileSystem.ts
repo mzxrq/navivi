@@ -8,6 +8,7 @@ import { TimelineData, RecentProjects, TextStyle, ProjectMetadata } from "../typ
 import { routeCacheKey } from "../utils/routeCacheKey";
 import { stripApiKeys } from "../utils/apiKeys";
 import { mapboxTileLoader, segmentElevations } from "../utils/terrainElevation";
+import { pathProfile } from "../utils/legEstimate";
 import { planFileNames } from "../utils/fileNames";
 import { renameCredits } from "../utils/photoCredits";
 import { carryOverLooks, emptyTimeline, type ExportOptions, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
@@ -154,15 +155,30 @@ export const saveProjectData = async (
 
   // The video colors the route by steepness from these <ele> values (Python reads them back from raw_track.gpx).
   // Without the switch, a token or a network they stay the old constant, which Python ignores as "no elevation".
-  let legEle: (number[] | null)[] = [];
+  // The same lookup also gives every routed leg its climb for the walking-time estimate (route_brief.py reads it), so it
+  // runs on every save that has a token, not only with the heatmap; a slow or failed lookup must not hold the save up.
+  let terrainEle: (number[] | null)[] = [];
   const mapboxToken = settings?.mapbox_api_key || import.meta.env.VITE_MAPBOX_TOKEN;
-  if (settings?.show_route_heatmap && mapboxToken) {
+  if (mapboxToken) {
     try {
-      legEle = await segmentElevations(routeSegments, waypoints, mapboxTileLoader(mapboxToken));
+      terrainEle = await Promise.race([
+        segmentElevations(routeSegments, waypoints, mapboxTileLoader(mapboxToken)),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("terrain lookup timed out")), 10000)),
+      ]);
     } catch {
-      legEle = [];
+      terrainEle = [];
     }
   }
+  const legEle = settings?.show_route_heatmap ? terrainEle : [];
+  // Climb per leg, keyed by the leg's route cache key so Python only trusts it while the leg is unchanged.
+  const routedStops = waypoints.filter((wp) => !wp.isStopBy || wp.connectToRoute);
+  const legAscent = new Map<string, { m: number; key: string }>();
+  terrainEle.forEach((ele, i) => {
+    const from = routedStops[i];
+    const to = routedStops[i + 1];
+    const profile = ele && from && to && routeSegments[i] ? pathProfile(routeSegments[i].positions, ele) : null;
+    if (profile) legAscent.set(from.id, { m: Math.round(profile.ascentM), key: routeCacheKey(from, to) });
+  });
 
   // track segments
   gpxLines.push(`  <trk>\n    <name>${xmlText(projName)}</name>\n    <trkseg>`);
@@ -269,6 +285,8 @@ export const saveProjectData = async (
         routeMode: wp.routeMode || "driving",
         customRoute: wp.customRoute || [],
         customRouteEle: wp.customRouteEle?.length ? wp.customRouteEle : undefined,
+        legAscentM: legAscent.get(wp.id)?.m,
+        legAscentKey: legAscent.get(wp.id)?.key,
         drawStyle: wp.drawStyle || "linear",
         customRouteCurve: wp.customRouteCurve?.length ? wp.customRouteCurve : undefined,
         lineColor: wp.lineColor || undefined,
