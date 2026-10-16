@@ -198,6 +198,24 @@ def split_crossings(points: List[List[float]], mode: str) -> List[dict]:
     return pieces
 
 
+def _leg_ascent_m(from_wp: dict, to_wp: dict) -> Optional[float]:
+    """Metres climbed on the leg, from the elevation recorded with its drawn line (Waypoint.customRouteEle, parallel to
+    [from, *customRoute, to]); None when there is none or it does not match the line. Smoothed first, so GPS jitter
+    does not add up to a climb."""
+    from services.vdoprocessing.pydeckrecorder.elevation import cumulative_m, fill_gaps, smooth
+
+    nodes = from_wp.get("customRoute") or []
+    raw = from_wp.get("customRouteEle")
+    if not isinstance(raw, list) or len(raw) != len(nodes) + 2:
+        return None
+    ele = fill_gaps(raw)
+    if ele is None:
+        return None
+    line = [[from_wp["lat"], from_wp["lng"]], *[[float(p[0]), float(p[1])] for p in nodes], [to_wp["lat"], to_wp["lng"]]]
+    ele = smooth(cumulative_m(line), ele)
+    return sum(max(0.0, b - a) for a, b in zip(ele, ele[1:]))
+
+
 def _leg_mode(from_wp: dict, to_wp: dict, cache: dict) -> str:
     """The leg's mode as the project set it ("draw" and "direct" included)."""
     from services.vdoprocessing.videopipeline.helpers import _resolve_leg_mode_from_cache
@@ -297,21 +315,21 @@ def build_brief(project: dict, routing_cache: Optional[dict] = None) -> dict:
         points = _leg_points(a, b, cache)
         km = _length_km(points)
         straight = _length_km([[a["lat"], a["lng"]], [b["lat"], b["lng"]]])
-        pieces = [
-            {
+        # Only a routed line can hide a crossing: a hand-drawn one ("draw")
+        # is as sparse as the user clicked it, and "direct" is a straight line.
+        raw_pieces = split_crossings(points, mode) if set_mode == mode else [{"mode": mode, "km": km}]
+        # Climb is only known for a drawn line, and counted only for a plain walk (no boat pieces to share it with).
+        ascent = _leg_ascent_m(a, b) if set_mode == "draw" and mode == "walking" and len(raw_pieces) == 1 else None
+        pieces = []
+        for piece in raw_pieces:
+            hours = piece["km"] / (speeds.get(piece["mode"]) or speeds.get("walking", 3.0))
+            if ascent is not None:
+                hours += ascent / tuning.WALKING_ASCENT_M_PER_HOUR
+            pieces.append({
                 "mode": piece["mode"],
                 "km": round(piece["km"], 2),
-                "minutes": max(1, int(round(
-                    piece["km"] / (speeds.get(piece["mode"]) or speeds.get("walking", 3.0)) * 60
-                ))),
-            }
-            # Only a routed line can hide a crossing: a hand-drawn one ("draw")
-            # is as sparse as the user clicked it, and "direct" is a straight line.
-            for piece in (
-                split_crossings(points, mode) if set_mode == mode
-                else [{"mode": mode, "km": km}]
-            )
-        ]
+                "minutes": max(1, int(round(hours * 60))),
+            })
         legs.append({
             "from": clean_label(a),
             "to": clean_label(b),
@@ -320,6 +338,7 @@ def build_brief(project: dict, routing_cache: Optional[dict] = None) -> dict:
             "km": round(km, 2),
             "minutes": sum(piece["minutes"] for piece in pieces),
             "pieces": pieces,
+            **({"ascent_m": int(round(ascent))} if ascent is not None else {}),
             "heading": heading(a["lat"], a["lng"], b["lat"], b["lng"]),
             "winding": bool(straight > 0.05 and km / straight >= WINDING_RATIO),
             "passes": [],
