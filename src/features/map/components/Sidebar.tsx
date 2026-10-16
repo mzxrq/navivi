@@ -9,6 +9,7 @@ import {
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
 import { WaypointItem } from "./WaypointItem";
+import { SegmentElevationsProvider } from "../hooks/useSegmentElevations";
 import { LocationSearch } from "../../../components/ui/LocationSearch";
 import { OverviewPanel } from "./OverviewPanel";
 import { requestForcedRender } from "../../../services/renderOptions";
@@ -187,6 +188,7 @@ export function Sidebar() {
             </p>
           </div>
         ) : (
+          <SegmentElevationsProvider>
           <DragDropContext onDragEnd={handleDragEnd}>
             <Droppable droppableId="waypoints-list">
               {(provided) => (
@@ -234,6 +236,7 @@ export function Sidebar() {
               )}
             </Droppable>
           </DragDropContext>
+          </SegmentElevationsProvider>
         )}
       </div>
 

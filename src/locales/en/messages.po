@@ -102,6 +102,11 @@ msgstr "{0} failed"
 msgid "{0} is ready"
 msgstr "{0} is ready"
 
+#. placeholder {0}: km.toFixed(1)
+#: src/features/map/components/LegStats.tsx:8
+msgid "{0} km"
+msgstr "{0} km"
+
 #. placeholder {0}: blocks.length
 #: src/features/editor/EditorView.tsx:187
 msgid "{0} lines timed automatically. Drag them to adjust."
@@ -116,6 +121,11 @@ msgstr "{0} lines, burned in"
 #: src/features/editor/ExportDialog.tsx:87
 msgid "{0} lines, not burned in"
 msgstr "{0} lines, not burned in"
+
+#. placeholder {0}: Math.round(km * 1000)
+#: src/features/map/components/LegStats.tsx:8
+msgid "{0} m"
+msgstr "{0} m"
 
 #. placeholder {0}: brief.durationMin
 #: src/features/assistant/AssistantChat.tsx:19
@@ -208,15 +218,20 @@ msgstr "{count} stops found. They will be added after the stops already in this 
 msgid "{failed} photos could not be converted and were skipped."
 msgstr "{failed} photos could not be converted and were skipped."
 
+#: src/features/map/components/LegStats.tsx:14
 #: src/services/renderEstimate.ts:23
 msgid "{h} h"
 msgstr "{h} h"
+
+#: src/features/map/components/LegStats.tsx:14
+msgid "{h} h {m} min"
+msgstr "{h} h {m} min"
 
 #: src/services/renderEstimate.ts:23
 msgid "{h} h {rest} min"
 msgstr "{h} h {rest} min"
 
-#: src/features/map/components/WaypointItem.tsx:213
+#: src/features/map/components/WaypointItem.tsx:214
 msgid "{imageCount} photos"
 msgstr "{imageCount} photos"
 
@@ -224,6 +239,7 @@ msgstr "{imageCount} photos"
 msgid "{legs} legs"
 msgstr "{legs} legs"
 
+#: src/features/map/components/LegStats.tsx:13
 #: src/services/renderEstimate.ts:20
 msgid "{m} min"
 msgstr "{m} min"
@@ -248,11 +264,11 @@ msgstr "{skipped} files were skipped: only photos, GPX files and documents can b
 msgid "{skipped} photos without a location were skipped."
 msgstr "{skipped} photos without a location were skipped."
 
-#: src/features/map/components/Sidebar.tsx:163
+#: src/features/map/components/Sidebar.tsx:164
 msgid "{stopCount} stops"
 msgstr "{stopCount} stops"
 
-#: src/features/map/components/Sidebar.tsx:159
+#: src/features/map/components/Sidebar.tsx:160
 msgid "{stopCount} stops · {stopByCount} stop-by"
 msgstr "{stopCount} stops · {stopByCount} stop-by"
 
@@ -264,7 +280,7 @@ msgstr "{totalClips} clips"
 msgid "{unnamedRemaining} more steps"
 msgstr "{unnamedRemaining} more steps"
 
-#: src/features/map/components/WaypointItem.tsx:394
+#: src/features/map/components/WaypointItem.tsx:396
 msgid "{viaCount} via"
 msgstr "{viaCount} via"
 
@@ -518,7 +534,7 @@ msgstr "Add English voices"
 msgid "Add music"
 msgstr "Add music"
 
-#: src/features/map/components/MapArea.tsx:1191
+#: src/features/map/components/MapArea.tsx:1193
 msgid "Add new points after this one"
 msgstr "Add new points after this one"
 
@@ -526,7 +542,7 @@ msgstr "Add new points after this one"
 msgid "Add photo"
 msgstr "Add photo"
 
-#: src/features/map/components/MapArea.tsx:378
+#: src/features/map/components/MapArea.tsx:380
 msgid "Add point here"
 msgstr "Add point here"
 
@@ -583,7 +599,7 @@ msgstr "Add title here"
 msgid "Add up to 3 images that will pop up during the narration at this stop"
 msgstr "Add up to 3 images that will pop up during the narration at this stop"
 
-#: src/features/map/components/MapArea.tsx:393
+#: src/features/map/components/MapArea.tsx:395
 msgid "Add via point here"
 msgstr "Add via point here"
 
@@ -637,7 +653,7 @@ msgstr "Address"
 msgid "Adds a brief pause in the generated video at this waypoint before continuing the journey"
 msgstr "Adds a brief pause in the generated video at this waypoint before continuing the journey"
 
-#: src/features/map/components/WaypointItem.tsx:386
+#: src/features/map/components/WaypointItem.tsx:388
 msgid "Adjust"
 msgstr "Adjust"
 
@@ -646,7 +662,7 @@ msgstr "Adjust"
 msgid "Adjust route"
 msgstr "Adjust route"
 
-#: src/features/map/components/WaypointItem.tsx:375
+#: src/features/map/components/WaypointItem.tsx:377
 msgid "Adjust Route (Add via points to nudge)"
 msgstr "Adjust Route (Add via points to nudge)"
 
@@ -720,12 +736,12 @@ msgstr "An unknown error occurred during rendering."
 #~ msgstr "Anchor {0}"
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1232
+#: src/features/map/components/MapArea.tsx:1234
 msgid "Anchor {0} · corner · double-click to smooth"
 msgstr "Anchor {0} · corner · double-click to smooth"
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1232
+#: src/features/map/components/MapArea.tsx:1234
 msgid "Anchor {0} · smooth · double-click for a corner"
 msgstr "Anchor {0} · smooth · double-click for a corner"
 
@@ -1060,7 +1076,7 @@ msgstr "Cancel"
 #: src/components/ui/AutoDirectorModal.tsx:323
 #: src/components/ui/AutoDirectorModal.tsx:368
 #: src/components/ui/ComponentsChecklist.tsx:299
-#: src/components/ui/ExportCsvDialog.tsx:94
+#: src/components/ui/ExportCsvDialog.tsx:100
 #: src/components/ui/ExportProjectDialog.tsx:88
 #: src/components/ui/NewProject.tsx:401
 #: src/components/ui/OnlineAiSettings.tsx:249
@@ -1079,7 +1095,7 @@ msgstr "Cancel"
 #: src/features/editor/ExportDialog.tsx:110
 #: src/features/map/components/GenerateDialog.tsx:124
 #: src/features/map/components/OverviewNarration.tsx:285
-#: src/features/map/components/Sidebar.tsx:252
+#: src/features/map/components/Sidebar.tsx:255
 #: src/features/map/components/WaypointEditor.tsx:887
 msgid "Cancel"
 msgstr "Cancel"
@@ -1111,7 +1127,7 @@ msgstr "Cannot close window. Check Tauri capabilities"
 msgid "Cannot edit settings directly in .nvv archive. Please open project first."
 msgstr "Cannot edit settings directly in .nvv archive. Please open project first."
 
-#: src/features/map/components/Sidebar.tsx:99
+#: src/features/map/components/Sidebar.tsx:100
 msgid "Cannot generate: Please add at least one waypoint."
 msgstr "Cannot generate: Please add at least one waypoint."
 
@@ -1179,7 +1195,7 @@ msgstr "Choose a recording…"
 msgid "Choose file…"
 msgstr "Choose file…"
 
-#: src/components/ui/ExportCsvDialog.tsx:97
+#: src/components/ui/ExportCsvDialog.tsx:103
 msgid "Choose folder…"
 msgstr "Choose folder…"
 
@@ -1203,7 +1219,7 @@ msgstr "Clean map before the card"
 #: src/components/ui/StatusBar.tsx:402
 #: src/components/ui/VoiceSettings.tsx:589
 #: src/features/map/components/DrawBar.tsx:414
-#: src/features/map/components/Sidebar.tsx:262
+#: src/features/map/components/Sidebar.tsx:265
 msgid "Clear"
 msgstr "Clear"
 
@@ -1223,7 +1239,7 @@ msgstr "Clear cache"
 msgid "Clear path"
 msgstr "Clear path"
 
-#: src/features/map/components/Sidebar.tsx:274
+#: src/features/map/components/Sidebar.tsx:277
 msgid "Clear route"
 msgstr "Clear route"
 
@@ -1243,7 +1259,7 @@ msgstr "Click a point to remove it."
 msgid "Click for details"
 msgstr "Click for details"
 
-#: src/features/map/components/Sidebar.tsx:186
+#: src/features/map/components/Sidebar.tsx:187
 msgid "Click the map or drop a GPS file to start building your route"
 msgstr "Click the map or drop a GPS file to start building your route"
 
@@ -1259,9 +1275,19 @@ msgstr "Click the map to add points. Drag a point to move it; click one to inser
 msgid "Click the map to add:"
 msgstr "Click the map to add:"
 
-#: src/features/map/components/MapArea.tsx:864
+#: src/features/map/components/MapArea.tsx:866
 msgid "Click the map to nudge the route. Drag a via point to move it, or right-click it for options."
 msgstr "Click the map to nudge the route. Drag a via point to move it, or right-click it for options."
+
+#. placeholder {0}: Math.round(stats.ascentM)
+#: src/features/map/components/LegStats.tsx:42
+msgid "Climb: {0} m"
+msgstr "Climb: {0} m"
+
+#. placeholder {0}: Math.round(stats.ascentM)
+#: src/features/map/components/LegStats.tsx:41
+msgid "Climb: {0} m (estimated from map terrain)"
+msgstr "Climb: {0} m (estimated from map terrain)"
 
 #: src/features/editor/Inspector.tsx:450
 msgid "Clip"
@@ -1584,7 +1610,7 @@ msgstr "Credit: {0}"
 msgid "Cross-checking building data..."
 msgstr "Cross-checking building data..."
 
-#: src/components/ui/ExportCsvDialog.tsx:78
+#: src/components/ui/ExportCsvDialog.tsx:84
 msgid "CSV exported"
 msgstr "CSV exported"
 
@@ -1593,8 +1619,8 @@ msgid "Custom Color"
 msgstr "Custom Color"
 
 #: src/components/ui/AppSettings.tsx:514
-#: src/features/map/components/MapArea.tsx:1016
-#: src/features/map/components/MapArea.tsx:1078
+#: src/features/map/components/MapArea.tsx:1018
+#: src/features/map/components/MapArea.tsx:1080
 #: src/features/map/components/WaypointEditor.tsx:831
 msgid "Custom Marker"
 msgstr "Custom Marker"
@@ -1679,7 +1705,7 @@ msgstr "Delete Anchor"
 msgid "Delete and generate"
 msgstr "Delete and generate"
 
-#: src/features/map/components/MapArea.tsx:1210
+#: src/features/map/components/MapArea.tsx:1212
 msgid "Delete point"
 msgstr "Delete point"
 
@@ -1709,11 +1735,11 @@ msgstr "Delete title"
 msgid "Delete version"
 msgstr "Delete version"
 
-#: src/features/map/components/Sidebar.tsx:110
+#: src/features/map/components/Sidebar.tsx:111
 msgid "Deleted {removed} old files. They will be made again."
 msgstr "Deleted {removed} old files. They will be made again."
 
-#: src/features/map/components/Sidebar.tsx:110
+#: src/features/map/components/Sidebar.tsx:111
 msgid "Deleted 1 old file. It will be made again."
 msgstr "Deleted 1 old file. It will be made again."
 
@@ -1786,6 +1812,11 @@ msgstr "Discard"
 msgid "Dismiss"
 msgstr "Dismiss"
 
+#. placeholder {0}: stats.km.toFixed(2)
+#: src/features/map/components/LegStats.tsx:37
+msgid "Distance along the path: {0} km"
+msgstr "Distance along the path: {0} km"
+
 #: src/components/ui/CaptionStyleFields.tsx:220
 #: src/features/editor/Inspector.tsx:391
 msgid "Distance from bottom"
@@ -1804,9 +1835,13 @@ msgstr "Distance from right"
 msgid "Distance from top"
 msgstr "Distance from top"
 
+#: src/components/ui/ExportCsvDialog.tsx:77
+msgid "Distance, climb, walking time and via points between neighbouring stops"
+msgstr "Distance, climb, walking time and via points between neighbouring stops"
+
 #: src/components/ui/ExportCsvDialog.tsx:71
-msgid "Distance, mode and via points between neighbouring stops"
-msgstr "Distance, mode and via points between neighbouring stops"
+#~ msgid "Distance, mode and via points between neighbouring stops"
+#~ msgstr "Distance, mode and via points between neighbouring stops"
 
 #: src/components/ui/VideoLookSettings.tsx:216
 msgid "Distance, time and mode on each card."
@@ -1840,23 +1875,23 @@ msgstr "Don't redo this voice"
 msgid "Don't Save"
 msgstr "Don't Save"
 
-#: src/components/ui/ExportCsvDialog.tsx:88
+#: src/components/ui/ExportCsvDialog.tsx:94
 #: src/components/ui/ExportProjectDialog.tsx:82
 #: src/components/ui/RenderOverlay.tsx:1266
 #: src/components/ui/SetupGate.tsx:72
 #: src/features/editor/ExportDialog.tsx:104
 #: src/features/map/components/DrawBar.tsx:382
-#: src/features/map/components/MapArea.tsx:878
-#: src/features/map/components/Sidebar.tsx:281
+#: src/features/map/components/MapArea.tsx:880
+#: src/features/map/components/Sidebar.tsx:284
 msgid "Done"
 msgstr "Done"
 
-#: src/features/map/components/MapArea.tsx:398
-#: src/features/map/components/WaypointItem.tsx:384
+#: src/features/map/components/MapArea.tsx:400
+#: src/features/map/components/WaypointItem.tsx:386
 msgid "Done adjusting"
 msgstr "Done adjusting"
 
-#: src/features/map/components/MapArea.tsx:383
+#: src/features/map/components/MapArea.tsx:385
 msgid "Done drawing"
 msgstr "Done drawing"
 
@@ -1933,7 +1968,7 @@ msgstr "Drive"
 msgid "Driving"
 msgstr "Driving"
 
-#: src/features/map/components/MapArea.tsx:1264
+#: src/features/map/components/MapArea.tsx:1266
 msgid "Drop photos or GPS files to plot route"
 msgstr "Drop photos or GPS files to plot route"
 
@@ -1952,7 +1987,7 @@ msgstr "Duplicate Project"
 msgid "Duplicate Project Name"
 msgstr "Duplicate Project Name"
 
-#: src/features/map/components/MapArea.tsx:959
+#: src/features/map/components/MapArea.tsx:961
 msgid "E"
 msgstr "E"
 
@@ -1964,11 +1999,11 @@ msgstr "E.g. Tomogashima and Kada area..."
 msgid "E.g. Wakayama, Wakayama City"
 msgstr "E.g. Wakayama, Wakayama City"
 
-#: src/features/map/components/Sidebar.tsx:174
+#: src/features/map/components/Sidebar.tsx:175
 msgid "Edit"
 msgstr "Edit"
 
-#: src/features/map/components/WaypointItem.tsx:344
+#: src/features/map/components/WaypointItem.tsx:346
 #: src/features/map/hooks/useStopMenus.ts:142
 msgid "Edit path"
 msgstr "Edit path"
@@ -1977,12 +2012,12 @@ msgstr "Edit path"
 msgid "Edit stop"
 msgstr "Edit stop"
 
-#: src/features/map/components/WaypointItem.tsx:240
 #: src/features/map/components/WaypointItem.tsx:241
+#: src/features/map/components/WaypointItem.tsx:242
 msgid "Edit Stop"
 msgstr "Edit Stop"
 
-#: src/features/map/components/WaypointItem.tsx:340
+#: src/features/map/components/WaypointItem.tsx:342
 msgid "Edit the drawn path on the map"
 msgstr "Edit the drawn path on the map"
 
@@ -2084,7 +2119,7 @@ msgstr "Estimating time left…"
 msgid "Estimating…"
 msgstr "Estimating…"
 
-#: src/components/ui/ExportCsvDialog.tsx:72
+#: src/components/ui/ExportCsvDialog.tsx:78
 msgid "Every caption with its start and end time in the video"
 msgstr "Every caption with its start and end time in the video"
 
@@ -2123,7 +2158,7 @@ msgstr "Export"
 msgid "Export automatically"
 msgstr "Export automatically"
 
-#: src/components/ui/ExportCsvDialog.tsx:78
+#: src/components/ui/ExportCsvDialog.tsx:84
 msgid "Export CSV"
 msgstr "Export CSV"
 
@@ -2351,6 +2386,11 @@ msgstr "Finished"
 msgid "Fit to window"
 msgstr "Fit to window"
 
+#. placeholder {0}: formatMinutes(stats.flatMinutes)
+#: src/features/map/components/LegStats.tsx:54
+msgid "flat {0}"
+msgstr "flat {0}"
+
 #: src/components/ui/NewProject.tsx:184
 #: src/features/map/hooks/useStopMenus.ts:42
 msgid "Fly"
@@ -2431,7 +2471,7 @@ msgstr "General"
 msgid "Generate assets"
 msgstr "Generate assets"
 
-#: src/features/map/components/Sidebar.tsx:321
+#: src/features/map/components/Sidebar.tsx:324
 msgid "Generate Assets"
 msgstr "Generate Assets"
 
@@ -2444,7 +2484,7 @@ msgstr "Generate intro video"
 msgid "Generate only makes what is missing and reuses the rest, so running it again will not change what you already have. To make something again, tick it here and it is deleted first."
 msgstr "Generate only makes what is missing and reuses the rest, so running it again will not change what you already have. To make something again, tick it here and it is deleted first."
 
-#: src/components/ui/ExportCsvDialog.tsx:72
+#: src/components/ui/ExportCsvDialog.tsx:78
 msgid "Generate the video first"
 msgstr "Generate the video first"
 
@@ -2468,7 +2508,7 @@ msgstr "Generating the sample. The first one can take a minute or more while the
 msgid "Generating the sample. The first one takes about 20 seconds while the voice model loads."
 msgstr "Generating the sample. The first one takes about 20 seconds while the voice model loads."
 
-#: src/features/map/components/Sidebar.tsx:317
+#: src/features/map/components/Sidebar.tsx:320
 msgid "Generating..."
 msgstr "Generating..."
 
@@ -3000,9 +3040,9 @@ msgstr "Locating places"
 msgid "Locating places ({done} of {total}) {label}"
 msgstr "Locating places ({done} of {total}) {label}"
 
-#: src/features/map/components/MapArea.tsx:441
-#: src/features/map/components/MapArea.tsx:482
-#: src/features/map/components/MapArea.tsx:522
+#: src/features/map/components/MapArea.tsx:443
+#: src/features/map/components/MapArea.tsx:484
+#: src/features/map/components/MapArea.tsx:524
 #: src/hooks/useWaypointActions.ts:17
 #: src/hooks/useWaypointActions.ts:51
 msgid "Locating..."
@@ -3102,12 +3142,12 @@ msgid "Make everything again"
 msgstr "Make everything again"
 
 #: src/features/map/components/DrawBar.tsx:495
-#: src/features/map/components/MapArea.tsx:1204
+#: src/features/map/components/MapArea.tsx:1206
 msgid "Make this a corner"
 msgstr "Make this a corner"
 
 #: src/features/map/components/DrawBar.tsx:495
-#: src/features/map/components/MapArea.tsx:1204
+#: src/features/map/components/MapArea.tsx:1206
 msgid "Make this smooth"
 msgstr "Make this smooth"
 
@@ -3314,7 +3354,7 @@ msgstr "Name"
 msgid "Name your project to continue"
 msgstr "Name your project to continue"
 
-#: src/components/ui/ExportCsvDialog.tsx:70
+#: src/components/ui/ExportCsvDialog.tsx:76
 msgid "Name, position, route mode, scripts and media counts for each stop"
 msgstr "Name, position, route mode, scripts and media counts for each stop"
 
@@ -3382,7 +3422,7 @@ msgstr "Navivi will run Ollama's official installer from ollama.com in PowerShel
 msgid "Needs an NVIDIA graphics card"
 msgstr "Needs an NVIDIA graphics card"
 
-#: src/components/ui/ExportCsvDialog.tsx:71
+#: src/components/ui/ExportCsvDialog.tsx:77
 msgid "Needs at least two stops on the route"
 msgstr "Needs at least two stops on the route"
 
@@ -3498,11 +3538,11 @@ msgstr "No route leads to this stop; only its description's opening line was add
 msgid "No saved versions yet"
 msgstr "No saved versions yet"
 
-#: src/features/map/components/Sidebar.tsx:183
+#: src/features/map/components/Sidebar.tsx:184
 msgid "No stops added yet"
 msgstr "No stops added yet"
 
-#: src/components/ui/ExportCsvDialog.tsx:70
+#: src/components/ui/ExportCsvDialog.tsx:76
 msgid "No stops yet"
 msgstr "No stops yet"
 
@@ -3616,7 +3656,7 @@ msgstr "Ollama or online AI"
 msgid "On route"
 msgstr "On route"
 
-#: src/components/ui/ExportCsvDialog.tsx:118
+#: src/components/ui/ExportCsvDialog.tsx:124
 msgid "One CSV file per table, saved into the folder you pick. They open in Excel or Google Sheets. Files with the same name there are replaced."
 msgstr "One CSV file per table, saved into the folder you pick. They open in Excel or Google Sheets. Files with the same name there are replaced."
 
@@ -3822,7 +3862,7 @@ msgstr "Pan Up"
 msgid "Parsing Maps & GPS Data{prog}..."
 msgstr "Parsing Maps & GPS Data{prog}..."
 
-#: src/features/map/components/MapArea.tsx:1273
+#: src/features/map/components/MapArea.tsx:1275
 msgid "Parsing Route Data..."
 msgstr "Parsing Route Data..."
 
@@ -3954,7 +3994,7 @@ msgid "Playing..."
 msgstr "Playing..."
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1189
+#: src/features/map/components/MapArea.tsx:1191
 msgid "Point {0}"
 msgstr "Point {0}"
 
@@ -4045,8 +4085,8 @@ msgid "Project saved to {fileName}"
 msgstr "Project saved to {fileName}"
 
 #: src/components/view/ProjectManager.tsx:258
-#: src/features/map/components/Sidebar.tsx:290
-#: src/features/map/components/Sidebar.tsx:291
+#: src/features/map/components/Sidebar.tsx:293
+#: src/features/map/components/Sidebar.tsx:294
 msgid "Project settings"
 msgstr "Project settings"
 
@@ -4258,7 +4298,7 @@ msgid "Remove"
 msgstr "Remove"
 
 #. placeholder {0}: waypoints.length
-#: src/features/map/components/Sidebar.tsx:245
+#: src/features/map/components/Sidebar.tsx:248
 msgid "Remove all {0} stops?"
 msgstr "Remove all {0} stops?"
 
@@ -4289,8 +4329,8 @@ msgstr "Remove narration"
 msgid "Remove Project"
 msgstr "Remove Project"
 
-#: src/features/map/components/WaypointItem.tsx:166
 #: src/features/map/components/WaypointItem.tsx:167
+#: src/features/map/components/WaypointItem.tsx:168
 msgid "Remove stop"
 msgstr "Remove stop"
 
@@ -4415,7 +4455,7 @@ msgid "Restore version"
 msgstr "Restore version"
 
 #: src/components/ui/RenderOverlay.tsx:928
-#: src/features/map/components/Sidebar.tsx:312
+#: src/features/map/components/Sidebar.tsx:315
 msgid "Resume Generation"
 msgstr "Resume Generation"
 
@@ -4452,7 +4492,7 @@ msgstr "Review them, or carry on in the timeline editor."
 msgid "Right"
 msgstr "Right"
 
-#: src/features/map/components/WaypointItem.tsx:391
+#: src/features/map/components/WaypointItem.tsx:393
 msgid "Right-click the leg to clear via points"
 msgstr "Right-click the leg to clear via points"
 
@@ -4468,7 +4508,7 @@ msgstr "Road and path data that drawn routes snap to in Japan."
 msgid "Rough estimate from this PC's hardware. It becomes accurate after your first render."
 msgstr "Rough estimate from this PC's hardware. It becomes accurate after your first render."
 
-#: src/features/map/components/Sidebar.tsx:154
+#: src/features/map/components/Sidebar.tsx:155
 msgid "Route"
 msgstr "Route"
 
@@ -4485,7 +4525,7 @@ msgstr "Route color"
 msgid "Route facts"
 msgstr "Route facts"
 
-#: src/components/ui/ExportCsvDialog.tsx:71
+#: src/components/ui/ExportCsvDialog.tsx:77
 msgid "Route legs"
 msgstr "Route legs"
 
@@ -4554,7 +4594,7 @@ msgstr "Runs Ollama's own installer"
 msgid "Runs open models such as Gemma 4 on this PC. Download a model in Settings > AI models."
 msgstr "Runs open models such as Gemma 4 on this PC. Download a model in Settings > AI models."
 
-#: src/features/map/components/MapArea.tsx:956
+#: src/features/map/components/MapArea.tsx:958
 msgid "S"
 msgstr "S"
 
@@ -4854,7 +4894,7 @@ msgstr "Show elevation profile"
 msgid "Show file"
 msgstr "Show file"
 
-#: src/components/ui/ExportCsvDialog.tsx:85
+#: src/components/ui/ExportCsvDialog.tsx:91
 msgid "Show folder"
 msgstr "Show folder"
 
@@ -5088,7 +5128,7 @@ msgstr "Stop"
 msgid "Stop {0}"
 msgstr "Stop {0}"
 
-#: src/features/map/components/MapArea.tsx:537
+#: src/features/map/components/MapArea.tsx:539
 msgid "Stop By"
 msgstr "Stop By"
 
@@ -5102,7 +5142,7 @@ msgstr "Stop type"
 
 #: src/features/map/components/MapToolbar.tsx:89
 #: src/features/map/components/WaypointEditor.tsx:475
-#: src/features/map/components/WaypointItem.tsx:203
+#: src/features/map/components/WaypointItem.tsx:204
 #: src/features/map/hooks/useStopMenus.ts:223
 msgid "Stop-by"
 msgstr "Stop-by"
@@ -5124,7 +5164,7 @@ msgstr "Stopped."
 msgid "stops"
 msgstr "stops"
 
-#: src/components/ui/ExportCsvDialog.tsx:70
+#: src/components/ui/ExportCsvDialog.tsx:76
 #: src/features/assistant/AssistantChat.tsx:18
 msgid "Stops"
 msgstr "Stops"
@@ -5159,7 +5199,7 @@ msgid "Subtitle lines in the timeline"
 msgstr "Subtitle lines in the timeline"
 
 #: src/components/ui/AppSettings.tsx:943
-#: src/components/ui/ExportCsvDialog.tsx:72
+#: src/components/ui/ExportCsvDialog.tsx:78
 #: src/components/ui/PipelineLogPanel.tsx:50
 #: src/features/editor/EditorView.tsx:178
 #: src/features/editor/EditorView.tsx:384
@@ -5526,6 +5566,14 @@ msgstr "This voice can also speak English. The English voices are needed to make
 msgid "Throw away your script? The video will write its own when you make it."
 msgstr "Throw away your script? The video will write its own when you make it."
 
+#: src/features/map/components/LegStats.tsx:43
+msgid "Time ignores climb: no elevation available for this leg"
+msgstr "Time ignores climb: no elevation available for this leg"
+
+#: src/features/map/components/LegStats.tsx:40
+#~ msgid "Time ignores climb: no elevation recorded for this leg"
+#~ msgstr "Time ignores climb: no elevation recorded for this leg"
+
 #: src/features/map/components/GenerateDialog.tsx:152
 msgid "Time unavailable"
 msgstr "Time unavailable"
@@ -5621,7 +5669,7 @@ msgstr "Transition"
 msgid "Translating {0} of {1}…"
 msgstr "Translating {0} of {1}…"
 
-#: src/features/map/components/WaypointItem.tsx:277
+#: src/features/map/components/WaypointItem.tsx:278
 msgid "Travel mode to the next stop"
 msgstr "Travel mode to the next stop"
 
@@ -5700,9 +5748,9 @@ msgstr "Underline"
 msgid "Undo"
 msgstr "Undo"
 
-#: src/features/map/components/MapArea.tsx:466
-#: src/features/map/components/MapArea.tsx:507
-#: src/features/map/components/MapArea.tsx:544
+#: src/features/map/components/MapArea.tsx:468
+#: src/features/map/components/MapArea.tsx:509
+#: src/features/map/components/MapArea.tsx:546
 #: src/features/map/components/WaypointEditor.tsx:209
 #: src/hooks/useWaypointActions.ts:44
 #: src/hooks/useWaypointActions.ts:60
@@ -5830,7 +5878,7 @@ msgstr "Version label"
 #~ msgstr "Vertical 9:16"
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1131
+#: src/features/map/components/MapArea.tsx:1133
 msgid "Via {0} · Right-click for options"
 msgstr "Via {0} · Right-click for options"
 
@@ -5957,9 +6005,9 @@ msgid "Warm"
 msgstr "Warm"
 
 #: src/features/map/components/DrawBar.tsx:348
-#: src/features/map/components/MapArea.tsx:500
-#: src/features/map/components/MapArea.tsx:1000
-#: src/features/map/components/MapArea.tsx:1061
+#: src/features/map/components/MapArea.tsx:502
+#: src/features/map/components/MapArea.tsx:1002
+#: src/features/map/components/MapArea.tsx:1063
 #: src/features/map/hooks/useStopMenus.ts:152
 #: src/features/map/hooks/useStopMenus.ts:208
 msgid "Waypoint"
@@ -6030,6 +6078,11 @@ msgstr "Wide view before each leg"
 #: src/components/ui/ComponentsChecklist.tsx:185
 msgid "Windows"
 msgstr "Windows"
+
+#. placeholder {0}: stats.slopeKm.toFixed(2)
+#: src/features/map/components/LegStats.tsx:38
+msgid "With height change: {0} km"
+msgstr "With height change: {0} km"
 
 #: src/components/ui/ReviewStep.tsx:80
 msgid "Word"

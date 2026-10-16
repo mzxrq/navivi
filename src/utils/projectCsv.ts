@@ -1,6 +1,7 @@
 import type { RouteSegment, Waypoint } from "../types";
 import { layout, placedCues, type TimelineData } from "../features/editor/model";
 import { distanceMeters, type LatLon } from "./gpxTrack";
+import { legEstimate, legFacts } from "./legEstimate";
 import { stopLabel } from "./stopLabel";
 
 type Cell = string | number | boolean | null | undefined;
@@ -41,8 +42,10 @@ const pathMeters = (points: LatLon[]) => points.reduce((sum, p, i) => (i ? sum +
 
 // A leg is a pair of neighbouring *routed* stops (stop-bys that are not connected to the route are skipped), the same pairing
 // useMapRouting uses, so routeSegments[i] is the leg from routed[i] to routed[i + 1]. A leg that is missing or still being
-// calculated falls back to the straight line between its stops.
-export function legsCsv(waypoints: Waypoint[], routeSegments: RouteSegment[]): string {
+// calculated falls back to the straight line between its stops. `terrain[i]` is the terrain height of every point of
+// routeSegments[i] (see segmentElevations), which gives a routed leg its climb; without it only a drawn line with recorded
+// elevation has one. minutes_flat is the time without climb, so the climb's effect can be seen.
+export function legsCsv(waypoints: Waypoint[], routeSegments: RouteSegment[], terrain: (number[] | null | undefined)[] = []): string {
   const routed = waypoints.map((w, index) => ({ w, index })).filter(({ w }) => !w.isStopBy || w.connectToRoute);
   const rows: Cell[][] = [];
   for (let i = 0; i < routed.length - 1; i++) {
@@ -51,6 +54,9 @@ export function legsCsv(waypoints: Waypoint[], routeSegments: RouteSegment[]): s
     const seg = routeSegments[i];
     const usable = !!seg && seg.mode !== "calculating" && seg.positions.length >= 2;
     const meters = usable ? pathMeters(seg.positions) : distanceMeters([from.w.lat, from.w.lng], [to.w.lat, to.w.lng]);
+    const facts = usable
+      ? legFacts(from.w, to.w, seg, terrain[i])
+      : { ...legEstimate([[from.w.lat, from.w.lng], [to.w.lat, to.w.lng]], from.w.routeMode, null), ascentM: null, slopeKm: null, source: null, flatMinutes: null };
     rows.push([
       stopLabel(waypoints, from.index),
       stopLabel(waypoints, to.index),
@@ -61,9 +67,17 @@ export function legsCsv(waypoints: Waypoint[], routeSegments: RouteSegment[]): s
       usable ? "route" : "straight",
       from.w.viaPoints?.length ?? 0,
       usable ? seg.positions.length : 2,
+      facts.ascentM === null ? "" : Math.round(facts.ascentM),
+      facts.source ?? "",
+      facts.slopeKm === null ? "" : round(facts.slopeKm * 1000, 1),
+      facts.minutes,
+      facts.flatMinutes ?? facts.minutes,
     ]);
   }
-  return toCsv(["from_label", "to_label", "from_name", "to_name", "mode", "distance_m", "distance_basis", "via_point_count", "point_count"], rows);
+  return toCsv(
+    ["from_label", "to_label", "from_name", "to_name", "mode", "distance_m", "distance_basis", "via_point_count", "point_count", "ascent_m", "ascent_source", "slope_distance_m", "minutes", "minutes_flat"],
+    rows,
+  );
 }
 
 export const hasSubtitles = (timeline: TimelineData) => timeline.segments.length > 0 && timeline.subtitles.length > 0;

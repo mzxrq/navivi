@@ -7,6 +7,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { hasSubtitles, legsCsv, stopsCsv, subtitlesCsv } from "../../utils/projectCsv";
+import { mapboxTileLoader, segmentElevations } from "../../utils/terrainElevation";
 import { CheckCircle, Folder, Loader2 } from "./icons";
 import { Checkbox } from "./Checkbox";
 import { Dialog, dialogButton } from "./Dialog";
@@ -18,7 +19,7 @@ type Table = "stops" | "legs" | "subtitles";
 const BOM = "﻿";
 
 export function ExportCsvDialog() {
-  const { metadata, waypoints, routeSegments, timeline } = useWorkspace();
+  const { metadata, waypoints, routeSegments, timeline, settings } = useWorkspace();
   const [isOpen, setIsOpen] = useState(false);
   const [chosen, setChosen] = useState<Record<Table, boolean>>({ stops: true, legs: true, subtitles: true });
   const [phase, setPhase] = useState<"ready" | "working" | "done" | "error">("ready");
@@ -54,7 +55,12 @@ export function ExportCsvDialog() {
       setPhase("working");
       const files: [string, string][] = [];
       if (on("stops")) files.push([`${base}_stops.csv`, stopsCsv(waypoints)]);
-      if (on("legs")) files.push([`${base}_legs.csv`, legsCsv(waypoints, routeSegments)]);
+      if (on("legs")) {
+        // Terrain heights give routed legs a climb; without a token or a connection the legs just have no climb.
+        const token = settings.mapbox_api_key || import.meta.env.VITE_MAPBOX_TOKEN;
+        const terrain = token ? await segmentElevations(routeSegments, waypoints, mapboxTileLoader(token)).catch(() => []) : [];
+        files.push([`${base}_legs.csv`, legsCsv(waypoints, routeSegments, terrain)]);
+      }
       if (on("subtitles")) files.push([`${base}_subtitles.csv`, subtitlesCsv(timeline)]);
       for (const [name, text] of files) await writeTextFile(await join(picked, name), BOM + text);
       setFolder(picked);
@@ -68,7 +74,7 @@ export function ExportCsvDialog() {
 
   const rows: { key: Table; label: string; hint: string; off: string }[] = [
     { key: "stops", label: t`Stops`, hint: t`Name, position, route mode, scripts and media counts for each stop`, off: t`No stops yet` },
-    { key: "legs", label: t`Route legs`, hint: t`Distance, mode and via points between neighbouring stops`, off: t`Needs at least two stops on the route` },
+    { key: "legs", label: t`Route legs`, hint: t`Distance, climb, walking time and via points between neighbouring stops`, off: t`Needs at least two stops on the route` },
     { key: "subtitles", label: t`Subtitles`, hint: t`Every caption with its start and end time in the video`, off: t`Generate the video first` },
   ];
 

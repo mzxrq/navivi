@@ -52,6 +52,17 @@ describe("legsCsv", () => {
     expect(Number(meters)).toBeGreaterThan(1570); // detour is longer than the 1112 m straight line
   });
 
+  it("adds the climb from terrain heights, and the time with and without it", () => {
+    const path = [[0, 0], [0.005, 0.005], [0, 0.01]] as [number, number][];
+    const withClimb = lines(legsCsv([a, b], [seg(path)], [[0, 300, 0]]))[1].split(",");
+    const flat = lines(legsCsv([a, b], [seg(path)]))[1].split(",");
+    expect(lines(legsCsv([a, b], [seg(path)]))[0].split(",").slice(-5)).toEqual(["ascent_m", "ascent_source", "slope_distance_m", "minutes", "minutes_flat"]);
+    expect(withClimb.slice(-5, -3)).toEqual(["300", "terrain"]);
+    expect(Number(withClimb[withClimb.length - 2])).toBe(Number(withClimb[withClimb.length - 1]) + 30); // 300 m / 600 m per hour
+    expect(flat.slice(-5, -3)).toEqual(["", ""]);
+    expect(flat[flat.length - 2]).toBe(flat[flat.length - 1]);
+  });
+
   it("falls back to the straight line when the leg is missing or still calculating", () => {
     const missing = lines(legsCsv([a, b], []))[1].split(",");
     expect(missing[5]).toBe("1111.9");
