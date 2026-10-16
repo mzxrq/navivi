@@ -189,6 +189,9 @@ REPORTED_MODE_SPEED_KMH: Dict[str, float] = {
     "driving": 70.0,
     "airplane": 500.0,
 }
+# Naismith's rule: each 600 m of climb adds an hour to a walk. Added to the flat time (km / walking speed) of a leg
+# whose recorded elevation is known; a leg without elevation keeps the flat time.
+WALKING_ASCENT_M_PER_HOUR = 600.0
 ANIMATION_SPEED_KMH = 3.0
 # Fixed anchor "1x" pace every mode's on-screen speed-up factor is computed
 # against — not whatever ANIMATION_SPEED_KMH happens to be configured as
