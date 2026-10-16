@@ -281,6 +281,14 @@ export function TitleBar() {
                     <MenuItem
                       onClick={() => {
                         setIsMenuOpen(false);
+                        window.dispatchEvent(new CustomEvent("export-csv"));
+                      }}
+                    >
+                      <Trans>Export CSV...</Trans>
+                    </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        setIsMenuOpen(false);
                         setShowAppSettings(true);
                         setTimeout(() => window.dispatchEvent(new CustomEvent("open-app-settings-tab", { detail: "project" })), 0);
                       }}

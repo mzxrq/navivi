@@ -19,6 +19,7 @@ import { useAutoSave } from "./hooks/useAutoSave";
 import { useAutoFurigana } from "./hooks/useAutoFurigana";
 import { AutoDirectorModal } from "./components/ui/AutoDirectorModal";
 import { ExportProjectDialog } from "./components/ui/ExportProjectDialog";
+import { ExportCsvDialog } from "./components/ui/ExportCsvDialog";
 
 export default function App() {
   const { currentView, editorMode } = useUI();
@@ -67,6 +68,7 @@ export default function App() {
       {currentView === "editor" && <StatusBar />}
       <AutoDirectorModal />
       <ExportProjectDialog />
+      <ExportCsvDialog />
     </div>
   );
 }
