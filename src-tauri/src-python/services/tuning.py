@@ -1618,6 +1618,12 @@ IMAGE_UPSCALE_MAX_SIDE = 3840
 # spills into shared memory.
 IMAGE_UPSCALE_MIN_FREE_VRAM_MB = 5500
 IMAGE_UPSCALE_TIMEOUT_SECONDS = 300.0
+# "Sharpen photos" also sharpens the photo ComfyUI animates when it was big enough to skip the upscale
+# (vdoprocessing/photo_sharpen.py): shrunk to at most this long side first (ComfyUI works far below
+# it, so sharpening at full size would be wasted), then an unsharp mask of this radius / strength.
+PHOTO_SHARPEN_MAX_SIDE = 1920
+PHOTO_SHARPEN_RADIUS = 1.2
+PHOTO_SHARPEN_PERCENT = 80
 
 # --- Intro clip (multi-image slideshow + centered project title) -----------
 # A slideshow of INTRO_IMAGE_COUNT random waypoint images (a fresh pick

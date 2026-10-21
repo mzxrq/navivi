@@ -438,14 +438,14 @@ def _resolve_motion_prompt(camera_pan_hint: Any) -> str:
 
 
 def _read_image(path: str):
-    """cv2.imread that also opens a non-ASCII Windows path."""
+    """cv2.imread that also opens a non-ASCII Windows path (decoded from the bytes, so no imread warning)."""
     import cv2
     import numpy as np
 
-    image = cv2.imread(path, cv2.IMREAD_COLOR)
-    if image is None:
-        image = cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_COLOR)
-    return image
+    try:
+        return cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_COLOR)
+    except OSError:
+        return None
 
 
 def _edge_cropped(image_path: str, output_png: str) -> str:

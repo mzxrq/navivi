@@ -24,7 +24,7 @@ def _fake_clip(path, seconds):
 @pytest.fixture
 def generator(tmp_path, monkeypatch):
     cfg = tmp_path / "job_config.json"
-    cfg.write_text(json.dumps({"directory_path": str(tmp_path), "waypoints": []}), encoding="utf-8")
+    cfg.write_text(json.dumps({"directory_path": str(tmp_path), "waypoints": [], "settings": {"upscale_popup_images": False}}), encoding="utf-8")
     gen = AttractionVideoGenerator(JobConfigManager(str(cfg)))
 
     # Wan stand-in: every moving photo gives a 2 s clip; "none" stays the real still clip.

@@ -82,11 +82,8 @@ def match_clip_to_photo(video_path: str, photo_path: str) -> bool:
     if not tuning.ATTRACTION_COLOR_MATCH:
         return False
     try:
-        photo = cv2.imread(photo_path, cv2.IMREAD_COLOR)
-        if photo is None:
-            # cv2.imread can't open non-ASCII paths on Windows.
-            data = np.fromfile(photo_path, dtype=np.uint8)
-            photo = cv2.imdecode(data, cv2.IMREAD_COLOR)
+        # Decoded from the bytes: cv2.imread can't open non-ASCII paths on Windows (and warns).
+        photo = cv2.imdecode(np.fromfile(photo_path, dtype=np.uint8), cv2.IMREAD_COLOR)
         if photo is None:
             logger.warning("Colour match skipped: can't read %s", photo_path)
             return False

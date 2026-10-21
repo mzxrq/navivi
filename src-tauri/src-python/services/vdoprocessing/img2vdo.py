@@ -911,6 +911,15 @@ class AttractionVideoGenerator:
         if not image_list:
             return None
 
+        # "Sharpen photos": ComfyUI animates the sharpened copy (its clip key follows the new file).
+        from services.config.upscaled_images import upscale_enabled
+
+        config_path = getattr(self.config, "config_path", None)
+        if config_path is not None and upscale_enabled(self.config.get_settings() or {}):
+            from services.vdoprocessing.photo_sharpen import sharpened_photo
+
+            image_list = [sharpened_photo(img, Path(config_path).parent) for img in image_list]
+
         if isinstance(prompt_text, str):
             prompt_list = [prompt_text]
         elif isinstance(prompt_text, list):

@@ -34,11 +34,11 @@ def _small(image: np.ndarray) -> np.ndarray:
 
 
 def read_image(path: str) -> Optional[np.ndarray]:
-    """cv2.imread that also opens a non-ASCII Windows path."""
-    image = cv2.imread(path, cv2.IMREAD_COLOR)
-    if image is None:
-        image = cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_COLOR)
-    return image
+    """cv2.imread that also opens a non-ASCII Windows path (decoded from the bytes, so no imread warning)."""
+    try:
+        return cv2.imdecode(np.fromfile(path, dtype=np.uint8), cv2.IMREAD_COLOR)
+    except OSError:
+        return None
 
 
 def read_frames(video_path: str) -> List[np.ndarray]:
