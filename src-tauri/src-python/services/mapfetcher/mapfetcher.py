@@ -21,7 +21,7 @@ from services.logger.logger import setup_logger
 from services.logger.progress import tracker
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
-from services.mapfetcher.maplanguage import resolve_map_style, streets_lang
+from services.mapfetcher.maplanguage import needs_gl_labels, resolve_map_style, streets_lang
 from services.vdoprocessing.stopby_visits import visits_stopby
 
 # Logging configuration
@@ -69,10 +69,7 @@ class MapFetcher:
         # (English) is drawn through the GL page, which rewrites its labels (maplanguage's localizer),
         # unless the project gave a Studio style for that language or chose the background itself.
         lang = streets_lang(self.config.get("map_language")) if self.config else None
-        if (
-            not background and lang and lang != "en"
-            and not settings.get(f"mapbox_style_id_{lang}") and resolve_mapbox_token(settings)
-        ):
+        if needs_gl_labels(settings, lang, bool(resolve_mapbox_token(settings))):
             background = "pydeck"
             logger.info("Map language %s: drawing the overview map through the GL page so its labels follow it.", lang)
         if background == "pydeck":

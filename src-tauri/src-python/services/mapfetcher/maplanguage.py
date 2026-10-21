@@ -19,6 +19,16 @@ def streets_lang(locale: Optional[str]) -> Optional[str]:
     return base if base in STREETS_LANGS else None
 
 
+def needs_gl_labels(settings: dict, lang: Optional[str], has_token: bool) -> bool:
+    """Raster tiles can't be relabeled: a language other than English, with a token and no Studio
+    style of its own for it, goes through the GL page. A project that sets `overview_background`
+    itself ("pydeck" or "raster") is never switched."""
+    return bool(
+        has_token and lang and lang != "en"
+        and not settings.get("overview_background") and not settings.get(f"mapbox_style_id_{lang}")
+    )
+
+
 def current_map_language() -> Optional[str]:
     from services.config.job_config import JobConfigManager
 

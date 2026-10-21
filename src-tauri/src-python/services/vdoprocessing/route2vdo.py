@@ -55,8 +55,9 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # departure photo, not the destination's; v4: HUD card is the overview's
 # summary card; v5: framing clears the corner banners and the caption;
 # v6: the card's Total counts down the whole trip, not just the leg;
-# v7: leg card numbers are the overview card's own per-leg numbers).
-LEG_RENDER_VERSION = 7
+# v7: leg card numbers are the overview card's own per-leg numbers;
+# v8: stop-bys are framed too, and the summary card sits lower).
+LEG_RENDER_VERSION = 8
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.

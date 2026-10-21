@@ -187,6 +187,11 @@ def _nearest_point_on_polygon(
     return best_pt
 
 
+def _card_bottom_limit(h: float, margin: float) -> float:
+    """The lowest y a card may reach: above the margin and the band kept free for the captions."""
+    return h * (1.0 - tuning.OVERVIEW_BOTTOM_CARD_CLEARANCE) - margin
+
+
 class _PopupMixin:
     @staticmethod
     def _attach_stopby_groups(active_popups: List[Dict]) -> None:
@@ -446,7 +451,7 @@ class _PopupMixin:
             # so popup cards never land on that chip (see render_top_banner).
             top_margin = tuning.OVERVIEW_TOP_CARD_CLEARANCE
             # Likewise the bottom band, where the narration captions are burned in.
-            bottom_limit = h * (1.0 - tuning.OVERVIEW_BOTTOM_CARD_CLEARANCE) - margin
+            bottom_limit = _card_bottom_limit(h, margin)
             start_x = x - card_w / 2
             # own_head (2.5*radius + 4 ≈ 54px) is the gap between card bottom
             # and pin centre so the card clears the pin's drawn head.
@@ -755,7 +760,7 @@ class _PopupMixin:
         def clamp(bx: float, by: float) -> Tuple[float, float]:
             return (
                 max(margin, min(bx, w - card_w - margin)),
-                max(margin, min(by, h * (1.0 - tuning.OVERVIEW_BOTTOM_CARD_CLEARANCE) - margin - card_h)),
+                max(margin, min(by, _card_bottom_limit(h, margin) - card_h)),
             )
 
         def leader_crosses_placed(
@@ -1132,7 +1137,7 @@ class _PopupMixin:
         def slot_ok(x: int, y: int) -> bool:
             if (
                 x < margin or y < margin or x + card_w > w - margin
-                or y + card_h > h * (1.0 - tuning.OVERVIEW_BOTTOM_CARD_CLEARANCE) - margin
+                or y + card_h > _card_bottom_limit(h, margin)
             ):
                 return False
             if any(

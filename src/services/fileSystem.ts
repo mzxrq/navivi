@@ -13,6 +13,7 @@ import { planFileNames } from "../utils/fileNames";
 import { renameCredits } from "../utils/photoCredits";
 import { carryOverLooks, emptyTimeline, type ExportOptions, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
 import { i18n } from "@lingui/core";
+import { resolveNarrationLanguage } from "../utils/narrationLanguage";
 import { db } from "./db";
 
 // A slug id already used by a different project folder in the DB.
@@ -358,8 +359,13 @@ export const saveProjectData = async (
     thumbnail_path: thumbnailPath,
     source_files: { gps_route: "raw_track.gpx" },
     settings: { ...savedSettings, global_pronunciation_dictionary: (await db.appSettings.get(GLOBAL_DICTIONARY_KEY)) ?? [] },
-    // Map labels and on-screen video text: the narration language when one is chosen, else the app's.
-    map_language: settings?.narration_language === "ja" || settings?.narration_language === "en" ? settings.narration_language : i18n.locale || "en",
+    // Map labels and on-screen video text: the narration language (from the stop names and scripts on "Auto"),
+    // so switching the app's own language never re-renders the project.
+    map_language: resolveNarrationLanguage(
+      settings?.narration_language,
+      processedWaypoints.flatMap((w) => [w.name ?? "", w.arrivingNarration ?? "", w.attractionNarration ?? ""]),
+      i18n.locale || "en",
+    ),
     ...overviewNarrationFields(metadata),
     video_title: row.videoTitle,
     video_subtitle: row.videoSubtitle,

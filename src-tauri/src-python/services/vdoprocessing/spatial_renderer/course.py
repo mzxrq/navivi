@@ -69,6 +69,13 @@ def trace_anchors(
     return relax_anchors(anchors)
 
 
+def pin_reveal_time(reached: float, said: float, route_at: float, window: float = tuning.COURSE_CUE_WINDOW_SECONDS) -> float:
+    """When a stop's pin shows: when the voice names it (`said`), or when the trace gets there
+    if that is within `window` seconds after; never earlier than the voice, never later than the window."""
+    said = max(route_at, float(said))
+    return min(max(reached, said), said + window)
+
+
 def relax_anchors(anchors: List[Tuple], window: float = tuning.COURSE_CUE_WINDOW_SECONDS, passes: int = 30) -> List[Tuple]:
     """Eases the pace between cues: a place the trace only passes may be reached up to
     `window` seconds AFTER its cue (never before: a pin should not show ahead of the voice),
@@ -264,8 +271,7 @@ class _CourseOverviewMixin:
             # at most COURSE_CUE_WINDOW_SECONDS after, wherever the trace is by then.
             said = cues.get(str(ap.get("order")))
             if said is not None and ap["index"] != 0 and ap is not stop_popup:
-                said = max(route_at, float(said))
-                ap["course_at"] = min(max(ap["course_at"], said), said + tuning.COURSE_CUE_WINDOW_SECONDS)
+                ap["course_at"] = pin_reveal_time(ap["course_at"], said, route_at)
         for k, ap in enumerate(extras):
             ap["course_at"] = (extras_at or end_at) + k * tuning.COURSE_STOPBY_STAGGER_SECONDS
             ap["pop_frame"] = int(round(ap["course_at"] * fps))

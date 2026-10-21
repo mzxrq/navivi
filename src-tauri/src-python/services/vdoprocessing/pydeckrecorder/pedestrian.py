@@ -539,6 +539,30 @@ def _fit_view_for_path(
     return center_lon, center_lat, zoom
 
 
+# A stop-by farther than this from the route is left out of the camera frame: fitting it would shrink the walk.
+_FRAME_STOPBY_MAX_M = 500.0
+
+
+def _framed_points(df_raw, lo: int, hi: int, landmarks) -> Tuple[List[float], List[float]]:
+    """(lons, lats) of the path rows `lo:hi` plus every stop-by within _FRAME_STOPBY_MAX_M of the
+    route whose nearest path row falls in that stretch, so a stop-by seen from the route is inside
+    the leg's camera frame too."""
+    part = df_raw.iloc[lo:hi]
+    lons, lats = part["lon"].tolist(), part["lat"].tolist()
+    for lm in (landmarks or []):
+        lat, lon = lm.get("lat"), lm.get("lon")
+        if lat is None or lon is None:
+            continue
+        dlat = (df_raw["lat"] - lat) * 111_320.0
+        dlon = (df_raw["lon"] - lon) * 111_320.0 * math.cos(math.radians(lat))
+        gap = (dlat ** 2 + dlon ** 2).to_numpy()
+        nearest = int(gap.argmin())
+        if lo <= nearest < hi and gap[nearest] <= _FRAME_STOPBY_MAX_M ** 2:
+            lons.append(float(lon))
+            lats.append(float(lat))
+    return lons, lats
+
+
 # Top clearance for a leg's locked framing, measured to a pin's POINT: the
 # corner banners (#hud-banner/#hud-chain: 24px down, ~70px tall), a 16px gap,
 # then the 60px pin standing above its point.
@@ -1443,7 +1467,7 @@ def render_residential_leg_pydeck(
     # compute the bounding box only up to that first stop-by so the camera
     # tightly frames the segment actually being walked in this clip, instead
     # of zooming out to fit the entire multi-segment route at once.
-    fit_df = df_raw
+    fit_end = len(df_raw)
     for lm in (landmarks or []):
         if lm.get("connect_to_route") and lm.get("popup_image") and lm.get("lat") is not None and lm.get("lon") is not None:
             sq_dist = (df_raw["lat"] - lm["lat"]) ** 2 + (df_raw["lon"] - lm["lon"]) ** 2
@@ -1451,11 +1475,12 @@ def render_residential_leg_pydeck(
             # Use only a minimal +2 buffer. The previous +10 included points
             # much further down the route, which skewed the bounding box center
             # and pushed the visible portion off-center.
-            fit_df = df_raw.iloc[:closest_idx + 2]
+            fit_end = closest_idx + 2
             break
 
+    fit_lons, fit_lats = _framed_points(df_raw, 0, fit_end, landmarks)
     locked_lon, locked_lat, locked_zoom = _fit_view_for_path(
-        fit_df["lon"].tolist(), fit_df["lat"].tolist(), output_size,
+        fit_lons, fit_lats, output_size,
         padding_frac=0.15, pitch=follow_pitch,
         bottom_margin_px=_leg_bottom_margin_px(bottom_reserve_px),
         top_margin_px=_LEG_TOP_MARGIN_PX,
@@ -2861,10 +2886,10 @@ async def _record_leg(
                             sq_dist_next = (df_raw["lat"] - n_lat) ** 2 + (df_raw["lon"] - n_lon) ** 2
                             next_df_idx = int(sq_dist_next.idxmin())
                             
-                            next_fit_df = df_raw.iloc[curr_df_idx : next_df_idx + 2]
-                            if not next_fit_df.empty:
+                            next_fit_lons, next_fit_lats = _framed_points(df_raw, curr_df_idx, next_df_idx + 2, landmarks)
+                            if next_fit_lons:
                                 new_lon, new_lat, new_zoom = _fit_view_for_path(
-                                    next_fit_df["lon"].tolist(), next_fit_df["lat"].tolist(), output_size,
+                                    next_fit_lons, next_fit_lats, output_size,
                                     padding_frac=0.15, pitch=follow_pitch,
                                     bottom_margin_px=_leg_bottom_margin_px(bottom_reserve_px),
                                     top_margin_px=_LEG_TOP_MARGIN_PX,
