@@ -15,7 +15,8 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from services.localization.cues import cue_tags, cue_times, strip_cues
+from services.localization.cue_alignment import measured_cue_times
+from services.localization.cues import cue_tags, strip_cues
 from services.localization.sentence_split import SENTENCE_END
 
 from . import audio_step
@@ -293,6 +294,8 @@ def record_cue_times(project_config_path: str, audio_data: dict) -> None:
     store = CueStore(config_path.parent)
     durations = audio_data.get("audio_durations") or []
     pauses = audio_data.get("audio_pauses") or []
+    paths = audio_data.get("audio_paths") or []
+    align = (json.loads(config_path.read_text(encoding="utf-8")).get("settings") or {}).get("align_cues_to_voice", True)
     for pos, wp in enumerate(waypoints):
         if not isinstance(wp, dict) or pos >= len(durations) or not durations[pos]:
             continue
@@ -300,7 +303,10 @@ def record_cue_times(project_config_path: str, audio_data: dict) -> None:
         if cues:
             store.set_cue_times(
                 waypoint_cue_key(wp, pos),
-                cue_times(cues, clean, durations[pos], pauses[pos] if pos < len(pauses) else []),
+                measured_cue_times(
+                    paths[pos] if pos < len(paths) else None, cues, clean, durations[pos],
+                    pauses[pos] if pos < len(pauses) else [], enabled=align,
+                ),
             )
     store.save()
 

@@ -50,10 +50,14 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 
 # Bump when the overview's rendering code changes what it draws, so
 # checkpointed overviews made by older code are re-rendered.
-OVERVIEW_RENDER_VERSION = 3  # v3: connected stop-bys stop; ending photo goes fullscreen after the voice
+OVERVIEW_RENDER_VERSION = 5  # v5: pins on their cue, cue window, faster last stretch; v4: bottom caption band in the framing, cards clear of top/bottom bands; v3: connected stop-bys stop; ending photo goes fullscreen after the voice
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
-_OVERVIEW_CHECKPOINT_PARTS = ("render_version", "route_waypoints", "photos")
+# The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
+_OVERVIEW_CHECKPOINT_PARTS = (
+    "render_version", "route_waypoints", "photos", "config.overview_cue_seconds", "config.overview_audio_seconds",
+    "job_config.map_language", "video_text",
+)
 # Config flags about the checkpoint itself, not the picture.
 _FINGERPRINT_SKIP_CONFIG = {"checkpoint_enabled", "overview_rerender"}
 # Waypoint fields only the walking legs/audio use; the overview never reads them.

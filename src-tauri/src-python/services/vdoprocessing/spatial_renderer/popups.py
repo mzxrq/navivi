@@ -442,20 +442,24 @@ class _PopupMixin:
             # same pin, since the route passes close by on either side of
             # where it just arrived. A pin near the top of the frame
             # (where "above" would run off-screen) seeds below instead.
-            # --- MODIFICATION: Add extra vertical clearance ---
-            extra_lift = 30  # Increase this value to push the card higher
-            
+            # top_margin reserves the banner-pill band at the top of the frame
+            # so popup cards never land on that chip (see render_top_banner).
+            top_margin = tuning.OVERVIEW_TOP_CARD_CLEARANCE
+            # Likewise the bottom band, where the narration captions are burned in.
+            bottom_limit = h * (1.0 - tuning.OVERVIEW_BOTTOM_CARD_CLEARANCE) - margin
             start_x = x - card_w / 2
+            # own_head (2.5*radius + 4 ≈ 54px) is the gap between card bottom
+            # and pin centre so the card clears the pin's drawn head.
             start_y = (
-                y - card_h - lead_offset - extra_lift
-                if y - card_h - lead_offset - extra_lift >= margin
-                else y + lead_offset + extra_lift
+                y - card_h - own_head
+                if y - card_h - own_head >= top_margin
+                else y + lead_offset
             )
 
             def clamp(bx: float, by: float) -> Tuple[float, float]:
                 return (
                     max(margin, min(bx, w - card_w - margin)),
-                    max(margin, min(by, h - card_h - margin)),
+                    max(top_margin, min(by, bottom_limit - card_h)),
                 )
 
             # A small buffer on top of the raw rectangles so two cards end
@@ -751,7 +755,7 @@ class _PopupMixin:
         def clamp(bx: float, by: float) -> Tuple[float, float]:
             return (
                 max(margin, min(bx, w - card_w - margin)),
-                max(margin, min(by, h - card_h - margin)),
+                max(margin, min(by, h * (1.0 - tuning.OVERVIEW_BOTTOM_CARD_CLEARANCE) - margin - card_h)),
             )
 
         def leader_crosses_placed(
@@ -1126,7 +1130,10 @@ class _PopupMixin:
             ox, oy = route_obstacles[:, 0], route_obstacles[:, 1]
 
         def slot_ok(x: int, y: int) -> bool:
-            if x < margin or y < margin or x + card_w > w - margin or y + card_h > h - margin:
+            if (
+                x < margin or y < margin or x + card_w > w - margin
+                or y + card_h > h * (1.0 - tuning.OVERVIEW_BOTTOM_CARD_CLEARANCE) - margin
+            ):
                 return False
             if any(
                 x < rx2 and x + card_w > rx1 and y < ry2 and y + card_h > ry1

@@ -287,6 +287,10 @@ def _checkpoint_parts(
     parts["route.photos"] = photo_inputs_hash(
         [[wp.get(k) for k in IMAGE_KEYS] for wp in shown.get("waypoints") or [] if isinstance(wp, dict)]
     )
+    # Map labels and on-screen text follow this; a project saved before it was written has none.
+    language = config_data.get("map_language")
+    if language:
+        parts["route.map_language"] = _short_hash(str(language))
     style_part = map_style_inputs(config_data.get("settings"))
     if style_part:
         parts["route.map_style"] = _short_hash(style_part)
@@ -337,9 +341,10 @@ def _checkpoint_parts(
 # route.markers: a new pin picture too (absent, so unchanged, for a project with none).
 # route.map_style: the video's map style or tile sharpness (absent, so unchanged, until a project sets one).
 # route.overview_voice: the overview's cue times and voice length (set by render_route_video).
+# route.map_language: the label/on-screen text language (absent for a config that never had one).
 ROUTE_CHECKPOINT_PARTS = (
     "route.waypoints", "route.overview_flags", "route.photos", "route.markers", "route.map_style",
-    "route.overview_voice",
+    "route.overview_voice", "route.map_language",
 )
 
 
@@ -443,15 +448,51 @@ def _reserve_overview_bands(
     }
 
 
+_MAP_LANGUAGE_STAMP = ".map_language"
+
+
+def purge_map_images_on_language_change(project_dir, language: Optional[str]) -> bool:
+    """Deletes the project's map pictures (overview and each leg's tile) when the map
+    language they were made for is not the current one; they are fetched again right
+    after. The language is remembered in a small file beside them. True when purged."""
+    folder = Path(project_dir) / "assets" / "image" / "map"
+    stamp = folder / _MAP_LANGUAGE_STAMP
+    current = str(language or "")
+    try:
+        previous = stamp.read_text(encoding="utf-8").strip() if stamp.exists() else None
+    except OSError:
+        previous = None
+    purged = False
+    # Images with no note were made before the language was remembered: language unknown, so fetched again once.
+    if previous != current and (previous is not None or any(folder.glob("*.png"))):
+        for image in folder.glob("*.png"):
+            try:
+                image.unlink()
+                purged = True
+            except OSError as exc:
+                logger.warning("Could not delete the old map image %s: %s", image, exc)
+        logger.info("Map language changed (%s -> %s): old map images deleted, fetching them again.", previous if previous is not None else "unknown", current or "none")
+    if previous != current and folder.is_dir():
+        try:
+            stamp.write_text(current, encoding="utf-8")
+        except OSError:
+            pass
+    return purged
+
+
 def overview_bounding_box(fetcher, route_df: pd.DataFrame, project_config: dict) -> dict:
     """The overview map's box: the route padded by its span; in the "course"
-    style also clear of the headline above and the subtitles/cards below."""
+    style also clear of the headline above, and both styles clear of the subtitles below."""
     bbox = fetcher.get_bounding_box(route_df, padding_factor=_adaptive_overview_padding(route_df))
     if overview_style(project_config) == "course":
         bbox = _reserve_overview_bands(
             bbox, OVERVIEW_FRAME_SIZE,
             OVERVIEW_FRAME_SIZE[1] * tuning.COURSE_TOP_BAND_FRACTION,
             OVERVIEW_FRAME_SIZE[1] * tuning.COURSE_BOTTOM_BAND_FRACTION,
+        )
+    else:
+        bbox = _reserve_overview_bands(
+            bbox, OVERVIEW_FRAME_SIZE, 0.0, OVERVIEW_FRAME_SIZE[1] * tuning.OVERVIEW_BOTTOM_BAND_FRACTION
         )
     return bbox
 
@@ -693,6 +734,7 @@ def render_route_video(
     # constructing (and re-loading/re-normalizing) a second one.
     fetcher = MapFetcher(job_config=job_config_mgr or JobConfigManager(str(config_path)))
 
+    purge_map_images_on_language_change(config_path.parent, project_config.get("map_language"))
     bbox = overview_bounding_box(fetcher, route_df, project_config)
 
     map_output_path, extent, (img_w, img_h) = fetcher.fetch_image(

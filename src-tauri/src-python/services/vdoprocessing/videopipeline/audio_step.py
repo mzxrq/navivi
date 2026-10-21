@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from services import tuning
-from services.localization.cues import clean_text, cue_times, strip_cues
+from services.localization.cue_alignment import measured_cue_times
+from services.localization.cues import clean_text, strip_cues
 from services.logger.progress import tracker
 from services.tts.errors import TTSNotReady
 
@@ -386,8 +387,9 @@ async def generate_overview_audio(
     # Where each cue ({start}, {1}, {2}, {end}) falls in the real audio: the
     # overview animation lands its stops on them (overview.py).
     clean, cues = strip_cues(tagged)
-    cue_seconds = cue_times(
-        cues, clean, analysis.get("duration_seconds", 0.0), analysis.get("pauses", [])
+    cue_seconds = measured_cue_times(
+        audio_path, cues, clean, analysis.get("duration_seconds", 0.0), analysis.get("pauses", []),
+        enabled=project_config.get("settings", {}).get("align_cues_to_voice", True),
     ) if cues else {}
     # The overview is sized first (60-120s) and its script to it: say when
     # the real voice misses that by more than the 3s the video can absorb.
@@ -544,7 +546,10 @@ def existing_audio_data(project_config_path: str) -> dict:
         data["overview_audio_path"] = str(overview_path)
         data["overview_audio_duration"] = overview["duration_seconds"]
         data["overview_cue_times"] = (
-            cue_times(cues, clean, overview["duration_seconds"], overview["pauses"]) if cues else {}
+            measured_cue_times(
+                overview_path, cues, clean, overview["duration_seconds"], overview["pauses"],
+                enabled=project_config.get("settings", {}).get("align_cues_to_voice", True),
+            ) if cues else {}
         )
     return data
 

@@ -41,6 +41,14 @@ def _isolated_job_config_singleton():
 
 
 @pytest.fixture(autouse=True)
+def _no_voice_listening(monkeypatch):
+    """Tests never load the speech recogniser to measure cue times; test_cue_alignment feeds its own segments."""
+    from services import tuning
+
+    monkeypatch.setattr(tuning, "ALIGN_CUES_TO_VOICE", False)
+
+
+@pytest.fixture(autouse=True)
 def _no_dictionary_downloads(tmp_path, monkeypatch):
     """Tests never download JMnedict or read the real shared cache; test_jmnedict builds its own sample."""
     from services.localization import jmnedict

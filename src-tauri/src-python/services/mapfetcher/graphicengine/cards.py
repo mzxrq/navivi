@@ -1172,7 +1172,10 @@ class _CardMixin:
         margin: int = 20,
         corner: str = "bottom_right",
         slide_offset_y: float = 0.0,
+        margin_y: Optional[int] = None,
     ) -> np.ndarray:
+        """`margin_y` (default: `margin`) is the gap to the top/bottom edge, which may be negative
+        to cancel the card image's own transparent padding."""
         out = frame.copy()
         h, w = out.shape[:2]
         ch, cw = card_bgra.shape[:2]
@@ -1186,7 +1189,8 @@ class _CardMixin:
             )
             ch, cw = card_bgra.shape[:2]
         x = margin if "left" in corner else w - cw - margin
-        y = margin if "top" in corner else h - ch - margin
+        edge_y = margin if margin_y is None else margin_y
+        y = edge_y if "top" in corner else h - ch - edge_y
         # Positive slide_offset_y pushes the card DOWN below its resting
         # spot — animating this from a large value down to 0 (and back up
         # on exit) is the "pop up from the bottom" entrance/exit, without

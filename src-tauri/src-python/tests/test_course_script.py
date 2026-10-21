@@ -93,11 +93,11 @@ def test_names_are_spaced_by_distance_along_the_trip():
 def test_the_stop_bys_get_their_own_paragraph_with_their_cautions():
     project, _ = _island_course()
     text = stopby_text(project)
-    assert text.startswith("茶色で示した地点は、ルート沿いにある追加の見どころです。")
+    assert text.startswith("黒色で示した地点は、ルート沿いにある追加の見どころです。")
     assert "閼伽井跡" in text and "時間に余裕があれば" in text
     assert "ただし、訪れるには管理事務所で同意書を受け取る必要があります。" in text
     script, _ = build_tour_script(*_island_course())
-    assert script.index("{end}") < script.index("茶色で示した地点")
+    assert script.index("{end}") < script.index("黒色で示した地点")
 
 
 def test_totals_count_the_walk_and_each_crossing():
@@ -153,10 +153,10 @@ def test_a_hand_written_script_gets_start_before_the_pivot_line():
 def test_the_users_example_gets_route_and_extras_tags():
     text = ("友ヶ島は四つの島からなっています。これが全体のルートです。加太駅から加太の町を抜けて、港へと向かいます。"
             "島では、砲台跡やタカノス山をめぐり、南垂水広場から第四砲台跡へ。コースのゴールは、出発地と同じ加太駅です。"
-            "茶色で示した地点は、ルート沿いにある追加の見どころです。砲台跡の近くの閼伽井跡です。")
+            "黒色で示した地点は、ルート沿いにある追加の見どころです。砲台跡の近くの閼伽井跡です。")
     tagged = auto_tag_overview(text, ["砲台跡", "タカノス山"])
     assert "{start}これが全体のルートです。{route}加太駅から" in tagged
-    assert "{extras}茶色で示した地点は" in tagged
+    assert "{extras}黒色で示した地点は" in tagged
     assert tagged.index("{1}") < tagged.index("{extras}")  # the extras' 砲台跡 is not the stop
     assert clean_text(tagged) == text
 

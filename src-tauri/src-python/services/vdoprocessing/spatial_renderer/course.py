@@ -20,6 +20,7 @@ from services.vdoprocessing.vdoexporter import VideoExporter
 from .base import logger
 
 _MIN_ANCHOR_GAP_SECONDS = 0.4
+_LAST_LEG_MAX_SECONDS = 4.0  # the walk to the last stop never takes longer than this
 
 
 def _smoothstep(t: float) -> float:
@@ -48,7 +49,14 @@ def trace_anchors(
             continue
         anchors.append((float(cue), float(dist)) if not rest or rest[0] else (float(cue), float(dist), False))
     if end_at is not None and end_at > anchors[-1][0] + _MIN_ANCHOR_GAP_SECONDS:
-        anchors.append((float(end_at), total_dist))
+        arrive = float(end_at)
+        if len(anchors) > 1 and anchors[-1][1] < total_dist:
+            # The last stretch goes at the pace so far (2..LAST_LEG_MAX_SECONDS) and rests at the end;
+            # stretching it to the end cue made a short walk crawl while the voice talked on.
+            pace = anchors[-1][1] / max(1e-6, anchors[-1][0] - route_at)
+            take = min(_LAST_LEG_MAX_SECONDS, max(2.0, (total_dist - anchors[-1][1]) / max(1e-6, pace)))
+            arrive = min(arrive, anchors[-1][0] + take)
+        anchors.append((arrive, total_dist))
     elif anchors[-1][1] < total_dist:
         if len(anchors) > 1:
             # the rest at the pace so far
@@ -58,7 +66,29 @@ def trace_anchors(
             rest = min(tuning.COURSE_TRACE_MAX_SECONDS,
                        max(tuning.COURSE_TRACE_MIN_SECONDS, legs * tuning.COURSE_SECONDS_PER_LEG))
         anchors.append((anchors[-1][0] + max(2.0, rest), total_dist))
-    return anchors
+    return relax_anchors(anchors)
+
+
+def relax_anchors(anchors: List[Tuple], window: float = tuning.COURSE_CUE_WINDOW_SECONDS, passes: int = 30) -> List[Tuple]:
+    """Eases the pace between cues: a place the trace only passes may be reached up to
+    `window` seconds AFTER its cue (never before: a pin should not show ahead of the voice),
+    which evens out the speed before and after it. Settling stops, the start and the end keep
+    their times, so every cue still lands within 0..window seconds."""
+    times = [float(a[0]) for a in anchors]
+    cues = list(times)
+    for _ in range(passes):
+        for i in range(1, len(anchors) - 1):
+            if len(anchors[i]) == 2:
+                continue  # a stop the trace settles on keeps its cue
+            (_, d0), (_, d1), (_, d2) = (a[:2] for a in anchors[i - 1:i + 2])
+            if d2 <= d0:
+                continue
+            even = times[i - 1] + (times[i + 1] - times[i - 1]) * (d1 - d0) / (d2 - d0)
+            low = max(cues[i], times[i - 1] + _MIN_ANCHOR_GAP_SECONDS)
+            high = min(cues[i] + window, times[i + 1] - _MIN_ANCHOR_GAP_SECONDS)
+            if high >= low:
+                times[i] = min(high, max(low, even))
+    return [(t, *a[1:]) for t, a in zip(times, anchors)]
 
 
 def _ease(s: float, settle_from: bool, settle_to: bool) -> float:
@@ -163,17 +193,21 @@ class _CourseOverviewMixin:
         numbered = [ap for ap in on_route if ap["index"] != 0 and ap is not stop_popup]
         any_go = any(str(k).startswith("go") for k in cues)
 
-        def arrive_cue(ap: Dict) -> Optional[float]:
+        def arrive_cue(ap: Dict) -> Tuple:
             # A group's names are listed in a few seconds, then its walk time is
             # read; the trace reaches its {go} stop as the next sentence starts.
+            # A stop named without a {go} is passed at the second its name is
+            # said (not spread by distance, which put its pin seconds late).
             name = cues.get(str(ap.get("order")))
             if not any_go:
-                return name
+                return (name, ap["course_dist"])
             go = cues.get(f"go{ap.get('order')}")
-            return None if go is None else max(float(go), float(name if name is not None else go))
+            if go is None:
+                return (name, ap["course_dist"], False)
+            return (max(float(go), float(name if name is not None else go)), ap["course_dist"])
 
         anchors = trace_anchors(
-            [(arrive_cue(ap), ap["course_dist"]) for ap in numbered],
+            [arrive_cue(ap) for ap in numbered],
             total, route_at, cues.get("end"), max(1, len(numbered) + 1),
         )
         trace_end = anchors[-1][0]
@@ -226,6 +260,12 @@ class _CourseOverviewMixin:
 
         for ap in on_route:
             ap["course_at"] = route_at if ap["index"] == 0 else reveal_time(ap["course_dist"])
+            # A pin and its card appear when the voice names the stop: never before, and
+            # at most COURSE_CUE_WINDOW_SECONDS after, wherever the trace is by then.
+            said = cues.get(str(ap.get("order")))
+            if said is not None and ap["index"] != 0 and ap is not stop_popup:
+                said = max(route_at, float(said))
+                ap["course_at"] = min(max(ap["course_at"], said), said + tuning.COURSE_CUE_WINDOW_SECONDS)
         for k, ap in enumerate(extras):
             ap["course_at"] = (extras_at or end_at) + k * tuning.COURSE_STOPBY_STAGGER_SECONDS
             ap["pop_frame"] = int(round(ap["course_at"] * fps))

@@ -448,6 +448,15 @@ DEFAULT_LEG_DIRECTIONS = "brief"
 COURSE_TRACE_COLOR: Tuple[int, int, int] = (40, 90, 240)  # BGR, #F05A28 orange
 # Whole route shown this long after {start} when the script has no {route} cue.
 COURSE_PIVOT_HOLD_SECONDS = 2.5
+# The leg clips' summary card (distance / time) in the bottom-right corner. The card image carries
+# 14-20 px of transparent shadow around it, so these are NOT the visible gaps: the visible gap is
+# about this + 14 px to the right and this + 20 px above the bottom edge. Lower (or negative)
+# bottom margin moves the card down.
+LEG_CARD_MARGIN_PX = 4
+LEG_CARD_MARGIN_BOTTOM_PX = -10
+# A place the trace only passes may be reached up to this long after its cue (never before it),
+# so the pace between cues stays natural; every cue still lands within 0..this.
+COURSE_CUE_WINDOW_SECONDS = 0.75
 # Without cues: seconds of trace per leg (kept within MIN..MAX in total).
 COURSE_SECONDS_PER_LEG = 3.0
 COURSE_TRACE_MIN_SECONDS = 8.0
@@ -461,7 +470,9 @@ COURSE_STOPBY_STAGGER_SECONDS = 0.15
 # bottom (subtitles, stats card, stop-by notice): the map is framed around it.
 # Added on top of the route's own padding (OVERVIEW_PADDING_BY_SPAN_KM).
 COURSE_TOP_BAND_FRACTION = 0.10
-COURSE_BOTTOM_BAND_FRACTION = 0.10
+COURSE_BOTTOM_BAND_FRACTION = 0.17
+# The "walk" overview keeps the same bottom band clear for its captions (no headline above).
+OVERVIEW_BOTTOM_BAND_FRACTION = 0.17
 # The stats card sits this much lower than the shared 20px margin (its image
 # has ~26px of shadow padding, so it floated ~46px above the bottom edge).
 COURSE_STATS_DROP_PX = 30
@@ -599,6 +610,14 @@ OVERVIEW_POPUP_TRIGGER_TOLERANCE_SECONDS = 0.2
 # meters, since the 2D overview has no consistent meters-per-pixel scale
 # to compare against.
 OVERVIEW_BANNER_NEAR_SECONDS = 3.0
+# Vertical clearance (px) kept free at the TOP of the overview frame for
+# popup card placement: the "next stop" pill banner (render_top_banner) sits
+# at top_margin=30 and is ~35px tall, so this floor keeps beside-pin cards off it.
+OVERVIEW_TOP_CARD_CLEARANCE = 80
+# Share of the frame height kept free at the BOTTOM for the narration captions
+# (burned in at export, up to two lines: CAPTION_MARGIN_V + ~2 lines of
+# CAPTION_DEFAULT_SIZE on libass's 288-line frame is ~0.2), so cards stay clear of them.
+OVERVIEW_BOTTOM_CARD_CLEARANCE = 0.2
 # End-of-video recap: every waypoint's photo card ends up on screen at once
 # (laid out around the frame's border by popups.py's _layout_recap_cards),
 # all fading in together from the clean map in a single crossfade of this
@@ -1612,6 +1631,9 @@ INTRO_CROSSFADE_SECONDS = 0.8
 # MIN..MAX, using up to INTRO_MAX_IMAGE_COUNT photos.
 DEFAULT_OVERVIEW_VOICE_OVER_INTRO = True
 INTRO_VOICE_LEAD_SECONDS = 0.5
+# The intro ends this long BEFORE the voice reaches {start}, so the overview map is already on
+# screen when "これが全体のルートです" begins instead of the line starting on the cut.
+INTRO_MAP_LEAD_SECONDS = 1.2
 INTRO_MIN_SECONDS = 4.0
 INTRO_MAX_SECONDS = 26.0
 INTRO_MAX_IMAGE_COUNT = 5
@@ -1851,6 +1873,10 @@ TTS_STRAY_BURST_ENGINES = ("irodori",)
 # Each take is heard back (services/tts/name_check.py) and retaken when a spelled-out place name isn't in it (サルサカ峠 spoken as
 # さらさか). Off, or without faster-whisper installed, takes are not checked. The fewest-misses take is kept after the retakes.
 TTS_NAME_CHECK = True
+# Cue times ({start}, {1}, {end}...) are measured by listening to the take with the same
+# recogniser (CPU, localization/cue_alignment.py) instead of estimated from character counts,
+# which were up to ~5 s off by the end of an overview. Falls back to the estimate when it fails.
+ALIGN_CUES_TO_VOICE = True
 TTS_NAME_RETAKES = 2
 # Send auto dictionary words the analyser already reads right in kanji (better intonation), relying on the name check to retake a
 # misread one. Off: Irodori guesses kanji itself and Whisper can write the right kanji for a misread take (慈眼院 said じがんいん,

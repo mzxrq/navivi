@@ -18,7 +18,8 @@ def _reset_visits():
 class TestTrace:
     def test_the_trace_reaches_each_cued_stop_on_its_cue(self):
         anchors = trace_anchors([(10.0, 100.0), (None, 150.0), (20.0, 300.0)], 400.0, 2.0, 30.0, 4)
-        assert anchors == [(2.0, 0.0), (10.0, 100.0), (20.0, 300.0), (30.0, 400.0)]
+        # the last stretch goes at the pace so far (at most 4 s) and rests there until the end cue
+        assert anchors == [(2.0, 0.0), (10.0, 100.0), (20.0, 300.0), (24.0, 400.0)]
         assert distance_at(anchors, 0.0) == 0.0
         assert distance_at(anchors, 10.0) == 100.0
         assert distance_at(anchors, 99.0) == 400.0
@@ -115,3 +116,18 @@ def test_a_stopby_photo_stays_still_unless_a_camera_move_is_picked():
     assert _resolve_attraction_prompt(stopby) == ["none", "none"]
     assert _resolve_attraction_prompt({**stopby, "imagePans": ["zoom-in"]}) == ["zoom-in", "none"]
     assert _resolve_attraction_prompt({"images": ["a.jpg"]}) == ["panright"]  # an ordinary stop, as before
+
+
+def test_passed_places_are_reached_within_the_cue_window_and_settling_stops_exactly():
+    from services import tuning
+
+    stops = [(29.0, 3.4, False), (33.6, 5.7, False), (36.2, 5.9, False), (41.7, 7.1), (54.4, 13.6)]
+    anchors = trace_anchors(stops, 14.2, 25.2, 60.7, 6)
+    cues = {round(d, 1): t for t, d, *_ in [(29.0, 3.4), (33.6, 5.7), (36.2, 5.9), (41.7, 7.1), (54.4, 13.6)]}
+    for t, d, *rest in anchors[1:-1]:
+        late = t - cues[round(d, 1)]
+        assert -1e-9 <= late <= tuning.COURSE_CUE_WINDOW_SECONDS + 1e-9
+        if not rest:  # a stop it settles on
+            assert late == 0
+    times = [a[0] for a in anchors]
+    assert times == sorted(times)

@@ -23,7 +23,9 @@ def plan_intro_seconds(settings: dict, cue_times: Optional[dict], audio_seconds:
     if start is None:
         n = tuning.INTRO_IMAGE_COUNT
         return n * tuning.INTRO_PER_IMAGE_SECONDS - (n - 1) * tuning.INTRO_CROSSFADE_SECONDS
-    return min(tuning.INTRO_MAX_SECONDS, max(tuning.INTRO_MIN_SECONDS, tuning.INTRO_VOICE_LEAD_SECONDS + float(start)))
+    # Ends INTRO_MAP_LEAD_SECONDS before the voice reaches {start}: the map is up before that line begins.
+    ends = tuning.INTRO_VOICE_LEAD_SECONDS + float(start) - tuning.INTRO_MAP_LEAD_SECONDS
+    return min(tuning.INTRO_MAX_SECONDS, max(tuning.INTRO_MIN_SECONDS, ends))
 
 
 def render_intro_clip(project_config_path: str, duration_sec: Optional[float] = None) -> Optional[str]:

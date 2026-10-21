@@ -339,7 +339,8 @@ export const saveProjectData = async (
     thumbnail_path: thumbnailPath,
     source_files: { gps_route: "raw_track.gpx" },
     settings: { ...savedSettings, global_pronunciation_dictionary: (await db.appSettings.get(GLOBAL_DICTIONARY_KEY)) ?? [] },
-    map_language: i18n.locale || "en",
+    // Map labels and on-screen video text: the narration language when one is chosen, else the app's.
+    map_language: settings?.narration_language === "ja" || settings?.narration_language === "en" ? settings.narration_language : i18n.locale || "en",
     ...overviewNarrationFields(metadata),
     video_title: row.videoTitle,
     video_subtitle: row.videoSubtitle,

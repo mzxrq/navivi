@@ -32,8 +32,9 @@ class _WaypointRenderMixin:
     # entrance and the intro card's hold/exit compositing further down.
     _CARD_SLIDE_MARGIN_PX = 40
 
-    # Same corner margin overview.py docks its summary card with.
-    _LEG_CARD_MARGIN_PX = 20
+    # See tuning.LEG_CARD_MARGIN_PX / LEG_CARD_MARGIN_BOTTOM_PX (the card image has transparent padding).
+    _LEG_CARD_MARGIN_PX = tuning.LEG_CARD_MARGIN_PX
+    _LEG_CARD_MARGIN_BOTTOM_PX = tuning.LEG_CARD_MARGIN_BOTTOM_PX
 
     # Default hold time (seconds) for a merged-in mid-route stop-by's
     # pass-by popup card when it doesn't specify its own freeze_seconds.
@@ -85,6 +86,7 @@ class _WaypointRenderMixin:
         play_hold: bool = True,
         margin: int = 20,
         corner: str = "bottom_right",
+        margin_y: Optional[int] = None,
     ) -> None:
         """Slides this leg's summary card/bar up from off-screen at the
         bottom (rather than just fading it in in place), holds it, then
@@ -111,14 +113,14 @@ class _WaypointRenderMixin:
             eased = 1 - (1 - t) ** 3
             video.write(
                 self.graphics.composite_card_on_frame(
-                    base_frame, seg_card, alpha=t, margin=margin, corner=corner,
+                    base_frame, seg_card, alpha=t, margin=margin, corner=corner, margin_y=margin_y,
                     slide_offset_y=slide_distance * (1 - eased),
                 )
             )
 
         if play_hold:
             held_frame = self.graphics.composite_card_on_frame(
-                base_frame, seg_card, alpha=1.0, margin=margin, corner=corner,
+                base_frame, seg_card, alpha=1.0, margin=margin, corner=corner, margin_y=margin_y,
             )
             for _ in range(max(0, int(clip_hold_sec * fps) - fade_frames)):
                 video.write(held_frame)
@@ -129,7 +131,7 @@ class _WaypointRenderMixin:
                 eased = 1 - (1 - t) ** 3
                 video.write(
                     self.graphics.composite_card_on_frame(
-                        base_frame, seg_card, alpha=1.0 - t, margin=margin, corner=corner,
+                        base_frame, seg_card, alpha=1.0 - t, margin=margin, corner=corner, margin_y=margin_y,
                         slide_offset_y=slide_distance * eased,
                     )
                 )
@@ -843,7 +845,7 @@ class _WaypointRenderMixin:
                 intro_seg_card = self._leg_summary_card(res_data, seg_real_duration, res_mode)
                 self._play_leg_summary_card(
                     video, route_preview_frame, intro_seg_card, fps, fade_sec, clip_hold_sec,
-                    margin=self._LEG_CARD_MARGIN_PX, play_exit=False, play_hold=False,
+                    margin=self._LEG_CARD_MARGIN_PX, margin_y=self._LEG_CARD_MARGIN_BOTTOM_PX, play_exit=False, play_hold=False,
                 )
                 # Held for the leg's ENTIRE animation (not just a brief
                 # clip_hold_sec beat) — this used to fade out after ~2s,
@@ -1110,7 +1112,7 @@ class _WaypointRenderMixin:
                             seg_card = self._leg_summary_card(res_data, seg_real_duration, res_mode)
                             self._play_leg_summary_card(
                                 video, frame, seg_card, fps, fade_sec, clip_hold_sec,
-                                margin=self._LEG_CARD_MARGIN_PX,
+                                margin=self._LEG_CARD_MARGIN_PX, margin_y=self._LEG_CARD_MARGIN_BOTTOM_PX,
                             )
 
                         # Every arrival now transitions the same way —
@@ -1153,7 +1155,7 @@ class _WaypointRenderMixin:
                             eased = 1 - (1 - t) ** 3
                             alpha, slide = 1.0 - t, intro_card_slide_distance * eased
                         frame = self.graphics.composite_card_on_frame(
-                            frame, intro_seg_card, alpha=alpha, margin=self._LEG_CARD_MARGIN_PX,
+                            frame, intro_seg_card, alpha=alpha, margin=self._LEG_CARD_MARGIN_PX, margin_y=self._LEG_CARD_MARGIN_BOTTOM_PX,
                             slide_offset_y=slide,
                         )
                     video.write(frame)
@@ -1174,7 +1176,7 @@ class _WaypointRenderMixin:
                 seg_card = self._leg_summary_card(res_data, seg_real_duration, res_mode)
                 self._play_leg_summary_card(
                     video, self.last_frame, seg_card, fps, fade_sec, clip_hold_sec,
-                    play_exit=False, margin=self._LEG_CARD_MARGIN_PX,
+                    play_exit=False, margin=self._LEG_CARD_MARGIN_PX, margin_y=self._LEG_CARD_MARGIN_BOTTOM_PX,
                 )
 
             output_paths.append(video.release(str(self.out_dir / chunk_filename)))

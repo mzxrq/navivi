@@ -12,7 +12,7 @@ from services.vdoprocessing.videopipeline.timeline_step import build_timeline
 
 class TestPlanIntroSeconds:
     def test_the_intro_lasts_until_the_start_cue(self):
-        assert plan_intro_seconds({}, {"start": 15.2, "1": 20.0}, 70.0) == tuning.INTRO_VOICE_LEAD_SECONDS + 15.2
+        assert plan_intro_seconds({}, {"start": 15.2, "1": 20.0}, 70.0) == tuning.INTRO_VOICE_LEAD_SECONDS + 15.2 - tuning.INTRO_MAP_LEAD_SECONDS
 
     def test_clamped(self):
         assert plan_intro_seconds({}, {"start": 1.0}, 70.0) == tuning.INTRO_MIN_SECONDS

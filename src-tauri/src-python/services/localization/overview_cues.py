@@ -13,7 +13,7 @@ never changing a word of the script:
     {start} before "これが全体のルートです。" (the map appears; the opening
           before it plays over the intro, and its names are not stops), and
           {route} before the next sentence (the route is traced from there)
-    {extras} before "茶色で示した地点は…" (the stop-bys appear; not stops either)
+    {extras} before "黒色で示した地点は…" (the stop-bys appear; not stops either)
 
 Tags the user wrote win: a script with any {n} keeps its own, and one with any
 {go} keeps its own.
@@ -38,7 +38,7 @@ TRANSITION_OPENERS = (
 TRANSITION_ENDINGS = re.compile(r"(へ|に)(向かい|進み|歩き|移動し|戻り)(ます|ましょう)[。！!]?$")
 
 _ROUTE_PIVOT = re.compile(r"全体のルート|ルート全体|ルートの全体")
-_EXTRAS = re.compile(r"茶色で示した|茶色のマーカー|追加の見どころ")
+_EXTRAS = re.compile(r"黒色で示した|黒色のマーカー|茶色で示した|茶色のマーカー|追加の見どころ")  # 茶色: scripts written when the pins were brown
 
 # Dropped from a name to also find its short form (加太駅 -> 加太).
 _NAME_SUFFIXES = ("駅", "神社", "寺", "城", "公園", "港", "橋", "展望台", "資料館", "博物館")
@@ -78,7 +78,7 @@ def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[
     sentences = _sentences(script)
     # "これが全体のルートです。": the map appears there, so the opening before it plays
     # over the intro ({start}); the route is traced from the next sentence ({route}).
-    # "茶色で示した地点は…": the stop-bys appear ({extras}); their names are not stops.
+    # "黒色で示した地点は…": the stop-bys appear ({extras}); their names are not stops.
     pivot = None if "start" in tags else next((i for i, s in enumerate(sentences) if _ROUTE_PIVOT.search(s)), None)
     extras = None if "extras" in tags else next((i for i, s in enumerate(sentences) if _EXTRAS.search(s)), None)
     marks: dict = {}

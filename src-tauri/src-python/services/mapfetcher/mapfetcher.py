@@ -21,7 +21,7 @@ from services.logger.logger import setup_logger
 from services.logger.progress import tracker
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
-from services.mapfetcher.maplanguage import resolve_map_style
+from services.mapfetcher.maplanguage import resolve_map_style, streets_lang
 from services.vdoprocessing.stopby_visits import visits_stopby
 
 # Logging configuration
@@ -64,18 +64,34 @@ class MapFetcher:
         # dependency. See pydeck_overview.py's own module docstring for why
         # this is a separate top-down-only capture rather than reusing the
         # residential mode's tilted pydeck camera.
-        if str(settings.get("overview_background", "")).lower() == "pydeck":
+        background = str(settings.get("overview_background", "")).lower()
+        # Static raster tiles can't be relabeled, so a map in another language than the style's own
+        # (English) is drawn through the GL page, which rewrites its labels (maplanguage's localizer),
+        # unless the project gave a Studio style for that language or chose the background itself.
+        lang = streets_lang(self.config.get("map_language")) if self.config else None
+        if (
+            not background and lang and lang != "en"
+            and not settings.get(f"mapbox_style_id_{lang}") and resolve_mapbox_token(settings)
+        ):
+            background = "pydeck"
+            logger.info("Map language %s: drawing the overview map through the GL page so its labels follow it.", lang)
+        if background == "pydeck":
             from services.mapfetcher.pydeck_overview import fetch_overview_image_pydeck
 
             logger.info("Fetching overview map background via pydeck...")
             map_style = resolve_map_style(settings, "mapbox/streets-v12")
-            result = fetch_overview_image_pydeck(
-                bounding_box, final_filename, output_size,
-                mapbox_key=resolve_mapbox_token(settings),
-                map_style=map_style,
-            )
-            logger.info("Overview map background saved -> %s", result[0])
-            return result
+            try:
+                result = fetch_overview_image_pydeck(
+                    bounding_box, final_filename, output_size,
+                    mapbox_key=resolve_mapbox_token(settings),
+                    map_style=map_style,
+                )
+                logger.info("Overview map background saved -> %s", result[0])
+                return result
+            except Exception as exc:
+                if str(settings.get("overview_background", "")).lower() == "pydeck":
+                    raise
+                logger.warning("GL overview map failed (%s); using the raster map (its labels stay in the style's language).", exc)
 
         logger.info("Fetching overview map tile (zoom<=%d)...", max_zoom)
         result = self.downloader.fetch_overview_image(
