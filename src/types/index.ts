@@ -7,6 +7,10 @@ export type RouteMode = "driving" | "walking" | "direct" | "curve" | "ferry" | "
 export type TrackKind = "video" | "overlay" | "subtitle" | "audio";
 export type ClipKind = "video" | "audio" | "image" | "text" | "subtitle";
 
+// How a drawn anchor bends the path: null = sharp corner, "auto" = smooth with handles worked out from its neighbours,
+// object = smooth with handles the user dragged (offsets in degrees from the anchor, kept in a line).
+export type AnchorCurve = "auto" | { in: [number, number]; out: [number, number] } | null;
+
 export interface Waypoint {
   id: string;
   lineColor?: [number, number, number];
@@ -37,7 +41,8 @@ export interface Waypoint {
   pauseAtWaypoint?: boolean;
   generatingScriptType?: "arriving" | "attraction" | null;
   isStopBy?: boolean;
-  drawStyle?: "linear" | "spline";
+  drawStyle?: "linear" | "spline"; // legacy: a "spline" leg with no customRouteCurve reads as every anchor smooth
+  customRouteCurve?: AnchorCurve[]; // parallel to customRoute; ignored when its length differs
   viaPoints?: [number, number][]; // intermediate routing nudge points for the outgoing leg
   curveOffset?: number;
   timelineOffset?: number;
@@ -147,6 +152,7 @@ export interface ProjectSettings {
     subtitle_style?: TextStyle;
   };
   show_route_heatmap?: boolean;
+  map_3d?: boolean; // the editor map's 3D terrain switch, remembered per project
   // "Look of the video" (Project settings). Every key is optional: unset = what the renderer always did (videoLookDefaults).
   summary_card_style?: SummaryCardStyle;
   theme?: "light" | "dark"; // the video's HUD and card theme, not the app's

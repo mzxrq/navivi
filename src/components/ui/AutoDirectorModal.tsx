@@ -5,6 +5,7 @@ import { aiEngine } from "../../services/ai/engine";
 import { buildProject, type BuildProgress } from "../../services/assistant/buildProject";
 import { EMPTY_BRIEF } from "../../services/assistant/brief";
 import { resolveNarrationLanguage } from "../../utils/narrationLanguage";
+import { parseCoordinates } from "../../utils/coordinates";
 import { i18n } from "@lingui/core";
 import type { Waypoint } from "../../types";
 import { t } from "@lingui/core/macro";
@@ -34,7 +35,10 @@ function StopRow({ wp, index, uncertain, token, open, onToggle, onChange, onRemo
   const [coords, setCoords] = useState(`${wp.lat.toFixed(5)}, ${wp.lng.toFixed(5)}`);
   const [coordsBad, setCoordsBad] = useState(false);
 
+  const shown = useRef({ lat: wp.lat, lng: wp.lng });
   useEffect(() => {
+    if (shown.current.lat === wp.lat && shown.current.lng === wp.lng) return;
+    shown.current = { lat: wp.lat, lng: wp.lng };
     setCoords(`${wp.lat.toFixed(5)}, ${wp.lng.toFixed(5)}`);
     setCoordsBad(false);
   }, [wp.lat, wp.lng]);
@@ -52,9 +56,9 @@ function StopRow({ wp, index, uncertain, token, open, onToggle, onChange, onRemo
   };
 
   const commitCoords = () => {
-    const m = coords.match(/^\s*(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)\s*$/);
-    const [lat, lng] = m ? [parseFloat(m[1]), parseFloat(m[2])] : [NaN, NaN];
-    if (!(Math.abs(lat) <= 90 && Math.abs(lng) <= 180)) return setCoordsBad(true);
+    const parsed = parseCoordinates(coords);
+    if (!parsed) return setCoordsBad(true);
+    const [lat, lng] = parsed;
     setCoordsBad(false);
     if (lat !== wp.lat || lng !== wp.lng) onChange({ lat, lng });
   };

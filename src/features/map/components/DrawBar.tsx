@@ -14,6 +14,8 @@ import {
   X,
 } from "../../../components/ui/icons";
 import { Waypoint } from "../../../types";
+import { parseCoordinates } from "../../../utils/coordinates";
+import { curvesOf, isAllSmooth, moveAnchor, pathOf, removeAnchors, reorderAnchors, setAllCurves, toggleAnchorCurve } from "../../../utils/drawnPath";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 
@@ -24,7 +26,6 @@ interface DrawBarProps {
   isEraserMode: boolean;
   setIsEraserMode: (v: boolean) => void;
   onPickLeg: (wpId: string) => void;
-  onToggleSpline: () => void;
   onFit: () => void;
   onDone: () => void;
   updateWaypoint: (id: string, data: Partial<Waypoint>) => void;
@@ -72,7 +73,6 @@ export function DrawBar({
   isEraserMode,
   setIsEraserMode,
   onPickLeg,
-  onToggleSpline,
   onFit,
   onDone,
   updateWaypoint,
@@ -83,6 +83,9 @@ export function DrawBar({
   const [showPoints, setShowPoints] = useState(false);
   const [selectedAnchorIdx, setSelectedAnchorIdx] = useState<number | null>(null);
   const [marked, setMarked] = useState<Set<number>>(new Set());
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [draft, setDraft] = useState("");
+  const [draftBad, setDraftBad] = useState(false);
   const lastMarked = useRef<number | null>(null);
   const legMenuRef = useDismiss(isLegMenuOpen, () => setIsLegMenuOpen(false));
   const moreRef = useDismiss(isMoreOpen, () => setIsMoreOpen(false));
@@ -105,9 +108,10 @@ export function DrawBar({
     (w) => w.id !== activeWp?.id && (w.customRoute?.length ?? 0) > 0,
   );
 
-  const setPoints = (next: [number, number][]) => {
+  const curves = activeWp ? curvesOf(activeWp) : [];
+  const patchPath = (patch: Partial<Waypoint>) => {
     if (!activeWp) return;
-    updateWaypoint(activeWp.id, { customRoute: next });
+    updateWaypoint(activeWp.id, patch);
     setIsDirty(true);
   };
 
@@ -132,7 +136,7 @@ export function DrawBar({
 
   const removeMarked = () => {
     if (marked.size === 0) return;
-    setPoints(points.filter((_, i) => !marked.has(i)));
+    patchPath(removeAnchors(activeWp!, marked));
     selectAnchor(null);
     clearMarked();
   };
@@ -150,13 +154,30 @@ export function DrawBar({
   }, []);
 
   useEffect(clearMarked, [activeWp?.id, points.length]);
+  useEffect(() => setEditingIdx(null), [activeWp?.id, points.length]);
+
+  const startEdit = (idx: number) => {
+    setDraft(`${points[idx][0].toFixed(5)}, ${points[idx][1].toFixed(5)}`);
+    setDraftBad(false);
+    setEditingIdx(idx);
+  };
+
+  // An unchanged or invalid entry leaves the point alone; Enter on an invalid one keeps the box open and red.
+  const editingRef = useRef<number | null>(null);
+  editingRef.current = editingIdx;
+  const commitEdit = (idx: number, leaving = false) => {
+    if (editingRef.current !== idx) return;
+    const parsed = parseCoordinates(draft);
+    if (!parsed) return leaving ? setEditingIdx(null) : setDraftBad(true);
+    editingRef.current = null;
+    setEditingIdx(null);
+    if (parsed[0] === points[idx][0] && parsed[1] === points[idx][1]) return;
+    patchPath(moveAnchor(activeWp!, idx, parsed));
+  };
 
   const handlePointDragEnd = (result: DropResult) => {
     if (!result.destination || result.source.index === result.destination.index) return;
-    const next = Array.from(points);
-    const [moved] = next.splice(result.source.index, 1);
-    next.splice(result.destination.index, 0, moved);
-    setPoints(next);
+    patchPath(reorderAnchors(activeWp!, result.source.index, result.destination.index));
   };
 
   const legLabel = hasLeg ? `${activeWp!.name} → ${nextWp!.name}` : t`Choose a leg`;
@@ -253,14 +274,14 @@ export function DrawBar({
 
             <button
               type="button"
-              onClick={onToggleSpline}
-              aria-pressed={activeWp!.drawStyle === "spline"}
-              title={t`Smooth the path through the points`}
-              className={iconButtonClass(activeWp!.drawStyle === "spline")}
+              onClick={() => patchPath(setAllCurves(activeWp!, !isAllSmooth(curves)))}
+              aria-pressed={isAllSmooth(curves)}
+              title={t`Make every point smooth, or every point a corner`}
+              className={iconButtonClass(isAllSmooth(curves))}
             >
               <SplinePointer className="w-3.5 h-3.5" />
               <span className="max-[1159px]:hidden">
-                <Trans>Smooth</Trans>
+                <Trans>Smooth all</Trans>
               </span>
             </button>
 
@@ -316,7 +337,7 @@ export function DrawBar({
                           role="menuitem"
                           onClick={() => {
                             updateWaypoint(activeWp!.id, {
-                              customRoute: [...w.customRoute!],
+                              ...pathOf(w),
                               routeMode: "draw",
                             });
                             setIsDirty(true);
@@ -338,7 +359,7 @@ export function DrawBar({
                     role="menuitem"
                     disabled={points.length === 0}
                     onClick={() => {
-                      setPoints([]);
+                      patchPath({ customRoute: [], customRouteCurve: undefined, drawStyle: undefined });
                       selectAnchor(null);
                       setIsMoreOpen(false);
                     }}
@@ -370,7 +391,7 @@ export function DrawBar({
         ) : selectedAnchorIdx !== null ? (
           <Trans>New points go after point {selectedAnchorIdx + 1}. Click it again to add at the end.</Trans>
         ) : (
-          <Trans>Click the map to add points. Drag a point to move it; click one to insert after it.</Trans>
+          <Trans>Click the map to add points. Drag a point to move it; click one to insert after it; double-click one to smooth it.</Trans>
         )}
       </p>
 
@@ -432,17 +453,57 @@ export function DrawBar({
                             <span className="w-5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 tabular-nums">
                               {idx + 1}
                             </span>
-                            <span className="flex-1 text-[11px] tabular-nums tracking-tight text-zinc-600 dark:text-zinc-400 truncate">
-                              {point[0].toFixed(5)}, {point[1].toFixed(5)}
-                            </span>
+                            {editingIdx === idx ? (
+                              <input
+                                autoFocus
+                                value={draft}
+                                onChange={(e) => {
+                                  setDraft(e.target.value);
+                                  setDraftBad(false);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                onFocus={(e) => e.currentTarget.select()}
+                                onBlur={() => commitEdit(idx, true)}
+                                onKeyDown={(e) => {
+                                  e.stopPropagation();
+                                  if (e.key === "Enter") commitEdit(idx);
+                                  else if (e.key === "Escape") setEditingIdx(null);
+                                }}
+                                placeholder="34.2908, 135.1508"
+                                aria-label={t`Coordinates of point ${idx + 1}`}
+                                aria-invalid={draftBad}
+                                className={`flex-1 min-w-0 h-5 px-1 rounded border bg-white dark:bg-zinc-800 text-[11px] tabular-nums outline-none ${
+                                  draftBad ? "border-red-500" : "border-navi"
+                                }`}
+                              />
+                            ) : (
+                              <span
+                                onDoubleClick={() => startEdit(idx)}
+                                title={t`Double-click to type coordinates`}
+                                className="flex-1 text-[11px] tabular-nums tracking-tight text-zinc-600 dark:text-zinc-400 truncate"
+                              >
+                                {point[0].toFixed(5)}, {point[1].toFixed(5)}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                patchPath(toggleAnchorCurve(activeWp!, idx));
+                              }}
+                              title={curves[idx] ? t`Smooth point: click for a corner` : t`Corner point: click to smooth`}
+                              aria-label={curves[idx] ? t`Make this a corner` : t`Make this smooth`}
+                              aria-pressed={!!curves[idx]}
+                              className={`p-1 rounded transition ${curves[idx] ? "text-navi" : "text-zinc-400 opacity-0 group-hover:opacity-100 hover:text-navi"}`}
+                            >
+                              <SplinePointer className="w-3 h-3" />
+                            </button>
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (marked.has(idx) && marked.size > 1) return removeMarked();
-                                const next = [...points];
-                                next.splice(idx, 1);
-                                setPoints(next);
+                                patchPath(removeAnchors(activeWp!, new Set([idx])));
                               }}
                               title={t`Delete Anchor`}
                               aria-label={t`Delete Anchor`}

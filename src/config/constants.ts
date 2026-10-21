@@ -47,6 +47,7 @@ export const defaultProjectSettings = {
     summary_fade: 0.5,
     auto_save_interval: 3,
     show_route_heatmap: false,
+    map_3d: false,
     quick_export: false,
     video_text_language: "auto" as "auto" | "en" | "ja",
     hardware_spec_override: "auto" as "auto" | "high" | "low",

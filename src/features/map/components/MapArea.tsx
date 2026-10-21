@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import Map, { Marker, MapRef, Source } from "react-map-gl/mapbox";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { UploadCloud } from "../../../components/ui/icons";
@@ -7,7 +7,7 @@ import { DrawBar } from "./DrawBar";
 import { MapCompass } from "./MapCompass";
 import { openContextMenu, separator } from "../../../components/ui/menuItems";
 import { useStopMenus } from "../hooks/useStopMenus";
-import { Check, Pencil, Plus, Trash2 } from "../../../components/ui/icons";
+import { Check, Pencil, Plus, SplinePointer, Trash2 } from "../../../components/ui/icons";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import { mapStyles } from "../../../config/constants";
 import { RouteStyling } from "./MapLayers/RouteStyling";
@@ -29,6 +29,9 @@ import { useLingui } from "@lingui/react";
 import { Trans } from "@lingui/react/macro";
 import { placeNameOf } from "../../../utils/placeName";
 import { stopLabel } from "../../../utils/stopLabel";
+import { curvesOf, insertAnchor, moveAnchor, removeAnchors, toggleAnchorCurve } from "../../../utils/drawnPath";
+import { setDrawPreview } from "../drawPreview";
+import { DrawHandles } from "./DrawHandles";
 
 export function MapArea() {
   const { i18n } = useLingui();
@@ -43,6 +46,7 @@ export function MapArea() {
     routePoints,
     routeSegments,
     updateWaypoint,
+    updateSettings,
     setActiveWaypointId,
     registerThumbnailGetter,
   } = useWorkspace();
@@ -63,7 +67,8 @@ export function MapArea() {
   const [addType, setAddType] = useState<AddType>("normal");
   const [selectedAnchor, setSelectedAnchor] = useState<number | null>(null);
 
-  const [is3D, setIs3D] = useState(false);
+  const is3D = !!settings.map_3d;
+  const setIs3D = useCallback((on: boolean) => updateSettings({ map_3d: on }), [updateSettings]);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isProcessing] = useState(false);
   const [uploadedRouteLine] = useState<[number, number][]>([]);
@@ -298,27 +303,20 @@ export function MapArea() {
       setWaypoints((prev) =>
         prev.map((wp) => {
           if (wp.id === activeWaypointId) {
-            const existing = wp.customRoute || [];
-            let newRoute = [...existing];
+            const count = wp.customRoute?.length ?? 0;
             const insertIdx = activeAnchorIndexRef.current;
-            if (
-              insertIdx !== null &&
-              insertIdx >= 0 &&
-              insertIdx < newRoute.length
-            ) {
-              newRoute.splice(insertIdx + 1, 0, [e.lngLat.lat, e.lngLat.lng]);
+            const after = insertIdx !== null && insertIdx >= 0 && insertIdx < count;
+            if (after) {
               window.dispatchEvent(
                 new CustomEvent("select-anchor", {
                   detail: { index: insertIdx + 1 },
                 }),
               );
-            } else {
-              newRoute = [...existing, [e.lngLat.lat, e.lngLat.lng]];
             }
             return {
               ...wp,
               routeMode: "draw",
-              customRoute: newRoute,
+              ...insertAnchor(wp, after ? insertIdx + 1 : count, [e.lngLat.lat, e.lngLat.lng]),
             };
           }
           return wp;
@@ -555,7 +553,7 @@ export function MapArea() {
     setWaypoints((prev) =>
       prev.map((wp) =>
         wp.id === activeWaypointId && wp.customRoute
-          ? { ...wp, customRoute: wp.customRoute.filter((_, i) => i !== idx) }
+          ? { ...wp, ...removeAnchors(wp, new Set([idx])) }
           : wp,
       ),
     );
@@ -820,6 +818,13 @@ export function MapArea() {
       ? waypoints[activeIndex + 1]
       : null;
 
+  const drawnCurves = isDrawMode && activeWp ? curvesOf(activeWp) : [];
+  const toggleCurve = (idx: number) => {
+    setWaypoints((prev) =>
+      prev.map((wp) => (wp.id === activeWaypointId && wp.customRoute ? { ...wp, ...toggleAnchorCurve(wp, idx) } : wp)),
+    );
+    setIsDirty(true);
+  };
   return (
     <main {...fileDropHandlers} className="flex-1 relative bg-zinc-100 dark:bg-[#09090b] overflow-hidden transition-colors">
       <div className="absolute z-200 top-14 left-1/2 -translate-x-1/2 max-w-[calc(100%-2rem)] flex flex-col items-center gap-2 pointer-events-none *:pointer-events-auto">
@@ -846,14 +851,6 @@ export function MapArea() {
               drawTargetRef.current = wpId;
               setActiveWaypointId(wpId);
               fitToLeg(wpId);
-            }}
-            onToggleSpline={() => {
-              if (activeWp) {
-                updateWaypoint(activeWp.id, {
-                  drawStyle:
-                    activeWp.drawStyle === "spline" ? "linear" : "spline",
-                });
-              }
             }}
             onFit={handleZoomToFit}
             onDone={() => setIsDrawMode(false)}
@@ -1151,22 +1148,30 @@ export function MapArea() {
                   latitude={pos[0]}
                   longitude={pos[1]}
                   draggable={!isEraserMode}
+                  onDrag={(e) => {
+                    if (activeWp) setDrawPreview({ wpId: activeWp.id, patch: moveAnchor(activeWp, idx, [e.lngLat.lat, e.lngLat.lng]) });
+                  }}
                   onDragEnd={(e) => {
                     setWaypoints((prev) =>
                       prev.map((wp) => {
                         if (wp.id === activeWaypointId && wp.customRoute) {
-                          const newRoute = [...wp.customRoute];
-                          newRoute[idx] = [e.lngLat.lat, e.lngLat.lng];
-                          return { ...wp, customRoute: newRoute };
+                          return { ...wp, ...moveAnchor(wp, idx, [e.lngLat.lat, e.lngLat.lng]) };
                         }
                         return wp;
                       }),
                     );
+                    setDrawPreview(null);
                     setIsDirty(true);
                   }}
                 >
                   <div
                     className={`relative group ${isEraserMode ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      if (isEraserMode) return;
+                      toggleCurve(idx);
+                      window.dispatchEvent(new CustomEvent("select-anchor", { detail: { index: idx } }));
+                    }}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!isEraserMode) {
@@ -1197,6 +1202,11 @@ export function MapArea() {
                               }),
                             ),
                         },
+                        {
+                          label: drawnCurves[idx] ? t`Make this a corner` : t`Make this smooth`,
+                          icon: SplinePointer,
+                          onSelect: () => toggleCurve(idx),
+                        },
                         separator,
                         {
                           label: t`Delete point`,
@@ -1208,7 +1218,7 @@ export function MapArea() {
                     }
                   >
                     <div
-                      className={`w-5 h-5 border-2 border-white dark:border-zinc-900 rounded-full shadow-md group-hover:scale-110 transition-all flex items-center justify-center ${
+                      className={`w-5 h-5 border-2 border-white dark:border-zinc-900 ${drawnCurves[idx] ? "rounded-full" : "rounded-md"} shadow-md group-hover:scale-110 transition-all flex items-center justify-center ${
                         isEraserMode
                           ? "bg-amber-500 group-hover:bg-red-500"
                           : selectedAnchor === idx
@@ -1221,11 +1231,23 @@ export function MapArea() {
                       </span>
                     </div>
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-900 text-white text-[9px] font-bold px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap">
-                      <Trans>Anchor {idx + 1}</Trans>
+                      {drawnCurves[idx] ? t`Anchor ${idx + 1} · smooth · double-click for a corner` : t`Anchor ${idx + 1} · corner · double-click to smooth`}
                     </div>
                   </div>
                 </Marker>
               ))}
+
+          {isDrawMode && (
+            <DrawHandles
+              activeWp={activeWp}
+              nextWp={nextWp}
+              selectedAnchor={selectedAnchor}
+              onCommit={(patch) => {
+                if (activeWp) updateWaypoint(activeWp.id, patch);
+                setIsDirty(true);
+              }}
+            />
+          )}
         </Map>
       </div>
 

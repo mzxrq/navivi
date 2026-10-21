@@ -1,8 +1,7 @@
 import { useRef, useEffect } from "react";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { getCurve, fillRouteCoordinates } from "../../../utils/mapUtils";
-import bezierSpline from "@turf/bezier-spline";
-import { lineString } from "@turf/helpers";
+import { sampleDrawnPath, curvesOf } from "../../../utils/drawnPath";
 import { routeCacheKey } from "../../../utils/routeCacheKey";
 import { closeGaps } from "../../../utils/gsiPaths";
 
@@ -190,17 +189,8 @@ export function useMapRouting() {
         }
         let dense: [number, number][] = [];
 
-        if (
-          mode === "draw" &&
-          wp1.drawStyle === "spline" &&
-          rawPoints.length >= 3
-        ) {
-          const turfLine = lineString(rawPoints.map((p) => [p[1], p[0]]));
-          const curvedDraw = bezierSpline(turfLine, {
-            resolution: 10000,
-            sharpness: 0.85,
-          });
-          dense = curvedDraw.geometry.coordinates.map((c: any) => [c[1], c[0]]);
+        if (mode === "draw") {
+          dense = sampleDrawnPath(rawPoints, curvesOf(wp1));
         } else {
           dense = fillRouteCoordinates(rawPoints, 0.01);
         }

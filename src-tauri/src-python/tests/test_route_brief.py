@@ -3,6 +3,7 @@
 Synthetic routes in different places: nothing here depends on a real project."""
 
 from services.localization.route_brief import (
+    _leg_ascent_m,
     build_brief,
     heading,
     split_crossings,
@@ -417,3 +418,77 @@ class TestOverviewIsSeparateFromStopNarration:
         # only the stop that hosts a stop-by batch keeps time (the map freezes there)
         assert [n for n, v in budget["describe"].items() if v] == [1]
         assert in_overview_range(budget["estimated"])
+
+
+class TestClimb:
+    """A drawn leg with recorded elevation adds Naismith's 1 h per 600 m climbed to the flat time."""
+
+    @staticmethod
+    def _leg(ele):
+        a = _wp("山の下", 35.0, 139.0, mode="draw", customRoute=[[35.0, 139.01], [35.0, 139.02], [35.0, 139.03]])
+        if ele is not None:
+            a["customRouteEle"] = ele
+        b = _wp("山の上", 35.0, 139.04)
+        return build_brief({"waypoints": [a, b], "settings": {}}, {})["legs"][0]
+
+    def test_climb_adds_time(self):
+        flat, steep = self._leg(None), self._leg([0, 125, 250, 375, 500])
+        assert "ascent_m" not in flat
+        assert steep["ascent_m"] == 500
+        assert flat["minutes"] == round(flat["km"] / 3.0 * 60)
+        assert abs((steep["minutes"] - flat["minutes"]) - 50) <= 1  # 500 m / 600 m per hour
+
+    def test_descent_and_flat_ground_add_nothing(self):
+        flat = self._leg(None)
+        assert self._leg([500, 375, 250, 125, 0])["minutes"] == flat["minutes"]
+        assert self._leg([35, 35, 35, 35, 35])["minutes"] == flat["minutes"]
+
+    def test_unusable_elevation_falls_back_to_the_flat_time(self):
+        flat = self._leg(None)
+        for ele in ([0, 100, 200], [None] * 5):  # wrong length, nothing known
+            leg = self._leg(ele)
+            assert "ascent_m" not in leg and leg["minutes"] == flat["minutes"]
+
+    def test_gps_jitter_is_not_a_climb(self):
+        # 60 points 10 m apart on flat ground, elevation flickering +-2 m: raw it sums to ~120 m of "climb"
+        nodes = [[35.0, 139.0 + 0.0001 * i] for i in range(1, 60)]
+        ele = [100 + (2 if i % 2 else -2) for i in range(61)]
+        a = _wp("A", 35.0, 139.0, mode="draw", customRoute=nodes, customRouteEle=ele)
+        b = _wp("B", 35.0, 139.006)
+        assert _leg_ascent_m(a, b) < 30  # smoothing keeps a small residue (17 m here), not the raw 120 m
+
+
+class TestTerrainClimb:
+    """A routed leg has no recorded elevation; the app saves the climb it read from the terrain tiles (legAscentM) with
+    the leg's route cache key, and the brief uses it only while that key still names the leg."""
+
+    @staticmethod
+    def _brief(ascent_key="match", ascent=300, mode="walking"):
+        a = _wp("山の下", 35.0, 139.0, mode=mode)
+        b = _wp("山の上", 35.0, 139.04)
+        key = _key(a, b, mode)
+        cache = {key: _line(35.0, 139.0, 35.0, 139.04, 80)}
+        a["legAscentM"] = ascent
+        a["legAscentKey"] = key if ascent_key == "match" else ascent_key
+        return build_brief({"waypoints": [a, b], "settings": {}}, cache)["legs"][0]
+
+    def test_saved_terrain_climb_adds_time(self):
+        flat = self._brief(ascent=None)
+        steep = self._brief(ascent=300)
+        assert steep["ascent_m"] == 300 and "ascent_m" not in flat
+        assert steep["minutes"] - flat["minutes"] == 30  # 300 m / 600 m per hour
+
+    def test_a_stale_key_is_ignored(self):
+        leg = self._brief(ascent_key="35.00000,139.00000|35.00000,139.04000|driving|")
+        assert "ascent_m" not in leg
+
+    def test_a_walk_with_a_boat_takes_no_climb(self):
+        a = _wp("A", 35.0, 139.0)
+        b = _wp("B", 35.0, 139.06)
+        key = _key(a, b, "walking")
+        walk1 = _line(35.0, 139.0, 35.0, 139.011, 50)
+        boat = _line(35.0, 139.011, 35.0, 139.044, 10)[1:]
+        walk2 = _line(35.0, 139.044, 35.0, 139.06, 50)[1:]
+        a.update(legAscentM=300, legAscentKey=key)
+        leg = build_brief({"waypoints": [a, b], "settings": {}}, {key: walk1 + boat + walk2})["legs"][0]
+        assert "ascent_m" not in leg and len(leg["pieces"]) == 3

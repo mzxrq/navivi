@@ -30,6 +30,7 @@ jobs:
             frontend:
               - .github/workflows/ci.yml
               - src/**
+              - tests/**
               - index.html
               - package.json
               - package-lock.json
