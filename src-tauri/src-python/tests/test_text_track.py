@@ -346,3 +346,26 @@ def test_the_shifted_clip_has_the_same_size_and_a_background_strip_on_top(tmp_pa
     bg = np.array(tuning.OUTRO_BG_COLOR[::-1])
     assert (np.abs(frame[:45].astype(int) - bg) < 12).all()  # the pushed-down gap
     assert not (np.abs(frame[120:].astype(int) - bg) < 12).all()  # the picture continues below
+
+
+def test_line_margins_match_the_previews_rules():
+    from services.vdoprocessing.introclip import apply_line_margins
+
+    ys, shown = (100, 160, 240), (True, True, True)
+    assert apply_line_margins("top", ys, (0, 0, 0), shown) == ys
+    assert apply_line_margins("top", ys, (0, 20, 0), shown) == (100, 180, 260)
+    assert apply_line_margins("top", ys, (10, 0, 0), shown) == (110, 170, 250)
+    assert apply_line_margins("bottom", ys, (0, 0, 30), shown) == (70, 130, 240)
+    assert apply_line_margins("middle", ys, (0, 0, 30), shown) == (85, 145, 255)
+    assert apply_line_margins("top", ys, (50, 0, -10), (False, True, True)) == (100, 160, 230)
+
+
+def test_a_text_line_margin_moves_that_line_in_the_exported_text(tmp_path):
+    def title_y(margin):
+        item = {"start": 0.0, "end": 5.0, "position": "top", "margin_v": 100, "title": {"text": "A"},
+                "subtitle": {"text": "B", **({"margin_top": margin} if margin else {})}}
+        path = write_caption_ass([], None, (1920, 1080), tmp_path / "t.ass", check_font=False, texts=[item])
+        line = [l for l in _events(path.read_text(encoding="utf-8")) if "}B" in l][0]
+        return int(line.split(BS + "move(")[1].split(")")[0].split(",")[1])  # the subtitle rises in with \move
+
+    assert title_y(40) - title_y(0) == 40

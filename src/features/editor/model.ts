@@ -45,6 +45,8 @@ export interface TextLine {
   // starts it appears (it leaves as long before the end). Absent = the intro's.
   animation?: LineAnimation;
   delay?: number;
+  // Space above this line, px on a 1080p frame (may be negative): added to the automatic stacking. Absent = 0.
+  margin_top?: number;
 }
 
 // A full-width band behind a text item, at the edge it sits on (top for "top", bottom for "bottom", else centred).
@@ -636,6 +638,7 @@ export async function timelineFromPipeline(
       ...(l?.style ? { style: l.style } : {}),
       ...(l?.animation ? { animation: l.animation } : {}),
       ...(typeof l?.delay === "number" ? { delay: l.delay } : {}),
+      ...(typeof l?.margin_top === "number" && l.margin_top !== 0 ? { margin_top: l.margin_top } : {}),
     });
     for (const x of Array.isArray(t.texts) ? t.texts : []) {
       const start = Math.min(Number(x.start) || 0, Math.max(0, limit - MIN_CUE));

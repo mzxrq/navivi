@@ -145,7 +145,7 @@ msgid "{0} of {1} stops"
 msgstr "{1}か所中{0}か所"
 
 #. placeholder {0}: seg.fadeIntoNext.toFixed(1)
-#: src/features/editor/Inspector.tsx:556
+#: src/features/editor/Inspector.tsx:561
 msgid "{0} s dissolve"
 msgstr "{0}秒のディゾルブ"
 
@@ -389,7 +389,7 @@ msgstr "添付する GPX トラックをたどる、のんびりとした散策�
 msgid "A short description of the way the natural voice speaks, written in Japanese. Leave it empty for no style. Changing it regenerates the narration the next time you generate."
 msgstr "自然な声の話し方を日本語で短く書きます。空欄の場合は話し方の指定なしになります。変更すると、次回の生成時にナレーションが作り直されます。"
 
-#: src/features/editor/Inspector.tsx:378
+#: src/features/editor/Inspector.tsx:383
 msgid "A taller box pushes the outro's content down by the same amount when you export; a shorter one pulls it up."
 msgstr "ボックスを高くすると、書き出し時にエンドロールの内容が同じ分だけ下がります。低くすると上がります。"
 
@@ -503,7 +503,7 @@ msgstr "地図を表示するには、設定で Mapbox キーを追加してく�
 msgid "Add a video first, then import subtitles"
 msgstr "先に動画を追加してから字幕を読み込んでください"
 
-#: src/features/editor/Preview.tsx:399
+#: src/features/editor/Preview.tsx:450
 msgid "Add a video to start"
 msgstr "動画を追加して開始"
 
@@ -691,7 +691,7 @@ msgstr "AIナレーション"
 msgid "Aimed-for seconds per leg in the street-level view."
 msgstr "ストリートレベル表示での、1区間あたりの目標秒数です。"
 
-#: src/features/editor/Inspector.tsx:439
+#: src/features/editor/Inspector.tsx:444
 msgid "Align"
 msgstr "揃え"
 
@@ -786,7 +786,7 @@ msgstr "アプリ設定"
 msgid "Appearance"
 msgstr "外観"
 
-#: src/features/editor/Inspector.tsx:324
+#: src/features/editor/Inspector.tsx:329
 msgid "Appears after"
 msgstr "表示までの秒数"
 
@@ -794,7 +794,7 @@ msgstr "表示までの秒数"
 msgid "Application"
 msgstr "アプリ"
 
-#: src/features/editor/Inspector.tsx:460
+#: src/features/editor/Inspector.tsx:465
 msgid "Apply to all place names"
 msgstr "すべての地名に適用"
 
@@ -802,7 +802,7 @@ msgstr "すべての地名に適用"
 msgid "Apply to all subtitles"
 msgstr "すべての字幕に適用"
 
-#: src/features/editor/Inspector.tsx:460
+#: src/features/editor/Inspector.tsx:465
 msgid "Apply to all titles like this"
 msgstr "同じ種類のタイトルすべてに適用"
 
@@ -932,8 +932,8 @@ msgstr "自動作成では、プロンプト、地点名、位置情報、地点
 msgid "Back"
 msgstr "戻る"
 
-#: src/features/editor/Preview.tsx:407
-#: src/features/editor/Preview.tsx:409
+#: src/features/editor/Preview.tsx:458
+#: src/features/editor/Preview.tsx:460
 msgid "Back to start"
 msgstr "最初に戻る"
 
@@ -1016,17 +1016,17 @@ msgid "Border Width"
 msgstr "境界線の幅"
 
 #: src/components/ui/CaptionStyleFields.tsx:212
-#: src/features/editor/Inspector.tsx:430
+#: src/features/editor/Inspector.tsx:435
 msgid "Bottom"
 msgstr "下"
 
-#: src/features/editor/Inspector.tsx:350
+#: src/features/editor/Inspector.tsx:355
 msgid "Box behind"
 msgstr "背景ボックス"
 
 #: src/components/ui/CaptionStyleFields.tsx:134
 #: src/components/ui/CaptionStyleFields.tsx:135
-#: src/features/editor/Inspector.tsx:357
+#: src/features/editor/Inspector.tsx:362
 msgid "Box colour"
 msgstr "ボックスの色"
 
@@ -1153,7 +1153,7 @@ msgstr "カードの枠線の太さ"
 msgid "Cards and overlays"
 msgstr "カードとオーバーレイ"
 
-#: src/features/editor/Inspector.tsx:447
+#: src/features/editor/Inspector.tsx:452
 msgid "Centre"
 msgstr "中央"
 
@@ -1232,7 +1232,7 @@ msgstr "カードの前にきれいな地図を表示"
 msgid "Clear"
 msgstr "クリア"
 
-#: src/features/editor/Inspector.tsx:670
+#: src/features/editor/Inspector.tsx:675
 msgid "Clear all"
 msgstr "すべて削除"
 
@@ -1298,7 +1298,7 @@ msgstr "登り: {0} m"
 msgid "Climb: {0} m (estimated from map terrain)"
 msgstr "登り: {0} m（地図の地形データからの推定）"
 
-#: src/features/editor/Inspector.tsx:494
+#: src/features/editor/Inspector.tsx:499
 msgid "Clip"
 msgstr "クリップ"
 
@@ -1351,7 +1351,7 @@ msgstr "閉じる"
 msgid "Collapse"
 msgstr "折りたたむ"
 
-#: src/features/editor/Inspector.tsx:356
+#: src/features/editor/Inspector.tsx:361
 msgid "Color"
 msgstr "色"
 
@@ -1434,11 +1434,11 @@ msgstr "ポイント{0}の座標"
 msgid "Copied"
 msgstr "コピーしました"
 
-#: src/features/editor/Inspector.tsx:465
+#: src/features/editor/Inspector.tsx:470
 msgid "Copies position and both lines' animation and style; the words stay."
 msgstr "位置と、両方の行のアニメーションとスタイルをコピーします。文字はそのままです。"
 
-#: src/features/editor/Inspector.tsx:464
+#: src/features/editor/Inspector.tsx:469
 msgid "Copies position and both lines' animation and style. Place names made later use it too."
 msgstr "位置と、両方の行のアニメーションとスタイルをコピーします。今後作成される地名にも使われます。"
 
@@ -1695,8 +1695,8 @@ msgstr "ポイントを配置する際のデフォルトの経路検索"
 
 #: src/components/ui/VoiceSettings.tsx:452
 #: src/components/ui/VoiceSettings.tsx:464
-#: src/features/editor/Inspector.tsx:620
-#: src/features/editor/Inspector.tsx:654
+#: src/features/editor/Inspector.tsx:625
+#: src/features/editor/Inspector.tsx:659
 #: src/features/map/components/DrawBar.tsx:411
 #: src/features/map/components/WaypointEditor.tsx:894
 msgid "Delete"
@@ -1835,20 +1835,20 @@ msgid "Distance along the path: {0} km"
 msgstr "道のり: {0} km"
 
 #: src/components/ui/CaptionStyleFields.tsx:220
-#: src/features/editor/Inspector.tsx:435
+#: src/features/editor/Inspector.tsx:440
 msgid "Distance from bottom"
 msgstr "下端からの距離"
 
-#: src/features/editor/Inspector.tsx:453
+#: src/features/editor/Inspector.tsx:458
 msgid "Distance from left"
 msgstr "左端からの距離"
 
-#: src/features/editor/Inspector.tsx:453
+#: src/features/editor/Inspector.tsx:458
 msgid "Distance from right"
 msgstr "右端からの距離"
 
 #: src/components/ui/CaptionStyleFields.tsx:220
-#: src/features/editor/Inspector.tsx:435
+#: src/features/editor/Inspector.tsx:440
 msgid "Distance from top"
 msgstr "上端からの距離"
 
@@ -1991,7 +1991,7 @@ msgstr "写真またはGPSファイルをドロップしてルートを作成"
 
 #: src/components/view/ProjectManager.tsx:232
 #: src/features/editor/EditorView.tsx:304
-#: src/features/editor/Inspector.tsx:560
+#: src/features/editor/Inspector.tsx:565
 #: src/features/map/hooks/useStopMenus.ts:240
 msgid "Duplicate"
 msgstr "複製"
@@ -2217,8 +2217,8 @@ msgstr "GPSデータからポイントを抽出しています..."
 msgid "Fade"
 msgstr "フェード"
 
-#: src/features/editor/Inspector.tsx:553
-#: src/features/editor/Inspector.tsx:554
+#: src/features/editor/Inspector.tsx:558
+#: src/features/editor/Inspector.tsx:559
 msgid "Fade into next"
 msgstr "次へフェード"
 
@@ -2478,7 +2478,7 @@ msgstr "全面表示"
 #~ msgid "Full width, at the edge the text sits on. Height in pixels on a 1080p frame."
 #~ msgstr "文字がある端に、横幅いっぱいで表示します。高さは1080pのピクセル数です。"
 
-#: src/features/editor/Inspector.tsx:376
+#: src/features/editor/Inspector.tsx:381
 msgid "Full width, at the edge the text sits on. Heights are pixels on a 1080p frame. The soft edge fades what scrolls under the box."
 msgstr "文字がある端に、横幅いっぱいで表示します。高さは1080pのピクセル数です。ぼかしは、ボックスの下に流れる内容を薄くします。"
 
@@ -2614,7 +2614,7 @@ msgstr "グリッド"
 msgid "Grid View"
 msgstr "グリッド表示"
 
-#: src/features/editor/Inspector.tsx:556
+#: src/features/editor/Inspector.tsx:561
 msgid "Hard cut"
 msgstr "カット"
 
@@ -2631,7 +2631,7 @@ msgstr "個別のスタイルあり"
 msgid "Hear it"
 msgstr "聞いてみる"
 
-#: src/features/editor/Inspector.tsx:364
+#: src/features/editor/Inspector.tsx:369
 msgid "Height"
 msgstr "高さ"
 
@@ -2980,7 +2980,7 @@ msgstr "空欄のままにすると、動画の作成時に自動で書かれま
 msgid "Leave this stop out"
 msgstr "このスポットを除外"
 
-#: src/features/editor/Inspector.tsx:446
+#: src/features/editor/Inspector.tsx:451
 msgid "Left"
 msgstr "左"
 
@@ -3040,8 +3040,8 @@ msgstr "線の太さ"
 msgid "Link narration to clip"
 msgstr "ナレーションをクリップにリンク"
 
-#: src/features/editor/Inspector.tsx:515
-#: src/features/editor/Inspector.tsx:519
+#: src/features/editor/Inspector.tsx:520
+#: src/features/editor/Inspector.tsx:524
 msgid "Linked to clip"
 msgstr "クリップにリンク"
 
@@ -3082,7 +3082,7 @@ msgstr "位置情報を取得中..."
 msgid "Location"
 msgstr "場所"
 
-#: src/features/editor/Inspector.tsx:590
+#: src/features/editor/Inspector.tsx:595
 msgid "Location line"
 msgstr "場所の行"
 
@@ -3275,7 +3275,7 @@ msgid "Microsoft Visual C++ runtime"
 msgstr "Microsoft Visual C++ ランタイム"
 
 #: src/components/ui/CaptionStyleFields.tsx:211
-#: src/features/editor/Inspector.tsx:429
+#: src/features/editor/Inspector.tsx:434
 msgid "Middle"
 msgstr "中央"
 
@@ -3354,7 +3354,7 @@ msgstr "動くアトラクション動画"
 #~ msgstr "動くアトラクション動画 · ComfyUI"
 
 #: src/features/editor/ExportDialog.tsx:88
-#: src/features/editor/Inspector.tsx:676
+#: src/features/editor/Inspector.tsx:681
 msgid "Music"
 msgstr "音楽"
 
@@ -3362,16 +3362,16 @@ msgstr "音楽"
 msgid "Music credit, to include where you publish the video:"
 msgstr "音楽のクレジット(動画の公開先に記載してください):"
 
-#: src/features/editor/Inspector.tsx:687
+#: src/features/editor/Inspector.tsx:692
 msgid "Music volume"
 msgstr "音楽の音量"
 
-#: src/features/editor/Inspector.tsx:534
+#: src/features/editor/Inspector.tsx:539
 msgid "Mute"
 msgstr "ミュート"
 
 #: src/features/editor/EditorView.tsx:306
-#: src/features/editor/Inspector.tsx:535
+#: src/features/editor/Inspector.tsx:540
 msgid "Mute narration"
 msgstr "ナレーションをミュート"
 
@@ -3390,7 +3390,7 @@ msgstr "各地点の名前、位置、移動手段、台本、写真・動画の
 #: src/components/ui/AppSettings.tsx:1187
 #: src/features/assistant/AssistantChat.tsx:20
 #: src/features/editor/ExportDialog.tsx:86
-#: src/features/editor/Inspector.tsx:514
+#: src/features/editor/Inspector.tsx:519
 #: src/features/map/components/WaypointEditor.tsx:549
 msgid "Narration"
 msgstr "ナレーション"
@@ -3510,7 +3510,7 @@ msgstr "ローカルモデルが見つかりません。このPCでスクリプ�
 msgid "No models installed"
 msgstr "インストールされているモデルがありません"
 
-#: src/features/editor/Inspector.tsx:691
+#: src/features/editor/Inspector.tsx:696
 msgid "No music. Use Music in the toolbar."
 msgstr "音楽なし。ツールバーの音楽から追加できます。"
 
@@ -3709,7 +3709,7 @@ msgstr "初回のみのセットアップ"
 #~ msgid "Online AI service · your own API key"
 #~ msgstr "オンラインAIサービス · 自分のAPIキー"
 
-#: src/features/editor/Inspector.tsx:359
+#: src/features/editor/Inspector.tsx:364
 msgid "Opacity"
 msgstr "不透明度"
 
@@ -3810,11 +3810,11 @@ msgstr "任意"
 msgid "Orange"
 msgstr "オレンジ"
 
-#: src/features/editor/Inspector.tsx:543
+#: src/features/editor/Inspector.tsx:548
 msgid "Original sound"
 msgstr "元の音声"
 
-#: src/features/editor/Inspector.tsx:545
+#: src/features/editor/Inspector.tsx:550
 msgid "Original sound volume"
 msgstr "元の音の音量"
 
@@ -3908,8 +3908,8 @@ msgid "Paste your key. It is kept in this PC's credential store, never in the pr
 msgstr "キーを貼り付けてください。キーはこのPCの資格情報ストアに保存され、プロジェクトや共有ファイルには含まれません。"
 
 #: src/features/editor/MusicPicker.tsx:148
-#: src/features/editor/Preview.tsx:413
-#: src/features/editor/Preview.tsx:418
+#: src/features/editor/Preview.tsx:464
+#: src/features/editor/Preview.tsx:469
 msgid "Pause"
 msgstr "一時停止"
 
@@ -3994,7 +3994,7 @@ msgstr "パイプラインログ"
 msgid "Pixels on a 1080p frame"
 msgstr "1080p フレーム上のピクセル"
 
-#: src/features/editor/Inspector.tsx:421
+#: src/features/editor/Inspector.tsx:426
 msgid "Place"
 msgstr "配置"
 
@@ -4009,8 +4009,8 @@ msgid "Place cues in the overview narration"
 msgstr "全体ナレーションにキューを入れる"
 
 #: src/features/editor/MusicPicker.tsx:148
-#: src/features/editor/Preview.tsx:413
-#: src/features/editor/Preview.tsx:418
+#: src/features/editor/Preview.tsx:464
+#: src/features/editor/Preview.tsx:469
 msgid "Play"
 msgstr "再生"
 
@@ -4040,7 +4040,7 @@ msgid "Pop in"
 msgstr "ポップイン"
 
 #: src/components/ui/CaptionStyleFields.tsx:202
-#: src/features/editor/Inspector.tsx:420
+#: src/features/editor/Inspector.tsx:425
 msgid "Position"
 msgstr "位置"
 
@@ -4326,7 +4326,7 @@ msgstr "アプリを再読み込み"
 #: src/components/view/ProjectManager.tsx:649
 #: src/features/assistant/AssistantChat.tsx:179
 #: src/features/editor/EditorView.tsx:322
-#: src/features/editor/Inspector.tsx:563
+#: src/features/editor/Inspector.tsx:568
 msgid "Remove"
 msgstr "削除"
 
@@ -4350,11 +4350,11 @@ msgid "Remove Image"
 msgstr "画像を削除"
 
 #: src/features/editor/EditorView.tsx:339
-#: src/features/editor/Inspector.tsx:682
+#: src/features/editor/Inspector.tsx:687
 msgid "Remove music"
 msgstr "音楽を削除"
 
-#: src/features/editor/Inspector.tsx:538
+#: src/features/editor/Inspector.tsx:543
 msgid "Remove narration"
 msgstr "ナレーションを削除"
 
@@ -4457,7 +4457,7 @@ msgstr "リセット"
 msgid "Reset speaking style"
 msgstr "話し方をリセット"
 
-#: src/features/editor/Inspector.tsx:337
+#: src/features/editor/Inspector.tsx:342
 msgid "Reset style"
 msgstr "スタイルをリセット"
 
@@ -4470,7 +4470,7 @@ msgstr "見た目をリセット"
 #~ msgstr "初期設定に戻す"
 
 #: src/features/editor/EditorView.tsx:317
-#: src/features/editor/Inspector.tsx:510
+#: src/features/editor/Inspector.tsx:515
 msgid "Reset trim"
 msgstr "トリミングをリセット"
 
@@ -4521,7 +4521,7 @@ msgstr "アセットを確認"
 msgid "Review them, or carry on in the timeline editor."
 msgstr "確認するか、タイムラインエディタでそのまま作業を続けてください。"
 
-#: src/features/editor/Inspector.tsx:448
+#: src/features/editor/Inspector.tsx:453
 msgid "Right"
 msgstr "右"
 
@@ -4651,7 +4651,7 @@ msgstr "彩度と明度"
 msgid "Save"
 msgstr "保存"
 
-#: src/features/editor/Inspector.tsx:667
+#: src/features/editor/Inspector.tsx:672
 msgid "Save .srt"
 msgstr ".srtを保存"
 
@@ -4766,7 +4766,7 @@ msgstr "秒"
 msgid "Seconds a leg dissolves into the clip that follows it. 0 is a hard cut."
 msgstr "区間が次のクリップへディゾルブする秒数です。0はカットです。"
 
-#: src/features/editor/Inspector.tsx:327
+#: src/features/editor/Inspector.tsx:332
 msgid "Seconds after the title item starts. It leaves the same time before the end."
 msgstr "タイトル項目の開始からの秒数です。終了の同じ秒数前に消えます。"
 
@@ -4905,8 +4905,8 @@ msgstr "写真をシャープにする"
 msgid "Sharper map tiles"
 msgstr "より鮮明な地図タイル"
 
-#: src/features/editor/Inspector.tsx:351
-#: src/features/editor/Inspector.tsx:352
+#: src/features/editor/Inspector.tsx:356
+#: src/features/editor/Inspector.tsx:357
 msgid "Show a box"
 msgstr "ボックスを表示"
 
@@ -5036,7 +5036,7 @@ msgstr "なめらかなポイント:クリックで角に"
 #~ msgid "Smooth the path through the points"
 #~ msgstr "点を通る経路をなめらかにする"
 
-#: src/features/editor/Inspector.tsx:370
+#: src/features/editor/Inspector.tsx:375
 msgid "Soft edge"
 msgstr "ぼかしの幅"
 
@@ -5055,6 +5055,10 @@ msgstr "問題が発生しました"
 #: src/components/ui/AboutPanel.tsx:61
 msgid "Source code"
 msgstr "ソースコード"
+
+#: src/features/editor/Inspector.tsx:324
+msgid "Space above"
+msgstr "上の余白"
 
 #: src/components/ui/VoiceSettings.tsx:507
 #: src/components/ui/VoiceSettings.tsx:542
@@ -5133,11 +5137,11 @@ msgstr "出発地点"
 msgid "Starting…"
 msgstr "開始中…"
 
-#: src/features/editor/Inspector.tsx:527
+#: src/features/editor/Inspector.tsx:532
 msgid "Starts after"
 msgstr "開始までの待ち"
 
-#: src/features/editor/Inspector.tsx:523
+#: src/features/editor/Inspector.tsx:528
 msgid "Starts at"
 msgstr "開始位置"
 
@@ -5226,8 +5230,8 @@ msgid "Style"
 msgstr "スタイル"
 
 #: src/components/ui/NewProject.tsx:382
-#: src/features/editor/Inspector.tsx:605
-#: src/features/editor/Inspector.tsx:633
+#: src/features/editor/Inspector.tsx:610
+#: src/features/editor/Inspector.tsx:638
 #: src/features/map/components/OverviewPanel.tsx:185
 msgid "Subtitle"
 msgstr "字幕"
@@ -5247,7 +5251,7 @@ msgstr "タイムライン内の字幕行"
 #: src/features/editor/EditorView.tsx:384
 #: src/features/editor/EditorView.tsx:386
 #: src/features/editor/ExportDialog.tsx:87
-#: src/features/editor/Inspector.tsx:663
+#: src/features/editor/Inspector.tsx:668
 #: src/features/map/components/GenerateDialog.tsx:56
 #: src/features/map/components/WaypointEditor.tsx:190
 msgid "Subtitles"
@@ -5456,7 +5460,7 @@ msgstr "やり直したクリップを確認できます。"
 msgid "The redone clips are ready. Your timeline edits were kept."
 msgstr "やり直したクリップの準備ができました。タイムラインの編集内容はそのまま残っています。"
 
-#: src/features/editor/Inspector.tsx:548
+#: src/features/editor/Inspector.tsx:553
 msgid "The sound of your own video, mixed under the narration."
 msgstr "ご自身の動画の音声を、ナレーションの下にミックスします。"
 
@@ -5620,8 +5624,8 @@ msgstr "時間を取得できません"
 msgid "Timeline"
 msgstr "タイムライン"
 
-#: src/features/editor/Inspector.tsx:578
-#: src/features/editor/Inspector.tsx:636
+#: src/features/editor/Inspector.tsx:583
+#: src/features/editor/Inspector.tsx:641
 msgid "Timing"
 msgstr "タイミング"
 
@@ -5636,7 +5640,7 @@ msgstr "ナレーションに書いたタイミング指定で、地点に到着
 #: src/components/ui/NewProject.tsx:373
 #: src/components/ui/NewProject.tsx:374
 #: src/features/editor/EditorView.tsx:253
-#: src/features/editor/Inspector.tsx:598
+#: src/features/editor/Inspector.tsx:603
 #: src/features/map/components/OverviewPanel.tsx:169
 #: src/features/map/components/OverviewPanel.tsx:175
 msgid "Title"
@@ -5673,7 +5677,7 @@ msgid "Too short"
 msgstr "短すぎます"
 
 #: src/components/ui/CaptionStyleFields.tsx:210
-#: src/features/editor/Inspector.tsx:428
+#: src/features/editor/Inspector.tsx:433
 msgid "Top"
 msgstr "上"
 
@@ -5697,7 +5701,7 @@ msgstr "トレースバック"
 msgid "Tracks in your Music folder"
 msgstr "Musicフォルダ内の曲"
 
-#: src/features/editor/Inspector.tsx:552
+#: src/features/editor/Inspector.tsx:557
 msgid "Transition"
 msgstr "トランジション"
 
@@ -5711,7 +5715,7 @@ msgstr "翻訳中 {0} / {1}…"
 msgid "Travel mode to the next stop"
 msgstr "次の地点までの移動手段"
 
-#: src/features/editor/Inspector.tsx:502
+#: src/features/editor/Inspector.tsx:507
 msgid "Trim"
 msgstr "トリミング"
 
@@ -6001,10 +6005,10 @@ msgstr "音声"
 msgid "Voices that come with Navivi"
 msgstr "Navivi に付属する音声"
 
-#: src/features/editor/Inspector.tsx:531
-#: src/features/editor/Inspector.tsx:532
-#: src/features/editor/Inspector.tsx:544
-#: src/features/editor/Inspector.tsx:686
+#: src/features/editor/Inspector.tsx:536
+#: src/features/editor/Inspector.tsx:537
+#: src/features/editor/Inspector.tsx:549
+#: src/features/editor/Inspector.tsx:691
 msgid "Volume"
 msgstr "音量"
 

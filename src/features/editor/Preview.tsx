@@ -18,6 +18,7 @@ import {
   lineMotion,
   stackedLineYs,
   textStyleToCss,
+  applyLineMargins,
   wrapText,
 } from "../../utils/textStyle";
 
@@ -149,7 +150,12 @@ function TextOverlay({ texts }: { texts: PlacedText[] }) {
         const km = lineMotion("kicker", x.kicker?.animation, x.kicker?.delay, x.animation, dur, paired);
         const kf = lineFrame(t, dur, km.animation, km.delay);
         const cy = textBlockCenterY(x.position, x.margin_v, title.font_size, sub.font_size, hasTitle, hasSub, hasKicker ? kicker.font_size : 0);
-        const { kickerY, titleY, subY } = stackedLineYs(cy, kicker.font_size, title.font_size, sub.font_size, hasKicker, hasTitle, hasSub);
+        const { kickerY, titleY, subY } = applyLineMargins(
+          x.position,
+          stackedLineYs(cy, kicker.font_size, title.font_size, sub.font_size, hasKicker, hasTitle, hasSub),
+          { kicker: x.kicker?.margin_top, title: x.title.margin_top, subtitle: x.subtitle.margin_top },
+          { kicker: hasKicker, title: hasTitle, subtitle: hasSub },
+        );
         const line = "absolute whitespace-nowrap leading-none";
         return (
           <div key={x.id}>

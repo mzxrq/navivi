@@ -225,6 +225,24 @@ def stacked_line_ys(
     return top_y - gap + shift, title_y + shift, sub_y + shift
 
 
+def apply_line_margins(
+    position: str, ys: Tuple[int, int, int], margins: Tuple[float, float, float], has: Tuple[bool, bool, bool],
+) -> Tuple[int, int, int]:
+    """`ys` (kicker, title, subtitle centres) with each shown line's "space above" (`margins`, 1080-line px,
+    may be negative) added to it and to every line under it. A top block keeps its first line where it was
+    (that line's own margin moves the whole block down), a bottom block keeps its last line, a middle
+    block stays centred. Mirrors applyLineMargins in src/utils/textStyle.ts."""
+    added, running = [], 0.0
+    for m, shown in zip(margins, has):
+        if shown:
+            running += float(m)
+        added.append(running)
+    shift = {"top": 0.0, "bottom": -running}.get(position, -running / 2)
+    return tuple(  # type: ignore[return-value]
+        int(math.floor(y + a + shift + 0.5)) if shown else y for y, a, shown in zip(ys, added, has)
+    )
+
+
 def text_block_center_y(
     position: str, margin_px: float, title_size: int, subtitle_size: int,
     has_title: bool, has_subtitle: bool, frame_h: int = 1080,
@@ -312,6 +330,8 @@ def title_events(
     kicker: str = "",
     kicker_style: TextStyle = DEFAULT_KICKER_STYLE,
     kicker_motion: Optional[dict] = None,
+    position: str = "middle",
+    margins: Tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> List[Tuple[float, float, str]]:
     """(start, end, text with override tags) for a title + subtitle block (plus
     an optional small kicker line above) whose `align` edge (left/center/right)
@@ -319,6 +339,7 @@ def title_events(
     Each line has its own animation ("pop", "rise", "fade", "none") and enters
     `delay` seconds after the item starts, leaving as long before it ends
     (title_motion / subtitle_motion / kicker_motion: {"animation", "delay"}; see line_motion).
+    `margins`/`position`: see apply_line_margins.
     Used by the intro and by text items on the editor's text track."""
     duration_sec = max(0.0, end_sec - start_sec)
     an = _ALIGN_AN.get(align, 5)
@@ -330,6 +351,10 @@ def title_events(
     kicker_y, title_y, sub_y = stacked_line_ys(
         cy, kicker_style.font_size, title_style.font_size, subtitle_style.font_size,
         bool(safe_kicker), bool(safe_title), bool(safe_subtitle),
+    )
+    # Each line's own "space above" (kicker, title, subtitle margins), as the editor sets them.
+    kicker_y, title_y, sub_y = apply_line_margins(
+        position, (kicker_y, title_y, sub_y), margins, (bool(safe_kicker), bool(safe_title), bool(safe_subtitle)),
     )
 
     events: List[Tuple[float, float, str]] = []

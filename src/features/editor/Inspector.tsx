@@ -321,6 +321,11 @@ function TextLineSection({
           ]}
         />
       </Row>
+      <Row label={t`Space above`}>
+        <div className="w-24">
+          <IntInput value={line.margin_top ?? 0} min={-300} max={600} onCommit={(v) => onChange({ ...line, margin_top: v || undefined })} />
+        </div>
+      </Row>
       <Row label={t`Appears after`}>
         <TimeField value={motion.delay} min={0} max={60} onCommit={(v) => onChange({ ...line, delay: +v.toFixed(2) })} />
       </Row>
@@ -332,7 +337,7 @@ function TextLineSection({
         onChange={(patch) => onChange({ ...line, style: { ...(line.style ?? {}), ...patch } })}
         row={styleRow}
       />
-      {(line.style || line.animation || line.delay !== undefined) && (
+      {(line.style || line.animation || line.delay !== undefined || line.margin_top !== undefined) && (
         <button type="button" className={iconButton} onClick={() => onChange({ text: line.text })}>
           <Trans>Reset style</Trans>
         </button>

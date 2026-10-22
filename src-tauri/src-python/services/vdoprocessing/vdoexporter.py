@@ -108,6 +108,12 @@ _BOX_FADE_STEPS = 12
 _BOX_FADE_DEFAULT_PX = 56
 
 
+def _line_margin(line: dict) -> float:
+    """A text line's "space above" in 1080-line px (0 when unset or not a number)."""
+    v = line.get("margin_top")
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else 0.0
+
+
 def _text_box_events(item: dict, play_w: int) -> list:
     """A full-width band behind a text item (`box`: colour, opacity 0..1, height in 1080-line px) drawn at
     the item's own edge: top for "top", bottom for "bottom", else centred. Layer 0, under the text. For a
@@ -220,6 +226,8 @@ def write_caption_ass(
             subtitle_motion={"animation": subtitle.get("animation"), "delay": subtitle.get("delay")},
             kicker=kicker_text, kicker_style=kicker_style,
             kicker_motion={"animation": kicker.get("animation"), "delay": kicker.get("delay")},
+            position=str(item.get("position") or "middle"),
+            margins=tuple(_line_margin(line) for line in (kicker, title, subtitle)),
         ):
             # Layer 1: above captions. Every look is in the event's own tags.
             events.append(f"Dialogue: 1,{_ass_timestamp(a)},{_ass_timestamp(b)},Text,,0,0,0,,{text}")

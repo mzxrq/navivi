@@ -37,11 +37,37 @@ const rgba = (hex: string, alpha: number) => {
 };
 
 /** CSS for a TextStyle inside a box with `container-type: size` (1080 px → 100cqh). */
+const emScales = new Map<string, number>();
+
+/**
+ * libass sizes a font by its line height (ascent + descent), CSS by its em, so the same number gives a smaller
+ * picture in the export: em / line height of the font, about 0.72 for Yu Gothic UI. The preview scales by it to match.
+ */
+export function libassEmScale(family: string, bold: boolean): number {
+  const key = `${bold}|${family}`;
+  const known = emScales.get(key);
+  if (known !== undefined) return known;
+  let scale = 1;
+  try {
+    const ctx = document.createElement("canvas").getContext("2d");
+    if (ctx) {
+      ctx.font = `${bold ? 700 : 400} 100px "${family}", Meiryo, "Yu Gothic UI", sans-serif`;
+      const m = ctx.measureText("あ");
+      const lineHeight = m.fontBoundingBoxAscent + m.fontBoundingBoxDescent;
+      if (lineHeight > 0) scale = Math.min(1.2, Math.max(0.5, 100 / lineHeight));
+    }
+  } catch {
+    // no canvas (a test, an old browser): the preview keeps the CSS size
+  }
+  if (scale !== 1) emScales.set(key, scale);
+  return scale;
+}
+
 export function textStyleToCss(s: Required<TextStyle>): CSSProperties {
   const u = (px: number) => `${(px / 1080) * 100}cqh`;
   const css: CSSProperties = {
     fontFamily: `"${s.font_family}", Meiryo, "Yu Gothic UI", sans-serif`,
-    fontSize: u(s.font_size),
+    fontSize: u(s.font_size * libassEmScale(s.font_family, s.bold)),
     fontWeight: s.bold ? 700 : 400,
     fontStyle: s.italic ? "italic" : "normal",
     textDecoration: s.underline ? "underline" : "none",
@@ -189,6 +215,28 @@ export function stackedLineYs(
   const gap = Math.trunc(0.6 * (kickerSize + topSize));
   const shift = Math.floor(gap / 2);
   return { kickerY: topY - gap + shift, titleY: titleY + shift, subY: subY + shift };
+}
+
+/**
+ * The line centres with each shown line's "space above" (1080p px, may be negative) added to it and to every
+ * line under it. A top block keeps its first line in place (that line's own margin moves the whole block),
+ * a bottom block its last line, a middle block stays centred; mirrors apply_line_margins in introclip.py.
+ */
+export function applyLineMargins(
+  position: "top" | "middle" | "bottom" | undefined,
+  ys: { kickerY: number; titleY: number; subY: number },
+  margins: { kicker?: number; title?: number; subtitle?: number },
+  has: { kicker: boolean; title: boolean; subtitle: boolean },
+): { kickerY: number; titleY: number; subY: number } {
+  let running = 0;
+  const added = { kicker: 0, title: 0, subtitle: 0 };
+  for (const k of ["kicker", "title", "subtitle"] as const) {
+    if (has[k]) running += margins[k] ?? 0;
+    added[k] = running;
+  }
+  const shift = position === "top" ? 0 : position === "bottom" ? -running : -running / 2;
+  const move = (y: number, k: keyof typeof added) => (has[k] ? Math.floor(y + added[k] + shift + 0.5) : y);
+  return { kickerY: move(ys.kickerY, "kicker"), titleY: move(ys.titleY, "title"), subY: move(ys.subY, "subtitle") };
 }
 
 /** Vertical centre (1080p px) of a title + subtitle block (kickerSize > 0 adds a kicker above);
