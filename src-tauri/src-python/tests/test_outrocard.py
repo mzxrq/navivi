@@ -396,3 +396,30 @@ class TestUnpinnedOutro:
     def test_a_pinned_page_keeps_its_top_clear_and_an_unpinned_one_scrolls_under_the_edge(self, tmp_path):
         assert self._top_row_is_background_while_scrolling(tmp_path, True)
         assert not self._top_row_is_background_while_scrolling(tmp_path, False)
+
+
+def _scroll_frames(tmp_path, header_h):
+    import cv2
+    from PIL import Image
+
+    from services import tuning
+    from services.vdoprocessing.outrocard import _write_scroll_clip
+
+    page = Image.new("RGB", (320, 720), tuning.OUTRO_BG_COLOR)
+    page.paste((230, 230, 230), (40, 200, 280, 400))  # one card
+    page.info.update(pinned=False, header_h=header_h)
+    out = tmp_path / f"scroll_{header_h}.mp4"
+    assert _write_scroll_clip(page, out, 24, (320, 180), start_hold=0.0)
+    cap, frames = cv2.VideoCapture(str(out)), []
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            return frames
+        frames.append(frame)
+
+
+def test_unburned_title_area_stays_empty_and_the_logo_comes_once_cards_are_under_it(tmp_path):
+    under_box = _scroll_frames(tmp_path, 60)
+    full_frame = _scroll_frames(tmp_path, 0)
+    assert all(f[:55].max() < 120 for f in under_box)  # no card ever shows where the text box sits
+    assert len(under_box) < len(full_frame)  # the scroll stops once the cards are under the box

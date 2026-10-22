@@ -989,9 +989,10 @@ def _write_scroll_clip(
     card is gone the title fades into the logo end card."""
     width, height = size
     k = height / _CANVAS_H
-    # Without a pinned box (the title is a timeline text item with its own box) the cards scroll the full frame.
+    # Not pinned: the title is a timeline text item whose box covers these same top rows. They are kept
+    # plain background, so nothing shows there once that box ends, and the scroll ends when the cards are under it.
     pinned = bool(page.info.get("pinned", True))
-    header_h = int(page.info.get("header_h", 0)) if pinned else 0
+    header_h = int(page.info.get("header_h", 0))
     page_px = np.asarray(page, dtype=np.uint8)
     bg = np.asarray(tuning.OUTRO_BG_COLOR, dtype=np.float32)
 
@@ -1009,7 +1010,7 @@ def _write_scroll_clip(
     # 0 once OUTRO_SCROLL_EDGE_FADE_PX in.
     fade = max(1, int(round(tuning.OUTRO_SCROLL_EDGE_FADE_PX * k)))
     ramp = np.clip(1.0 - np.arange(fade, dtype=np.float32) / fade, 0.0, 1.0)
-    header = page_px[:header_h].astype(np.float32)
+    header = page_px[:header_h].astype(np.float32) if pinned else np.broadcast_to(bg, (header_h, width, 3))
 
     def frame_at(top: int) -> np.ndarray:
         frame = page_px[top: top + height].astype(np.float32)

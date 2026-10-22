@@ -270,7 +270,9 @@ def test_outro_text_spans_the_outro_until_its_logo_card(tmp_path, monkeypatch):
     )
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     (text,) = data["texts"]
-    assert (text["start"], text["end"]) == (20.0, 46.0)  # the outro's 30 s less the 4 s logo card
+    # after the dissolve into the outro, until its 30 s less the 4 s logo card
+    assert (text["start"], text["end"]) == (20.0 + tuning.ENDING_FADE_SECONDS, 46.0)
+    assert data["video_tracks"][0]["fade_into_next_seconds"] == tuning.ENDING_FADE_SECONDS
     assert "trim_end" not in text and text["kind"] == "outro"
 
 BS = chr(92)  # a backslash, the start of an ASS override tag
