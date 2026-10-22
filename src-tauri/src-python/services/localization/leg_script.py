@@ -110,14 +110,20 @@ def leg_turns(points: List[List[float]]) -> dict:
     def heading_between(start: float, end: float) -> str:
         return _compass(_bearing(_point_at(line, lengths, start), _point_at(line, lengths, end)))
 
+    lat_m = 110540.0
+    lng_m = 111320.0 * math.cos(math.radians(sum(p[0] for p in points) / len(points)))
     out = []
     for k, turn in enumerate(turns):
+        x, y = _point_at(line, lengths, marks[k + 1])
         out.append({
             "angle": turn["angle"],
             "heading": heading_between(marks[k + 1], marks[k + 2]),
             "run": marks[k + 2] - marks[k + 1],
             "to_end": total - marks[k + 1],
             "at": marks[k + 1],
+            "lat": points[0][0] + y / lat_m,
+            "lon": points[0][1] + x / lng_m,
+            "bearing": _bearing((x, y), _point_at(line, lengths, min(marks[k + 1] + 20.0, total))),
         })
     return {"heading": heading_between(0.0, marks[1]), "first_run": marks[1], "turns": out, "length": total,
             "heading_between": heading_between}

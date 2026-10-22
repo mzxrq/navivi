@@ -99,11 +99,13 @@ fn python_command(app: &AppHandle) -> Result<Command, String> {
     }
     let mut cmd = rt.command();
     secrets::export_keys(&mut cmd);
-    let token = app
-        .try_state::<db::DbState>()
-        .and_then(|state| state.0.lock().ok().and_then(|conn| db::app_settings::api_key(&conn, "mapbox")));
-    if let Some(token) = token {
-        cmd.env("NAVIVI_MAPBOX_TOKEN", token);
+    for (name, var) in [("mapbox", "NAVIVI_MAPBOX_TOKEN"), ("mapillary", "NAVIVI_MAPILLARY_TOKEN")] {
+        let token = app
+            .try_state::<db::DbState>()
+            .and_then(|state| state.0.lock().ok().and_then(|conn| db::app_settings::api_key(&conn, name)));
+        if let Some(token) = token {
+            cmd.env(var, token);
+        }
     }
     Ok(cmd)
 }

@@ -41,6 +41,9 @@ def test_a_corner_is_read_as_a_turn_with_its_new_heading():
     assert len(plan["turns"]) == 1
     turn = plan["turns"][0]
     assert turn["angle"] < -60 and turn["heading"] == "北"  # left, then north
+    corner = _at(400, 0)
+    assert abs(turn["lat"] - corner[0]) < 5 * M_LAT and abs(turn["lon"] - corner[1]) < 5 * M_LNG
+    assert abs(turn["bearing"]) < 5 or abs(turn["bearing"] - 360) < 5
 
 
 def test_a_wobbly_straight_road_has_no_turns():

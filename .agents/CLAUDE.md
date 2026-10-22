@@ -146,6 +146,7 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
 - `services/tuning.py` — central hand-tuned constants (speeds, colors, timings, GPU cooldown, FFmpeg threads).
   Per-project overrides come from `job_config.json` `settings.*`; tuning.py holds fallback defaults only.
 - Elevation heatmap in the video: `settings.show_route_heatmap` + `<ele>` in `raw_track.gpx` (`height` in the csv) → `pydeckrecorder/elevation.py`; see CODEMAP.
+- Street photos at turns: `settings.street_photos_at_turns` + the app-wide Mapillary key (`NAVIVI_MAPILLARY_TOKEN`) → `mapfetcher/street_photos.py` adds a pip landmark per `leg_turns()` turn on walking legs (route2vdo.py); photos cached in `.navivi/streetview/` with `index.json` per turn (unchanged route = no requests; ≤2 req/s, limit 10, a 4xx stops that leg's requests), credit stamped on each.
 - Rendering: `pydeckrecorder/` (3D, deck.gl in headless Chromium via Playwright → frames → ffmpeg) and
   `spatial_renderer/` (legacy 2D overview/waypoint maps, mixin-composed `SpatialRenderer`). `mapfetcher/` = tiles, geometry, pacing, graphic overlays.
 - AI/local servers (auto-started on demand, idle-watchdog stopped): Irodori TTS (`bin/Irodori-TTS-Server`, port 8088), Qwen3-TTS balanced voice (`bin/Qwen3-TTS`, port 8090, own venv) and Kokoro fast voice (`bin/Kokoro-TTS`, port 8089, own venv); the engine switch is in Settings > Voice,

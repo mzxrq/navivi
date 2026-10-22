@@ -181,6 +181,7 @@ _LOOK_OPTION_DEFAULTS = (
     ("waypoint_intro_freeze", 2.0),
     ("show_leg_wide_intro", False),
     ("res_follow_pitch", 0.0),
+    ("street_photos_at_turns", tuning.STREET_PHOTOS_AT_TURNS),
     ("overview_max_leg_seconds", 10.0),
     ("overview_intro_card_scale", 1.3),
     ("overview_intro_clean_hold_seconds", 1.5),

@@ -6,9 +6,10 @@ export const API_KEYS_SETTING = "api_keys";
 export interface AppApiKeys {
   mapbox?: string;
   ors?: string;
+  mapillary?: string;
 }
 
-const FIELDS = { mapbox: "mapbox_api_key", ors: "ors_api_key" } as const;
+const FIELDS = { mapbox: "mapbox_api_key", ors: "ors_api_key", mapillary: "mapillary_api_key" } as const;
 type KeyName = keyof typeof FIELDS;
 const NAMES = Object.keys(FIELDS) as KeyName[];
 
@@ -46,8 +47,8 @@ export function stripApiKeys<T extends object>(settings: T): T {
 }
 
 /** The app-wide keys as the settings fields the rest of the UI reads. */
-export function apiKeySettings(keys: AppApiKeys): Pick<ProjectSettings, "mapbox_api_key" | "ors_api_key"> {
-  return { mapbox_api_key: keys.mapbox ?? "", ors_api_key: keys.ors ?? "" };
+export function apiKeySettings(keys: AppApiKeys): Pick<ProjectSettings, "mapbox_api_key" | "ors_api_key" | "mapillary_api_key"> {
+  return { mapbox_api_key: keys.mapbox ?? "", ors_api_key: keys.ors ?? "", mapillary_api_key: keys.mapillary ?? "" };
 }
 
 /** A project's old keys fill only the app-wide keys that are still empty; a key the user already has is never replaced. */

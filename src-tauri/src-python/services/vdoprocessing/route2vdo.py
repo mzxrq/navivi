@@ -21,6 +21,8 @@ from services.logger.progress import tracker
 from services import runtime_paths, tuning, video_text
 from services.mapbox_token import resolve_mapbox_token
 from services.mapfetcher.maplanguage import resolve_map_style
+from services.mapfetcher.street_photos import resolve_mapillary_token, turn_photos
+from services.projectfiles import meta_dir
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.pydeckrecorder import record_headless_video
 from services.vdoprocessing.route_inputs import photo_inputs_hash
@@ -605,6 +607,11 @@ class RouteAnimator:
                 for m in res_data.get("mid_markers", [])
                 if m.get("lat") is not None and m.get("lng", m.get("lon")) is not None
             ]
+            mapillary_token = resolve_mapillary_token()
+            if (leg_mode == "walking" and mapillary_token and self.config.get("res_route_path")
+                    and self.config.get("street_photos_at_turns", tuning.STREET_PHOTOS_AT_TURNS)):
+                photo_dir = meta_dir(Path(self.config["res_route_path"]).parent) / "streetview"
+                landmarks += turn_photos([list(p) for p in leg_latlon], photo_dir, mapillary_token)
 
             # Every connectToRoute landmark in THIS leg, in the same order
             # `landmarks` (and therefore pedestrian.py's own cut sequence)

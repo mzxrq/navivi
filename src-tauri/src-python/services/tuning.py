@@ -2019,3 +2019,7 @@ QWEN3_MODEL = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
 QWEN3_DEVICE = "cpu"
 QWEN3_VRAM_FRACTION = 0.4
 QWEN3_COST = {"request": 5.0, "char": 0.85, "startup": 40.0}
+
+# [NOTE] [Legs] A Mapillary street photo pops up as a small card at each turn of a walking leg (settings.street_photos_at_turns).
+# Needs the app-wide Mapillary token; turns without coverage just show no card.
+STREET_PHOTOS_AT_TURNS = False

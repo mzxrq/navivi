@@ -552,6 +552,16 @@ export function AppSettings() {
                       label={t`Elevation heatmap`}
                     />
                   </Row>
+                  <Row
+                    title={t`Street photos at turns`}
+                    description={t`Show a Mapillary street photo at each turn of a walking leg (needs a Mapillary key)`}
+                  >
+                    <Switch
+                      checked={!!settings.street_photos_at_turns}
+                      onChange={(v) => updateProject({ street_photos_at_turns: v })}
+                      label={t`Street photos at turns`}
+                    />
+                  </Row>
                 </Section>
               </>
             )}
@@ -586,6 +596,22 @@ export function AppSettings() {
                       updateSettings({ ors_api_key: e.target.value })
                     }
                     placeholder={t`API key`}
+                    spellCheck={false}
+                    className={`${inputClass} w-full text-[12px]`}
+                  />
+                </Row>
+                <Row
+                  title={t`Mapillary`}
+                  description={t`Street photos at each turn of a walking leg`}
+                  stacked
+                >
+                  <input
+                    type="text"
+                    value={settings.mapillary_api_key || ""}
+                    onChange={(e) =>
+                      updateSettings({ mapillary_api_key: e.target.value })
+                    }
+                    placeholder="MLY|..."
                     spellCheck={false}
                     className={`${inputClass} w-full text-[12px]`}
                   />

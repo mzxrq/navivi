@@ -49,7 +49,7 @@ msgid "Rose"
 msgstr "ローズ色"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:1085
+#: src/components/ui/AppSettings.tsx:1111
 msgid "Starting..."
 msgstr "ダウンロード開始中..."
 
@@ -481,8 +481,8 @@ msgstr "アクセントカラー"
 msgid "Accept and export"
 msgstr "承認して書き出す"
 
-#: src/components/ui/AppSettings.tsx:1189
-#: src/components/ui/AppSettings.tsx:1193
+#: src/components/ui/AppSettings.tsx:1215
+#: src/components/ui/AppSettings.tsx:1219
 msgid "Active model"
 msgstr "使用するモデル"
 
@@ -618,11 +618,11 @@ msgstr "動画を追加"
 msgid "Add voice"
 msgstr "ボイスを追加"
 
-#: src/components/ui/AppSettings.tsx:871
+#: src/components/ui/AppSettings.tsx:897
 msgid "Add word"
 msgstr "単語を追加"
 
-#: src/components/ui/AppSettings.tsx:857
+#: src/components/ui/AppSettings.tsx:883
 msgid "Add words below or extract them from narration scripts."
 msgstr "以下に単語を追加するか、スクリプトから抽出する"
 
@@ -711,7 +711,7 @@ msgstr "手動での確認を挟むことなく、すべてのメディアが自
 msgid "all projects"
 msgstr "すべてのプロジェクト"
 
-#: src/components/ui/AppSettings.tsx:708
+#: src/components/ui/AppSettings.tsx:734
 #: src/components/ui/ReviewStep.tsx:98
 msgid "All projects"
 msgstr "すべてのプロジェクト"
@@ -767,7 +767,7 @@ msgstr "そのままにした項目は、これまでどおりにレンダリン
 msgid "Anything you redo is made in the background while you work in the timeline editor. Turn that off below to change a clip's photo, script or route first."
 msgstr "やり直したものは、タイムラインエディタで作業している間にバックグラウンドで作られます。クリップの写真、台本、ルートを先に変えたいときは、下でオフにしてください。"
 
-#: src/components/ui/AppSettings.tsx:588
+#: src/components/ui/AppSettings.tsx:598
 #: src/components/ui/OnlineAiSettings.tsx:204
 #: src/components/ui/OnlineAiSettings.tsx:263
 msgid "API key"
@@ -858,11 +858,11 @@ msgstr "観光地動画"
 msgid "Audio"
 msgstr "音声"
 
-#: src/components/ui/AppSettings.tsx:827
+#: src/components/ui/AppSettings.tsx:853
 msgid "auto"
 msgstr "自動"
 
-#: src/components/ui/AppSettings.tsx:632
+#: src/components/ui/AppSettings.tsx:658
 #: src/components/ui/VoiceSettings.tsx:259
 msgid "Auto"
 msgstr "自動"
@@ -875,7 +875,7 @@ msgstr "自動編集"
 msgid "Auto edit: order clips, add fades and subtitles"
 msgstr "自動編集:クリップの並び替え、フェード、字幕を追加"
 
-#: src/components/ui/AppSettings.tsx:661
+#: src/components/ui/AppSettings.tsx:687
 msgid "Auto-Detect (Recommended)"
 msgstr "自動検出 (推奨)"
 
@@ -887,7 +887,7 @@ msgstr "自動検出 (推奨)"
 #~ msgid "Auto-Director proposal"
 #~ msgstr "オートディレクターの提案"
 
-#: src/components/ui/AppSettings.tsx:903
+#: src/components/ui/AppSettings.tsx:929
 msgid "Auto-fill readings"
 msgstr "読み方を自動入力"
 
@@ -1109,8 +1109,8 @@ msgstr "キャンセル"
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: src/components/ui/AppSettings.tsx:1283
-#: src/components/ui/AppSettings.tsx:1285
+#: src/components/ui/AppSettings.tsx:1309
+#: src/components/ui/AppSettings.tsx:1311
 msgid "Cancel download"
 msgstr "ダウンロードをキャンセル"
 
@@ -1190,7 +1190,7 @@ msgstr "ファイルを選択…"
 msgid "Choose a leg"
 msgstr "区間を選択"
 
-#: src/components/ui/AppSettings.tsx:1195
+#: src/components/ui/AppSettings.tsx:1221
 #: src/components/ui/ComponentsChecklist.tsx:260
 msgid "Choose a model"
 msgstr "モデルを選択"
@@ -1221,8 +1221,8 @@ msgstr "選択…"
 msgid "Clean map before the card"
 msgstr "カードの前にきれいな地図を表示"
 
-#: src/components/ui/AppSettings.tsx:1283
-#: src/components/ui/AppSettings.tsx:1285
+#: src/components/ui/AppSettings.tsx:1309
+#: src/components/ui/AppSettings.tsx:1311
 #: src/components/ui/NewProject.tsx:317
 #: src/components/ui/ReviewStep.tsx:182
 #: src/components/ui/StatusBar.tsx:402
@@ -1486,7 +1486,7 @@ msgstr "角のポイント:クリックでなめらかに"
 msgid "Corner radius"
 msgstr "角の丸み"
 
-#: src/components/ui/AppSettings.tsx:690
+#: src/components/ui/AppSettings.tsx:716
 msgid "Correct words or kanji that are read incorrectly by the AI voice. You can auto-extract entries from scripts by typing <0>漢字(よみがな)</0> in any narration script."
 msgstr "以下に音声が誤って読み上げる単語や漢字を修正してください。"
 
@@ -1932,7 +1932,7 @@ msgstr "ダブルクリックで座標を入力"
 msgid "Downhill"
 msgstr "下り"
 
-#: src/components/ui/AppSettings.tsx:1302
+#: src/components/ui/AppSettings.tsx:1328
 msgid "Download"
 msgstr "ダウンロード"
 
@@ -2140,7 +2140,7 @@ msgstr "見積もり中…"
 msgid "Every caption with its start and end time in the video"
 msgstr "すべての字幕と、動画内での開始・終了時刻"
 
-#: src/components/ui/AppSettings.tsx:943
+#: src/components/ui/AppSettings.tsx:969
 msgid "Every subtitle starts from this look"
 msgstr "すべての字幕の基本の見た目になります"
 
@@ -2537,7 +2537,7 @@ msgstr "サンプルを生成しています。最初の1回は音声モデル�
 msgid "Generating..."
 msgstr "生成中..."
 
-#: src/components/ui/AppSettings.tsx:641
+#: src/components/ui/AppSettings.tsx:667
 msgid "Generation"
 msgstr "生成"
 
@@ -2566,7 +2566,7 @@ msgstr "フォントを追加"
 msgid "Get name from coordinate"
 msgstr "座標から名前をと取得"
 
-#: src/components/ui/AppSettings.tsx:1183
+#: src/components/ui/AppSettings.tsx:1209
 #: src/components/ui/ComponentsChecklist.tsx:249
 msgid "Get Ollama"
 msgstr "Ollama を入手"
@@ -2618,8 +2618,8 @@ msgstr "グリッド表示"
 msgid "Hard cut"
 msgstr "カット"
 
-#: src/components/ui/AppSettings.tsx:653
-#: src/components/ui/AppSettings.tsx:657
+#: src/components/ui/AppSettings.tsx:679
+#: src/components/ui/AppSettings.tsx:683
 msgid "Hardware mode"
 msgstr "ハードウェアモード"
 
@@ -2658,7 +2658,7 @@ msgstr "ログを隠す"
 msgid "Hide the route behind photos"
 msgstr "写真の背後でルートを隠す"
 
-#: src/components/ui/AppSettings.tsx:663
+#: src/components/ui/AppSettings.tsx:689
 msgid "High-spec Mode"
 msgstr "ハイスペックモード"
 
@@ -2876,8 +2876,8 @@ msgstr "日本語"
 msgid "Keep all"
 msgstr "すべて残す"
 
-#: src/components/ui/AppSettings.tsx:840
-#: src/components/ui/AppSettings.tsx:841
+#: src/components/ui/AppSettings.tsx:866
+#: src/components/ui/AppSettings.tsx:867
 msgid "Keep as written"
 msgstr "表記のまま読む"
 
@@ -2922,7 +2922,7 @@ msgstr "Kokoro-82Mには1回限りのセットアップが必要です。小さ�
 msgid "Kyoto Demo Route"
 msgstr "京都デモルート"
 
-#: src/components/ui/AppSettings.tsx:626
+#: src/components/ui/AppSettings.tsx:652
 msgid "Labels, route banners and cards drawn into the video. Auto follows the language the app was in when the project was last saved."
 msgstr "動画に描画されるラベル、ルートバナー、カードの言語です。「自動」では、プロジェクトを最後に保存したときのアプリの言語になります。"
 
@@ -2939,7 +2939,7 @@ msgstr "言語"
 msgid "Language of the new version"
 msgstr "新しいバージョンの言語"
 
-#: src/components/ui/AppSettings.tsx:625
+#: src/components/ui/AppSettings.tsx:651
 msgid "Language of the text in the video"
 msgstr "動画内の文字の言語"
 
@@ -3099,7 +3099,7 @@ msgstr "場所の名前"
 msgid "Log view"
 msgstr "ログ表示"
 
-#: src/components/ui/AppSettings.tsx:959
+#: src/components/ui/AppSettings.tsx:985
 msgid "Long subtitles"
 msgstr "長い字幕"
 
@@ -3125,7 +3125,7 @@ msgstr "探しています…"
 msgid "Looks on Wikimedia Commons for free photos of this place. Sends the place name and position to Wikimedia."
 msgstr "この場所の自由に使える写真を Wikimedia Commons から探します。場所の名前と位置が Wikimedia に送信されます。"
 
-#: src/components/ui/AppSettings.tsx:662
+#: src/components/ui/AppSettings.tsx:688
 msgid "Low-spec Mode"
 msgstr "ロースペックモード"
 
@@ -3245,9 +3245,13 @@ msgstr "動画内の地図スタイル"
 msgid "Map tools"
 msgstr "マップツール"
 
-#: src/components/ui/AppSettings.tsx:562
+#: src/components/ui/AppSettings.tsx:572
 msgid "Mapbox"
 msgstr "Mapbox"
+
+#: src/components/ui/AppSettings.tsx:604
+msgid "Mapillary"
+msgstr "Mapillary"
 
 #: src/features/map/components/WaypointEditor.tsx:768
 msgid "Marked for Regeneration: Edit image, narration, or route mode, then click Resume Generation"
@@ -3387,7 +3391,7 @@ msgstr "続行するにはプロジェクト名を入力してください"
 msgid "Name, position, route mode, scripts and media counts for each stop"
 msgstr "各地点の名前、位置、移動手段、台本、写真・動画の数"
 
-#: src/components/ui/AppSettings.tsx:1187
+#: src/components/ui/AppSettings.tsx:1213
 #: src/features/assistant/AssistantChat.tsx:20
 #: src/features/editor/ExportDialog.tsx:86
 #: src/features/editor/Inspector.tsx:519
@@ -3486,7 +3490,7 @@ msgstr "太字なし"
 msgid "No clips yet"
 msgstr "クリップがありません"
 
-#: src/components/ui/AppSettings.tsx:854
+#: src/components/ui/AppSettings.tsx:880
 msgid "No entries yet."
 msgstr "まだ投稿がありません"
 
@@ -3498,7 +3502,7 @@ msgstr "一致するフォントがありません。"
 msgid "No free photos of this place were found."
 msgstr "この場所の自由に使える写真は見つかりませんでした。"
 
-#: src/components/ui/AppSettings.tsx:1173
+#: src/components/ui/AppSettings.tsx:1199
 msgid "No local models found. To write scripts on this PC, install Ollama and keep it running, then download a model below. Or pick an online provider above, which needs nothing installed."
 msgstr "ローカルモデルが見つかりません。このPCでスクリプトを書くには、Ollama をインストールして起動したまま、下のモデルをダウンロードしてください。インストール不要のオンラインプロバイダーを上で選ぶこともできます。"
 
@@ -3506,7 +3510,7 @@ msgstr "ローカルモデルが見つかりません。このPCでスクリプ�
 #~ msgid "No locations found in document"
 #~ msgstr "ドキュメントに場所が見つかりませんでした"
 
-#: src/components/ui/AppSettings.tsx:1202
+#: src/components/ui/AppSettings.tsx:1228
 msgid "No models installed"
 msgstr "インストールされているモデルがありません"
 
@@ -3693,7 +3697,7 @@ msgstr "表ごとに1つのCSVファイルを、選んだフォルダーに保�
 msgid "One file you can send to someone, or keep as a backup. It holds the route, scripts, photos, your own videos, music and the narration audio. Map tiles and old versions are left out."
 msgstr "人に送ったりバックアップにしたりできる1つのファイルです。ルート、台本、写真、ご自身の動画、音楽、ナレーション音声が入ります。地図タイルと過去のバージョンは含まれません。"
 
-#: src/components/ui/AppSettings.tsx:966
+#: src/components/ui/AppSettings.tsx:992
 msgid "One line at a time"
 msgstr "1行ずつ表示"
 
@@ -3782,7 +3786,7 @@ msgstr "Wikimedia Commons の写真のページを開く"
 msgid "Opening the timeline editor so you can change the clip by hand."
 msgstr "タイムラインエディタを開きます。クリップを手動で変更できます。"
 
-#: src/components/ui/AppSettings.tsx:578
+#: src/components/ui/AppSettings.tsx:588
 msgid "OpenRouteService"
 msgstr "OpenRouteService"
 
@@ -3838,7 +3842,7 @@ msgstr "縁取りの色"
 #~ msgid "Outline width"
 #~ msgstr "縁取りの太さ"
 
-#: src/components/ui/AppSettings.tsx:617
+#: src/components/ui/AppSettings.tsx:643
 msgid "Output"
 msgstr "出力"
 
@@ -4160,8 +4164,8 @@ msgstr "プロバイダー"
 msgid "Purple"
 msgstr "紫"
 
-#: src/components/ui/AppSettings.tsx:643
-#: src/components/ui/AppSettings.tsx:649
+#: src/components/ui/AppSettings.tsx:669
+#: src/components/ui/AppSettings.tsx:675
 msgid "Quick export"
 msgstr "クイック書き出し"
 
@@ -4209,7 +4213,7 @@ msgstr "Qwen3-TTSのセットアップ"
 msgid "Reading"
 msgstr "読み"
 
-#: src/components/ui/AppSettings.tsx:809
+#: src/components/ui/AppSettings.tsx:835
 msgid "Reading (e.g. かだ)"
 msgstr "読み方 (例: かだ)"
 
@@ -4217,7 +4221,7 @@ msgstr "読み方 (例: かだ)"
 msgid "Reading (e.g. さんだんべき)"
 msgstr "読み(例: さんだんべき)"
 
-#: src/components/ui/AppSettings.tsx:786
+#: src/components/ui/AppSettings.tsx:812
 msgid "Reading (Furigana)"
 msgstr "読み方（フリガナ）"
 
@@ -4225,7 +4229,7 @@ msgstr "読み方（フリガナ）"
 #~ msgid "Reading guessed automatically from the scripts. Edit it to keep your own."
 #~ msgstr "台本から自動で推定した読みです。編集すると、あなたの読みとして固定されます。"
 
-#: src/components/ui/AppSettings.tsx:824
+#: src/components/ui/AppSettings.tsx:850
 msgid "Reading guessed automatically. Click to keep it as yours: the voice is then always given this reading instead of guessing from the kanji."
 msgstr "台本から自動で推定した読みです。クリックするとあなたの読みとして固定され、音声は漢字から推測せず、常にこの読みで話します。"
 
@@ -4246,7 +4250,7 @@ msgstr "読み上げています..."
 msgid "Readings of place names for the voice."
 msgstr "ナレーションでの地名の読みに使用しています。"
 
-#: src/components/ui/AppSettings.tsx:1294
+#: src/components/ui/AppSettings.tsx:1320
 #: src/components/ui/ComponentsChecklist.tsx:148
 msgid "Ready"
 msgstr "準備完了"
@@ -4260,7 +4264,7 @@ msgstr "作成の準備ができました"
 msgid "Recent"
 msgstr "最近のプロジェクト"
 
-#: src/components/ui/AppSettings.tsx:1239
+#: src/components/ui/AppSettings.tsx:1265
 msgid "Recommended models"
 msgstr "おすすめのモデル"
 
@@ -4319,8 +4323,8 @@ msgstr "モデル一覧を更新"
 msgid "Reload Application"
 msgstr "アプリを再読み込み"
 
-#: src/components/ui/AppSettings.tsx:840
-#: src/components/ui/AppSettings.tsx:841
+#: src/components/ui/AppSettings.tsx:866
+#: src/components/ui/AppSettings.tsx:867
 #: src/components/ui/OnlineAiSettings.tsx:226
 #: src/components/ui/ReviewStep.tsx:111
 #: src/components/view/ProjectManager.tsx:649
@@ -4433,11 +4437,11 @@ msgstr "このプロジェクトの立ち寄り先を新しいものに置き換
 msgid "Report a problem"
 msgstr "不具合を報告"
 
-#: src/components/ui/AppSettings.tsx:579
+#: src/components/ui/AppSettings.tsx:589
 msgid "Required for driving and some hiking routes"
 msgstr "自動車ルートや一部の歩行ルートで必要です"
 
-#: src/components/ui/AppSettings.tsx:563
+#: src/components/ui/AppSettings.tsx:573
 msgid "Required for map rendering and 3D terrain"
 msgstr "マップのレンダリングや3D地形で必要です"
 
@@ -4712,7 +4716,7 @@ msgstr "保存済み"
 msgid "Saved in this PC's credential store, not in the project."
 msgstr "このPCの資格情報ストアに保存されています（プロジェクトには保存されません）。"
 
-#: src/components/ui/AppSettings.tsx:560
+#: src/components/ui/AppSettings.tsx:570
 msgid "Saved on this PC only, never inside projects or shared files"
 msgstr "この PC にのみ保存され、プロジェクトや共有ファイルには含まれません"
 
@@ -4825,7 +4829,7 @@ msgstr "1語だけのリクエストを送って、キーとモデルを確認�
 msgid "Serious"
 msgstr "まじめ"
 
-#: src/components/ui/AppSettings.tsx:560
+#: src/components/ui/AppSettings.tsx:570
 msgid "Services"
 msgstr "サービス"
 
@@ -4909,6 +4913,10 @@ msgstr "より鮮明な地図タイル"
 #: src/features/editor/Inspector.tsx:357
 msgid "Show a box"
 msgstr "ボックスを表示"
+
+#: src/components/ui/AppSettings.tsx:557
+msgid "Show a Mapillary street photo at each turn of a walking leg (needs a Mapillary key)"
+msgstr "徒歩区間の曲がり角ごとに Mapillary の街並み写真を表示します（Mapillary キーが必要）"
 
 #: src/components/ui/AppSettings.tsx:292
 #~ msgid "Show Auto-Write script buttons and overview narration. Requires Ollama to be installed and running locally."
@@ -5008,7 +5016,7 @@ msgstr "動画のエクスポート時にスキップ"
 msgid "Skipped"
 msgstr "スキップ"
 
-#: src/components/ui/AppSettings.tsx:644
+#: src/components/ui/AppSettings.tsx:670
 msgid "Skips asset review and automatically stitches & exports finished video"
 msgstr "アセットの確認をスキップし、完成した動画を自動的に結合してエクスポートします"
 
@@ -5219,11 +5227,20 @@ msgstr "地点数"
 msgid "Stops containing custom images or AI scripts"
 msgstr "カスタム画像またはスクリプトを含む地点"
 
+#: src/components/ui/AppSettings.tsx:605
+msgid "Street photos at each turn of a walking leg"
+msgstr "徒歩区間の曲がり角ごとの街並み写真"
+
+#: src/components/ui/AppSettings.tsx:556
+#: src/components/ui/AppSettings.tsx:562
+msgid "Street photos at turns"
+msgstr "曲がり角の街並み写真"
+
 #: src/components/view/ProjectSettingsModal.tsx:178
 msgid "Streets"
 msgstr "ストリート"
 
-#: src/components/ui/AppSettings.tsx:600
+#: src/components/ui/AppSettings.tsx:626
 #: src/features/editor/Inspector.tsx:229
 #: src/features/editor/Inspector.tsx:262
 msgid "Style"
@@ -5244,7 +5261,7 @@ msgstr "サブタイトル（任意）"
 msgid "Subtitle lines in the timeline"
 msgstr "タイムライン内の字幕行"
 
-#: src/components/ui/AppSettings.tsx:943
+#: src/components/ui/AppSettings.tsx:969
 #: src/components/ui/ExportCsvDialog.tsx:78
 #: src/components/ui/PipelineLogPanel.tsx:50
 #: src/features/editor/EditorView.tsx:178
@@ -5290,7 +5307,7 @@ msgstr "システムログと通知"
 msgid "Table View"
 msgstr "テーブル表示"
 
-#: src/components/ui/AppSettings.tsx:618
+#: src/components/ui/AppSettings.tsx:644
 msgid "Target FPS"
 msgstr "ターゲットフレームレート"
 
@@ -5404,7 +5421,7 @@ msgstr "地図には Mapbox のトークンが必要です"
 msgid "The map overlays and cards in the video, not the app."
 msgstr "アプリではなく、動画内の地図オーバーレイとカードに適用されます。"
 
-#: src/components/ui/AppSettings.tsx:1190
+#: src/components/ui/AppSettings.tsx:1216
 msgid "The model that writes narration scripts and answers in the assistant chat. Only downloaded models are shown."
 msgstr "ナレーション原稿の作成とアシスタントチャットの返答に使うモデルです。ダウンロード済みのモデルのみ表示されます。"
 
@@ -5532,13 +5549,13 @@ msgstr "このバージョン"
 #~ msgid "This downloads about 30 GB and can take an hour or more. Stay on this tab; a stopped download continues where it left off."
 #~ msgstr "約30GBをダウンロードするため、1時間以上かかることがあります。このタブを開いたままにしてください。中断してもダウンロードは続きから再開します。"
 
-#: src/components/ui/AppSettings.tsx:1228
+#: src/components/ui/AppSettings.tsx:1254
 msgid "This model cannot read photos. Scripts for stops with photos are written from the place name and location facts only. A vision model such as Gemma 4 can use the photos."
 msgstr "このモデルは写真を読み取れません。写真のある立ち寄り先でも、台本は地名と位置情報だけから作られます。Gemma 4 などの画像対応モデルなら写真を活用できます。"
 
 #. placeholder {0}: fit.sizeGb.toFixed(0)
 #. placeholder {1}: fit.ramGb.toFixed(0)
-#: src/components/ui/AppSettings.tsx:1213
+#: src/components/ui/AppSettings.tsx:1239
 msgid "This model is about {0} GB and this PC has {1} GB of memory, so it loads slowly and writes only a word or two a second. A 3-4B model is much faster here."
 msgstr "このモデルは約 {0} GB で、このPCのメモリは {1} GB です。読み込みが遅く、1秒に1〜2語しか書けません。3〜4Bクラスのモデルのほうがずっと速く動きます。"
 
@@ -5555,7 +5572,7 @@ msgid "this project"
 msgstr "このプロジェクト"
 
 #: src/components/ui/AppSettings.tsx:359
-#: src/components/ui/AppSettings.tsx:707
+#: src/components/ui/AppSettings.tsx:733
 #: src/components/ui/ReviewStep.tsx:97
 msgid "This project"
 msgstr "このプロジェクト"
@@ -5760,7 +5777,7 @@ msgstr "{0}({1})と{2}({3}、{4})を使い、{5}({6})で実行して、写真ご
 msgid "Turns waypoints and GPS tracks into narrated, cinematic map-route travel videos. Everything runs on your PC."
 msgstr "経由地や GPS の記録から、ナレーション付きのシネマティックなルート旅行動画を作ります。処理はすべてお使いの PC 上で行われます。"
 
-#: src/components/ui/AppSettings.tsx:967
+#: src/components/ui/AppSettings.tsx:993
 msgid "Two lines"
 msgstr "2行で表示"
 
@@ -5943,7 +5960,7 @@ msgstr "動画を書き出しました"
 msgid "Video Exported Successfully!"
 msgstr "動画のエクスポートに成功しました"
 
-#: src/components/ui/AppSettings.tsx:602
+#: src/components/ui/AppSettings.tsx:628
 msgid "Video style"
 msgstr "動画のスタイル"
 
@@ -6030,11 +6047,11 @@ msgstr "徒歩"
 msgid "Walk In"
 msgstr "ウォークイン"
 
-#: src/components/ui/AppSettings.tsx:609
+#: src/components/ui/AppSettings.tsx:635
 msgid "Walk the route"
 msgstr "ルートを歩く"
 
-#: src/components/ui/AppSettings.tsx:603
+#: src/components/ui/AppSettings.tsx:629
 msgid "Walk the route: a walker travels the map and stops at each place. Whole route first: the whole route is shown and traced, stop-bys come last, and every stop-by gets its own stop in its leg. Each style has its own overview script; switching rewrites an automatic one."
 msgstr "ルートを歩く：地図上を歩きながら、各地点で止まって紹介します。ルート全体から：ルート全体を見せてからなぞり、立ち寄りスポットは最後に紹介します。区間の動画では、立ち寄りスポットごとに止まります。スタイルごとにオーバービューの原稿が異なり、切り替えると自動作成の原稿は書き直されます。"
 
@@ -6072,7 +6089,7 @@ msgstr "ほかに何をセットアップしますか？"
 msgid "What the video's map looks like. Default keeps the look the video always had."
 msgstr "動画の地図の見た目です。「標準」では、これまでの動画と同じ見た目になります。"
 
-#: src/components/ui/AppSettings.tsx:960
+#: src/components/ui/AppSettings.tsx:986
 msgid "When a sentence doesn't fit on one line. Applies the next time the video is generated."
 msgstr "1行に収まらない文の表示方法。次に動画を生成したときに反映されます。"
 
@@ -6096,7 +6113,7 @@ msgstr "読み込んだデータを配置する前に地図を開く場所"
 msgid "Where to save"
 msgstr "保存先"
 
-#: src/components/ui/AppSettings.tsx:654
+#: src/components/ui/AppSettings.tsx:680
 msgid "Which pipeline to use when regenerating assets"
 msgstr "素材を再生成するときに使う処理方式"
 
@@ -6108,7 +6125,7 @@ msgstr "動画ではどの場所を巡りますか？"
 msgid "White"
 msgstr "白"
 
-#: src/components/ui/AppSettings.tsx:610
+#: src/components/ui/AppSettings.tsx:636
 msgid "Whole route first"
 msgstr "ルート全体から"
 
@@ -6134,11 +6151,11 @@ msgstr "単語"
 msgid "Word (e.g. 三段壁)"
 msgstr "単語(例: 三段壁)"
 
-#: src/components/ui/AppSettings.tsx:798
+#: src/components/ui/AppSettings.tsx:824
 msgid "Word (e.g. 加太)"
 msgstr "単語 (例: 加太)"
 
-#: src/components/ui/AppSettings.tsx:783
+#: src/components/ui/AppSettings.tsx:809
 msgid "Word / Kanji"
 msgstr "単語 / 漢字"
 
@@ -6146,7 +6163,7 @@ msgstr "単語 / 漢字"
 msgid "Words every project shares live in App Settings, which you can open from here without opening a project."
 msgstr "すべてのプロジェクトで共有する単語はアプリ設定にあります。プロジェクトを開かずにここから開けます。"
 
-#: src/components/ui/AppSettings.tsx:730
+#: src/components/ui/AppSettings.tsx:756
 msgid "Words here apply to every project. A project's own entry for the same word wins."
 msgstr "ここにある単語はすべてのプロジェクトに適用されます。同じ単語がプロジェクト側にある場合は、プロジェクトが優先されます。"
 

@@ -104,6 +104,7 @@ export interface ProjectSettings {
   /** App-wide, never saved in a project: the workspace merges them in from the `api_keys` app setting (utils/apiKeys.ts). */
   mapbox_api_key?: string;
   ors_api_key?: string;
+  mapillary_api_key?: string;
   auto_save_interval: number;
   skip_rich_media?: boolean;
   default_route_mode?: RouteMode;
@@ -152,6 +153,7 @@ export interface ProjectSettings {
     subtitle_style?: TextStyle;
   };
   show_route_heatmap?: boolean;
+  street_photos_at_turns?: boolean;
   map_3d?: boolean; // the editor map's 3D terrain switch, remembered per project
   // "Look of the video" (Project settings). Every key is optional: unset = what the renderer always did (videoLookDefaults).
   summary_card_style?: SummaryCardStyle;
