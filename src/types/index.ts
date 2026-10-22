@@ -172,6 +172,13 @@ export interface ProjectSettings {
   enable_outro?: boolean;
   outro_style?: "scroll" | "grid";
   outro_route_info?: boolean;
+  // The outro's title box: height in 1080-line px and fill colour ("#RRGGBB"; unset = the page background),
+  // and its text styles (unset = the intro's).
+  outro_header_height?: number;
+  outro_header_color?: string;
+  outro_kicker_style?: TextStyle;
+  outro_title_style?: TextStyle;
+  outro_subtitle_style?: TextStyle;
   start_pin_color?: [number, number, number];
   end_pin_color?: [number, number, number];
   stopby_pin_color?: [number, number, number];

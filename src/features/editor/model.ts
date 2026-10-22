@@ -47,6 +47,17 @@ export interface TextLine {
   delay?: number;
 }
 
+// A full-width band behind a text item, at the edge it sits on (top for "top", bottom for "bottom", else centred).
+export interface TextBox {
+  color: string; // "#RRGGBB"
+  opacity: number; // 0..1
+  height: number; // px on a 1080p frame
+  fade?: number; // px of soft edge under a top box (above a bottom one); absent = 56
+  base?: number; // the outro: the height its video was drawn with. The export moves the content down (or up) by height - base
+}
+
+export const DEFAULT_TEXT_BOX: TextBox = { color: "#131C2E", opacity: 0.85, height: 190, fade: 56 };
+
 export interface TextClip {
   id: string;
   segmentId: string;
@@ -59,10 +70,11 @@ export interface TextClip {
   position?: "top" | "middle" | "bottom";
   margin_v?: number; // px from that edge (1080p frame)
   align?: "left" | "center" | "right"; // absent = centred
+  box?: TextBox; // the band behind the text; absent = none
   margin_h?: number; // px from the left/right edge
   animation?: TextAnimation; // absent = "pop"
-  // What made it: the intro's title, an attraction's place name, or added by hand.
-  kind?: "intro" | "place";
+  // What made it: the intro's or outro's title, an attraction's place name, or added by hand.
+  kind?: "intro" | "outro" | "place";
 }
 
 export type TextAnimation = "pop" | "fade" | "none";
@@ -418,6 +430,11 @@ export function exportOptionsFrom(settings: Partial<ProjectSettings>): ExportOpt
   };
 }
 
+function contentShift(timeline: TimelineData, seg: Segment): { content_shift?: number } {
+  const box = timeline.texts.find((x) => x.segmentId === seg.id && x.kind === "outro")?.box;
+  return box && typeof box.base === "number" && box.height !== box.base ? { content_shift: box.height - box.base } : {};
+}
+
 export function toManifest(projectName: string, timeline: TimelineData, captionStyle?: TextStyle, options: ExportOptions = {}) {
   const { placed, total } = layout(timeline);
   const cues = placedCues(timeline, placed).map((c) => ({
@@ -443,6 +460,8 @@ export function toManifest(projectName: string, timeline: TimelineData, captionS
       trim_out: s.trimOut < s.videoDuration - 0.01 ? s.trimOut : null,
       // The export makes each clip exactly as long as the preview plays it.
       duration: segmentLength(s),
+      // The outro's content starts below its title box: a taller (shorter) box pushes it down (up) at export.
+      ...contentShift(timeline, s),
       volume: s.volume,
       muted: s.muted,
       fade_into_next_seconds: s.fadeIntoNext,
@@ -461,6 +480,7 @@ export function toManifest(projectName: string, timeline: TimelineData, captionS
       ...(x.margin_v !== undefined ? { margin_v: x.margin_v } : {}),
       ...(x.align ? { align: x.align } : {}),
       ...(x.margin_h !== undefined ? { margin_h: x.margin_h } : {}),
+      ...(x.box ? { box: x.box } : {}),
       ...(x.animation ? { animation: x.animation } : {}),
       ...(x.kind ? { kind: x.kind } : {}),
     })),
@@ -633,6 +653,7 @@ export async function timelineFromPipeline(
           ...(typeof x.margin_v === "number" ? { margin_v: x.margin_v } : {}),
           ...(x.align ? { align: x.align } : {}),
           ...(typeof x.margin_h === "number" ? { margin_h: x.margin_h } : {}),
+          ...(x.box && typeof x.box.height === "number" ? { box: x.box } : {}),
           ...(x.animation ? { animation: x.animation } : {}),
           ...(x.kind ? { kind: x.kind } : {}),
         });

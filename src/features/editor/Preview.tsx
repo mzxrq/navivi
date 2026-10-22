@@ -4,6 +4,7 @@ import { Pause, Play, SkipBack } from "../../components/ui/icons";
 import { Caption } from "../../components/ui/Caption";
 import { Tip } from "../../components/ui/Tip";
 import { DEFAULT_EXTRA_VOLUME, fadeIns, isUnlinked, layout, placedCues, placedTexts, PlacedText, segmentAt, trimmedLength, TimelineData } from "./model";
+import { hexToRgb } from "../../utils/color";
 import { formatTime, mediaUrl, player, usePlayerTime, usePlaying } from "./player";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import {
@@ -68,6 +69,52 @@ function SubtitleOverlay({ cues, show }: { cues: ReturnType<typeof placedCues>; 
   );
 }
 
+const rgba = (hex: string, opacity: number) => `rgba(${hexToRgb(hex).join(", ")}, ${opacity})`;
+
+// The band behind a text item and its soft edge, drawn like the export (vdoexporter._text_box_events).
+export function TextBoxBand({ item, cq }: { item: PlacedText; cq: (px: number) => string }) {
+  const box = item.box;
+  if (!box || !(box.height > 0)) return null;
+  const height = Math.min(1080, box.height);
+  const fade = item.position === "top" || item.position === "bottom" ? Math.max(0, Math.min(400, box.fade ?? 56)) : 0;
+  const solid = rgba(box.color, box.opacity);
+  const bottom = item.position === "bottom";
+  const middle = item.position !== "top" && !bottom;
+  return (
+    <>
+      <div
+        className="absolute left-0 right-0"
+        style={{ height: cq(height), background: solid, ...(bottom ? { bottom: 0 } : middle ? { top: cq((1080 - height) / 2) } : { top: 0 }) }}
+      />
+      {fade > 0 && (
+        <div
+          className="absolute left-0 right-0"
+          style={{
+            height: cq(fade),
+            background: `linear-gradient(${bottom ? "to top" : "to bottom"}, ${solid}, ${rgba(box.color, 0)})`,
+            ...(bottom ? { bottom: cq(height) } : { top: cq(height) }),
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+// The outro's content moves with its title box's height, as the export does (content_shift).
+export function ShiftedLayer({ texts, children }: { texts: PlacedText[]; children: React.ReactNode }) {
+  const time = usePlayerTime();
+  const x = texts.find((y) => y.kind === "outro" && typeof y.box?.base === "number" && time >= y.globalStart && time < y.globalEnd);
+  const shift = x ? x.box!.height - x.box!.base! : 0;
+  return (
+    <>
+      {shift !== 0 && <div className="absolute inset-0" style={{ background: "#131C2E" }} />}
+      <div className="absolute inset-0" style={shift ? { transform: `translateY(${(shift / 1080) * 100}cqh)` } : undefined}>
+        {children}
+      </div>
+    </>
+  );
+}
+
 // Text-track items: centred title + subtitle, animated like the export (introclip.title_events).
 function TextOverlay({ texts }: { texts: PlacedText[] }) {
   const time = usePlayerTime();
@@ -106,6 +153,7 @@ function TextOverlay({ texts }: { texts: PlacedText[] }) {
         const line = "absolute whitespace-nowrap leading-none";
         return (
           <div key={x.id}>
+            <TextBoxBand item={x} cq={cq} />
             {hasKicker && kf.opacity > 0 && (
               <span
                 className={line}
@@ -152,7 +200,7 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
   const voiceRef = useRef<HTMLAudioElement>(null);
   const musicRef = useRef<HTMLAudioElement>(null);
   const extraRef = useRef<HTMLAudioElement>(null);
-  const loaded = useRef({ video: "", fade: "", voice: "", music: "", extra: "" });
+  const loaded = useRef({ voice: "", music: "", extra: "" });
   // Narration goes through a gain node once it's set above 100%: an <audio> element can't
   // play louder, the export can.
   const audioCtx = useRef<AudioContext | null>(null);
@@ -248,10 +296,8 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
       const from = fading ? placed[index - 1]?.seg : (fades[index + 1] ?? 0) > 0 ? seg : undefined;
       if (from) {
         const src = mediaUrl(projectDir, from.video);
-        if (loaded.current.fade !== src) {
-          fadeVideo.src = src;
-          loaded.current.fade = src;
-        }
+        // Compared with the element itself, not a remembered string, so a remounted <video> reloads.
+        if (fadeVideo.getAttribute("src") !== src) fadeVideo.src = src;
         const last = Math.max(0, from.trimIn + trimmedLength(from) - 0.04);
         if (Math.abs(fadeVideo.currentTime - last) > 0.05) fadeVideo.currentTime = last;
       }
@@ -259,10 +305,7 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
     }
 
     const videoSrc = mediaUrl(projectDir, seg.video);
-    if (loaded.current.video !== videoSrc) {
-      video.src = videoSrc;
-      loaded.current.video = videoSrc;
-    }
+    if (video.getAttribute("src") !== videoSrc) video.src = videoSrc;
     const holding = local >= trimmedLength(seg);
     const wantVideo = seg.trimIn + Math.min(local, trimmedLength(seg));
     if (Math.abs(video.currentTime - wantVideo) > (isPlaying ? 0.35 : 0.03)) video.currentTime = wantVideo;
@@ -389,8 +432,10 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
           className="relative max-h-full max-w-full aspect-video h-full bg-black rounded-xl overflow-hidden shadow-sm ring-1 ring-black/10 dark:ring-white/10"
           style={{ containerType: "size" }}
         >
-          <video ref={videoRef} muted playsInline preload="auto" className="absolute inset-0 w-full h-full object-contain" />
-          <video ref={fadeRef} muted playsInline preload="auto" className="absolute inset-0 w-full h-full object-contain pointer-events-none" style={{ opacity: 0 }} />
+          <ShiftedLayer texts={texts}>
+            <video ref={videoRef} muted playsInline preload="auto" className="absolute inset-0 w-full h-full object-contain" />
+            <video ref={fadeRef} muted playsInline preload="auto" className="absolute inset-0 w-full h-full object-contain pointer-events-none" style={{ opacity: 0 }} />
+          </ShiftedLayer>
           <audio ref={voiceRef} preload="auto" crossOrigin="anonymous" />
           <audio ref={musicRef} preload="auto" />
           <audio ref={extraRef} preload="auto" />

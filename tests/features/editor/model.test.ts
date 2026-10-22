@@ -245,6 +245,20 @@ describe("timeline.json", () => {
     expect(Object.keys(toManifest("Trip", timeline([seg("a")])))).toEqual(Object.keys(manifest));
   });
 
+  it("moves the outro's content by how far its title box was resized", () => {
+    const line = (text: string) => ({ text });
+    const outro = (box: { color: string; opacity: number; height: number; base?: number }): TimelineData => ({
+      ...timeline([seg("a"), seg("o", { kind: "outro" })]),
+      texts: [{ id: "t", segmentId: "o", start: 0, end: 5, kind: "outro", title: line("Trip"), subtitle: line(""), box }],
+    });
+    const tracks = (box: { color: string; opacity: number; height: number; base?: number }): any[] => toManifest("Trip", outro(box)).video_tracks;
+    expect(tracks({ color: "#000000", opacity: 1, height: 300, base: 200 })[1].content_shift).toBe(100);
+    expect(tracks({ color: "#000000", opacity: 1, height: 150, base: 200 })[1].content_shift).toBe(-50);
+    expect("content_shift" in tracks({ color: "#000000", opacity: 1, height: 200, base: 200 })[1]).toBe(false);
+    expect("content_shift" in tracks({ color: "#000000", opacity: 1, height: 300 })[1]).toBe(false); // no base: an ordinary box
+    expect("content_shift" in tracks({ color: "#000000", opacity: 1, height: 300, base: 200 })[0]).toBe(false);
+  });
+
   it("writes the Export dialog's choices", () => {
     const options = exportOptionsFrom({
       default_export_resolution: "4k", export_fps: 24, export_burn_subtitles: false, export_save_srt: true,

@@ -10,6 +10,7 @@ cannot drift or invent objects the way extra Wan segments do.
 
 import math
 import random
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -195,6 +196,64 @@ def _extend_with_photo(video_path: str, photo_path: str, gap: float, output_path
     return output_path
 
 
+def _extend_with_reverse(video_path: str, gap: float, output_path: str) -> Optional[str]:
+    """video_path followed by itself played backwards, then forwards again, and so on (a boomerang)
+    until `gap` more seconds have passed. Each join is the same frame, so nothing jumps; the repeated
+    frame at a join is dropped. One re-encode of the joined list."""
+    import tempfile
+
+    from services.tts.ttsengine import FFmpegManager
+
+    ffmpeg = FFmpegManager.resolve_ffmpeg_bin()
+    current = FFmpegManager.get_media_duration(video_path)
+    if current <= 0.2:
+        return None
+    work = Path(tempfile.mkdtemp(prefix="navivi_reverse_"))
+    try:
+        def cut(name: str, vf: str) -> Optional[Path]:
+            out = work / name
+            run = subprocess.run(
+                [ffmpeg, "-y", *tuning.ffmpeg_log_args(), "-i", video_path, "-an", "-vf", vf,
+                 "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "16", "-preset", "fast",
+                 "-pix_fmt", "yuv420p", str(out)],
+                capture_output=True, encoding="utf-8", errors="replace",
+            )
+            if run.returncode != 0:
+                logger.warning("Reverse tail failed: %s", run.stderr.strip())
+                return None
+            return out
+
+        backward = cut("back.mp4", "reverse,trim=start_frame=1,setpts=PTS-STARTPTS")
+        forward = cut("again.mp4", "trim=start_frame=1,setpts=PTS-STARTPTS")
+        if backward is None or forward is None:
+            return None
+        pieces = [Path(video_path)]
+        piece = current - 1.0 / _fps(video_path)  # each copy lost its first frame
+        covered, turn = current, 0
+        while covered < current + gap:
+            pieces.append(backward if turn % 2 == 0 else forward)
+            covered += piece
+            turn += 1
+        listing = work / "list.txt"
+        listing.write_text(
+            "".join("file '{}'\n".format(str(p).replace("\\", "/").replace("'", "'\\''")) for p in pieces),
+            encoding="utf-8",
+        )
+        run = subprocess.run(
+            [ffmpeg, "-y", *tuning.ffmpeg_log_args(), "-f", "concat", "-safe", "0", "-i", str(listing),
+             "-t", f"{current + gap:.3f}", "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18",
+             "-preset", "fast", "-pix_fmt", "yuv420p", output_path],
+            capture_output=True, encoding="utf-8", errors="replace",
+        )
+        if run.returncode != 0:
+            logger.warning("Reverse tail failed: %s", run.stderr.strip())
+            return None
+        logger.info("Filled %.1fs after %s by playing it back and forth.", gap, video_path)
+        return output_path
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
 def extend_with_slow_move(
     video_path: str, target_duration: float, camera_pan, output_path: str,
     rng: Optional[random.Random] = None, photo_path: Optional[str] = None,
@@ -214,6 +273,8 @@ def extend_with_slow_move(
         gap = target_duration - current
         if gap <= 0.05:
             return None
+        if tuning.ATTRACTION_SLOW_MOVE_STYLE == "reverse":
+            return _extend_with_reverse(video_path, gap, output_path)
         if tuning.ATTRACTION_SLOW_MOVE_STYLE == "photo":
             # No photo (a refit of a finished clip, which already ends on it): hold.
             return _extend_with_photo(video_path, photo_path, gap, output_path) if photo_path else None

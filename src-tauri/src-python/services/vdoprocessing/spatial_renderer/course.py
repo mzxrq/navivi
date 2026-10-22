@@ -237,7 +237,11 @@ class _CourseOverviewMixin:
                 mode_breakdown=summary.get("mode_breakdown"),
                 mode_duration=summary.get("mode_duration"),
             )
-        reserved = [(w * 0.18, 0.0, w * 0.82, h * 0.16)]  # the headline
+        taglines = [str(x) for x in (self.config.get("overview_taglines") or []) if str(x).strip()]
+        # the headline, docked top left: as wide as the widest tagline
+        headline_font = max(22, int(h * 0.033))
+        headline_w = max((self.graphics.top_banner_width(x, headline_font) for x in taglines), default=0)
+        reserved = [(0.0, 0.0, min(float(w), h * 0.03 * 2 + headline_w), h * 0.14)]
         if summary_card is not None:
             ch, cw = summary_card.shape[:2]
             drop = tuning.COURSE_STATS_DROP_PX
@@ -353,7 +357,6 @@ class _CourseOverviewMixin:
             opacity = np.clip(1.0 - (on_white - on_black).mean(axis=2, keepdims=True) / 255.0, 0.0, 1.0)
             return 1.0 - opacity, on_black
 
-        taglines = [str(x) for x in (self.config.get("overview_taglines") or []) if str(x).strip()]
         total_frames = int(math.ceil(end_at * fps))
         logger.info(
             "Course overview: %.1fs (route from %.1fs, traced by %.1fs, stats at %.1fs%s); %d card(s).",
@@ -407,7 +410,8 @@ class _CourseOverviewMixin:
             text, alpha = tagline_at(taglines, t)
             if text and alpha > 0:
                 frame = self.graphics.render_top_banner(
-                    frame, text, alpha=alpha, top_margin=int(h * 0.07), font_px=max(22, int(h * 0.033)))
+                    frame, text, alpha=alpha, top_margin=int(h * 0.03), font_px=max(22, int(h * 0.033)),
+                    align="left", left_margin=int(h * 0.03))
             if summary_card is not None and t >= stats_at:
                 u = _smoothstep((t - stats_at) / tuning.COURSE_STATS_SLIDE_SECONDS)
                 frame = self.graphics.composite_card_on_frame(

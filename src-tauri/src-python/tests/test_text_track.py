@@ -253,3 +253,96 @@ def test_a_long_delay_still_leaves_the_line_on_screen():
 def test_saved_place_look_carries_line_motion():
     item = place_text_item("x", {"title_animation": "fade", "title_delay": 0.3})
     assert item["title"]["animation"] == "fade" and item["title"]["delay"] == 0.3
+
+
+def test_outro_text_spans_the_outro_until_its_logo_card(tmp_path, monkeypatch):
+    lengths = {"01_overview.mp4": 20.0, tuning.OUTRO_OUTPUT_FILENAME: 30.0}
+    monkeypatch.setattr(timeline_step, "_duration", lambda p: lengths.get(Path(p).name, 0.0) if p else 0.0)
+    (tmp_path / "job_config.json").write_text(json.dumps({"waypoints": []}), encoding="utf-8")
+    route = tmp_path / "assets/video/route"
+    overview = _touch(route / "01_overview.mp4")
+    outro = _touch(tmp_path / "assets/video" / tuning.OUTRO_OUTPUT_FILENAME)
+    item = {"kind": "outro", "title": {"text": "Trip"}, "subtitle": {"text": ""}, "trim_end": 4.0}
+
+    path = build_timeline(
+        video_paths=[overview], attraction_videos=[], final_videos=[overview, outro],
+        project_dir=str(tmp_path), outro_text=item,
+    )
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    (text,) = data["texts"]
+    assert (text["start"], text["end"]) == (20.0, 46.0)  # the outro's 30 s less the 4 s logo card
+    assert "trim_end" not in text and text["kind"] == "outro"
+
+BS = chr(92)  # a backslash, the start of an ASS override tag
+BAND = BS + "p1"
+
+
+def test_a_text_box_is_drawn_as_a_band_behind_the_text(tmp_path):
+    item = {"start": 2.0, "end": 8.0, "position": "top", "title": {"text": "Trip"}, "subtitle": {"text": ""},
+            "box": {"color": "#ff0000", "opacity": 0.5, "height": 200, "fade": 0}}
+    path = write_caption_ass([], None, (1920, 1080), tmp_path / "t.ass", check_font=False, texts=[item])
+    lines = _events(path.read_text(encoding="utf-8"))
+    (band,) = [l for l in lines if BAND in l]
+    assert band.startswith("Dialogue: 0,0:00:02.00,0:00:08.00,")  # layer 0, under the text
+    assert BS + "1c&H0000FF&" in band and BS + "1a&H7F&" in band  # red (BGR), half transparent
+    assert "m 0 0.0 l 1920 0.0 l 1920 200.0 l 0 200.0" in band
+    assert all(l.startswith("Dialogue: 1,") for l in lines if BAND not in l)
+
+
+def test_a_top_box_ends_in_a_soft_edge_of_thinner_strips(tmp_path):
+    item = {"start": 0.0, "end": 5.0, "position": "top", "title": {"text": "T"}, "subtitle": {"text": ""},
+            "box": {"color": "#000000", "opacity": 1.0, "height": 100, "fade": 60}}
+    path = write_caption_ass([], None, (1920, 1080), tmp_path / "t.ass", check_font=False, texts=[item])
+    strips = [l for l in _events(path.read_text(encoding="utf-8")) if BAND in l]
+    assert len(strips) == 1 + 12
+    alphas = [int(l.split(BS + "1a&H")[1][:2], 16) for l in strips]
+    assert alphas[0] == 0 and alphas[1:] == sorted(alphas[1:]) and alphas[-1] < 255  # clearer and clearer
+    assert "l 0 160.0" in strips[-1]  # ends 60 px under the box
+
+
+def test_a_middle_box_has_no_soft_edge(tmp_path):
+    item = {"start": 0.0, "end": 5.0, "title": {"text": "T"}, "subtitle": {"text": ""},
+            "box": {"color": "#000000", "opacity": 1.0, "height": 100, "fade": 60}}
+    path = write_caption_ass([], None, (1920, 1080), tmp_path / "t.ass", check_font=False, texts=[item])
+    assert len([l for l in _events(path.read_text(encoding="utf-8")) if BAND in l]) == 1
+
+
+def test_a_box_with_no_height_or_a_bad_colour_draws_nothing(tmp_path):
+    for box in ({"color": "#ff0000", "height": 0}, {"color": "nonsense", "height": 100}, "x"):
+        item = {"start": 0.0, "end": 1.0, "title": {"text": "T"}, "subtitle": {"text": ""}, "box": box}
+        path = write_caption_ass([], None, (1920, 1080), tmp_path / "t.ass", check_font=False, texts=[item])
+        assert not any(BAND in l for l in _events(path.read_text(encoding="utf-8")))
+
+
+def test_content_shift_filter_pushes_the_picture_down_or_up_and_keeps_the_size():
+    from services.vdoprocessing.vdoexporter import VideoExporter
+
+    f = VideoExporter._content_shift_filter
+    assert f(0, (1920, 1080)) == "" and f(10, None) == ""
+    assert f(100, (1920, 1080)) == "pad=1920:1180:0:100:color=0x131c2e,crop=1920:1080:0:0"
+    assert f(-100, (1920, 1080)) == "crop=1920:980:0:100,pad=1920:1080:0:0:color=0x131c2e"
+    assert f(100, (1280, 720)).startswith("pad=1280:787:0:67")  # scaled to the frame's height
+
+
+def test_the_shifted_clip_has_the_same_size_and_a_background_strip_on_top(tmp_path):
+    import subprocess
+
+    import cv2
+    import numpy as np
+
+    from services.tts.ttsengine import FFmpegManager
+    from services.vdoprocessing.vdoexporter import VideoExporter
+
+    src, out = tmp_path / "a.mp4", tmp_path / "b.mp4"
+    ffmpeg = FFmpegManager.resolve_ffmpeg_bin()
+    subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=10:duration=1",
+                    "-pix_fmt", "yuv420p", str(src)], check=True)
+    vf = VideoExporter._content_shift_filter(300, (320, 180))  # 300 of 1080 lines = 50 px here
+    subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", str(src), "-vf", vf, "-pix_fmt", "yuv420p", str(out)], check=True)
+    cap = cv2.VideoCapture(str(out))
+    ok, frame = cap.read()
+    cap.release()
+    assert ok and frame.shape[:2] == (180, 320)
+    bg = np.array(tuning.OUTRO_BG_COLOR[::-1])
+    assert (np.abs(frame[:45].astype(int) - bg) < 12).all()  # the pushed-down gap
+    assert not (np.abs(frame[120:].astype(int) - bg) < 12).all()  # the picture continues below

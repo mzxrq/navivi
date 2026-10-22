@@ -142,6 +142,7 @@ def build_timeline(
     leg_narration_splits: Optional[dict[str, tuple[Optional[str], Optional[str]]]] = None,
     attraction_fade_seconds: float = 0.0,
     intro_text: Optional[dict] = None,
+    outro_text: Optional[dict] = None,
     place_label_look: Optional[dict] = None,
     overview_voice_start: Optional[float] = None,
 ) -> str:
@@ -386,6 +387,11 @@ def build_timeline(
         clip_texts = []
         if intro_text and is_intro:
             clip_texts.append({"start": 0.0, "end": round(length, 3), **intro_text})
+        # The outro's title rides on the text track too, until its logo end card starts.
+        if outro_text and source_name == tuning.OUTRO_OUTPUT_FILENAME:
+            shown = {k: v for k, v in outro_text.items() if k != "trim_end"}
+            end = max(0.5, length - float(outro_text.get("trim_end") or 0.0))
+            clip_texts.append({"start": 0.0, "end": round(end, 3), **shown})
         # An attraction's place name, when its clip was finalized without it.
         if kind == "attraction":
             from services.vdoprocessing.place_label import place_text_item, unburned_place_label

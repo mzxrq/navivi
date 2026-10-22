@@ -293,3 +293,106 @@ class TestScrollOffsets:
         offsets = outrocard._scroll_offsets(100_000, fps)
         cap = t.OUTRO_SCROLL_MAX_SECONDS + t.OUTRO_SCROLL_START_HOLD_SECONDS + t.OUTRO_SCROLL_END_HOLD_SECONDS
         assert len(offsets) <= round(cap * fps) + 2 * 40
+
+
+class TestHeaderBox:
+    def _page(self, tmp_path, heading=None, brief=BRIEF):
+        wps = TestRouteInfo()._waypoints(tmp_path)
+        return outrocard._build_scroll_page("My Trip", wps, SIZE, brief, heading or {"title": "My Trip"})
+
+    def test_the_box_height_follows_the_setting_on_both_pages(self, tmp_path):
+        for brief in (BRIEF, None):
+            natural = self._page(tmp_path, brief=brief).info["header_h"]
+            tall = self._page(tmp_path, {"title": "My Trip", "header_height": 400}, brief).info["header_h"]
+            assert tall > natural
+
+    def test_a_box_too_short_for_the_title_is_not_cut_off(self, tmp_path):
+        for brief in (BRIEF, None):
+            page = self._page(tmp_path, {"title": "My Trip", "header_height": 1}, brief)
+            # the pinned strip reaches below the title and subtitle (drawn down to ~95 px of 704)
+            assert page.info["header_h"] >= 95 * SIZE[1] / outrocard._CANVAS_H
+
+    def test_a_huge_box_is_held_to_most_of_the_frame(self, tmp_path):
+        page = self._page(tmp_path, {"title": "My Trip", "header_height": 5000})
+        assert page.info["header_h"] <= SIZE[1] * 0.8
+
+    def test_the_box_takes_its_colour(self, tmp_path):
+        page = self._page(tmp_path, {"title": "My Trip", "header_color": "#ff0000"})
+        assert page.getpixel((2, 2)) == (255, 0, 0)
+        assert page.getpixel((2, page.info["header_h"] + 40)) != (255, 0, 0)
+
+
+class TestOutroTitleAsText:
+    def test_an_unburned_title_leaves_the_header_blank(self, tmp_path):
+        wps = TestRouteInfo()._waypoints(tmp_path)
+        for brief in (BRIEF, None):
+            burned = outrocard._build_scroll_page("My Trip", wps, SIZE, brief, {"title": "My Trip", "burn_text": True})
+            blank = outrocard._build_scroll_page("My Trip", wps, SIZE, brief, {"title": "My Trip", "burn_text": False})
+            top = (0, 0, SIZE[0], blank.info["header_h"] // 2)
+            assert len(blank.crop(top).getcolors(10)) == 1  # nothing but the background
+            assert len(burned.crop(top).getcolors(10_000)) > 1
+
+    def test_the_item_spans_the_scroll_and_stops_before_the_logo_card(self, tmp_path):
+        import json
+
+        from services.vdoprocessing.videopipeline.outro_step import outro_text_item
+
+        cfg = tmp_path / "job_config.json"
+        cfg.write_text(json.dumps({"directory_path": str(tmp_path), "project_name": "My Trip", "waypoints": [],
+                                   "settings": {"outro_title_style": {"color": "#ff0000"}}}), encoding="utf-8")
+        from services.config.job_config import JobConfigManager
+
+        JobConfigManager._instance = None
+        item = outro_text_item(str(cfg))
+        assert item["kind"] == "outro" and item["position"] == "top"
+        assert item["title"]["text"] == "My Trip" and item["title"]["style"]["color"] == "#ff0000"
+        assert item["title"]["style"]["font_size"] > 0 and item["trim_end"] >= 0
+
+    def test_a_grid_outro_has_no_text_item(self, tmp_path):
+        import json
+
+        from services.config.job_config import JobConfigManager
+        from services.vdoprocessing.videopipeline.outro_step import outro_text_item
+
+        cfg = tmp_path / "job_config.json"
+        cfg.write_text(json.dumps({"directory_path": str(tmp_path), "project_name": "T", "waypoints": [],
+                                   "settings": {"outro_style": "grid"}}), encoding="utf-8")
+        JobConfigManager._instance = None
+        assert outro_text_item(str(cfg)) is None
+
+
+class TestNaturalHeaderHeight:
+    def test_it_matches_the_page_at_a_1080_frame(self, tmp_path):
+        wps = TestRouteInfo()._waypoints(tmp_path)
+        size = (1920, 1080)
+        heading = {"title": "My Trip", "subtitle": "A day out", "kicker": "Nara"}
+        route = outrocard._build_scroll_page("My Trip", wps, size, BRIEF, heading)
+        assert abs(outrocard.header_height_1080(heading, True) - route.info["header_h"]) <= 2
+        plain = outrocard._build_scroll_page("My Trip", wps, size, None, heading)
+        assert abs(outrocard.header_height_1080(heading, False) - plain.info["header_h"]) <= 2
+
+
+class TestUnpinnedOutro:
+    def _top_row_is_background_while_scrolling(self, tmp_path, burn):
+        import cv2
+        import numpy as np
+
+        wps = TestRouteInfo()._waypoints(tmp_path)
+        brief = {**BRIEF, "legs": BRIEF["legs"] * 4}
+        page = outrocard._build_scroll_page("T", wps, SIZE, brief, {"title": "T", "burn_text": burn})
+        assert page.info["pinned"] is burn
+        out = tmp_path / f"o{burn}.mp4"
+        assert outrocard._write_scroll_clip(page, out, 12, SIZE, None)
+        cap = cv2.VideoCapture(str(out))
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(total * 0.6))
+        ok, frame = cap.read()
+        cap.release()
+        assert ok
+        bg = np.array(outrocard.tuning.OUTRO_BG_COLOR[::-1])
+        header = page.info["header_h"]  # the last rows of the pinned box, under the drawn title
+        return bool((np.abs(frame[header - 5: header].astype(int) - bg) < 12).all())
+
+    def test_a_pinned_page_keeps_its_top_clear_and_an_unpinned_one_scrolls_under_the_edge(self, tmp_path):
+        assert self._top_row_is_background_while_scrolling(tmp_path, True)
+        assert not self._top_row_is_background_while_scrolling(tmp_path, False)

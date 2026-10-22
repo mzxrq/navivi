@@ -103,6 +103,56 @@ def _ass_text(text: str) -> str:
     return text.replace("\\", "＼").replace("{", "｛").replace("}", "｝").replace("\n", "\\N")
 
 
+# How many strips a text box's soft edge is drawn in (each one step of the fade).
+_BOX_FADE_STEPS = 12
+_BOX_FADE_DEFAULT_PX = 56
+
+
+def _text_box_events(item: dict, play_w: int) -> list:
+    """A full-width band behind a text item (`box`: colour, opacity 0..1, height in 1080-line px) drawn at
+    the item's own edge: top for "top", bottom for "bottom", else centred. Layer 0, under the text. For a
+    top or bottom item it ends in a soft edge, `box["fade"]` px (default 56) of thinner strips, so whatever
+    scrolls under it dissolves instead of being cut off."""
+    from services.localization.text_style import _bgr, parse_color
+
+    box = item.get("box")
+    parsed = parse_color(box.get("color")) if isinstance(box, dict) else None
+    try:
+        height = min(1080.0, float(box.get("height") or 0)) if parsed else 0.0
+    except (TypeError, ValueError):
+        return []
+    if height <= 0:
+        return []
+    opacity = box.get("opacity")
+    opacity = 1.0 if not isinstance(opacity, (int, float)) or isinstance(opacity, bool) else max(0.0, min(1.0, float(opacity)))
+    position = str(item.get("position") or "middle")
+    y0 = {"top": 0.0, "bottom": 1080.0 - height}.get(position, (1080.0 - height) / 2)
+    when = f"{_ass_timestamp(float(item['start']))},{_ass_timestamp(float(item['end']))}"
+    colour = "\\1c&H" + _bgr(parsed[0]) + "&"
+
+    def strip(top: float, bottom: float, alpha_opacity: float) -> str:
+        alpha = 255 - int(round(alpha_opacity * 255))
+        tags = "{\\an7\\pos(0,0)\\bord0\\shad0" + colour + "\\1a&H" + f"{alpha:02X}" + "&\\p1}"
+        shape = f"m 0 {top:.1f} l {play_w} {top:.1f} l {play_w} {bottom:.1f} l 0 {bottom:.1f}"
+        return f"Dialogue: 0,{when},Text,,0,0,0,,{tags}{shape}{{\\p0}}"
+
+    events = [strip(y0, y0 + height, opacity)]
+    try:
+        fade = float(box.get("fade", _BOX_FADE_DEFAULT_PX))
+    except (TypeError, ValueError):
+        fade = _BOX_FADE_DEFAULT_PX
+    fade = max(0.0, min(400.0, fade))
+    if fade > 0 and position in ("top", "bottom"):
+        step = fade / _BOX_FADE_STEPS
+        for n in range(_BOX_FADE_STEPS):
+            level = opacity * (1.0 - (n + 0.5) / _BOX_FADE_STEPS)  # thinner the further from the box
+            if position == "top":
+                events.append(strip(y0 + height + n * step, y0 + height + (n + 1) * step, level))
+            else:
+                events.append(strip(y0 - (n + 1) * step, y0 - n * step, level))
+    return events
+
+
 def write_caption_ass(
     cues: list, shared_style: Optional[dict], frame_size: Optional[Tuple[int, int]], path: Path,
     check_font: bool = True,
@@ -144,6 +194,7 @@ def write_caption_ass(
             events.append(f"Dialogue: 0,{when},{name},,0,0,0,,{box_event_text(style, box)}")
         events.append(f"Dialogue: 1,{when},{name},,0,0,0,,{text_position_tag(box) if box else ''}{_ass_text(shown)}")
     for item in sorted(texts or [], key=lambda x: float(x["start"])):
+        events.extend(_text_box_events(item, play_w))
         title, subtitle, kicker = item.get("title") or {}, item.get("subtitle") or {}, item.get("kicker") or {}
         title_text, sub_text = str(title.get("text") or ""), str(subtitle.get("text") or "")
         kicker_text = str(kicker.get("text") or "")
@@ -580,6 +631,23 @@ class VideoExporter:
         return output_path
 
     @staticmethod
+    def _content_shift_filter(shift_1080: float, size: Optional[Tuple[int, int]]) -> str:
+        """ffmpeg filter moving the picture down by `shift_1080` px of a 1080-line frame (up when negative), filling
+        the gap with the outro's background and cutting what leaves the frame. "" for no shift."""
+        if not size or abs(shift_1080) < 0.5:
+            return ""
+        w, h = size
+        d = int(round(abs(shift_1080) * h / 1080))
+        d = min(d, h - 2)
+        if d <= 0:
+            return ""
+        r, g, b = tuning.OUTRO_BG_COLOR
+        bg = f"0x{r:02x}{g:02x}{b:02x}"
+        if shift_1080 > 0:
+            return f"pad={w}:{h + d}:0:{d}:color={bg},crop={w}:{h}:0:0"
+        return f"crop={w}:{h - d}:0:{d},pad={w}:{h}:0:0:color={bg}"
+
+    @staticmethod
     def _mux_track_for_concat(
         ffmpeg_cmd: str, video_path: Path, audio_path: Optional[str], tmp_dir: Path, index: int,
         audio_offset: float = 0.0, target_size: Optional[Tuple[int, int]] = None,
@@ -588,7 +656,7 @@ class VideoExporter:
         volume: float = 1.0, muted: bool = False,
         extra_audio: Optional[str] = None, extra_volume: float = 0.5,
         duration: Optional[float] = None,
-        end_hold: float = 0.0, fade_out: float = 0.0,
+        end_hold: float = 0.0, fade_out: float = 0.0, content_shift: float = 0.0,
     ) -> Path:
         """Combines one timeline track's silent video with its own separate
         audio track (see timeline_step.build_timeline — video and audio are
@@ -671,6 +739,10 @@ class VideoExporter:
                     f"pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2,setsar=1"
                 )
                 logger.info("Track %d: %s scaled to %dx%d.", index, f"{size[0]}x{size[1]}", tw, th)
+        # The outro's content pushed down (up) by its title box's height change, in 1080-line px.
+        shift = VideoExporter._content_shift_filter(content_shift, target_size or VideoExporter._video_size(video_path))
+        if shift:
+            filters.append(shift)
         # ...and the same frame rate: segments at 24/25/30 fps joined by stream
         # copy lose their timing (the video ended minutes before the audio).
         if target_fps:
@@ -929,6 +1001,7 @@ class VideoExporter:
                     extra_audio=track.get("extra_audio_path"),
                     extra_volume=float(track.get("extra_audio_volume") if track.get("extra_audio_volume") is not None else 0.5),
                     duration=float(track["duration"]) if track.get("duration") else None,
+                    content_shift=float(track.get("content_shift") or 0.0),
                     end_hold=tuning.ENDING_HOLD_SECONDS
                     if i == len(tracks) - 2 and Path(tracks[-1]["file_path"]).name == tuning.OUTRO_OUTPUT_FILENAME else 0.0,
                     fade_out=tuning.VIDEO_END_FADE_SECONDS if i == len(tracks) - 1 else 0.0,

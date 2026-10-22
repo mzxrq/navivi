@@ -143,3 +143,31 @@ class TestZoomOut:
         _clip(src, 1.0)
         assert slow_move.extend_with_slow_move(str(src), 3.0, "pan-right", str(out)) == str(out)
         assert FFmpegManager.get_media_duration(str(out)) == pytest.approx(3.0, abs=0.1)
+
+
+class TestReverseTail:
+    def test_the_clip_plays_back_and_forth_until_the_narration_ends(self, tmp_path, monkeypatch):
+        from services import tuning
+
+        monkeypatch.setattr(tuning, "ATTRACTION_SLOW_MOVE_STYLE", "reverse")
+        src, out = tmp_path / "a.mp4", tmp_path / "b.mp4"
+        _clip(src, 1.0)
+        assert slow_move.extend_with_slow_move(str(src), 3.5, "pan-left", str(out)) == str(out)
+        assert FFmpegManager.get_media_duration(str(out)) == pytest.approx(3.5, abs=0.15)
+
+    def test_a_still_preset_is_left_alone(self, tmp_path, monkeypatch):
+        from services import tuning
+
+        monkeypatch.setattr(tuning, "ATTRACTION_SLOW_MOVE_STYLE", "reverse")
+        src = tmp_path / "a.mp4"
+        _clip(src, 1.0)
+        assert slow_move.extend_with_slow_move(str(src), 3.5, "none", str(tmp_path / "b.mp4")) is None
+
+    def test_a_long_narration_is_filled_to_the_end(self, tmp_path, monkeypatch):
+        from services import tuning
+
+        monkeypatch.setattr(tuning, "ATTRACTION_SLOW_MOVE_STYLE", "reverse")
+        src, out = tmp_path / "a.mp4", tmp_path / "b.mp4"
+        _clip(src, 1.0)
+        assert slow_move.extend_with_slow_move(str(src), 12.0, "pan-left", str(out)) == str(out)
+        assert FFmpegManager.get_media_duration(str(out)) >= 11.9  # a frame lost per piece used to leave it ~0.5 s short

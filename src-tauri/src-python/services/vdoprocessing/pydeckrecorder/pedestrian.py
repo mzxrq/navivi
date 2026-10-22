@@ -902,7 +902,7 @@ _HUD_CSS_TEMPLATE = string.Template("""
 #hud-card .icon { width: 26px; height: 26px; line-height: 1; }
 #hud-card .icon svg { display: block; width: 100%; height: 100%; }
 #hud-card.hidden { display: none; }
-#hud-card-img { position: fixed; bottom: 20px; right: 20px; z-index: 1000; }
+#hud-card-img { position: fixed; bottom: ${card_bottom}px; right: ${card_right}px; z-index: 1000; }
 /* Destination pill + compass stacked in the top-right corner, compass underneath. */
 #hud-top-right {
     position: fixed; top: 24px; right: 24px; z-index: 1000;
@@ -942,9 +942,11 @@ def _css_rgba(rgba) -> str:
 
 def _hud_css(theme: Optional[str] = None) -> str:
     """Leg HUD CSS in the light/dark palette from tuning.UI_THEMES."""
-    return _HUD_CSS_TEMPLATE.substitute(
-        {k: _css_rgba(v) for k, v in tuning.ui_theme(theme).items()}
-    )
+    # The card picture has ~20 px of transparent shadow around it: these are NOT the visible gaps.
+    return _HUD_CSS_TEMPLATE.substitute({
+        **{k: _css_rgba(v) for k, v in tuning.ui_theme(theme).items()},
+        "card_bottom": tuning.LEG_CARD_MARGIN_BOTTOM_PX, "card_right": tuning.LEG_CARD_MARGIN_PX,
+    })
 
 # Per-mode distance-card icon: a plain black line-drawing SVG (currentColor
 # stroke, no fill) instead of a platform emoji -- emoji glyphs are

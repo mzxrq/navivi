@@ -1225,8 +1225,16 @@ class _CardMixin:
         ).astype(np.uint8)
         return out
 
+    def top_banner_width(self, text: str, font_px: int = 22) -> int:
+        """Width in px of the pill render_top_banner draws for `text`."""
+        scale = 2
+        font = self._card_font(self.FONT_CANDIDATES_BOLD, font_px * scale)
+        bbox = ImageDraw.Draw(Image.new("RGBA", (1, 1))).textbbox((0, 0), text, font=font)
+        return (bbox[2] - bbox[0] + int(28 * font_px / 22) * scale * 2) // scale
+
     def render_top_banner(
         self, frame: np.ndarray, text: str, alpha: float = 1.0, top_margin: int = 30, font_px: int = 22,
+        align: str = "center", left_margin: int = 32,
     ) -> np.ndarray:
         """A dark rounded-pill caption centered near the top of the frame —
         the OpenCV/PIL equivalent of pydeckrecorder.pedestrian's own CSS HUD
@@ -1236,7 +1244,7 @@ class _CardMixin:
         since the destination label's length varies waypoint to waypoint.
         `alpha` fades the whole pill (not just its own soft edges) the same
         way composite_card_on_frame's own `alpha` does for popup/summary
-        cards, for a consistent fade in/out."""
+        cards, for a consistent fade in/out. `align="left"` docks it `left_margin` px from the left edge."""
         if not text:
             return frame
 
@@ -1258,7 +1266,7 @@ class _CardMixin:
         card_bgra = np.array(canvas)[:, :, [2, 1, 0, 3]]
         ch, cw = card_bgra.shape[:2]
         h, w = frame.shape[:2]
-        x0 = max(0, (w - cw) // 2)
+        x0 = max(0, left_margin) if align == "left" else max(0, (w - cw) // 2)
         y0 = max(0, top_margin)
         cw = min(cw, w - x0)
         ch = min(ch, h - y0)

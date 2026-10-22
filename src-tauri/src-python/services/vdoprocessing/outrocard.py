@@ -370,8 +370,10 @@ def _build_scroll_page(
     badge_font = _load_font(bold, px(tuning.OUTRO_SCROLL_BADGE_FONT_SIZE))
     title_font = _load_font(bold, px(tuning.OUTRO_TITLE_FONT_SIZE))
     subtitle_font = _load_font(bold, px(tuning.OUTRO_SUBTITLE_FONT_SIZE))
-    header_h = px(_HEADER_HEIGHT)
-
+    header_h, header_color = _header_box(
+        heading, height, px(_HEADER_HEIGHT),
+        px(34 + tuning.OUTRO_TITLE_FONT_SIZE + 10 + tuning.OUTRO_SUBTITLE_FONT_SIZE + 20),
+    )
     thumb_w = int((container_w - margin * (cols - 1)) / cols)
     thumb_h = int(thumb_w / tuning.OUTRO_CARD_ASPECT)
     label_h = label_size + px(16)
@@ -381,16 +383,20 @@ def _build_scroll_page(
 
     page = Image.new("RGB", (width, page_h), tuning.OUTRO_BG_COLOR)
     page.info["header_h"] = header_h - px(10)
+    page.info["pinned"] = (heading or {}).get("burn_text", True)
     draw = ImageDraw.Draw(page)
-    _center_text(draw, project_name, title_font, width / 2, px(34), tuning.OUTRO_TITLE_COLOR)
-    _center_text(
-        draw,
-        _outro_subtitle(len(waypoints)),
-        subtitle_font,
-        width / 2,
-        px(34 + tuning.OUTRO_TITLE_FONT_SIZE + 10),
-        tuning.OUTRO_SUBTITLE_COLOR,
-    )
+    if header_color:
+        draw.rectangle([0, 0, width, header_h - px(10)], fill=header_color)
+    if (heading or {}).get("burn_text", True):
+        _center_text(draw, project_name, title_font, width / 2, px(34), tuning.OUTRO_TITLE_COLOR)
+        _center_text(
+            draw,
+            _outro_subtitle(len(waypoints)),
+            subtitle_font,
+            width / 2,
+            px(34 + tuning.OUTRO_TITLE_FONT_SIZE + 10),
+            tuning.OUTRO_SUBTITLE_COLOR,
+        )
 
     badge_r = px(tuning.OUTRO_SCROLL_BADGE_RADIUS)
     for idx, wp in enumerate(waypoints):
@@ -454,6 +460,37 @@ def _style_font(style, size: int) -> FreeTypeFont | Any:
             pass
     base = _GraphicsEngineBase
     return _load_font(base.FONT_CANDIDATES_BOLD if style.bold else base.FONT_CANDIDATES_REGULAR, size)
+
+
+def header_height_1080(heading: Optional[Dict[str, Any]], has_route: bool) -> float:
+    """The pinned box's height without a custom one, in 1080-line px: what _build_scroll_page /
+    _build_route_page give `page.info["header_h"]` at a 1080-high frame."""
+    k = 1080 / _CANVAS_H
+    if not has_route:
+        return (_HEADER_HEIGHT - 10) * k
+    heading = heading or {}
+    lines = _heading_lines(
+        heading.get("title", ""), heading.get("subtitle", ""), heading.get("title_style"),
+        heading.get("subtitle_style"), 1080, heading.get("kicker", ""), heading.get("kicker_style"),
+    )
+    return (30 + 30 - 10) * k + _heading_height(lines, k)
+
+
+def _header_box(heading: Optional[Dict[str, Any]], height: int, natural: int, minimum: int = 0):
+    """(pinned header height px, its fill colour) for the outro's title box. `heading["header_height"]`
+    (settings.outro_header_height, in 1080-line units like the text sizes) replaces `natural`, but never
+    goes under `minimum` (the title would be cut off) or over 80% of the frame (some card has to show); `heading["header_color"]` is a colour
+    (settings.outro_header_color) or None for the page's own background."""
+    from services.localization.text_style import parse_color
+
+    heading = heading or {}
+    try:
+        custom = float(heading.get("header_height") or 0)
+    except (TypeError, ValueError):
+        custom = 0.0
+    h = max(minimum, min(int(round(custom * height / 1080)), int(height * 0.8))) if custom > 0 else natural
+    parsed = parse_color(heading.get("header_color")) if heading.get("header_color") else None
+    return h, (parsed[0] if parsed else None)
 
 
 def _heading_lines(
@@ -536,7 +573,10 @@ def _build_route_page(
         heading.get("kicker", ""), heading.get("kicker_style"),
     )
     heading_top = px(30)
-    panel_top = heading_top + _heading_height(lines, k) + px(30)
+    natural_top = heading_top + _heading_height(lines, k) + px(30)
+    header_h, header_color = _header_box(
+        heading, height, natural_top - px(10), heading_top + _heading_height(lines, k) + px(4))
+    panel_top = header_h + px(10)
     panel_h = _summary_height(brief, px)
     legs_top = panel_top + panel_h + px(32)
     cols = tuning.OUTRO_ROUTE_COLS
@@ -562,13 +602,17 @@ def _build_route_page(
 
     page = Image.new("RGB", (width, page_h), tuning.OUTRO_BG_COLOR)
     page.info["header_h"] = panel_top - px(10)
+    page.info["pinned"] = heading.get("burn_text", True)  # False: no box in the video, the text item's box does it
     draw = ImageDraw.Draw(page)
+    if header_color:
+        draw.rectangle([0, 0, width, panel_top - px(10)], fill=header_color)
     name_font = _load_font(bold, px(tuning.OUTRO_ROUTE_NAME_FONT_SIZE))
     from_font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_REGULAR, px(tuning.OUTRO_ROUTE_FROM_FONT_SIZE))
     chip_font = _load_font(bold, px(tuning.OUTRO_LEG_FONT_SIZE))
     badge_font = _load_font(bold, px(15))
 
-    _draw_heading(draw, lines, width / 2, heading_top, box_w, k)
+    if heading.get("burn_text", True):  # False: the title is a text-track item (outro_step.outro_text_item)
+        _draw_heading(draw, lines, width / 2, heading_top, box_w, k)
     _draw_summary(page, engine, brief, px, x0, box_w, panel_top, panel_h)
 
     pad = px(12)
@@ -928,17 +972,26 @@ def _end_card(size: Tuple[int, int]) -> Optional[np.ndarray]:
     return np.asarray(card, dtype=np.float32)
 
 
+def end_card_seconds() -> float:
+    """How long the logo end card lasts after the scroll (0 without logos)."""
+    if _end_card((_CANVAS_W, _CANVAS_H)) is None:
+        return 0.0
+    return tuning.OUTRO_LOGO_FADE_SECONDS + tuning.OUTRO_LOGO_HOLD_SECONDS
+
+
 def _write_scroll_clip(
     page: Image.Image, output_path: Path, fps: int, size: Tuple[int, int],
     start_hold: Optional[float] = None,
 ) -> bool:
     """Crops the tall page frame by frame at each _scroll_offsets offset, with
     the title (the page's top `header_h` rows) pinned in a box that the cards
-    fade out under, and pipes the raw frames straight into ffmpeg. Once every
+    fade out under (no box when the page is not `pinned`), and pipes the raw frames straight into ffmpeg. Once every
     card is gone the title fades into the logo end card."""
     width, height = size
     k = height / _CANVAS_H
-    header_h = int(page.info.get("header_h", 0))
+    # Without a pinned box (the title is a timeline text item with its own box) the cards scroll the full frame.
+    pinned = bool(page.info.get("pinned", True))
+    header_h = int(page.info.get("header_h", 0)) if pinned else 0
     page_px = np.asarray(page, dtype=np.uint8)
     bg = np.asarray(tuning.OUTRO_BG_COLOR, dtype=np.float32)
 
@@ -962,8 +1015,9 @@ def _write_scroll_clip(
         frame = page_px[top: top + height].astype(np.float32)
         # The fade grows in over the first `fade` px of scrolling, so nothing
         # is dimmed while the page sits on its first screen.
-        band = frame[header_h: header_h + fade]
-        band += (bg - band) * (ramp[: len(band)] * min(1.0, top / fade))[:, None, None]
+        if pinned:
+            band = frame[header_h: header_h + fade]
+            band += (bg - band) * (ramp[: len(band)] * min(1.0, top / fade))[:, None, None]
         frame[-fade:] += (bg - frame[-fade:]) * ramp[::-1][:, None, None]
         frame[:header_h] = header
         return frame

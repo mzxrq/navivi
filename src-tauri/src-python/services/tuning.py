@@ -616,11 +616,11 @@ OVERVIEW_BANNER_NEAR_SECONDS = 3.0
 # Vertical clearance (px) kept free at the TOP of the overview frame for
 # popup card placement: the "next stop" pill banner (render_top_banner) sits
 # at top_margin=30 and is ~35px tall, so this floor keeps beside-pin cards off it.
-OVERVIEW_TOP_CARD_CLEARANCE = 80
+OVERVIEW_TOP_CARD_CLEARANCE = 60
 # Share of the frame height kept free at the BOTTOM for the narration captions
 # (burned in at export, up to two lines: CAPTION_MARGIN_V + ~2 lines of
 # CAPTION_DEFAULT_SIZE on libass's 288-line frame is ~0.2), so cards stay clear of them.
-OVERVIEW_BOTTOM_CARD_CLEARANCE = 0.2
+OVERVIEW_BOTTOM_CARD_CLEARANCE = 0.1
 # End-of-video recap: every waypoint's photo card ends up on screen at once
 # (laid out around the frame's border by popups.py's _layout_recap_cards),
 # all fading in together from the clean map in a single crossfade of this
@@ -1009,7 +1009,9 @@ ATTRACTION_SLOW_MOVE_ZOOM_PER_SEC = 0.012
 # pick, 2026-10-09) dissolves from the animation's end to the original photo
 # and holds it still until the narration ends. The animation always plays to
 # its end first; one longer than the narration is cut there, with no photo.
-ATTRACTION_SLOW_MOVE_STYLE = "photo"
+# "reverse" (user's pick, 2026-10-21) plays the animation backwards, then forwards again,
+# until the narration ends (a boomerang, no still photo, no extra generation).
+ATTRACTION_SLOW_MOVE_STYLE = "reverse"
 ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT = 0.12
 # The dissolve into that photo; 0 = a hard cut.
 ATTRACTION_TAIL_PHOTO_FADE_SECONDS = 0.5
@@ -1787,6 +1789,9 @@ OUTRO_ROUTE_DISTANCE_FONT_SIZE = 22
 # The route page's title + subtitle use the intro's text and styles, at this
 # fraction of the intro's size (the intro's title fills a whole screen).
 OUTRO_HEADING_SCALE = 0.7
+# The scroll outro's title (a text-track item) sits this many px (1080 line) from the top.
+OUTRO_TEXT_MARGIN_TOP = 40
+OUTRO_TEXT_BOX_FADE = 56  # soft edge (1080 line px) under the title box
 OUTRO_HEADING_LINE_GAP = 10  # px between title and subtitle
 OUTRO_ROUTE_COLS = 2
 OUTRO_ROUTE_COL_GAP = 16

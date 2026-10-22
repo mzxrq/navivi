@@ -18,6 +18,7 @@ import { Select } from "../../components/ui/Select";
 import { Slider } from "../../components/ui/Slider";
 import { StepButtons } from "../../components/ui/StepButtons";
 import { Switch } from "../../components/ui/Switch";
+import { ColorPicker } from "../../components/ui/ColorPicker";
 import { CaptionRow, CaptionStyleFields, IntInput } from "../../components/ui/CaptionStyleFields";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import type { TextStyle } from "../../types";
@@ -34,6 +35,7 @@ import {
 import {
   anchorCue,
   DEFAULT_EXTRA_VOLUME,
+  DEFAULT_TEXT_BOX,
   isUnlinked,
   layout,
   linkAudio,
@@ -339,6 +341,48 @@ function TextLineSection({
   );
 }
 
+/** The band behind a text item: on or off, its colour, opacity and height. */
+function TextBoxSection({ text, timeline, commit }: { text: TextClip; timeline: TimelineData; commit: (t: TimelineData) => void }) {
+  const patch = (box: TextClip["box"]) =>
+    commit({ ...timeline, texts: timeline.texts.map((x) => (x.id === text.id ? { ...x, box } : x)) });
+  const box = text.box;
+  return (
+    <Section title={t`Box behind`}>
+      <Row label={t`Show a box`}>
+        <Switch checked={!!box} onChange={(on) => patch(on ? DEFAULT_TEXT_BOX : undefined)} label={t`Show a box`} />
+      </Row>
+      {box && (
+        <>
+          <Row label={t`Color`}>
+            <ColorPicker label={t`Box colour`} value={box.color} onChange={(color) => patch({ ...box, color })} />
+          </Row>
+          <Row label={t`Opacity`}>
+            <div className="w-24">
+              <IntInput value={Math.round(box.opacity * 100)} min={0} max={100} onCommit={(v) => patch({ ...box, opacity: v / 100 })} />
+            </div>
+          </Row>
+          <Row label={t`Height`}>
+            <div className="w-24">
+              <IntInput value={box.height} min={20} max={1080} onCommit={(v) => patch({ ...box, height: v })} />
+            </div>
+          </Row>
+          {(text.position === "top" || text.position === "bottom") && (
+            <Row label={t`Soft edge`}>
+              <div className="w-24">
+                <IntInput value={box.fade ?? 56} min={0} max={400} onCommit={(v) => patch({ ...box, fade: v })} />
+              </div>
+            </Row>
+          )}
+          <p className="-mt-1 text-[11px] text-zinc-400">{t`Full width, at the edge the text sits on. Heights are pixels on a 1080p frame. The soft edge fades what scrolls under the box.`}</p>
+          {typeof box.base === "number" && (
+            <p className="-mt-1 text-[11px] text-zinc-400">{t`A taller box pushes the outro's content down by the same amount when you export; a shorter one pulls it up.`}</p>
+          )}
+        </>
+      )}
+    </Section>
+  );
+}
+
 /** Where a text item sits and how it moves, plus sharing that look with others of its kind. */
 function TextLookSection({ text, timeline, commit }: { text: TextClip; timeline: TimelineData; commit: (t: TimelineData) => void }) {
   const { updateSettings, setIsDirty } = useWorkspace();
@@ -540,6 +584,7 @@ export function Inspector(p: InspectorProps) {
           </Row>
         </Section>
         <TextLookSection text={text} timeline={timeline} commit={commit} />
+        <TextBoxSection text={text} timeline={timeline} commit={commit} />
         {(text.kind === "intro" || text.kicker) && (
           <TextLineSection
             title={t`Location line`}

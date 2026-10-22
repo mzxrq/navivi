@@ -378,8 +378,8 @@ def sharp_enough_preset(preset: str, photo_path: str) -> str:
 def shot_list(preset: str, seed: str = "", photo_path: Optional[str] = None) -> List[str]:
     """The chosen move, then the second shot - unless the photo is too small
     for a close crop to stay sharp. With the "photo" tail the still photo
-    takes the second shot's place."""
-    if tuning.ATTRACTION_SLOW_MOVE_STYLE == "photo":
+    takes the second shot's place (and with the "reverse" tail the clip played backwards does)."""
+    if tuning.ATTRACTION_SLOW_MOVE_STYLE in ("photo", "reverse"):
         return [preset]
     if tuning.ATTRACTION_SECOND_SHOT and photo_path:
         try:

@@ -32,7 +32,7 @@ from .helpers import (
 from .intro_step import intro_text_item, plan_intro_seconds, render_intro_clip
 from .leg_pieces import compute_leg_narration_splits
 from .narration_step import add_default_cues, add_overview_cues, record_cue_times
-from .outro_step import render_outro_clip
+from .outro_step import outro_text_item, render_outro_clip
 from .render_step import render_route_video
 from .subtitle_step import (
     build_attraction_subtitles,
@@ -320,6 +320,7 @@ def run_full_pipeline(
             job_config.get("settings", {}).get("attraction_fade_seconds", 0.8)
         ),
         intro_text=intro_text_item(str(config_file_path)) if intro_path else None,
+        outro_text=outro_text_item(str(config_file_path)) if outro_path else None,
         place_label_look=job_config.get("settings", {}).get("place_label_look"),
         overview_voice_start=voice_start,
     )
