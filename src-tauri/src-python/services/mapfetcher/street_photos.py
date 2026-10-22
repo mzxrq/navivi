@@ -19,6 +19,7 @@ logger = setup_logger("StreetPhotos")
 ENV_VAR = "NAVIVI_MAPILLARY_TOKEN"
 API = "https://graph.mapillary.com/images"
 SEARCH_M = 30.0
+ZIGZAG_M = 100.0  # turns closer than this along the leg share one photo
 SEARCH_LIMIT = 10  # one small page per turn
 REQUEST_GAP_S = 0.5  # at most 2 requests a second, searches and downloads together
 CREDIT = "© Mapillary, CC-BY-SA"
@@ -57,6 +58,17 @@ def _download(content: bytes, path: Path) -> None:
     os.replace(tmp, path)
 
 
+def _photo_turns(turns: List[Dict]) -> List[Dict]:
+    """One turn per run of turns less than ZIGZAG_M apart (a zigzag is one photo): the sharpest of the run."""
+    groups: List[List[Dict]] = []
+    for turn in turns:
+        if groups and turn["at"] - groups[-1][-1]["at"] < ZIGZAG_M:
+            groups[-1].append(turn)
+        else:
+            groups.append([turn])
+    return [max(group, key=lambda t: abs(t["angle"])) for group in groups]
+
+
 def _load_index(path: Path) -> Dict[str, Optional[str]]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -91,12 +103,12 @@ def turn_photos(points: List[List[float]], cache_dir: Path, token: str) -> List[
         return resp
 
     out = []
-    for turn in leg_turns(points)["turns"]:
+    for turn in _photo_turns(leg_turns(points)["turns"]):
         lat, lon = turn["lat"], turn["lon"]
         key = f"{lat:.5f},{lon:.5f},{round(turn['bearing'] / 15.0) * 15 % 360}"
         if key in index and (index[key] is None or (cache_dir / index[key]).exists()):
             if index[key]:
-                out.append({"lat": lat, "lon": lon, "popup_image": str(cache_dir / index[key])})
+                out.append({"lat": lat, "lon": lon, "popup_image": str(cache_dir / index[key]), "passing": True})
             continue
         if refused:
             continue
@@ -125,7 +137,7 @@ def turn_photos(points: List[List[float]], cache_dir: Path, token: str) -> List[
             logger.warning("Mapillary photo for the turn at %.5f,%.5f failed: %s", lat, lon, e)
             continue
         index[key], changed = name, True
-        out.append({"lat": lat, "lon": lon, "popup_image": str(cache_dir / name)})
+        out.append({"lat": lat, "lon": lon, "popup_image": str(cache_dir / name), "passing": True})
     if changed:
         try:
             _save_index(index_path, index)

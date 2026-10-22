@@ -88,3 +88,10 @@ def test_a_refusal_stops_requests_but_keeps_cached_turns(tmp_path, api):
     api.status, api.calls = 429, []
     assert len(street_photos.turn_photos(Z_LEG, tmp_path, "token")) == 1  # the second turn, from the index
     assert len(api.calls) == 1  # the refused search, nothing after it
+
+
+def test_a_zigzag_loads_one_photo(tmp_path, api):
+    api.images = [_image("any", 0)]
+    zigzag = _path((0, 0), (200, 0), (200, 40), (260, 40), (260, 80), (500, 80))  # four bends within 100 m
+    assert len(street_photos.turn_photos(zigzag, tmp_path, "token")) == 1
+    assert len(api.calls) == 2  # one search, one download

@@ -1704,7 +1704,8 @@ async def _play_stopby_photo_pause(
                 const img = document.getElementById('stopby-preview'); if (img) img.remove();
             }"""
         )
-        await cut_to_new_clip()
+        if not stopby.get("passing"):  # a street photo has no narration piece of its own
+            await cut_to_new_clip()
         return idx
 
     # Pop-in: card + leader line fade/ease in together at their fixed,
