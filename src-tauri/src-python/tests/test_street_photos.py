@@ -28,7 +28,7 @@ class _Resp:
 
 def _jpeg():
     buf = io.BytesIO()
-    Image.new("RGB", (64, 48), "gray").save(buf, "JPEG")
+    Image.new("RGB", (640, 480), (128, 128, 128)).save(buf, "JPEG")  # 4:3, like most Mapillary photos
     return buf.getvalue()
 
 
@@ -40,7 +40,7 @@ def api(monkeypatch):
 
     def get(url, timeout=None, params=None):
         Api.calls.append(url)
-        if params is not None:
+        if url == street_photos.API:
             assert params["limit"] <= 10 and "bbox" in params
             return _Resp({"data": Api.images}, status=Api.status)
         return _Resp(content=_jpeg())
@@ -54,14 +54,19 @@ def api(monkeypatch):
 def _image(img_id, angle, at=(400, 0)):
     lat, lon = _at(*at)
     return {"id": img_id, "thumb_1024_url": f"https://x/{img_id}", "compass_angle": angle,
-            "geometry": {"coordinates": [lon, lat]}}
+            "geometry": {"coordinates": [lon, lat]}, "creator": {"username": "yasunari"}}
 
 
 def test_the_photo_facing_the_new_street_is_picked(tmp_path, api):
     api.images = [_image("east", 90), _image("north", 5)]
     photos = street_photos.turn_photos(L_LEG, tmp_path, "token")
     assert len(photos) == 1 and photos[0]["popup_image"].endswith("north.jpg")
-    assert Image.open(photos[0]["popup_image"]).size == (64, 48)
+    card = Image.open(photos[0]["popup_image"]).convert("L")
+    assert card.size == (640, 360)  # the card's 16:9, so the card shows all of it
+    strip = round(360 * street_photos.CREDIT_STRIP_SHARE)
+    assert abs(card.getpixel((10, 10)) - 128) < 8  # the photo fills the top, nothing on it
+    assert card.getpixel((10, 360 - strip // 2)) < 40  # the dark credit strip under it
+    assert card.crop((0, 360 - strip, 640, 360)).getextrema()[1] > 200  # with the white credit text
 
 
 def test_an_unchanged_route_makes_no_requests(tmp_path, api):
@@ -95,3 +100,11 @@ def test_a_zigzag_loads_one_photo(tmp_path, api):
     zigzag = _path((0, 0), (200, 0), (200, 40), (260, 40), (260, 80), (500, 80))  # four bends within 100 m
     assert len(street_photos.turn_photos(zigzag, tmp_path, "token")) == 1
     assert len(api.calls) == 2  # one search, one download
+
+
+def test_only_real_turns_away_from_the_stops_are_looked_up(tmp_path, api):
+    api.images = [_image("any", 0)]
+    gentle = _path((0, 0), (300, 0), (600, 250))  # a 40 deg bend (寄って): no request
+    assert street_photos.turn_photos(gentle, tmp_path, "token") == [] and api.calls == []
+    at_the_stop = _path((0, 0), (400, 0), (400, 30))  # a sharp turn 30 m before the destination
+    assert street_photos.turn_photos(at_the_stop, tmp_path, "token") == [] and api.calls == []
