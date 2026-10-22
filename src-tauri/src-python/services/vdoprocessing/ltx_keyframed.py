@@ -87,8 +87,9 @@ def depth_cams(move: str) -> Tuple[Tuple[float, ...], Tuple[float, ...], float]:
     if move in ("panright", "panleft"):
         left, right = (-t, 0.0, 0.0, -u), (t, 0.0, 0.0, u)
         return (left, right, t + u + 0.02) if move == "panright" else (right, left, t + u + 0.02)
-    if move == "walkin":
-        return (0.0, 0.0, 0.0), (0.0, 0.0, tuning.LTXV_WALK_ANCHOR_DOLLY), 0.02
+    if move in ("walkin", "walkback"):
+        near, far = (0.0, 0.0, 0.0), (0.0, 0.0, tuning.LTXV_WALK_ANCHOR_DOLLY)
+        return (near, far, 0.02) if move == "walkin" else (far, near, 0.02)
     near, far = (0.0, 0.0, 0.0), (0.0, 0.0, tuning.LTXV_DEPTH_DOLLY)
     return (near, far, 0.02) if move == "zoomin" else (far, near, 0.02)
 
@@ -300,7 +301,7 @@ def decode_graph(latent_name: str, prefix: str) -> Dict:
 # The close move that goes the same way as each editor preset.
 _SAME_WAY = {
     "panright": "closepanright", "panleft": "closepanleft", "panup": "closepanup",
-    "pandown": "closepandown", "zoomin": "closein", "zoomout": "closeout",
+    "pandown": "closepandown", "zoomin": "closein", "zoomout": "closeout", "walkback": "closeout",
     "walkfwd": "closein", "walkfwdleft": "closein", "walkfwdright": "closein", "walkshort": "closein",
     "walkai": "closein",
 }

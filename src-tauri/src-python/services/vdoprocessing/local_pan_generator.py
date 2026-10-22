@@ -276,6 +276,7 @@ _CAMERA_PAN_PRESETS = {
     "zoomin": (0, 0, 1.0, 0.75),
     "zoomout": (0, 0, 0.75, 1.0),
     "walkin": (0, 0, 1.0, 0.75),
+    "walkback": (0, 0, 0.75, 1.0),
     "none": (0, 0, 0.92, 0.92),
 }
 _DEFAULT_PRESET = (1, 0, 0.85, 1.0)

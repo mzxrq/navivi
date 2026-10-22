@@ -144,9 +144,10 @@ class AttractionVideoGenerator:
     @staticmethod
     def _tail_signature() -> str:
         style = tuning.ATTRACTION_SLOW_MOVE_STYLE
-        if style != "photo":
-            return style
-        return f"photo|{tuning.ATTRACTION_TAIL_PHOTO_FADE_SECONDS}|full-animation|first-shot"
+        sig = style if style != "photo" else f"photo|{tuning.ATTRACTION_TAIL_PHOTO_FADE_SECONDS}|full-animation|first-shot"
+        if tuning.HANDHELD:
+            sig += f"|handheld|{tuning.HANDHELD_DRIFT}|{tuning.HANDHELD_ROLL_DEG}"
+        return sig
 
     @staticmethod
     def _clip_key(image_path: str, pan: str) -> str:
@@ -478,8 +479,12 @@ class AttractionVideoGenerator:
         camera_pan=None,
         generation_cap: bool = True,
         photo_path: Optional[str] = None,
+        handheld_pan=None,
     ) -> str:
-        """Trims/stretches video_path to within tolerance of
+        """`handheld_pan`: a generated clip's preset, to give it the hand-held
+        finish (None for user footage and an already finished clip).
+
+        Trims/stretches video_path to within tolerance of
         target_audio_duration, upscales it, and (if place_label is given)
         burns it into the top-left corner — all in a single ffmpeg pass via
         VideoExporter.finalize_clip, falling back to the old three-pass
@@ -524,6 +529,15 @@ class AttractionVideoGenerator:
                     video_path, target_audio_duration, overshoot_tolerance, generation_cap=False
                 )
 
+        shaken_path = self.output_dir / f"handheld_{Path(output_filename).stem}.mp4"
+        pan_key = normalize_camera_pan(handheld_pan)
+        if (tuning.HANDHELD and handheld_pan is not None
+                and pan_key not in (STILL_PRESET, *tuning.ATTRACTION_JUMP_CUT_PRESETS)):
+            from services.vdoprocessing.handheld import apply_handheld
+
+            if apply_handheld(video_path, str(shaken_path), pan_key in tuning.HANDHELD_WALK_MOVES, output_filename):
+                video_path = str(shaken_path)
+
         final_path = self.output_dir / output_filename
         work_path = self._partial_path(final_path)
         work_path.unlink(missing_ok=True)
@@ -567,6 +581,7 @@ class AttractionVideoGenerator:
             return str(final_path)
         finally:
             moved_path.unlink(missing_ok=True)
+            shaken_path.unlink(missing_ok=True)
             work_path.unlink(missing_ok=True)
 
     # [Core] Slow-path fallback for _fit_and_finalize: the original
@@ -845,6 +860,8 @@ class AttractionVideoGenerator:
                 combined, target_audio_duration, output_filename,
                 self._MULTI_IMAGE_OVERSHOOT_TOLERANCE_SECONDS, place_label=place_label,
                 generation_cap=False,
+                # shortcut: the first photo's move picks the style for the whole stop; per-photo if mixed stops look off.
+                handheld_pan=presets[0] if presets else "",
             )
         except Exception as exc:
             logger.error("Combining clips for %s failed: %s", output_filename, exc)
@@ -1080,6 +1097,7 @@ class AttractionVideoGenerator:
                 place_label=place_label,
                 camera_pan=clip_presets[0],
                 photo_path=image_list[keys.index(built_keys[0])],
+                handheld_pan=clip_presets[0],
             )
             logger.info(f"Waypoint video deliverable complete: {final_output}")
 

@@ -30,7 +30,7 @@ logger = setup_logger("SlowMove")
 # edges out of view while drifting. Zoom In/Out are jump cuts and hold instead.
 # Dollies too since they became LTXV (2026-10-07): a 4 s dolly-out then sat
 # frozen for 6.4 s of 西ノ庄駅's narration.
-_MOVING = {"panright", "panleft", "panup", "pandown", "walkin", "zoomin", "zoomout"}
+_MOVING = {"panright", "panleft", "panup", "pandown", "walkin", "walkback", "zoomin", "zoomout"}
 
 
 def _random_drift(rng: random.Random) -> tuple:

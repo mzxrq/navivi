@@ -1162,7 +1162,7 @@ COMFYUI_DEFAULT_MOTION_PROMPT = COMFYUI_CAMERA_PAN_PROMPTS["none"]
 # machine, a watermark and a gate roof, 2026-10-07).
 ATTRACTION_ZOOM_STYLE = "ltxv"
 _ZOOM_PRESETS: Tuple[str, ...] = ("zoomin", "zoomout")
-ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pandown", "walkin") + (
+ATTRACTION_LTX_PRESETS: Tuple[str, ...] = ("panright", "panleft", "panup", "pandown", "walkin", "walkback") + (
     _ZOOM_PRESETS if ATTRACTION_ZOOM_STYLE == "ltxv" else ()
 )
 # Jump cut: wide, then a hard cut to a centred punch-in showing JUMP_CUT_TIGHT of
@@ -1266,7 +1266,7 @@ LTXV_WALK_TO_SIGN = True
 # walk-and-pan prompts a flat slide too (depth score 0.01 vs 0.56, 2026-10-07).
 # Pans: the camera steps DEPTH_TRUCK sideways (nearest things; far ones
 # PARALLAX_FAR_WEIGHT of it) while turning DEPTH_PAN; dollies travel DEPTH_DOLLY.
-LTXV_DEPTH_KEYFRAMES: Tuple[str, ...] = ("panleft", "panright", "zoomin", "zoomout")
+LTXV_DEPTH_KEYFRAMES: Tuple[str, ...] = ("panleft", "panright", "zoomin", "zoomout", "walkback")
 # Walk In, if added to LTXV_DEPTH_KEYFRAMES: a free POV walk softly pinned
 # (ANCHOR_STRENGTH) to a 3D view ANCHOR_DOLLY forward. Tried 2026-10-07 after the
 # unanchored 八王子峠 walk invented a corridor: LTXV then held still ~3 s and
@@ -1420,6 +1420,11 @@ LTXV_WALK_ATTEMPTS = 2
 # photo), never the CPU 3D photo - the user wants every picture made by LTX.
 LTXV_WALK_FAILED_FALLBACK = "zoomin"
 LTXV_PROMPTS["walkshort"] = LTXV_PROMPTS["walkfwd"]
+# Walk-in reversed: starts close, ends on the whole photo, so it never shows past its edges.
+LTXV_PROMPTS["walkback"] = (
+    "A smooth gimbal shot carried at eye height moves slowly backward away from {place}, step by step, the "
+    "view opening up to show more of it. The camera stays level." + _LTXV_WALK_END
+)
 # Unpinned, the gentle walkfwd wording only drifted (2026-10-06, 孝子駅).
 LTXV_PROMPTS["walkai"] = (
     "Point-of-view camera at eye height moving continuously straight forward through {place}, "
@@ -2023,3 +2028,11 @@ QWEN3_COST = {"request": 5.0, "char": 0.85, "startup": 40.0}
 # [NOTE] [Legs] A Mapillary street photo pops up as a small card at each turn of a walking leg (settings.street_photos_at_turns).
 # Needs the app-wide Mapillary token; turns without coverage just show no card.
 STREET_PHOTOS_AT_TURNS = False
+
+# [NOTE] [Attraction] Hand-held finish (vdoprocessing/handheld.py) on every generated attraction clip: a slow seeded
+# drift and roll, plus the PARALLAX_WALK_* footsteps on walking moves. After generation, never in the prompt
+# ("hand-held" made LTX draw hands). Part of the tail signature, so a change refits kept clips on the CPU.
+HANDHELD = False  # 2026-10-22: the user preferred the steady camera
+HANDHELD_DRIFT = 0.004  # share of the frame
+HANDHELD_ROLL_DEG = 0.3
+HANDHELD_WALK_MOVES: Tuple[str, ...] = ("walkin", "walkback", "walkfwd", "walkfwdleft", "walkfwdright", "walkshort", "walkai")

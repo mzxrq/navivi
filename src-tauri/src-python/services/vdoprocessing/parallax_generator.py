@@ -381,6 +381,8 @@ def generate_parallax_clip(
     from services.tts.ttsengine import FFmpegManager
 
     preset = normalize_camera_pan(camera_pan_hint)
+    if preset == "walkback":
+        preset = "zoomout"
     if preset not in _PANS + ("zoomin", "zoomout", "walk"):
         preset = "zoomin"
     photo = read_image(image_path)

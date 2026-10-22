@@ -2,6 +2,7 @@
 two real crops of the photo, with the 3D photo as the fallback."""
 
 import json
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -10,6 +11,7 @@ import pytest
 from services import tuning
 from services.config.job_config import JobConfigManager
 from services.vdoprocessing import img2vdo, ltx_keyframed, parallax_generator
+from services.vdoprocessing.camera_pan import normalize_camera_pan
 from services.vdoprocessing.img2vdo import AttractionVideoGenerator
 
 
@@ -346,6 +348,14 @@ class TestDepthKeyframes:
         first, last, _ = ltx_keyframed.depth_cams("zoomin")
         assert first[2] == 0 and last[2] == tuning.LTXV_DEPTH_DOLLY
         assert ltx_keyframed.depth_cams("zoomout")[:2] == (last, first)
+
+    def test_walk_back_is_walk_in_reversed_and_ends_on_the_photo(self):
+        first, last, _ = ltx_keyframed.depth_cams("walkin")
+        assert ltx_keyframed.depth_cams("walkback")[:2] == (last, first)
+        assert ltx_keyframed.depth_cams("walkback")[1] == (0.0, 0.0, 0.0)
+        assert normalize_camera_pan("walk-back") == "walkback"
+        assert "walkback" in tuning.ATTRACTION_LTX_PRESETS
+        assert "walkback" in tuning.LTXV_PROMPTS and len(ltx_keyframed.mid_guides("walkback", Path("."))) > 0
 
     def test_mid_guides_are_evenly_spaced_latent_frames(self, tmp_path):
         mids = ltx_keyframed.mid_guides("panleft", tmp_path)

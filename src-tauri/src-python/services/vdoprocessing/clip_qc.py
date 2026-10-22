@@ -25,7 +25,7 @@ _MIN_NCC = 0.45
 _MAX_COLOR_DIFF = 22.0
 _MIN_TEXTURE_STD = 12.0
 # Moves whose new view necessarily shows what's beyond the photo.
-REVEALING_MOVES = {"panright", "panleft", "panup", "pandown", "zoomout", "dollyback"}
+REVEALING_MOVES = {"panright", "panleft", "panup", "pandown", "zoomout", "dollyback", "walkback"}
 
 
 def _small(image: np.ndarray) -> np.ndarray:

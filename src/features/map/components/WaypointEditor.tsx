@@ -15,6 +15,7 @@ import {
   ZoomIn,
   ZoomOut,
   Footprints,
+  Undo2,
   Plus,
   Search,
   Loader2,
@@ -65,6 +66,7 @@ function useCameraMotions() {
     { value: "zoom-in", label: t`Dolly In`, icon: ZoomIn },
     { value: "zoom-out", label: t`Dolly Out`, icon: ZoomOut },
     { value: "walk-in", label: t`Walk In`, icon: Footprints },
+    { value: "walk-back", label: t`Walk Back`, icon: Undo2 },
   ];
 }
 
