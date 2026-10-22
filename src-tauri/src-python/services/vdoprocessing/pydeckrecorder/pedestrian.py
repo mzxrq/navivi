@@ -1533,14 +1533,36 @@ def render_residential_leg_pydeck(
 _FRAME_SHOT = {"type": "jpeg", "quality": tuning.LEG_FRAME_JPEG_QUALITY}
 
 
+def _clear_card_spot(route_px, mx, my, w, h, gap, margin, out_w, out_h) -> Tuple[float, float]:
+    """(left, top) of a w x h card beside the marker at (mx, my) that covers the
+    fewest route points: above first (the old spot), then below, right, left, diagonals."""
+    pad = 10.0  # the route line's own width
+    spots = [
+        (mx - w / 2, my - gap - h), (mx - w / 2, my + gap), (mx + gap, my - h / 2), (mx - gap - w, my - h / 2),
+        (mx + gap, my - gap - h), (mx - gap - w, my - gap - h), (mx + gap, my + gap), (mx - gap - w, my + gap),
+    ]
+
+    def clamp(left, top):
+        return min(max(left, margin), out_w - w - margin), min(max(top, margin), out_h - h - margin)
+
+    def covered(spot):
+        left, top = spot
+        return sum(left - pad <= x <= left + w + pad and top - pad <= y <= top + h + pad for x, y in route_px)
+
+    return min((clamp(*s) for s in spots), key=covered)
+
+
 async def _play_stopby_photo_pause(
     page, write_frame, cut_to_new_clip, fps, html_dir, port, stopby,
     view_lon, view_lat, zoom, output_size, trigger_index, pitch,
     pip_only: bool = False,
     advance_frame=None, frame_index: int = 0, frame_total: int = 0,
     small_hold_seconds: Optional[float] = None,
+    avoid_lonlat: Optional[List[Tuple[float, float]]] = None,
 ):
-    """Pauses the walk right where it is, for a connected stop-by (see
+    """`avoid_lonlat`: the leg's route; the card goes where it covers the least of it.
+
+    Pauses the walk right where it is, for a connected stop-by (see
     `landmarks` docstring): its own photo pops in as a small leader-line
     card anchored on the marker's own on-screen position (computed from
     the LOCKED camera's known, unmoving viewState -- see
@@ -1622,8 +1644,15 @@ async def _play_stopby_photo_pause(
     card_top = min(
         max(marker_y - card_gap - card_h, card_margin), out_h - card_h - card_margin
     )
-    card_box = (card_left, card_top, card_w, card_h)
     anchor_x, anchor_y = card_left + card_w / 2.0, card_top + card_h
+    if avoid_lonlat:
+        card_left, card_top = _clear_card_spot(
+            [_project_lonlat_to_px(lo, la, view_lon, view_lat, zoom, output_size, pitch=pitch) for lo, la in avoid_lonlat],
+            marker_x, marker_y, card_w, card_h, card_gap, card_margin, out_w, out_h,
+        )
+        anchor_x = min(max(marker_x, card_left), card_left + card_w)
+        anchor_y = min(max(marker_y, card_top), card_top + card_h)
+    card_box = (card_left, card_top, card_w, card_h)
 
     await page.evaluate(
         """([url, left, top, w, h, ax, ay, mx, my]) => new Promise((resolve) => {
@@ -2713,6 +2742,7 @@ async def _record_leg(
                 # pip call below as a hard ceiling so it never advances past
                 # whatever comes next.
                 all_trigger_indices = sorted(set(stopby_triggers.keys()) | set(pip_triggers.keys()))
+                route_lonlat = list(zip(smooth_df["lon"], smooth_df["lat"]))
 
                 # remaining_km's own total (its value at frame 0, before any
                 # distance has been walked) -- the SMOOTH path's cumulative
@@ -2949,6 +2979,7 @@ async def _record_leg(
                             pip_lm, locked_lon, locked_lat, locked_zoom, output_size, index,
                             pitch=follow_pitch, pip_only=True,
                             advance_frame=_draw_walker_frame, frame_index=index + 1, frame_total=next_trigger,
+                            avoid_lonlat=route_lonlat,
                         )
                         continue
 

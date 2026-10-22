@@ -46,3 +46,14 @@ class TestNeedsGlLabels:
 
     def test_a_chosen_background_is_never_switched(self):
         assert not needs_gl_labels({"overview_background": "raster"}, "ja", True)
+
+
+def test_photo_card_moves_off_the_route_line():
+    from services.vdoprocessing.pydeckrecorder.pedestrian import _clear_card_spot
+
+    spot = lambda route: _clear_card_spot(route, 960, 540, 200, 112, 26, 16, 1920, 1080)  # noqa: E731
+    vertical = [(960, y) for y in range(0, 1080, 4)]  # the route runs straight up through the marker
+    left, top = spot(vertical)
+    assert left > 960 or left + 200 < 960  # beside it, not above or below
+    horizontal = [(x, 540) for x in range(0, 1920, 4)]
+    assert spot(horizontal) == (960 - 100, 540 - 26 - 112)  # clear above: the old spot is kept
