@@ -5,6 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const store = vi.hoisted(() => ({ records: {} as Record<string, unknown>, get: vi.fn(), set: vi.fn() }));
 
+vi.mock("../../src/services/mapKeys", () => ({
+  loadMapKeys: () => Promise.resolve(store.get("api_keys")).then((v) => (v ?? {}) as never),
+  saveMapKeys: (keys: unknown) => store.set("api_keys", keys),
+}));
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => ({ onCloseRequested: () => Promise.resolve(() => {}), destroy: vi.fn() }) }));
 vi.mock("../../src/services/db", () => ({
   db: {

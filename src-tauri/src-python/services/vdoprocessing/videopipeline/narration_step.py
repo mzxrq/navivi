@@ -24,6 +24,7 @@ from .audio_step import OVERVIEW_CUE_KEY, base_narration_script, raw_narration_s
 from .helpers import logger
 
 from services.projectfiles import NARRATION_CUES, OVERVIEW_NARRATION, ROUTE_CACHE, meta_file, meta_path
+from services.projectfiles import write_json_atomic
 _SENTENCE_END = SENTENCE_END
 
 # How much of the narration is left to speak after the walker arrives. 0: the
@@ -72,7 +73,7 @@ class CueStore:
         self._data.setdefault(key, {})["cue_times"] = {t: round(v, 2) for t, v in times.items()}
 
     def save(self) -> None:
-        self.path.write_text(json.dumps(self._data, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_json_atomic(self.path, self._data)
 
 
 def cued_script(waypoint: dict) -> Optional[str]:
@@ -211,7 +212,7 @@ def ensure_overview_narration(project_config_path: str) -> bool:
         project["overview_narration"] = saved["script"]
         project["overview_narration_is_auto"] = True
         project["overview_narration_source_ids"] = current_ids
-        config_path.write_text(json.dumps(project, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_json_atomic(config_path, project)
         logger.info("Step 2: reused the saved overview_narration (waypoints unchanged).")
         return False
 
@@ -235,12 +236,9 @@ def ensure_overview_narration(project_config_path: str) -> bool:
     project["overview_narration"] = script
     project["overview_narration_is_auto"] = True
     project["overview_narration_source_ids"] = current_ids
-    config_path.write_text(json.dumps(project, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json_atomic(config_path, project)
     try:
-        saved_path.write_text(
-            json.dumps({"source_ids": current_ids, "script": script}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        write_json_atomic(saved_path, {"source_ids": current_ids, "script": script})
     except OSError as e:
         logger.warning("Step 2: could not save the overview_narration copy: %s", e)
     logger.info("Step 2: auto-generated overview_narration (%d chars).", len(script))

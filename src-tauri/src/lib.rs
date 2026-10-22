@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use std::{thread};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::fs;
 
 mod db;
@@ -92,18 +92,20 @@ fn vc_runtime_guard() -> Result<(), String> {
     }
 }
 
-fn python_command(app: &AppHandle) -> Result<Command, String> {
+/// `with_keys`: hand over the AI keys and map tokens, only for the modes that call an online model or fetch tiles
+/// and street photos (the pipeline and the script modes); utilities, exports and installs never see them.
+fn python_command(with_keys: bool) -> Result<Command, String> {
     let rt = runtime::get();
     if !rt.python_ready() {
         return Err("SETUP_REQUIRED: the media tools are not installed yet.".into());
     }
     let mut cmd = rt.command();
+    if !with_keys {
+        return Ok(cmd);
+    }
     secrets::export_keys(&mut cmd);
     for (name, var) in [("mapbox", "NAVIVI_MAPBOX_TOKEN"), ("mapillary", "NAVIVI_MAPILLARY_TOKEN")] {
-        let token = app
-            .try_state::<db::DbState>()
-            .and_then(|state| state.0.lock().ok().and_then(|conn| db::app_settings::api_key(&conn, name)));
-        if let Some(token) = token {
+        if let Some(token) = secrets::map_key(name) {
             cmd.env(var, token);
         }
     }
@@ -115,7 +117,7 @@ async fn run_python_blueprint(app: AppHandle, action: String, payload: String) -
     // Blocking work (it waits for the process): keep it off the async workers.
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<BlueprintState>();
-        run_in_slot(&app, &action, &payload, &state.process, None)
+        run_in_slot(&app, &action, &payload, &state.process, None, true)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -131,7 +133,7 @@ async fn run_python_install(app: AppHandle, action: String, payload: String) -> 
     }
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<BlueprintState>();
-        run_in_slot(&app, &action, &payload, &state.install_process, Some("install-log"))
+        run_in_slot(&app, &action, &payload, &state.install_process, Some("install-log"), false)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -151,9 +153,12 @@ fn cancel_python_install(state: State<'_, BlueprintState>) -> Result<String, Str
 
 /// Runs `python main.py <action> <payload>` and keeps it in `slot`; a new call on the same slot kills the previous one.
 /// With `log_event`, every stderr line is also sent to the window under that event name (installs show progress from it).
-fn run_in_slot(app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option<Child>>, log_event: Option<&'static str>) -> Result<String, String> {
+fn run_in_slot(
+    app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option<Child>>, log_event: Option<&'static str>,
+    with_keys: bool,
+) -> Result<String, String> {
     // Spawn instead of output()
-    let mut cmd = python_command(app)?;
+    let mut cmd = python_command(with_keys)?;
     cmd.arg(action)
         .arg(payload)
         .stdout(Stdio::piped())
@@ -229,11 +234,11 @@ const UTILITY_MODES: &[&str] = &[
 ];
 
 #[tauri::command]
-async fn run_python_utility(app: AppHandle, action: String, payload: String) -> Result<String, String> {
+async fn run_python_utility(action: String, payload: String) -> Result<String, String> {
     if !UTILITY_MODES.contains(&action.as_str()) {
         return Err(format!("Not a utility mode: {action}"));
     }
-    let mut cmd = python_command(&app)?;
+    let mut cmd = python_command(false)?;
     cmd.arg(&action).arg(&payload);
     let out = tauri::async_runtime::spawn_blocking(move || cmd.output())
         .await
@@ -282,7 +287,7 @@ fn start_render(
     state: State<'_, BlueprintState>,
 ) -> Result<String, String> {
     vc_runtime_guard()?;
-    let mut command = python_command(&app)?;
+    let mut command = python_command(true)?;
     command.arg("full_pipeline").arg(&config_path);
     if force.unwrap_or(false) {
         // Bypasses the checkpoint/resume logic so every stage regenerates
@@ -462,7 +467,7 @@ fn export_blocking(app: &tauri::AppHandle, project_dir: &str) -> Result<String, 
 
     let timeline_path = format!("{}/timeline.json", project_dir);
 
-    let spawned = python_command(app).and_then(|mut cmd| {
+    let spawned = python_command(false).and_then(|mut cmd| {
         cmd.arg("render_timeline")
             .arg(&timeline_path)
             .stdout(Stdio::piped())
@@ -522,19 +527,40 @@ fn export_blocking(app: &tauri::AppHandle, project_dir: &str) -> Result<String, 
 #[tauri::command]
 async fn copy_asset_file(source_path: String, target_dir: String) -> Result<String, String> {
     let source = Path::new(&source_path);
-    
-    let file_name = source.file_name().ok_or("Invalid file name")?;
-    
-    let target = Path::new(&target_dir).join(file_name);
-    
+    if source.file_name().is_none() {
+        return Err("Invalid file name".into());
+    }
     if let Err(e) = fs::create_dir_all(&target_dir) {
         return Err(format!("Failed to create directory: {}", e));
     }
-
-    match fs::copy(&source, &target) {
-        Ok(_) => Ok(target.to_string_lossy().to_string()),
-        Err(e) => Err(format!("Failed to copy file: {}", e)),
+    let (target, already_there) = asset_target(source, Path::new(&target_dir));
+    if !already_there {
+        fs::copy(source, &target).map_err(|e| format!("Failed to copy file: {}", e))?;
     }
+    Ok(target.to_string_lossy().to_string())
+}
+
+/// Where an imported file goes: the file itself when it is already there (the same file, or one with the same
+/// bytes under that name), else its name, or "name (2).ext", "name (3).ext"... when another file has it. Two
+/// different DSC_0001.JPG imports used to overwrite each other, swapping one stop's photo for another's.
+fn asset_target(source: &Path, dir: &Path) -> (PathBuf, bool) {
+    let name = source.file_name().unwrap_or_default();
+    let stem = Path::new(name).file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let ext = Path::new(name).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    let same_file = |candidate: &Path| {
+        fs::canonicalize(candidate).ok() == fs::canonicalize(source).ok()
+            || matches!((fs::read(candidate), fs::read(source)), (Ok(a), Ok(b)) if a == b)
+    };
+    for n in 1.. {
+        let candidate = if n == 1 { dir.join(name) } else { dir.join(format!("{stem} ({n}){ext}")) };
+        if !candidate.exists() {
+            return (candidate, false);
+        }
+        if same_file(&candidate) {
+            return (candidate, true);
+        }
+    }
+    unreachable!()
 }
 
 #[tauri::command(async)]
@@ -659,6 +685,7 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             fs::create_dir_all(&dir)?;
             let conn = db::open(&dir.join("navivi.db"))?;
+            secrets::move_map_keys_from_db(&conn);
             app.manage(db::DbState(Mutex::new(conn)));
             app.manage(StartedAt(std::time::Instant::now()));
             // If the page never reports in (a crash while loading), don't leave the user on the splash.

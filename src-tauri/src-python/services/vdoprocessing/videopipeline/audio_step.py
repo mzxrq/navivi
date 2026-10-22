@@ -16,6 +16,7 @@ from services.localization.cue_alignment import measured_cue_times
 from services.localization.cues import clean_text, strip_cues
 from services.logger.progress import tracker
 from services.tts.errors import TTSNotReady
+from services.projectfiles import write_json_atomic
 
 from .helpers import (
     attraction_audio_filename,
@@ -201,9 +202,25 @@ def _write_voice_note(audio_path, client: Any) -> None:
     if fp is None:
         return
     try:
-        _voice_note_path(audio_path).write_text(json.dumps(fp), encoding="utf-8")
+        write_json_atomic(_voice_note_path(audio_path), fp, indent=None)
     except OSError:
         pass
+
+
+def require_some_voice(waypoints: list, audio_data: dict) -> None:
+    """Fails the run when stops have scripts but not one voice clip was made (a dead or unreachable voice
+    server): every stop's TTS failure is only logged, so the render used to finish silent as a success."""
+    scripted = any(
+        isinstance(wp, dict) and (_resolve_narration_script(wp) or _resolve_attraction_narration_script(wp))
+        for wp in waypoints
+    )
+    made = (any(audio_data.get("audio_paths") or []) or any(audio_data.get("attraction_audio_paths") or [])
+            or audio_data.get("overview_audio_path"))
+    if scripted and not made:
+        raise RuntimeError(
+            "No narration audio was made although the stops have scripts: the voice engine did not answer. "
+            "Check Settings > Voice (or restart the app) and render again."
+        )
 
 
 def _remake_reason(existing_path, same_text: bool, client: Any, force: bool) -> str:

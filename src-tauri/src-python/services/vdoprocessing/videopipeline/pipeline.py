@@ -19,7 +19,7 @@ from services.vdoprocessing.stopby_visits import set_visit_all_stopbys
 from services.vdoprocessing.vdoexporter import VideoExporter, sweep_stale_temp_files
 
 from .attraction_step import render_attraction_videos
-from .audio_step import apply_cued_scripts, generate_audio, set_route_only_legs, stop_tts_server
+from .audio_step import apply_cued_scripts, generate_audio, require_some_voice, set_route_only_legs, stop_tts_server
 from .gps_step import process_gps
 from .helpers import (
     attraction_videos_enabled,
@@ -133,6 +133,7 @@ def run_full_pipeline(
         audio_data = generate_audio(
             cleaned_route, str(config_file_path), force=force_regenerate
         )
+        require_some_voice(waypoints, audio_data)
         # Where each cue falls in the real audio; render_step sizes each walk from it.
         if use_cues:
             record_cue_times(str(config_file_path), audio_data)
@@ -323,6 +324,7 @@ def run_full_pipeline(
         outro_text=outro_text_item(str(config_file_path)) if outro_path else None,
         place_label_look=job_config.get("settings", {}).get("place_label_look"),
         overview_voice_start=voice_start,
+        waypoints=waypoints,  # as the run started: job_config.json may be edited meanwhile
     )
     recorder.finish()
     tracker.on_stage = None

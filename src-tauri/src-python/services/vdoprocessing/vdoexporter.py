@@ -44,6 +44,7 @@ import cv2
 import numpy as np
 
 from services import runtime_paths, tuning
+from services.projectfiles import replace_into
 from services.localization.subtitle import SubtitleStyle
 from services.localization.caption_box import box_event_text, build_box, text_position_tag
 from services.localization.text_style import TextStyle, wrap_text
@@ -852,11 +853,12 @@ class VideoExporter:
 
         result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
         if result.returncode != 0 or not tmp_out.exists():
-            logger.error(
-                "concat_from_timeline: failed to mux track %d ('%s'), using it unmuxed: %s",
-                index, video_path, result.stderr,
+            # Fails the export: the clip without its sound (and a different stream layout) would leave it
+            # silent and shift every later clip's sound, while the export still reported success.
+            raise RuntimeError(
+                f"Export failed: could not add the sound to clip {index + 1} ('{Path(video_path).name}'): "
+                f"{result.stderr.strip()[-400:]}"
             )
-            return video_path
         return tmp_out
 
     @staticmethod
@@ -1008,6 +1010,9 @@ class VideoExporter:
             raise RuntimeError("FFmpeg binary not found.")
 
         tmp_dir = Path(tempfile.mkdtemp(prefix="navivi_concat_"))
+        # Built beside the export and swapped in at the very end: a failed or cancelled export keeps the last
+        # good video (the temp folder can be on another drive, where os.replace can't move it).
+        partial = Path(output_path).with_name(f".{Path(output_path).stem}.partial{Path(output_path).suffix}")
         target_size = VideoExporter._timeline_size(timeline_data, tracks)
         target_fps = VideoExporter._timeline_fps(timeline_data)
 
@@ -1081,7 +1086,7 @@ class VideoExporter:
                     str(concat_txt),
                     "-c",
                     "copy",
-                    str(output_path),
+                    str(partial),
                 ],
                 capture_output=True,
                 encoding="utf-8",
@@ -1096,21 +1101,22 @@ class VideoExporter:
                 logger.error("concat_from_timeline failed: %s", result.stderr)
                 raise RuntimeError(f"FFmpeg concat failed: {result.stderr}")
 
-            final_file = Path(output_path)
-            if not final_file.exists() or final_file.stat().st_size == 0:
+            if not partial.exists() or partial.stat().st_size == 0:
                 raise RuntimeError(
                     f"FFmpeg reported success, but the output file is missing or 0 bytes! STDERR: {result.stderr}"
                 )
 
             report(join_end)
             VideoExporter._finish_timeline_output(
-                ffmpeg_cmd, timeline_data, output_path, tmp_dir,
+                ffmpeg_cmd, timeline_data, str(partial), tmp_dir,
                 on_progress=lambda f: report(music_end + (100.0 - music_end) * f),
             )
+            replace_into(partial, output_path)
             VideoExporter._write_srt_beside(timeline_data, output_path)
             report(100.0)
             return output_path
         finally:
+            partial.unlink(missing_ok=True)
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
     @staticmethod
@@ -1419,8 +1425,11 @@ class VideoExporter:
         sharpen: bool = False,
         label_text: Optional[str] = None,
         label_style: Optional[SubtitleStyle] = None,
+        denoise: Optional[str] = None,
     ) -> str:
-        """Combines what used to be up to three sequential ffmpeg re-encodes
+        """`denoise`: an ffmpeg filter run first, at the clip's own size (tuning.ATTRACTION_DENOISE).
+
+        Combines what used to be up to three sequential ffmpeg re-encodes
         — trim_video_duration, upscale_video, and burn_static_label, each a
         full decode+encode pass over the same clip — into a single filter
         graph and a single encode. Pass only the stages actually needed;
@@ -1460,7 +1469,7 @@ class VideoExporter:
 
         from services.tts.ttsengine import FFmpegManager
 
-        vf_parts: List[str] = []
+        vf_parts: List[str] = [denoise] if denoise else []
 
         if hold_to is not None:
             current_duration = FFmpegManager.get_media_duration(str(video_path))

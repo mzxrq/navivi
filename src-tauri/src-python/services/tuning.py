@@ -1191,6 +1191,13 @@ ATTRACTION_SECOND_SHOT: Optional[str] = "auto"
 # generated frame). The second half only when the narration share is longer than one half; past both, the
 # slow-move tail ("reverse") fills. Not in the clip digest: finished photos are not regenerated.
 LTXV_CONTINUE = True
+# A two-half clip covers this many times the single clip's path (pan width, zoom, 3D truck/pan/dolly), so it
+# moves about as fast as before over twice the time. Dollies stop at LTXV_DEPTH_MAX_DOLLY: past it the
+# 3D photo stretches. The sharpness check (sharp_enough_preset) still guards tight crops.
+LTXV_HALVES_TRAVEL = 1.8
+LTXV_DEPTH_MAX_DOLLY = 0.6
+# Frames dissolved where the halves meet (2026-10-22: a hard cut showed a pop and a speed change there).
+LTXV_JOIN_FADE_FRAMES = 6
 # No walkthrough: unpinned, it invented a whole plaza at 札立山 (2026-10-06).
 ATTRACTION_SECOND_SHOT_MOVES: Tuple[str, ...] = (
     "closein", "closeout", "closepanleft", "closepanright", "closepanup", "closepandown",
@@ -1271,7 +1278,7 @@ LTXV_WALK_TO_SIGN = True
 # walk-and-pan prompts a flat slide too (depth score 0.01 vs 0.56, 2026-10-07).
 # Pans: the camera steps DEPTH_TRUCK sideways (nearest things; far ones
 # PARALLAX_FAR_WEIGHT of it) while turning DEPTH_PAN; dollies travel DEPTH_DOLLY.
-LTXV_DEPTH_KEYFRAMES: Tuple[str, ...] = ("panleft", "panright", "zoomin", "zoomout", "walkback")
+LTXV_DEPTH_KEYFRAMES: Tuple[str, ...] = ("panleft", "panright", "zoomin", "zoomout")
 # Walk In, if added to LTXV_DEPTH_KEYFRAMES: a free POV walk softly pinned
 # (ANCHOR_STRENGTH) to a 3D view ANCHOR_DOLLY forward. Tried 2026-10-07 after the
 # unanchored 八王子峠 walk invented a corridor: LTXV then held still ~3 s and
@@ -1425,11 +1432,8 @@ LTXV_WALK_ATTEMPTS = 2
 # photo), never the CPU 3D photo - the user wants every picture made by LTX.
 LTXV_WALK_FAILED_FALLBACK = "zoomin"
 LTXV_PROMPTS["walkshort"] = LTXV_PROMPTS["walkfwd"]
-# Walk-in reversed: starts close, ends on the whole photo, so it never shows past its edges.
-LTXV_PROMPTS["walkback"] = (
-    "A smooth gimbal shot carried at eye height moves slowly backward away from {place}, step by step, the "
-    "view opening up to show more of it. The camera stays level." + _LTXV_WALK_END
-)
+# "walkback" (the editor's Walk Back) has no recipe of its own: it is "walkin" played backwards
+# (ltx_keyframed.generate_ltx_move), a natural walk away that ends on the real photo.
 # Unpinned, the gentle walkfwd wording only drifted (2026-10-06, 孝子駅).
 LTXV_PROMPTS["walkai"] = (
     "Point-of-view camera at eye height moving continuously straight forward through {place}, "
@@ -1940,7 +1944,10 @@ ATTRACTION_LABEL_MARGIN_LEFT = 4
 # mild unsharp pass right after that upscale claws back some of the softness the
 # resize itself introduces. Off by default elsewhere since it's tuned for exactly
 # this upscale ratio, not a general-purpose sharpen.
-ATTRACTION_UPSCALE_SHARPEN = True
+# 2026-10-22: off - it sharpened LTX's grain along with the edges. ATTRACTION_DENOISE (a light temporal
+# denoise, CPU) runs on generated clips first, at their own 960x544, before the upscale.
+ATTRACTION_UPSCALE_SHARPEN = False
+ATTRACTION_DENOISE: Optional[str] = "hqdn3d=1.5:1.5:6:6"
 
 # --- Burned-in captions (timeline export and the per-clip subtitle burn) -----
 # A translucent dark box with the text on it, narrow and centred at the bottom so

@@ -36,6 +36,8 @@ from services.tts.artifacts import cut_off_ratio, remove_stray_bursts
 from services.localization.sentence_split import SENTENCE_END
 from services.localization.subtitle import SubtitleStyle
 from services.logger.logger import setup_logger
+from services.projectfiles import replace_into, write_atomic
+from services.runtime_paths import server_environ
 
 # Logging configuration
 logger = setup_logger("TTSEngine")
@@ -361,7 +363,7 @@ class IrodoriTTSClient:
         from services.tts.voices import voices_dir
 
         server_env = {
-            **os.environ,
+            **server_environ(),
             "IRODORI_MODEL_DEVICE": device,
             "IRODORI_CODEC_DEVICE": device,
             "IRODORI_HF_CHECKPOINT": "Aratako/Irodori-TTS-v4.1-Small",
@@ -789,8 +791,7 @@ class IrodoriTTSClient:
         for chunk in chunks or [text]:
             takes += await self._speak_chunk(chunk)
         if len(takes) == 1:
-            with open(file_path, "wb") as f:
-                f.write(takes[0])
+            write_atomic(file_path, takes[0])
             self._remove_stray_bursts(file_path)
             return str(file_path)
 
@@ -826,7 +827,9 @@ class IrodoriTTSClient:
                     gaps.append(gap_path)
                     interleaved.append(gap_path)
 
-            processor.concatenate_files(interleaved, str(file_path))
+            joined = file_path.with_name(f".{file_path.stem}.joining{file_path.suffix}")
+            processor.concatenate_files(interleaved, str(joined))
+            replace_into(joined, file_path)
             self._remove_stray_bursts(file_path)
         finally:
             for p in parts + gaps:
@@ -859,7 +862,7 @@ class _VenvEngineClient(IrodoriTTSClient):
                 "--host", "127.0.0.1", "--port", str(port), "--idle-seconds", str(int(self._IDLE_TIMEOUT_SECONDS)),
             ],
             cwd=str(self._SERVER_DIR),
-            env={**os.environ, "PYTHONIOENCODING": "utf-8", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1", **self._server_env()},
+            env={**server_environ(), "PYTHONIOENCODING": "utf-8", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1", **self._server_env()},
             stdout=log_file,
             stderr=subprocess.STDOUT,
             **popen_kwargs,

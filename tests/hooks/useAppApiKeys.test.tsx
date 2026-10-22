@@ -3,6 +3,10 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const store = vi.hoisted(() => ({ saved: null as unknown, get: vi.fn(), set: vi.fn() }));
+vi.mock("../../src/services/mapKeys", () => ({
+  loadMapKeys: () => Promise.resolve(store.get("api_keys")).then((v) => (v ?? {}) as never),
+  saveMapKeys: (keys: unknown) => store.set("api_keys", keys),
+}));
 vi.mock("../../src/services/db", () => ({ db: { appSettings: { get: store.get, set: store.set } } }));
 
 import { useAppApiKeys } from "../../src/hooks/useAppApiKeys";

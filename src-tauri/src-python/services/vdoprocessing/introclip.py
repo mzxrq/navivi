@@ -34,6 +34,7 @@ from services.mapfetcher.graphicengine.base import _GraphicsEngineBase
 from services.tts.ttsengine import FFmpegManager
 from services.vdoprocessing.outrocard import LOGO_DIR, _load_font, trimmed_logo
 from services import tuning, video_text
+from services.projectfiles import replace_into
 
 logger = setup_logger("IntroClip")
 
@@ -503,6 +504,7 @@ def generate_intro_clip(
     run_id = uuid.uuid4().hex[:8]
     per_clip_raw_paths: List[str] = []
     combined_path = video_dir_path / f".intro_combined_{run_id}.mp4"
+    partial_path = video_dir_path / f".intro_partial_{run_id}.mp4"
     title_path: Optional[Path] = None
     logo_path: Optional[Path] = None
 
@@ -566,7 +568,7 @@ def generate_intro_clip(
             "-filter_complex", graph,
             "-an",
             "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
-            str(output_path),
+            str(partial_path),
         ]
         result = subprocess.run(
             cmd, capture_output=True, encoding="utf-8", errors="replace"
@@ -574,6 +576,7 @@ def generate_intro_clip(
         if result.returncode != 0:
             logger.error("Intro generation failed: %s", result.stderr.strip())
             return None
+        replace_into(partial_path, output_path)  # a cancelled run leaves the last intro, never a cut-off one
     except Exception as exc:
         logger.error("Intro generation failed: %s", exc)
         return None
@@ -583,6 +586,7 @@ def generate_intro_clip(
         if logo_path is not None:
             logo_path.unlink(missing_ok=True)
         combined_path.unlink(missing_ok=True)
+        partial_path.unlink(missing_ok=True)
         for p in per_clip_raw_paths:
             Path(p).unlink(missing_ok=True)
 
