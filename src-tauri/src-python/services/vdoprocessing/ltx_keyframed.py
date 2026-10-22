@@ -735,9 +735,11 @@ def generate_ltx_move(
                         logger.warning("%s - LTXV %s instead.", exc, fallback)
                         move, free = fallback, False
                         prompt = prompt_for(move, seed)
-                        keep = _shot_cache(output_path, seed, move, prompt)
+                        if tuning.LTXV_CONTINUE and i == 0:  # a pinned move: two halves like any other
+                            preset, halves, part = move, True, 0
+                        keep = _shot_cache(output_path, seed, move if part is None else f"{move}#0", prompt)
                         cached[-1] = keep
-                        render_shot(photo_path, move, path, work, prompt, place)
+                        render_shot(photo_path, move, path, work, prompt, place, part)
                     tmp = keep.with_name(keep.stem + ".tmp.mp4")
                     shutil.copy2(path, tmp)
                     os.replace(tmp, keep)

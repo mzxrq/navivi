@@ -443,3 +443,22 @@ class TestContinuousHalves:
         frames = int(cv2.VideoCapture(out).get(cv2.CAP_PROP_FRAME_COUNT))
         assert frames == 2 * 4 * 24 - 1
         assert ltx_keyframed.first_shot_end(out, "unused") is None  # one shot: no dissolve point
+
+    def test_a_failed_walk_falls_back_to_a_move_rendered_in_two_halves(self, tmp_path, monkeypatch):
+        def walk(*args, **kwargs):
+            raise ltx_keyframed.WalkFailed("barely walked")
+
+        monkeypatch.setattr(ltx_keyframed, "render_walk", walk)
+        monkeypatch.setattr(ltx_keyframed, "ensure_files", lambda: None)
+        photo = tmp_path / "p.png"
+        photo.write_bytes(b"photo")
+        parts = []
+
+        def render(photo, move, out, work, prompt=None, place=None, part=None):
+            parts.append((move, part))
+            return TestTwoShots()._clip(out, 4)
+
+        monkeypatch.setattr(ltx_keyframed, "render_shot", render)
+        ltx_keyframed.generate_ltx_move(str(photo), str(tmp_path / "o.mp4"), "walk-in", duration_sec=10.0)
+        fallback = tuning.LTXV_WALK_FAILED_FALLBACK
+        assert parts == [(fallback, 0), (fallback, 1)]
