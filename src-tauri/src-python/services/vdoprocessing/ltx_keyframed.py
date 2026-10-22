@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import time
 import uuid
 from pathlib import Path
@@ -30,6 +31,19 @@ logger = setup_logger("LtxKeyframed")
 
 
 Rect = Tuple[int, int, int, int]  # x0, y0, width, height
+
+
+def _half(first: Sequence[float], last: Sequence[float], part: Optional[int], whole: bool = False) -> Tuple[tuple, tuple]:
+    """(first, last) of half `part` (0 or 1) of a first -> last move; both halves share the real middle
+    keyframe. `whole` rounds to pixels (crop rects). part None: the move unchanged."""
+    if part is None:
+        return tuple(first), tuple(last)
+
+    def at(t: float) -> tuple:
+        values = (a + (b - a) * t for a, b in zip(first, last))
+        return tuple(int(round(v)) for v in values) if whole else tuple(values)
+
+    return at(0.5 * part), at(0.5 * part + 0.5)
 
 
 def keyframe_rects(
@@ -127,14 +141,19 @@ def walk_target(image, place: Optional[str] = None) -> Optional[Tuple[float, flo
     return (x0 + x1) / 2, (y0 + y1) / 2
 
 
-def _depth_keyframes(photo_path: str, move: str, work_dir: Path) -> Tuple[str, str]:
+def _tag(move: str, part: Optional[int]) -> str:
+    return move if part is None else f"{move}{part}"
+
+
+def _depth_keyframes(photo_path: str, move: str, work_dir: Path, part: Optional[int] = None) -> Tuple[str, str]:
     from services.vdoprocessing.parallax_generator import render_views_to_files
 
     first, last, margin = depth_cams(move)
+    first, last = _half(first, last, part)
     n = 0 if move in tuning.LTXV_FREE_MOVES else tuning.LTXV_DEPTH_MID_GUIDES
     mids = [tuple(a + (b - a) * k / (n + 1) for a, b in zip(first, last)) for k in range(1, n + 1)]
     names = ["first", "last", *(f"mid{k}" for k in range(1, n + 1))]
-    paths = [str(work_dir / f"{move}_{name}.png") for name in names]
+    paths = [str(work_dir / f"{_tag(move, part)}_{name}.png") for name in names]
     render_views_to_files(photo_path, [first, last, *mids], margin, paths)  # child process: RAM comes back
     for path in paths:
         frame = read_image(path)
@@ -143,29 +162,31 @@ def _depth_keyframes(photo_path: str, move: str, work_dir: Path) -> Tuple[str, s
     return paths[0], paths[1]
 
 
-def mid_guides(move: str, work_dir: Path) -> List[Tuple[str, int]]:
+def mid_guides(move: str, work_dir: Path, part: Optional[int] = None) -> List[Tuple[str, int]]:
     """In-between 3D views written by _depth_keyframes, with the LTXV frame each
     is pinned to (evenly spaced, multiples of 8 - one latent frame each)."""
     if move not in tuning.LTXV_DEPTH_KEYFRAMES or move in tuning.LTXV_FREE_MOVES:
         return []
     n = tuning.LTXV_DEPTH_MID_GUIDES
     span = tuning.LTXV_FRAMES - 1
-    return [(str(work_dir / f"{move}_mid{k}.png"), round(span * k / (n + 1) / 8) * 8) for k in range(1, n + 1)]
+    return [(str(work_dir / f"{_tag(move, part)}_mid{k}.png"), round(span * k / (n + 1) / 8) * 8) for k in range(1, n + 1)]
 
 
-def crop_keyframes(photo_path: str, move: str, work_dir: Path, place: Optional[str] = None) -> Tuple[str, str]:
-    """(first, last) PNGs at LTXV_WIDTH x LTXV_HEIGHT for the move."""
+def crop_keyframes(
+    photo_path: str, move: str, work_dir: Path, place: Optional[str] = None, part: Optional[int] = None,
+) -> Tuple[str, str]:
+    """(first, last) PNGs at LTXV_WIDTH x LTXV_HEIGHT for the move, or for half `part` of it."""
     image = read_image(photo_path)
     if image is None:
         raise RuntimeError(f"Cannot read {photo_path}")
     h, w = image.shape[:2]
     work_dir.mkdir(parents=True, exist_ok=True)
     if move in tuning.LTXV_DEPTH_KEYFRAMES:
-        return _depth_keyframes(photo_path, move, work_dir)
+        return _depth_keyframes(photo_path, move, work_dir, part)
     paths = []
     target = walk_target(image, place) if move == "walkfwd" else None
-    for name, (x0, y0, cw, ch) in zip(("first", "last"), keyframe_rects(w, h, move, target)):
-        path = work_dir / f"{move}_{name}.png"
+    for name, (x0, y0, cw, ch) in zip(("first", "last"), _half(*keyframe_rects(w, h, move, target), part, whole=True)):
+        path = work_dir / f"{_tag(move, part)}_{name}.png"
         frame = cv2.resize(image[y0:y0 + ch, x0:x0 + cw], (tuning.LTXV_WIDTH, tuning.LTXV_HEIGHT),
                            interpolation=cv2.INTER_AREA)
         cv2.imencode(".png", frame)[1].tofile(str(path))
@@ -380,7 +401,7 @@ def shot_list(preset: str, seed: str = "", photo_path: Optional[str] = None) -> 
     """The chosen move, then the second shot - unless the photo is too small
     for a close crop to stay sharp. With the "photo" tail the still photo
     takes the second shot's place (and with the "reverse" tail the clip played backwards does)."""
-    if tuning.ATTRACTION_SLOW_MOVE_STYLE in ("photo", "reverse"):
+    if tuning.ATTRACTION_SLOW_MOVE_STYLE in ("photo", "reverse") or tuning.LTXV_CONTINUE:
         return [preset]
     if tuning.ATTRACTION_SECOND_SHOT and photo_path:
         try:
@@ -405,9 +426,9 @@ def _photo_seed(photo_path: str) -> str:
 
 def render_shot(
     photo_path: str, move: str, output_path: str, work: Path, prompt: Optional[str] = None,
-    place: Optional[str] = None,
+    place: Optional[str] = None, part: Optional[int] = None,
 ) -> str:
-    """One LTXV clip (LTXV_FRAMES at LTXV_FPS) of `move` between its two crops,
+    """One LTXV clip (LTXV_FRAMES at LTXV_FPS) of `move` (or half `part` of it) between its two crops,
     colour-matched to its own first crop. Raises on any failure."""
     import httpx
 
@@ -417,7 +438,7 @@ def render_shot(
 
     from services.vdoprocessing.local_pan_generator import release_models
 
-    first, last = crop_keyframes(photo_path, move, work, place)
+    first, last = crop_keyframes(photo_path, move, work, place, part)
     release_models()
     tuning.ensure_free_ram("LTXV clip", min_free_gb=tuning.LTXV_MIN_FREE_RAM_GB, relief=ComfyUII2VClient.stop_server,
                            timeout=tuning.LTXV_RAM_WAIT_SECONDS)
@@ -433,7 +454,7 @@ def render_shot(
                 None if move in tuning.LTXV_FREE_MOVES and move not in tuning.LTXV_DEPTH_KEYFRAMES
                 else client._upload_image(http, last),
                 prompt or prompt_for(move), uuid.uuid4().int & 0xFFFFFFFF, prefix,
-                [(client._upload_image(http, path), idx) for path, idx in mid_guides(move, work)],
+                [(client._upload_image(http, path), idx) for path, idx in mid_guides(move, work, part)],
                 tuning.LTXV_WALK_ANCHOR_STRENGTH if move in tuning.LTXV_FREE_MOVES else None,
             )
             prompt_id = client._submit(http, graph)
@@ -649,6 +670,30 @@ def first_shot_end(clip_path: str, photo_path: str) -> Optional[float]:
     return cut if across / (within + 1e-3) > 1.1 else None
 
 
+def needs_second_half(duration_sec: float) -> bool:
+    """The second half only when the photo's narration share is longer than one half (0 = unknown: render it)."""
+    return duration_sec <= 0 or duration_sec > tuning.LTXV_FRAMES / tuning.LTXV_FPS
+
+
+def join_halves(first: str, second: str, output_path: str) -> str:
+    """The two halves as one clip; the second's opening frame (the same real crop the first ends on) is dropped."""
+    from services.tts.ttsengine import FFmpegManager
+
+    tmp = str(Path(output_path).with_suffix(".join.mp4"))
+    result = subprocess.run(
+        [FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_log_args(), "-i", first, "-i", second,
+         "-filter_complex", "[1:v]trim=start_frame=1,setpts=PTS-STARTPTS[b];[0:v][b]concat=n=2:v=1:a=0[v]",
+         "-map", "[v]", "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "16", "-preset", "fast",
+         "-pix_fmt", "yuv420p", tmp],
+        capture_output=True, encoding="utf-8", errors="replace",
+    )
+    if result.returncode != 0:
+        Path(tmp).unlink(missing_ok=True)
+        raise RuntimeError(f"Joining the halves failed: {result.stderr.strip()[-300:]}")
+    os.replace(tmp, output_path)
+    return output_path
+
+
 def generate_ltx_move(
     photo_path: str, output_path: str, camera_pan_hint, duration_sec: float = 0.0, place: Optional[str] = None,
 ) -> str:
@@ -665,11 +710,13 @@ def generate_ltx_move(
     try:
         shots, cached = [], []
         seed = _photo_seed(photo_path)
+        halves = tuning.LTXV_CONTINUE and preset not in tuning.LTXV_FREE_MOVES
         for i, move in enumerate(shot_list(preset, seed, photo_path)):
             path = str(work / f"shot{i}.mp4")
             free = move in tuning.LTXV_FREE_MOVES
             prompt = prompt_for(move, seed) if free else prompt_for(move, seed, second=i > 0)
-            keep = _shot_cache(output_path, seed, move, prompt)
+            part = 0 if halves and i == 0 else None
+            keep = _shot_cache(output_path, seed, move if part is None else f"{move}#0", prompt)
             cached.append(keep)
             try:
                 if keep.is_file():
@@ -681,7 +728,7 @@ def generate_ltx_move(
                         if free:
                             render_walk(photo_path, move, path, work, prompt, place)
                         else:
-                            render_shot(photo_path, move, path, work, prompt, place)
+                            render_shot(photo_path, move, path, work, prompt, place, part)
                     except WalkFailed as exc:
                         # Still LTX and still inside the photo: a dolly in instead of the walk.
                         fallback = tuning.LTXV_WALK_FAILED_FALLBACK
@@ -706,9 +753,30 @@ def generate_ltx_move(
                     raise
                 logger.warning("LTXV %s shot failed (%s: %s) - keeping the first shot only.",
                                move, type(exc).__name__, exc)
-        result = crossfade(shots, output_path)
         from services.tts.ttsengine import FFmpegManager
 
+        if halves and needs_second_half(duration_sec):
+            path = str(work / "half1.mp4")
+            prompt = prompt_for(preset, seed)
+            keep = _shot_cache(output_path, seed, f"{preset}#1", prompt)
+            cached.append(keep)
+            try:
+                if keep.is_file():
+                    shutil.copy2(keep, path)
+                else:
+                    render_shot(photo_path, preset, path, work, prompt, place, part=1)
+                    tmp = keep.with_name(keep.stem + ".tmp.mp4")
+                    shutil.copy2(path, tmp)
+                    os.replace(tmp, keep)
+                result = join_halves(shots[0], path, output_path)
+                _write_first_shot_end(output_path, FFmpegManager.get_media_duration(result))
+                for keep in cached:
+                    keep.unlink(missing_ok=True)
+                return result
+            except Exception as exc:
+                logger.warning("LTXV %s second half failed (%s: %s) - keeping the first half only.",
+                               preset, type(exc).__name__, exc)
+        result = crossfade(shots, output_path)
         first = FFmpegManager.get_media_duration(shots[0])
         _write_first_shot_end(output_path, first - tuning.LTXV_CROSSFADE_SECONDS if len(shots) > 1 else first)
         for keep in cached:  # the photo clip is the checkpoint now

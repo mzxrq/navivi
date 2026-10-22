@@ -262,7 +262,8 @@ def test_outro_text_spans_the_outro_until_its_logo_card(tmp_path, monkeypatch):
     route = tmp_path / "assets/video/route"
     overview = _touch(route / "01_overview.mp4")
     outro = _touch(tmp_path / "assets/video" / tuning.OUTRO_OUTPUT_FILENAME)
-    item = {"kind": "outro", "title": {"text": "Trip"}, "subtitle": {"text": ""}, "trim_end": 4.0}
+    item = {"kind": "outro", "title": {"text": "Trip"}, "subtitle": {"text": ""}, "trim_end": 4.0,
+            "box": {"color": "#131C2E", "opacity": 1.0, "height": 324}}
 
     path = build_timeline(
         video_paths=[overview], attraction_videos=[], final_videos=[overview, outro],
@@ -270,10 +271,20 @@ def test_outro_text_spans_the_outro_until_its_logo_card(tmp_path, monkeypatch):
     )
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     (text,) = data["texts"]
-    # after the dissolve into the outro, until its 30 s less the 4 s logo card
-    assert (text["start"], text["end"]) == (20.0 + tuning.ENDING_FADE_SECONDS, 46.0)
+    # with the outro, until its 30 s less the 4 s logo card; box and lines wait out the dissolve into it
+    assert (text["start"], text["end"]) == (20.0, 46.0)
     assert data["video_tracks"][0]["fade_into_next_seconds"] == tuning.ENDING_FADE_SECONDS
+    assert text["box"]["fade_in"] == tuning.ENDING_FADE_SECONDS
+    assert text["wipe_out"] == tuning.OUTRO_TITLE_WIPE_SECONDS
     assert "trim_end" not in text and text["kind"] == "outro"
+
+
+def test_a_box_with_fade_in_appears_gradually(tmp_path):
+    item = {"start": 2.0, "end": 8.0, "position": "top", "title": {"text": ""}, "subtitle": {"text": ""},
+            "box": {"color": "#131C2E", "opacity": 1.0, "height": 300, "fade": 0, "fade_in": 1.0}}
+    path = write_caption_ass([], None, (1920, 1080), tmp_path / "t.ass", check_font=False, texts=[item])
+    (band,) = [line for line in _events(path.read_text(encoding="utf-8")) if BAND in line]
+    assert chr(92) + "fad(1000,0)" in band
 
 BS = chr(92)  # a backslash, the start of an ASS override tag
 BAND = BS + "p1"
@@ -371,3 +382,14 @@ def test_a_text_line_margin_moves_that_line_in_the_exported_text(tmp_path):
         return int(line.split(BS + "move(")[1].split(")")[0].split(",")[1])  # the subtitle rises in with \move
 
     assert title_y(40) - title_y(0) == 40
+
+
+def test_a_wipe_out_clips_box_and_lines_from_the_top_down_at_the_end(tmp_path):
+    item = {"start": 2.0, "end": 8.0, "position": "top", "title": {"text": "Trip"}, "subtitle": {"text": ""},
+            "box": {"color": "#131C2E", "opacity": 1.0, "height": 300, "fade": 0}, "wipe_out": 1.0}
+    path = write_caption_ass([], None, (1920, 1080), tmp_path / "t.ass", check_font=False, texts=[item])
+    lines = _events(path.read_text(encoding="utf-8"))
+    (band,) = [line for line in lines if BAND in line]
+    assert BS + "t(5000,6000," + BS + "clip(0,300,1920,1080))" in band  # 1 s before the end, down to the box's bottom
+    title = [line for line in lines if "Trip" in line]
+    assert title and all(BS + "clip(0,0,1920,1080)" in line for line in title)

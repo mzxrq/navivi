@@ -74,8 +74,10 @@ const rgba = (hex: string, opacity: number) => `rgba(${hexToRgb(hex).join(", ")}
 
 // The band behind a text item and its soft edge, drawn like the export (vdoexporter._text_box_events).
 export function TextBoxBand({ item, cq }: { item: PlacedText; cq: (px: number) => string }) {
+  const time = usePlayerTime();
   const box = item.box;
   if (!box || !(box.height > 0)) return null;
+  const shown = box.fade_in ? Math.min(1, Math.max(0, (time - item.globalStart) / box.fade_in)) : 1;
   const height = Math.min(1080, box.height);
   const fade = item.position === "top" || item.position === "bottom" ? Math.max(0, Math.min(400, box.fade ?? 56)) : 0;
   const solid = rgba(box.color, box.opacity);
@@ -85,13 +87,14 @@ export function TextBoxBand({ item, cq }: { item: PlacedText; cq: (px: number) =
     <>
       <div
         className="absolute left-0 right-0"
-        style={{ height: cq(height), background: solid, ...(bottom ? { bottom: 0 } : middle ? { top: cq((1080 - height) / 2) } : { top: 0 }) }}
+        style={{ height: cq(height), background: solid, opacity: shown, ...(bottom ? { bottom: 0 } : middle ? { top: cq((1080 - height) / 2) } : { top: 0 }) }}
       />
       {fade > 0 && (
         <div
           className="absolute left-0 right-0"
           style={{
             height: cq(fade),
+            opacity: shown,
             background: `linear-gradient(${bottom ? "to top" : "to bottom"}, ${solid}, ${rgba(box.color, 0)})`,
             ...(bottom ? { bottom: cq(height) } : { top: cq(height) }),
           }}
@@ -157,8 +160,11 @@ function TextOverlay({ texts }: { texts: PlacedText[] }) {
           { kicker: hasKicker, title: hasTitle, subtitle: hasSub },
         );
         const line = "absolute whitespace-nowrap leading-none";
+        // wipe_out: an edge sweeping down from the top to the box's bottom over the item's last seconds (export: _wipe_tag).
+        const wiped = x.wipe_out ? Math.min(1, Math.max(0, (t - (dur - x.wipe_out)) / x.wipe_out)) : 0;
+        const reach = x.position === "top" && x.box?.height ? Math.min(1080, x.box.height + (x.box.fade ?? 56)) : 1080;
         return (
-          <div key={x.id}>
+          <div key={x.id} className="absolute inset-0" style={wiped > 0 ? { clipPath: `inset(${cq(wiped * reach)} 0 0 0)` } : undefined}>
             <TextBoxBand item={x} cq={cq} />
             {hasKicker && kf.opacity > 0 && (
               <span

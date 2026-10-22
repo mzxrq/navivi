@@ -1186,6 +1186,11 @@ ATTRACTION_JUMP_CUT_AI_FEATHER = 16
 # horizon, path/gate -> walk in, central subject -> close in), random if the
 # photo can't be measured. A move name fixes it; None = the chosen move only.
 ATTRACTION_SECOND_SHOT: Optional[str] = "auto"
+# One unbroken ~8 s move instead of a second shot (2026-10-22): the pinned move is rendered as two halves,
+# the second starting on the real middle crop the first ended on (so nothing drifts, unlike chaining from a
+# generated frame). The second half only when the narration share is longer than one half; past both, the
+# slow-move tail ("reverse") fills. Not in the clip digest: finished photos are not regenerated.
+LTXV_CONTINUE = True
 # No walkthrough: unpinned, it invented a whole plaza at 札立山 (2026-10-06).
 ATTRACTION_SECOND_SHOT_MOVES: Tuple[str, ...] = (
     "closein", "closeout", "closepanleft", "closepanright", "closepanup", "closepandown",
@@ -1817,6 +1822,7 @@ OUTRO_SUMMARY_HOLD_SECONDS = 4.0
 OUTRO_LOGO_HEIGHT = 52
 OUTRO_LOGO_MAX_WIDTH = 0.8
 OUTRO_LOGO_FADE_SECONDS = 0.8
+OUTRO_TITLE_WIPE_SECONDS = 1.0  # the title + box wipe away top -> bottom as the last cards go under them
 OUTRO_LOGO_HOLD_SECONDS = 3.0
 OUTRO_LOGO_GAP = 40
 OUTRO_LOGO_TITLE_FONT_SIZE = 26  # the "Powered by" line above the plates

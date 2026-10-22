@@ -391,9 +391,12 @@ def build_timeline(
         if outro_text and source_name == tuning.OUTRO_OUTPUT_FILENAME:
             shown = {k: v for k, v in outro_text.items() if k != "trim_end"}
             end = max(0.5, length - float(outro_text.get("trim_end") or 0.0))
-            # After the dissolve into the outro (below), not over the previous clip's held last frame.
-            start = min(tuning.ENDING_FADE_SECONDS, end - 0.1) if tracks else 0.0
-            clip_texts.append({"start": round(start, 3), "end": round(end, 3), **shown})
+            # Starts with the outro, its box fading in with the dissolve (below) instead of popping up over the
+            # previous clip's held last frame; as the last cards go under it, it wipes away top -> bottom.
+            if tracks and isinstance(shown.get("box"), dict):
+                shown["box"] = {**shown["box"], "fade_in": tuning.ENDING_FADE_SECONDS}
+            shown["wipe_out"] = min(tuning.OUTRO_TITLE_WIPE_SECONDS, end / 2)
+            clip_texts.append({"start": 0.0, "end": round(end, 3), **shown})
         # An attraction's place name, when its clip was finalized without it.
         if kind == "attraction":
             from services.vdoprocessing.place_label import place_text_item, unburned_place_label

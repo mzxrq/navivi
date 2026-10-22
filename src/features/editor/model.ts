@@ -55,6 +55,7 @@ export interface TextBox {
   opacity: number; // 0..1
   height: number; // px on a 1080p frame
   fade?: number; // px of soft edge under a top box (above a bottom one); absent = 56
+  fade_in?: number; // seconds the band takes to appear (the outro's dissolve); absent = at once
   base?: number; // the outro: the height its video was drawn with. The export moves the content down (or up) by height - base
 }
 
@@ -75,6 +76,7 @@ export interface TextClip {
   box?: TextBox; // the band behind the text; absent = none
   margin_h?: number; // px from the left/right edge
   animation?: TextAnimation; // absent = "pop"
+  wipe_out?: number; // seconds at its end in which the block (box + lines) wipes away top -> bottom
   // What made it: the intro's or outro's title, an attraction's place name, or added by hand.
   kind?: "intro" | "outro" | "place";
 }
@@ -484,6 +486,7 @@ export function toManifest(projectName: string, timeline: TimelineData, captionS
       ...(x.margin_h !== undefined ? { margin_h: x.margin_h } : {}),
       ...(x.box ? { box: x.box } : {}),
       ...(x.animation ? { animation: x.animation } : {}),
+      ...(x.wipe_out ? { wipe_out: x.wipe_out } : {}),
       ...(x.kind ? { kind: x.kind } : {}),
     })),
     burn_subtitles: options.burnSubtitles ?? true,
@@ -658,6 +661,7 @@ export async function timelineFromPipeline(
           ...(typeof x.margin_h === "number" ? { margin_h: x.margin_h } : {}),
           ...(x.box && typeof x.box.height === "number" ? { box: x.box } : {}),
           ...(x.animation ? { animation: x.animation } : {}),
+          ...(typeof x.wipe_out === "number" ? { wipe_out: x.wipe_out } : {}),
           ...(x.kind ? { kind: x.kind } : {}),
         });
     }

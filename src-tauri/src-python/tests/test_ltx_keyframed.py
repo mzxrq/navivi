@@ -17,8 +17,9 @@ from services.vdoprocessing.img2vdo import AttractionVideoGenerator
 
 @pytest.fixture(autouse=True)
 def _second_shots_on(monkeypatch):
-    """The "photo" tail drops the second shot; these tests cover it."""
+    """The "photo" tail and the continuous halves drop the second shot; these tests cover it."""
     monkeypatch.setattr(tuning, "ATTRACTION_SLOW_MOVE_STYLE", "zoomout")
+    monkeypatch.setattr(tuning, "LTXV_CONTINUE", False)
 
 
 class TestPhotoTailShots:
@@ -151,7 +152,7 @@ class TestTwoShots:
         photo.write_bytes(b"photo")
         made = []
 
-        def render(photo, move, out, work, prompt=None, place=None):
+        def render(photo, move, out, work, prompt=None, place=None, part=None):
             made.append(move)
             if move == "closein":
                 raise RuntimeError("OOM")
@@ -389,3 +390,56 @@ class TestDepthKeyframes:
         image = np.zeros((600, 800, 3), np.uint8)
         assert ltx_keyframed.walk_target(image, "八王子峠") == (200, 130)
         assert ltx_keyframed.walk_target(image) == (440, 400)  # no name: the largest
+
+
+class TestContinuousHalves:
+    """One unbroken move as two halves meeting on the real middle keyframe (LTXV_CONTINUE)."""
+
+    @pytest.fixture(autouse=True)
+    def _halves_on(self, monkeypatch):
+        monkeypatch.setattr(tuning, "LTXV_CONTINUE", True)
+
+    def test_halves_meet_on_the_same_real_keyframe_and_cover_the_whole_move(self):
+        for move in ("panright", "panup", "closein", "closepanleft", "zoomin", "walkfwdleft"):
+            whole = ltx_keyframed.keyframe_rects(1600, 1200, move)
+            a, b = ltx_keyframed._half(*whole, 0, whole=True), ltx_keyframed._half(*whole, 1, whole=True)
+            assert a[1] == b[0] and a[0] == whole[0] and b[1] == whole[1], move
+        cams = ltx_keyframed.depth_cams("walkback")[:2]
+        assert ltx_keyframed._half(*cams, 0)[1] == ltx_keyframed._half(*cams, 1)[0]
+        assert ltx_keyframed._half(*cams, None) == cams
+
+    def test_no_second_shot_and_walk_in_stays_one_free_shot(self):
+        assert ltx_keyframed.shot_list("panright", "s") == ["panright"]
+        assert ltx_keyframed.shot_list("walkin", "s") == ["walkin"]
+
+    def test_the_second_half_only_when_the_narration_needs_it(self):
+        half = tuning.LTXV_FRAMES / tuning.LTXV_FPS
+        assert not ltx_keyframed.needs_second_half(half - 1)
+        assert ltx_keyframed.needs_second_half(half + 1) and ltx_keyframed.needs_second_half(0)
+
+    def _render(self, monkeypatch, tmp_path, seconds):
+        monkeypatch.setattr(ltx_keyframed, "ensure_files", lambda: None)
+        photo = tmp_path / "p.png"
+        photo.write_bytes(b"photo")
+        parts = []
+
+        def render(photo, move, out, work, prompt=None, place=None, part=None):
+            parts.append((move, part))
+            return TestTwoShots()._clip(out, 4)
+
+        monkeypatch.setattr(ltx_keyframed, "render_shot", render)
+        out = ltx_keyframed.generate_ltx_move(str(photo), str(tmp_path / "o.mp4"), "pan-right", duration_sec=seconds)
+        return parts, out
+
+    def test_a_short_share_renders_only_the_first_half(self, tmp_path, monkeypatch):
+        parts, _ = self._render(monkeypatch, tmp_path, 3.0)
+        assert parts == [("panright", 0)]
+
+    def test_a_long_share_renders_both_halves_joined_without_a_repeated_frame(self, tmp_path, monkeypatch):
+        import cv2
+
+        parts, out = self._render(monkeypatch, tmp_path, 10.0)
+        assert parts == [("panright", 0), ("panright", 1)]
+        frames = int(cv2.VideoCapture(out).get(cv2.CAP_PROP_FRAME_COUNT))
+        assert frames == 2 * 4 * 24 - 1
+        assert ltx_keyframed.first_shot_end(out, "unused") is None  # one shot: no dissolve point

@@ -63,14 +63,14 @@ def _download(content: bytes, path: Path, username: Optional[str] = None) -> Non
     card.paste(ImageOps.fit(photo, (w, h - strip), Image.LANCZOS), (0, 0))
     text = CREDIT_WITH_USER.format(user=username) if username else CREDIT
     draw = ImageDraw.Draw(card)
-    size = round(strip * 0.6)
+    size = round(strip * 0.7)
     while True:  # a long name shrinks to fit the strip
-        font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_THIN, size)
+        font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, size)  # thin strokes went grey on the small card
         x0, y0, x1, y1 = draw.textbbox((0, 0), text, font=font)
         if x1 - x0 <= w - strip or size <= 8:
             break
         size -= 2
-    draw.text((w - strip // 2 - (x1 - x0) - x0, h - strip + (strip - (y1 - y0)) // 2 - y0), text, font=font, fill="white")
+    draw.text((w - strip // 2 - (x1 - x0) - x0, h - strip + (strip - (y1 - y0)) // 2 - y0), text, font=font, fill=(255, 255, 255))
     tmp = path.with_suffix(".part")
     card.save(tmp, "JPEG", quality=90)
     os.replace(tmp, path)

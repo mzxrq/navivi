@@ -114,6 +114,23 @@ def _line_margin(line: dict) -> float:
     return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else 0.0
 
 
+def _wipe_tag(item: dict, event_start: float, play_w: int) -> str:
+    """`item["wipe_out"]` s before the item ends, an edge sweeps down from the frame's top to the bottom of a top
+    box (else the frame's): an animated \\clip for each of its events, starting at `event_start` (Preview: wiped)."""
+    wipe = item.get("wipe_out")
+    if not isinstance(wipe, (int, float)) or isinstance(wipe, bool) or wipe <= 0:
+        return ""
+    box = item.get("box") if isinstance(item.get("box"), dict) else {}
+    reach = 1080.0
+    if item.get("position") == "top" and isinstance(box.get("height"), (int, float)) and box["height"] > 0:
+        fade = box.get("fade", _BOX_FADE_DEFAULT_PX)
+        reach = min(1080.0, float(box["height"]) + (float(fade) if isinstance(fade, (int, float)) else _BOX_FADE_DEFAULT_PX))
+    end = float(item["end"])
+    t0 = max(0, int(round((end - wipe - event_start) * 1000)))
+    t1 = max(t0 + 1, int(round((end - event_start) * 1000)))
+    return f"{{\\clip(0,0,{play_w},1080)\\t({t0},{t1},\\clip(0,{reach:.0f},{play_w},1080))}}"
+
+
 def _text_box_events(item: dict, play_w: int) -> list:
     """A full-width band behind a text item (`box`: colour, opacity 0..1, height in 1080-line px) drawn at
     the item's own edge: top for "top", bottom for "bottom", else centred. Layer 0, under the text. For a
@@ -135,12 +152,17 @@ def _text_box_events(item: dict, play_w: int) -> list:
     y0 = {"top": 0.0, "bottom": 1080.0 - height}.get(position, (1080.0 - height) / 2)
     when = f"{_ass_timestamp(float(item['start']))},{_ass_timestamp(float(item['end']))}"
     colour = "\\1c&H" + _bgr(parsed[0]) + "&"
+    fade_in = box.get("fade_in")
+    if isinstance(fade_in, (int, float)) and not isinstance(fade_in, bool) and fade_in > 0:
+        colour += f"\\fad({int(round(fade_in * 1000))},0)"  # appears over `fade_in` s (the outro's dissolve)
 
     def strip(top: float, bottom: float, alpha_opacity: float) -> str:
         alpha = 255 - int(round(alpha_opacity * 255))
         tags = "{\\an7\\pos(0,0)\\bord0\\shad0" + colour + "\\1a&H" + f"{alpha:02X}" + "&\\p1}"
         shape = f"m 0 {top:.1f} l {play_w} {top:.1f} l {play_w} {bottom:.1f} l 0 {bottom:.1f}"
-        return f"Dialogue: 0,{when},Text,,0,0,0,,{tags}{shape}{{\\p0}}"
+        return f"Dialogue: 0,{when},Text,,0,0,0,,{wipe}{tags}{shape}{{\\p0}}"
+
+    wipe = _wipe_tag(item, float(item["start"]), play_w)
 
     events = [strip(y0, y0 + height, opacity)]
     try:
@@ -230,7 +252,7 @@ def write_caption_ass(
             margins=tuple(_line_margin(line) for line in (kicker, title, subtitle)),
         ):
             # Layer 1: above captions. Every look is in the event's own tags.
-            events.append(f"Dialogue: 1,{_ass_timestamp(a)},{_ass_timestamp(b)},Text,,0,0,0,,{text}")
+            events.append(f"Dialogue: 1,{_ass_timestamp(a)},{_ass_timestamp(b)},Text,,0,0,0,,{_wipe_tag(item, a, play_w)}{text}")
     path.write_text(
         "[Script Info]\nScriptType: v4.00+\nWrapStyle: 0\nScaledBorderAndShadow: yes\n"
         # 1080 lines tall, as wide as the frame's aspect, so style px read as 1080p px.
