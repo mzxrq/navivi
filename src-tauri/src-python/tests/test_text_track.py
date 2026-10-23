@@ -178,6 +178,7 @@ def test_place_item_uses_the_saved_look_over_the_default():
     assert item["kind"] == "place" and item["title"] == {"text": "常行寺", "style": {"color": "#ff0000"}}
     assert item["align"] == "right" and item["position"] == DEFAULT_PLACE_LOOK["position"]
     assert item["animation"] == "none" and item["subtitle"] == {"text": ""}
+    assert place_text_item("x", {"subtitle_margin_top": -12})["subtitle"]["margin_top"] == -12
 
 
 def test_only_unburned_attraction_clips_get_a_place_item(tmp_path, monkeypatch):
@@ -393,3 +394,18 @@ def test_a_wipe_out_clips_box_and_lines_from_the_top_down_at_the_end(tmp_path):
     assert BS + "t(5000,6000," + BS + "clip(0,300,1920,1080))" in band  # 1 s before the end, down to the box's bottom
     title = [line for line in lines if "Trip" in line]
     assert title and all(BS + "clip(0,0,1920,1080)" in line for line in title)
+
+
+def test_the_outro_never_takes_the_intros_text_styles(tmp_path):
+    from services.vdoprocessing.videopipeline.outro_step import outro_text_item
+
+    settings = {"enable_outro": True, "outro_style": "scroll", "intro_title_style": {"color": "#FF0000"}}
+    (tmp_path / "job_config.json").write_text(json.dumps(
+        {"project_name": "Trip", "waypoints": [], "settings": settings}), encoding="utf-8")
+    item = outro_text_item(str(tmp_path / "job_config.json"))
+    assert item["title"]["text"] == "Trip" and "color" not in item["title"]["style"]
+
+    settings["outro_title_style"] = {"color": "#00FF00"}
+    (tmp_path / "job_config.json").write_text(json.dumps(
+        {"project_name": "Trip", "waypoints": [], "settings": settings}), encoding="utf-8")
+    assert outro_text_item(str(tmp_path / "job_config.json"))["title"]["style"]["color"] == "#00FF00"

@@ -49,6 +49,7 @@ pub fn patch(conn: &Connection, project_id: &str, partial: &Value) -> DbResult<V
     get(conn, project_id)?.ok_or_else(|| DbError::NotFound(format!("settings for '{project_id}'")))
 }
 
+#[cfg(test)]
 pub fn delete(conn: &Connection, project_id: &str) -> DbResult<bool> {
     Ok(conn.execute("DELETE FROM project_settings WHERE project_id = ?1", [project_id])? > 0)
 }

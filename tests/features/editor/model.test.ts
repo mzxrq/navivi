@@ -329,7 +329,7 @@ describe("carryOverLooks", () => {
         { id: "c2", segmentId: "old-b", start: 1, end: 2, text: "bye", style: { font_size: 90 } },
       ],
       texts: [
-        { id: "t1", segmentId: "old-a", start: 0, end: 3, kind: "intro", position: "top", title: line("Trip", 120), subtitle: line("") },
+        { id: "t1", segmentId: "old-a", start: 0, end: 3, kind: "intro", position: "top", title: line("Trip", 120), subtitle: { ...line(""), margin_top: 40 } },
         { id: "t2", segmentId: "old-b", start: 1, end: 2, title: line("Mine"), subtitle: line("") },
       ],
       music: { path: "m.mp3", label: "m", volume: 0.3 },
@@ -343,7 +343,7 @@ describe("carryOverLooks", () => {
     const out = carryOverLooks(prev, next);
     expect(out.segments[0].volume).toBe(0.4);
     expect(out.subtitles[0].style).toEqual({ font_size: 90 });
-    expect(out.texts[0]).toMatchObject({ position: "top", title: { text: "New trip", style: { font_size: 120 } } });
+    expect(out.texts[0]).toMatchObject({ position: "top", title: { text: "New trip", style: { font_size: 120 } }, subtitle: { margin_top: 40 } });
     expect(out.texts[1]).toMatchObject({ segmentId: "b", title: { text: "Mine" } });
     expect(out.music?.path).toBe("m.mp3");
   });

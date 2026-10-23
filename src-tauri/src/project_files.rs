@@ -98,7 +98,8 @@ pub fn write_archive(source: &Path, dest: &Path, include_rendered: bool) -> Resu
 fn write_archive_to(source: &Path, partial: &Path, include_rendered: bool) -> Result<(), String> {
     let file = fs::File::create(partial).map_err(|e| e.to_string())?;
     let mut zip = ZipWriter::new(file);
-    for entry in WalkDir::new(source).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(source) {
+        let entry = entry.map_err(|e| e.to_string())?;
         if !entry.file_type().is_file() {
             continue;
         }
@@ -233,6 +234,12 @@ pub fn copy_project(source: &Path, dest: &Path) -> Result<(), String> {
         return Err(format!("{} already exists", dest.display()));
     }
     fs::create_dir_all(dest).map_err(|e| e.to_string())?;
+    copy_project_into(source, dest).inspect_err(|_| {
+        let _ = fs::remove_dir_all(dest);
+    })
+}
+
+fn copy_project_into(source: &Path, dest: &Path) -> Result<(), String> {
     for entry in WalkDir::new(source).min_depth(1) {
         let entry = entry.map_err(|e| e.to_string())?;
         let rel = entry.path().strip_prefix(source).map_err(|e| e.to_string())?;

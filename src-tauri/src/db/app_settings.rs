@@ -1,5 +1,5 @@
 use rusqlite::{params, Connection, OptionalExtension};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 use super::error::{DbError, DbResult};
 use super::now_ms;
@@ -28,10 +28,11 @@ pub fn delete(conn: &Connection, key: &str) -> DbResult<bool> {
 }
 
 /// All settings, or only keys starting with `prefix`.
-pub fn list(conn: &Connection, prefix: Option<&str>) -> DbResult<Map<String, Value>> {
+#[cfg(test)]
+pub fn list(conn: &Connection, prefix: Option<&str>) -> DbResult<serde_json::Map<String, Value>> {
     let mut stmt = conn.prepare("SELECT key, value_json FROM app_settings ORDER BY key")?;
     let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
-    let mut out = Map::new();
+    let mut out = serde_json::Map::new();
     for row in rows {
         let (k, v) = row?;
         if prefix.map_or(true, |p| k.starts_with(p)) {

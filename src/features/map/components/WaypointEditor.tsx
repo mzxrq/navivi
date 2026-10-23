@@ -120,6 +120,8 @@ export function WaypointEditor({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [findingPhotos, setFindingPhotos] = useState(false);
+  const [dragImage, setDragImage] = useState<number | null>(null);
+  const [dropImage, setDropImage] = useState<number | null>(null);
   const photoAbortRef = useRef<AbortController | null>(null);
   const latestWp = useRef(wp);
   latestWp.current = wp;
@@ -278,6 +280,15 @@ export function WaypointEditor({
     const pans = [...imagePans];
     images.splice(idx, 1);
     pans.splice(idx, 1);
+    updateWaypoint(wp.id, { images, imagePans: pans });
+  };
+
+  const moveImage = (from: number, to: number) => {
+    if (from === to) return;
+    const images = [...wpImages];
+    const pans = wpImages.map((_, i) => imagePans[i] || "none");
+    images.splice(to, 0, ...images.splice(from, 1));
+    pans.splice(to, 0, ...pans.splice(from, 1));
     updateWaypoint(wp.id, { images, imagePans: pans });
   };
 
@@ -675,10 +686,32 @@ export function WaypointEditor({
                                 },
                               ])
                             }
-                            className="group w-48 rounded-lg border border-zinc-200 dark:border-white/10 overflow-hidden bg-white dark:bg-zinc-950"
+                            draggable
+                            onDragStart={() => setDragImage(idx)}
+                            onDragEnd={() => {
+                              setDragImage(null);
+                              setDropImage(null);
+                            }}
+                            onDragOver={(e) => {
+                              if (dragImage === null) return;
+                              e.preventDefault();
+                              setDropImage(idx);
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              if (dragImage !== null) moveImage(dragImage, idx);
+                              setDragImage(null);
+                              setDropImage(null);
+                            }}
+                            className={`group w-48 rounded-lg border overflow-hidden bg-white dark:bg-zinc-950 cursor-grab active:cursor-grabbing ${
+                              dropImage === idx && dragImage !== idx
+                                ? "border-navi ring-2 ring-navi/30"
+                                : "border-zinc-200 dark:border-white/10"
+                            } ${dragImage === idx ? "opacity-50" : ""}`}
                           >
                             <div className="relative aspect-4/3 bg-zinc-100 dark:bg-zinc-800">
                               <img
+                                draggable={false}
                                 src={convertFileSrc(img)}
                                 alt={t`Waypoint ${idx}`}
                                 className="w-full h-full object-cover"

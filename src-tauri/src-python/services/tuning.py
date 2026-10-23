@@ -1190,7 +1190,8 @@ ATTRACTION_SECOND_SHOT: Optional[str] = "auto"
 # the second starting on the real middle crop the first ended on (so nothing drifts, unlike chaining from a
 # generated frame). The second half only when the narration share is longer than one half; past both, the
 # slow-move tail ("reverse") fills. Not in the clip digest: finished photos are not regenerated.
-LTXV_CONTINUE = True
+# 2026-10-23: off - the halves never met cleanly (pop at frame 97); LTXV_FRAMES = 161 renders the move in one pass.
+LTXV_CONTINUE = False
 # A two-half clip covers this many times the single clip's path (pan width, zoom, 3D truck/pan/dolly), so it
 # moves about as fast as before over twice the time. Dollies stop at LTXV_DEPTH_MAX_DOLLY: past it the
 # 3D photo stretches. The sharpness check (sharp_enough_preset) still guards tight crops.
@@ -1245,13 +1246,13 @@ LTXV_FILES: Dict[str, Dict[str, str]] = {
     },
 }
 LTXV_WIDTH, LTXV_HEIGHT = 960, 544  # 540p 16:9 (32 px grid); finalize upscales
-LTXV_FRAMES = 97  # 8k+1, ~4 s
+LTXV_FRAMES = 161  # 8k+1, ~6.7 s in one pass (no seam); was 97 (~4 s)
 LTXV_FPS = 24
 LTXV_SIGMAS = "1.0, 0.9937, 0.9875, 0.9812, 0.975, 0.9094, 0.725, 0.4219, 0.0"  # distilled, CFG 1
 # Decode in time chunks of this many frames: one chunk for the whole clip.
 # 32 (overlap 8) left a visible hitch at every seam - each second, frames
 # 24/48/72 (test 13, 2026-10-02). The decode runs alone in a fresh server.
-LTXV_DECODE_TEMPORAL_SIZE = 128
+LTXV_DECODE_TEMPORAL_SIZE = 168  # >= LTXV_FRAMES: the whole clip in one tile (128 left a hitch at frame 120 of 161)
 LTXV_DECODE_TEMPORAL_OVERLAP = 8
 # How firmly the last frame is pinned (1.0 = exact copy).
 LTXV_GUIDE_STRENGTH = 0.8

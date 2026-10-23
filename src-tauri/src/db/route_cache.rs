@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection};
 use serde_json::{Map, Value};
 
 use super::error::{DbError, DbResult};
@@ -30,7 +30,9 @@ pub fn get_all(conn: &Connection, project_id: &str) -> DbResult<Map<String, Valu
     Ok(out)
 }
 
+#[cfg(test)]
 pub fn get(conn: &Connection, project_id: &str, key: &str) -> DbResult<Option<Value>> {
+    use rusqlite::OptionalExtension;
     let text: Option<String> = conn
         .query_row(
             "SELECT points_json FROM route_cache WHERE project_id = ?1 AND cache_key = ?2",
@@ -41,12 +43,14 @@ pub fn get(conn: &Connection, project_id: &str, key: &str) -> DbResult<Option<Va
     Ok(text.map(|t| serde_json::from_str(&t)).transpose()?)
 }
 
+#[cfg(test)]
 pub fn put(conn: &Connection, project_id: &str, key: &str, points: &Value) -> DbResult<()> {
     projects::get(conn, project_id)?;
     insert(conn, project_id, key, points, true)?;
     Ok(())
 }
 
+#[cfg(test)]
 pub fn put_many(conn: &Connection, project_id: &str, entries: &Map<String, Value>) -> DbResult<usize> {
     projects::get(conn, project_id)?;
     let tx = conn.unchecked_transaction()?;
@@ -70,6 +74,7 @@ pub fn replace(conn: &Connection, project_id: &str, entries: &Map<String, Value>
     Ok(entries.len())
 }
 
+#[cfg(test)]
 pub fn delete(conn: &Connection, project_id: &str, key: &str) -> DbResult<bool> {
     Ok(conn.execute(
         "DELETE FROM route_cache WHERE project_id = ?1 AND cache_key = ?2",
@@ -95,6 +100,7 @@ fn prune_inner(conn: &Connection, project_id: &str, keep: &[String]) -> DbResult
 }
 
 /// Deletes every key not in `keep`; returns how many were removed.
+#[cfg(test)]
 pub fn prune(conn: &Connection, project_id: &str, keep: &[String]) -> DbResult<usize> {
     let tx = conn.unchecked_transaction()?;
     let removed = prune_inner(&tx, project_id, keep)?;
@@ -102,6 +108,7 @@ pub fn prune(conn: &Connection, project_id: &str, keep: &[String]) -> DbResult<u
     Ok(removed)
 }
 
+#[cfg(test)]
 pub fn clear(conn: &Connection, project_id: &str) -> DbResult<usize> {
     Ok(conn.execute("DELETE FROM route_cache WHERE project_id = ?1", [project_id])?)
 }

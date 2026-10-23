@@ -606,62 +606,6 @@ class VideoExporter:
             return False
 
     @staticmethod
-    def concat_clips(clip_paths: list[str], output_path: str) -> str:
-        """NLE Engine: Stitches multiple atomic .mp4 clips into a seamless master video."""
-        if not clip_paths:
-            return output_path
-
-        concat_txt = Path(output_path).parent / f"timeline_{uuid.uuid4().hex}.txt"
-        with open(concat_txt, "w", encoding="utf-8") as f:
-            for path in clip_paths:
-                f.write(f"file '{Path(path).resolve().as_posix()}'\n")
-
-        ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
-        if ffmpeg_cmd:
-            # [NOTE] [Editor] Previously ran with stdout/stderr=DEVNULL and NEVER
-            # inspected the CompletedProcess result at all — a failed
-            # concat (e.g. one clip has mismatched codec params) silently
-            # produced no output file (or a truncated one) while the
-            # caller happily continued as if it had succeeded. Now
-            # captured and checked, matching `concat_from_timeline`'s
-            # (already-correct) error handling below.
-            result = subprocess.run(
-                [
-                    ffmpeg_cmd,
-                    "-y", *tuning.ffmpeg_log_args(),
-                    "-f",
-                    "concat",
-                    "-safe",
-                    "0",
-                    "-i",
-                    str(concat_txt),
-                    "-c",
-                    "copy",
-                    output_path,
-                ],
-                capture_output=True,
-            )
-            concat_txt.unlink(missing_ok=True)
-
-            if result.returncode != 0:
-                stderr_text = VideoExporter._decode_tail(result.stderr)
-                logger.error(
-                    "concat_clips failed (exit %d) for -> %s\n%s",
-                    result.returncode,
-                    output_path,
-                    stderr_text,
-                )
-                raise RuntimeError(
-                    f"FFmpeg concat_clips failed (exit {result.returncode}) "
-                    f"producing '{output_path}'.\n{stderr_text}"
-                )
-        else:
-            concat_txt.unlink(missing_ok=True)
-            raise RuntimeError("FFmpeg binary not found; cannot concatenate clips.")
-
-        return output_path
-
-    @staticmethod
     def _content_shift_filter(shift_1080: float, size: Optional[Tuple[int, int]]) -> str:
         """ffmpeg filter moving the picture down by `shift_1080` px of a 1080-line frame (up when negative), filling
         the gap with the outro's background and cutting what leaves the frame. "" for no shift."""
@@ -1009,6 +953,13 @@ class VideoExporter:
         if not ffmpeg_cmd:
             raise RuntimeError("FFmpeg binary not found.")
 
+        # A cancelled export (process tree killed) never reaches its cleanup; old leftovers go here.
+        for old in Path(tempfile.gettempdir()).glob("navivi_concat_*"):
+            try:
+                if time.time() - old.stat().st_mtime > 6 * 3600:
+                    shutil.rmtree(old, ignore_errors=True)
+            except OSError:
+                pass
         tmp_dir = Path(tempfile.mkdtemp(prefix="navivi_concat_"))
         # Built beside the export and swapped in at the very end: a failed or cancelled export keeps the last
         # good video (the temp folder can be on another drive, where os.replace can't move it).

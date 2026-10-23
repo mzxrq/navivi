@@ -151,6 +151,8 @@ export interface ProjectSettings {
     animation?: "pop" | "fade" | "none";
     title_style?: TextStyle;
     subtitle_style?: TextStyle;
+    title_margin_top?: number;
+    subtitle_margin_top?: number;
   };
   show_route_heatmap?: boolean;
   street_photos_at_turns?: boolean;
