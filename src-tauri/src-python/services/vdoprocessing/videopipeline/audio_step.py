@@ -8,6 +8,7 @@ up independently re-derived in four different places)."""
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -279,6 +280,27 @@ def _spoken_form(entry: dict) -> Optional[str]:
     return japanese_words.to_katakana(reading)
 
 
+def _replace_words(text: str, word: str, spoken: str) -> str:
+    """`word` -> `spoken` only where it is whole words: 場 → バ must not turn 場所 into バ所 (2026-10-23).
+    Without the analyser, every occurrence as before."""
+    from services.localization.japanese_words import _tagger
+
+    tagger = _tagger()
+    if tagger is None:
+        return text.replace(word, spoken)
+    edges, at = {0}, 0
+    for token in tagger(text):
+        at = text.find(token.surface, at)
+        edges |= {at, at + len(token.surface)}  # both: whitespace between tokens is skipped
+        at += len(token.surface)
+    out, i = [], 0
+    while (j := text.find(word, i)) != -1:
+        whole = j in edges and j + len(word) in edges
+        out.append(text[i:j] + (spoken if whole else word))
+        i = j + len(word)
+    return "".join(out) + text[i:]
+
+
 def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
     from services.tts import name_check
 
@@ -293,7 +315,7 @@ def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
             name_check.remember_kanji(entry["word"], entry["reading"], spoken)
             continue
         name_check.remember(spoken, entry["word"])
-        text = text.replace(entry["word"], spoken)
+        text = _replace_words(text, entry["word"], spoken)
     return text
 
 async def generate_attraction_audio_for_waypoint(
@@ -328,6 +350,7 @@ async def generate_attraction_audio_for_waypoint(
     except OSError:
         # no note: made before it existed, so only trust it when the dictionary changes nothing
         same_text = tts_script == script
+    same_text = same_text or _keep_old_voice(existing_path, tts_script)
     if not force and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
         logger.info(
             "Step 2: [%d] '%s' attraction narration already exists — skipping TTS.",
@@ -385,6 +408,7 @@ async def generate_overview_audio(
         same_text = _spoken_text_path(existing_path).read_text(encoding="utf-8") == tts_script
     except OSError:
         same_text = False
+    same_text = same_text or _keep_old_voice(existing_path, tts_script)
     if not force and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
         logger.info("Step 2: Overview narration audio already exists — skipping TTS.")
         audio_path = str(existing_path)
@@ -434,6 +458,19 @@ def _spoken_text_path(audio_path) -> Path:
     return Path(str(audio_path) + ".txt")
 
 
+def _keep_old_voice(audio_path, tts_script: str) -> bool:
+    """NAVIVI_KEEP_VOICE=1: a recording on disk is kept although its text changed, and its note is
+    updated so later runs keep it too. shortcut: an env var for a one-off run, a setting if users need it."""
+    if os.environ.get("NAVIVI_KEEP_VOICE") != "1" or not output_is_valid(audio_path):
+        return False
+    try:
+        _spoken_text_path(audio_path).write_text(tts_script, encoding="utf-8")
+    except OSError:
+        return False
+    logger.info("Step 2: keeping the recorded voice of %s (NAVIVI_KEEP_VOICE).", Path(audio_path).name)
+    return True
+
+
 def _spoken_text_matches(audio_path, script: str, waypoint: dict, tts_script: Optional[str] = None) -> bool:
     """Whether the audio already on disk speaks `script` (as `tts_script`, after
     the pronunciation dictionary). Audio made before this note existed spoke
@@ -478,7 +515,8 @@ async def generate_waypoint_audio(
     audio_filename = waypoint_audio_filename(idx, label)
     existing_path = Path(output_dir) / audio_filename
 
-    same_text = output_is_valid(existing_path) and _spoken_text_matches(existing_path, script, waypoint, tts_script)
+    same_text = output_is_valid(existing_path) and (
+        _spoken_text_matches(existing_path, script, waypoint, tts_script) or _keep_old_voice(existing_path, tts_script))
     if not force and same_text and _voice_matches(existing_path, client):
         logger.info(
             "Step 2: [%d] '%s' already exists — skipping TTS.", idx + 1, label

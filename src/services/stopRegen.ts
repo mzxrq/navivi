@@ -51,6 +51,14 @@ const pad = (n: number) => String(n).padStart(2, "0");
 export const arrivalAudioPrefix = (index: number) => `02_waypoint_${pad(index + 1)}_`;
 export const attractionPrefix = (index: number) => `04_attraction_${pad(index)}_`;
 
+/** The stop a timeline clip belongs to, from those names (its photo clip or narration); null for other clips. */
+export function stopIndexOf(seg: Pick<Segment, "video" | "audio">): number | null {
+  const attraction = /^04_attraction_(\d+)_/.exec(base(seg.video)) ?? /^04_attraction_(\d+)_/.exec(base(seg.audio));
+  if (attraction) return Number(attraction[1]);
+  const arrival = /^02_waypoint_(\d+)_/.exec(base(seg.audio));
+  return arrival ? Number(arrival[1]) - 1 : null;
+}
+
 export interface RefreshIo {
   probe: (relPath: string, kind: "video" | "audio") => Promise<number>;
   readText: (relPath: string) => Promise<string>;

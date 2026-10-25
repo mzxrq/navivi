@@ -153,7 +153,8 @@ def measured_cue_times(
         seconds = measured[cue.tag]
         if abs(seconds - estimate.get(cue.tag, seconds)) > MAX_DRIFT_SECONDS:
             seconds = estimate[cue.tag]
-        elif cue.char_index == 0 or _SENTENCE_END.match(clean[cue.char_index - 1]):
+        # A line break inside a sentence (「近鉄御所駅と⏎吉祥草寺へ」) is not a sentence start: {9} snapped 3 s late to the next one.
+        elif cue.char_index == 0 or _SENTENCE_END.match(clean[: cue.char_index].rstrip()[-1:] or "。"):
             # A sentence starts where a heard segment starts, when one is near.
             starts = [st for st, _e, _t in segments if abs(st - seconds) <= SNAP_SEGMENT_SECONDS]
             if starts:

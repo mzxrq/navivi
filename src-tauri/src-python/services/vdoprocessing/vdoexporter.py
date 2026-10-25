@@ -658,10 +658,9 @@ class VideoExporter:
         # picture would end while the voice is still speaking, and every clip
         # after it would drift against its sound. Hold the last frame until the
         # voice is done, and a little beyond (tuning.AUDIO_END_HOLD_SECONDS).
-        # An editor timeline states each clip's length (as its preview plays it), used as is.
+        # An editor timeline states each clip's length (as its preview plays it), used as is: no end_hold either,
+        # or everything placed after it (the outro title) came out 1 s early (2026-10-23).
         # end_hold: extra seconds on the last frame (the goodbye before the outro, tuning.ENDING_HOLD_SECONDS).
-        if duration and end_hold:
-            duration += end_hold
         hold_extra = 0.0
         if has_audio or duration:
             try:

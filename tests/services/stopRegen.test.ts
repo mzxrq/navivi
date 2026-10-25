@@ -4,7 +4,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 import { emptyTimeline, type Segment, type TimelineData } from "../../src/features/editor/model";
-import { lastJson, refreshStopMedia, regenModes, runRegen } from "../../src/services/stopRegen";
+import { lastJson, refreshStopMedia, regenModes, runRegen, stopIndexOf } from "../../src/services/stopRegen";
 
 beforeEach(() => invoke.mockReset());
 
@@ -96,5 +96,13 @@ describe("refreshStopMedia", () => {
 
   it("returns null when nothing in the timeline belongs to the stop", async () => {
     expect(await refreshStopMedia(timeline(), 9, "voice", io)).toBeNull();
+  });
+});
+
+describe("stopIndexOf", () => {
+  it("finds the stop from a clip's photo clip or narration file", () => {
+    expect(stopIndexOf({ video: "assets/video/attraction/04_attraction_06_九品寺.mp4" })).toBe(6);
+    expect(stopIndexOf({ video: "assets/video/route/02_leg.mp4", audio: "assets/audio/02_waypoint_07_九品寺.wav" })).toBe(6);
+    expect(stopIndexOf({ video: "assets/video/route/01_overview.mp4", audio: "assets/audio/00_overview_narration.wav" })).toBeNull();
   });
 });

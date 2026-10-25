@@ -6,7 +6,9 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
-import { Copy, FileText, Film, LinkIcon, Maximize, Music, Plus, Sparkles, Subtitles, Trash2, Type, UnlinkIcon, Video, VolumeX, ZoomIn, ZoomOut } from "../../components/ui/icons";
+import { Copy, FileText, Film, LinkIcon, Loader2, Maximize, Mic, Music, Plus, RotateCcw, Sparkles, Subtitles, Trash2, Type, UnlinkIcon, Video, VolumeX, ZoomIn, ZoomOut } from "../../components/ui/icons";
+import { useStopRegen } from "../../hooks/useStopRegen";
+import { type RegenKind, stopIndexOf } from "../../services/stopRegen";
 import { Tip } from "../../components/ui/Tip";
 import { openContextMenu, separator } from "../../components/ui/menuItems";
 import { probeDuration, toAbsoluteProjectPath, toRelativeProjectPath } from "../../services/fileSystem";
@@ -47,8 +49,9 @@ const toolButton =
   "group/tool relative flex items-center justify-center w-8 h-8 rounded-lg text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-40 disabled:pointer-events-none transition-colors";
 
 export function EditorView() {
-  const { timeline, setTimeline, metadata, autoLoadTimeline } = useWorkspace();
-  const { showToast, isBackgroundBusy } = useUI();
+  const { timeline, setTimeline, metadata, autoLoadTimeline, waypoints } = useWorkspace();
+  const { showToast, isBackgroundBusy, isRendering } = useUI();
+  const { busy: regenBusy, regenerate, stopInfo } = useStopRegen();
   const dir = metadata.directory_path;
 
   const [draft, setDraft] = useState<TimelineData | null>(null);
@@ -299,8 +302,22 @@ export function EditorView() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const segmentMenu = (e: React.MouseEvent, seg: Segment) =>
+  const segmentMenu = (e: React.MouseEvent, seg: Segment) => {
+    const stopIndex = stopIndexOf(seg);
+    const stop = stopIndex === null ? null : stopInfo(stopIndex);
+    const remake = (kind: RegenKind) => () => void regenerate(stopIndex!, kind);
     openContextMenu(e, [
+      !!stop && {
+        label: t`Make again for this stop`,
+        icon: RotateCcw,
+        disabled: !!regenBusy || isRendering,
+        submenu: [
+          { label: t`Voice`, icon: Mic, disabled: !stop.hasArrivalVoice && !stop.hasAttractionVoice, onSelect: remake("voice") },
+          { label: t`Subtitles`, icon: Subtitles, disabled: !stop.hasArrivalVoice, onSelect: remake("subtitles") },
+          { label: t`Photo clip`, icon: Film, disabled: !stop.hasPhotos, onSelect: remake("photo") },
+        ],
+      },
+      !!stop && separator,
       { label: t`Duplicate`, icon: Copy, onSelect: () => duplicate(seg.id) },
       !!seg.audio && {
         label: seg.muted ? t`Unmute narration` : t`Mute narration`,
@@ -321,6 +338,7 @@ export function EditorView() {
       separator,
       { label: t`Remove`, icon: Trash2, danger: true, kbd: "Del", onSelect: () => removeSegment(seg.id) },
     ]);
+  };
 
   const cueMenu = (e: React.MouseEvent, cue: { id: string }) => {
     const picked = selectedCueIds(selection);
@@ -403,6 +421,14 @@ export function EditorView() {
           <ZoomIn className="w-4 h-4" />
           <Tip label={t`Zoom in`} align="end" />
         </button>
+        {regenBusy && (
+          <span role="status" className="ml-2 flex items-center gap-1.5 h-7 max-w-64 px-2.5 rounded-md bg-navi/10 text-navi text-[12px] font-medium">
+            <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+            <span className="truncate">
+              {t`Making this stop again...`} {waypoints[regenBusy.index]?.name ?? ""}
+            </span>
+          </span>
+        )}
         <button
           type="button"
           disabled={empty || isBackgroundBusy}
@@ -446,6 +472,7 @@ export function EditorView() {
           onTextMenu={textMenu}
           onLaneMenu={laneMenu}
           onAddText={addTextAt}
+          busyStop={regenBusy?.index ?? null}
         />
       </div>
 

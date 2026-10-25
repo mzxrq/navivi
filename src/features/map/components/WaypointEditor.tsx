@@ -43,11 +43,10 @@ import { PROVIDERS } from "../../../services/ai/providers";
 import { stopLabel } from "../../../utils/stopLabel";
 import { resolveNarrationLanguage } from "../../../utils/narrationLanguage";
 import { i18n } from "@lingui/core";
-import { readTextFile } from "@tauri-apps/plugin-fs";
-import { probeDuration, toAbsoluteProjectPath } from "../../../services/fileSystem";
 import { fetchLegScripts } from "../../../services/legScripts";
 import { legOf } from "../../../services/narrationPrompt";
-import { RegenKind, refreshStopMedia, regenModes, runRegen } from "../../../services/stopRegen";
+import type { RegenKind } from "../../../services/stopRegen";
+import { useStopRegen } from "../../../hooks/useStopRegen";
 import { PHOTO_EXTENSIONS, isHeic, preparePhotos } from "../../../services/imageImport";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
@@ -106,8 +105,6 @@ export function WaypointEditor({
     metadata,
     settings,
     saveProject,
-    timeline,
-    setTimeline,
   } = useWorkspace();
   const { showToast, markedWaypointIds, isRendering, setShowAppSettings } = useUI();
   const isMarkedForRegen = markedWaypointIds?.includes(wpId);
@@ -126,9 +123,7 @@ export function WaypointEditor({
   const latestWp = useRef(wp);
   latestWp.current = wp;
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [regenBusy, setRegenBusy] = useState<RegenKind | null>(null);
-  const liveTimeline = useRef(timeline);
-  liveTimeline.current = timeline;
+  const { busy: regenBusy, regenerate: regenerateStop } = useStopRegen();
   const [thoughtProcess, setThoughtProcess] = useState("");
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -156,35 +151,7 @@ export function WaypointEditor({
   const routeDirections = settings.overview_style === "course" && !!metadata.directory_path;
   const canRegen = !!metadata.directory_path && !wp.skipAssetGeneration && !wp.isStub;
 
-  // Redo one stop's files through the single-stop CLI modes (one sidecar call at a time), then re-read them in the timeline.
-  const regenerate = async (kind: RegenKind) => {
-    const dir = metadata.directory_path;
-    if (!dir || regenBusy || isRendering) return;
-    const index = wpIndex;
-    setRegenBusy(kind);
-    showToast(
-      kind === "voice" ? t`Making the new voice for this stop. The first one can take a while.` : kind === "subtitles" ? t`Making the subtitles for this stop.` : t`Making the photo clip for this stop. This can take a few minutes.`,
-      "info",
-    );
-    try {
-      await saveProject();
-      const { skipped } = await runRegen(`${dir}/job_config.json`, regenModes(kind, index, { hasArrivalVoice, hasAttractionVoice }));
-      const next = await refreshStopMedia(liveTimeline.current, index, kind, {
-        probe: async (rel, mediaKind) => probeDuration(convertFileSrc(await toAbsoluteProjectPath(rel, dir)), mediaKind, 0),
-        readText: async (rel) => readTextFile(await toAbsoluteProjectPath(rel, dir)),
-      });
-      if (next) setTimeline(next);
-      if (skipped) showToast(t`Nothing was made: ${skipped}`, "warning");
-      else if (kind === "voice") showToast(hasAttractionVoice ? t`The voice is ready. If its length changed, redo the photo clip so it fits.` : t`The voice is ready.`, "success");
-      else showToast(kind === "subtitles" ? t`The subtitles are ready.` : t`The photo clip is ready.`, "success");
-    } catch (err: any) {
-      const message = String(err?.message ?? err);
-      if (/process was cancelled/i.test(message)) showToast(t`Stopped before it finished.`, "info");
-      else showToast(t`Could not make that again: ${message}`, "error");
-    } finally {
-      setRegenBusy(null);
-    }
-  };
+  const regenerate = (kind: RegenKind) => regenerateStop(wpIndex, kind);
 
   const openRegenMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
     const box = e.currentTarget.getBoundingClientRect();
