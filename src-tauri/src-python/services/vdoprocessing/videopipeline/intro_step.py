@@ -41,6 +41,48 @@ def intro_voice_seconds(voice_seconds: float) -> float:
     return round(seconds * tuning.INTRO_FPS) / tuning.INTRO_FPS
 
 
+def place_overview_voice(settings: dict, audio_data: dict, use_cues: bool, render) -> dict:
+    """Builds the intro (`render(seconds, cue_times)` -> clip path or None) and places the overview voice:
+    the intro's length and scene cues, and the overview's cues and audio length as seen from the overview
+    clip's start. The opening as its own file (audio_step.overview_pieces): the intro lasts that voice and
+    the overview's voice starts INTRO_MAP_LEAD_SECONDS in, so editing the opening never moves the
+    overview; with no intro clip the opening plays at the overview's start and its voice follows. One
+    older file: the intro lasts up to the {start} cue and the overview's cues shift back by it
+    (`voice_start`: timeline seconds that voice starts at)."""
+    overview_cues = audio_data.get("overview_cue_times") if use_cues else None
+    overview_audio = audio_data.get("overview_audio_duration") or 0.0
+    intro_voice = audio_data.get("intro_voice") if audio_data.get("overview_audio_path") else None
+    voice_start, lead = None, 0.0
+    if intro_voice:
+        intro_seconds = intro_voice_seconds(intro_voice["duration_seconds"])
+        intro_cues = intro_voice.get("cue_times") if use_cues else None
+        intro_path = render(intro_seconds, intro_cues)
+        lead = tuning.INTRO_MAP_LEAD_SECONDS + (0.0 if intro_path else intro_voice["duration_seconds"])
+    else:
+        intro_seconds = plan_intro_seconds(settings, overview_cues, overview_audio)
+        intro_cues = overview_cues  # voice times, before the shift below
+        intro_path = render(intro_seconds, intro_cues)
+        if intro_path and intro_seconds:
+            from services.tts.ttsengine import FFmpegManager
+
+            voice_start = tuning.INTRO_VOICE_LEAD_SECONDS
+            try:
+                intro_seconds = float(FFmpegManager.get_media_duration(intro_path)) or intro_seconds
+            except Exception as exc:  # the planned length is close enough
+                logger.warning("Intro: could not probe %s (%s); using the planned length.", intro_path, exc)
+            lead = -max(0.0, intro_seconds - voice_start)
+    # {scene} cues only cut the intro; in the overview's cue list they would re-render it for nothing.
+    if overview_cues:
+        overview_cues = {
+            k: max(0.0, float(v) + lead) for k, v in overview_cues.items() if not str(k).startswith("scene")
+        }
+    return {
+        "intro_path": intro_path, "intro_seconds": intro_seconds, "intro_cues": intro_cues,
+        "intro_voice": intro_voice, "voice_start": voice_start, "overview_lead": max(0.0, lead),
+        "overview_cues": overview_cues, "overview_audio": max(0.0, overview_audio + lead) if overview_audio else 0.0,
+    }
+
+
 def intro_style(settings: dict) -> str:
     style = (settings or {}).get("intro_style")
     return style if style in tuning.INTRO_STYLES else tuning.DEFAULT_INTRO_STYLE
@@ -186,6 +228,10 @@ def intro_text_items(
     project = {k: job_config.get(k) for k in ("settings", "video_title", "project_name", "waypoints")}
     generate = script_generator(project["settings"])[0] if use_llm else None
     lines = intro_lines(project, job_config.get("directory_path", config_path.parent), video_text.current_language(), generate)
+    if generate is not None:
+        from services.ollama_memory import unload_ollama_models
+
+        unload_ollama_models()  # silent when Ollama isn't running
     scenes = styled_scenes(style, duration_sec, scene_cuts(cue_times) if duration_sec else None)  # as rendered
     cf, inset = tuning.INTRO_CROSSFADE_SECONDS, tuning.INTRO_LINE_INSET_SECONDS
     heading = intro_heading(job_config)

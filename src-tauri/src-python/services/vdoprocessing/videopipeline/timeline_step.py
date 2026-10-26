@@ -364,7 +364,7 @@ def build_timeline(
             audio_path, subtitle_path = _attraction_audio(source_name)
 
         # The user's own footage keeps its sound beside the clip when they asked for it.
-        extra_audio = None
+        extra_audio, extra_volume = None, 0.5
         if kind == "attraction":
             from services.vdoprocessing.user_videos import original_sound_path
 
@@ -380,6 +380,8 @@ def build_timeline(
             audio_offset = tuning.INTRO_VOICE_LEAD_SECONDS
         elif kind == "overview" and audio_path and overview_audio_offset:
             audio_offset = overview_audio_offset
+            if intro_audio_path and not intro_pair:  # no intro clip: the opening plays at the overview's start
+                extra_audio, extra_volume = _resolve(intro_audio_path), 1.0
         free_voice = voice_over_intro and kind == "overview"
         length = _clip_length(burned, None if free_voice else audio_path, audio_offset)
         if voice_over_intro and (is_intro or free_voice):
@@ -429,7 +431,7 @@ def build_timeline(
             {
                 "order": order,
                 "extra_audio_path": extra_audio,
-                "extra_audio_volume": 0.5 if extra_audio else None,
+                "extra_audio_volume": extra_volume if extra_audio else None,
                 "clip_name": Path(burned).stem,
                 "file_path": _resolve(burned),
                 "duration": round(length, 3),

@@ -29,7 +29,7 @@ from .helpers import (
     project_video_dir,
     skip_rich_media,
 )
-from .intro_step import intro_text_items, intro_voice_seconds, plan_intro_seconds, render_intro_clip
+from .intro_step import intro_text_items, place_overview_voice, render_intro_clip
 from .leg_pieces import compute_leg_narration_splits
 from .narration_step import add_default_cues, add_overview_cues, record_cue_times
 from .outro_step import outro_text_item, render_outro_clip
@@ -244,51 +244,15 @@ def run_full_pipeline(
     # --- STEP 4 ---
     tracker.stage("Rendering overview & residential video...")
     # The overview voice starts on the intro: its opening (up to {start}) plays over the intro.
-    overview_cues = audio_data.get("overview_cue_times") if use_cues else None
-    overview_audio = audio_data.get("overview_audio_duration") or 0.0
-    intro_voice = audio_data.get("intro_voice") if audio_data.get("overview_audio_path") else None
     tracker.show("Building intro clip...")
-    voice_start = None  # older single-file voice: timeline seconds it starts at, on the intro
-    overview_lead = 0.0  # seconds into the overview clip its own voice starts
-    if intro_voice:
-        # The opening is its own file (audio_step.overview_pieces): the intro is as long as it, and the
-        # overview's voice starts INTRO_MAP_LEAD_SECONDS in, so editing the opening never moves the
-        # overview's cues (its render is reused).
-        intro_seconds = intro_voice_seconds(intro_voice["duration_seconds"])
-        intro_cues = intro_voice.get("cue_times") if use_cues else None
-        intro_path = render_intro_clip(
-            str(config_file_path), duration_sec=intro_seconds, attraction_videos=attraction_videos,
-            cue_times=intro_cues,
-        )
-        if intro_path:
-            overview_lead = tuning.INTRO_MAP_LEAD_SECONDS
-        else:
-            logger.warning("Intro: no intro clip, so the opening narration (%s) is not heard.", intro_voice["audio_path"])
-    else:
-        intro_seconds = plan_intro_seconds(settings, overview_cues, overview_audio)
-        intro_cues = overview_cues  # before the shift below: {scene} cues are voice times
-        intro_path = render_intro_clip(
-            str(config_file_path), duration_sec=intro_seconds, attraction_videos=attraction_videos,
-            cue_times=intro_cues,
-        )
-        voice_start = tuning.INTRO_VOICE_LEAD_SECONDS if intro_path and intro_seconds else None
-        if voice_start is not None:
-            from services.tts.ttsengine import FFmpegManager
-
-            try:
-                intro_seconds = float(FFmpegManager.get_media_duration(intro_path)) or intro_seconds
-            except Exception as exc:  # the planned length is close enough
-                logger.warning("Intro: could not probe %s (%s); using the planned length.", intro_path, exc)
-            shift = max(0.0, intro_seconds - voice_start)
-            overview_cues = {k: max(0.0, float(v) - shift) for k, v in (overview_cues or {}).items()} or overview_cues
-            overview_audio = max(0.0, overview_audio - shift)
-    if overview_cues:
-        # {scene} cues only cut the intro; in the overview's cue list they would re-render it for nothing.
-        overview_cues = {
-            k: float(v) + overview_lead for k, v in overview_cues.items() if not str(k).startswith("scene")
-        }
-    if overview_audio:
-        overview_audio += overview_lead
+    voice = place_overview_voice(
+        settings, audio_data, use_cues,
+        lambda seconds, cues: render_intro_clip(
+            str(config_file_path), duration_sec=seconds, attraction_videos=attraction_videos, cue_times=cues,
+        ),
+    )
+    intro_path, intro_seconds, intro_cues = voice["intro_path"], voice["intro_seconds"], voice["intro_cues"]
+    overview_cues, overview_audio = voice["overview_cues"], voice["overview_audio"]
 
     tuning.ensure_free_ram("video rendering", min_free_ram, relief=_stop_gpu_servers)
     video_paths = render_route_video(
@@ -357,10 +321,10 @@ def run_full_pipeline(
         intro_text=intro_text_items(str(config_file_path), duration_sec=intro_seconds, cue_times=intro_cues) if intro_path else None,
         outro_text=outro_text_item(str(config_file_path)) if outro_path else None,
         place_label_look=job_config.get("settings", {}).get("place_label_look"),
-        overview_voice_start=voice_start,
-        intro_audio_path=(intro_voice or {}).get("audio_path") if intro_path else None,
+        overview_voice_start=voice["voice_start"],
+        intro_audio_path=(voice["intro_voice"] or {}).get("audio_path"),
         intro_subtitle_path=intro_subtitle_path if intro_path else None,
-        overview_audio_offset=overview_lead,
+        overview_audio_offset=voice["overview_lead"],
         waypoints=waypoints,  # as the run started: job_config.json may be edited meanwhile
     )
     recorder.finish()

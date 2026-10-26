@@ -636,6 +636,9 @@ def existing_audio_data(project_config_path: str) -> dict:
         return {"audio_path": str(path), "duration_seconds": found["duration_seconds"], "cue_times": times, "text": text}
 
     opening, rest = overview_pieces(project_config, config_path.parent)
+    if opening and not output_is_valid(audio_dir / INTRO_NARRATION_FILENAME):
+        # Voiced before the opening had its own file: the old recording still speaks all of it.
+        opening, rest = None, overview_tagged_script(project_config, config_path.parent)
     overview = piece(rest, audio_dir / OVERVIEW_NARRATION_FILENAME)
     if overview:
         data["overview_audio_path"] = overview["audio_path"]

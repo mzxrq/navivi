@@ -643,12 +643,13 @@ def _finish_intro(combined_path: Path, total_sec: float, base: str, video_dir: P
         partial_path.unlink(missing_ok=True)
 
 
-def _frame_at(path: str, fraction: float = 0.5) -> Optional[np.ndarray]:
-    """A photo, or a video's frame `fraction` of the way in (through ffmpeg: cv2 can't open non-ASCII paths)."""
+def _frame_at(path: str, fraction: float, length: float) -> Optional[np.ndarray]:
+    """A photo, or the frame `fraction` of the way into a `length`-second video (through ffmpeg: cv2
+    can't open non-ASCII paths)."""
     if Path(path).suffix.lower() not in _VIDEO_EXTS:
         return _read_image_safe(path)
     try:
-        at = float(FFmpegManager.get_media_duration(path)) * fraction
+        at = length * fraction
         result = subprocess.run(
             [FFmpegManager.resolve_ffmpeg_bin(), "-v", "error", "-ss", f"{at:.2f}", "-i", path,
              "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"],
@@ -756,7 +757,11 @@ def _scene_sources(waypoints: List[Dict[str, Any]], attraction_videos: List[str]
 
 
 def styled_intro_seconds(style: str, duration_sec: Optional[float] = None) -> float:
-    scenes = styled_scenes(style, duration_sec)
+    return joined_seconds(styled_scenes(style, duration_sec))
+
+
+def joined_seconds(scenes: List[Dict[str, Any]]) -> float:
+    """The scenes crossfaded together: each join overlaps by one crossfade."""
     return sum(s["seconds"] for s in scenes) - (len(scenes) - 1) * tuning.INTRO_CROSSFADE_SECONDS
 
 
@@ -794,15 +799,18 @@ def generate_styled_intro(
     scenes = styled_scenes(style, duration_sec, cuts)
     densities: Dict[str, float] = {}
     stills: Dict[str, np.ndarray] = {}  # held-photo clips: drawn like photos, with the zoom/pan
+    lengths: Dict[str, float] = {}
     for src in _scene_sources(waypoints, attraction_videos):
-        frame = _frame_at(src)
+        lengths[src] = _source_seconds(src)
+        frame = _frame_at(src, 0.5, lengths[src])
         if frame is None:
             continue
         densities[src] = edge_density(frame)
         if Path(src).suffix.lower() in _VIDEO_EXTS:
-            early, late = _frame_at(src, 0.2), _frame_at(src, 0.8)
+            early, late = _frame_at(src, 0.2, lengths[src]), _frame_at(src, 0.8, lengths[src])
             if early is not None and late is not None and is_still(early, late):
                 stills[src] = frame
+                lengths[src] = float("inf")
     picks = pick_scenes(densities, len(scenes))
     if not picks:
         logger.warning("Intro: no attraction clips or waypoint photos to build a %s intro from.", style)
@@ -815,7 +823,6 @@ def generate_styled_intro(
     combined_path = video_dir_path / f".intro_combined_{run_id}.mp4"
     raws: List[str] = []
     cf = tuning.INTRO_CROSSFADE_SECONDS
-    lengths = {src: float("inf") if src in stills else _source_seconds(src) for src in densities}
     pool = [p for p in sorted(densities, key=lambda p: densities[p], reverse=True) if p not in picks]
     try:
         for idx, (scene, src) in enumerate(zip(scenes, picks)):
@@ -841,7 +848,7 @@ def generate_styled_intro(
                 raws.append(raw)
         scene_raws = [str(video_dir_path / f".intro_raw_{run_id}_{i}.mp4") for i in range(len(scenes))]
         _crossfade_chain(scene_raws, [s["seconds"] for s in scenes], cf, str(combined_path))
-        if not _finish_intro(combined_path, sum(s["seconds"] for s in scenes) - (len(scenes) - 1) * tuning.INTRO_CROSSFADE_SECONDS, "null", video_dir_path, run_id,
+        if not _finish_intro(combined_path, joined_seconds(scenes), "null", video_dir_path, run_id,
                              video_dir_path / output_filename):
             return None
     except Exception as exc:
