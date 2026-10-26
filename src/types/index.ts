@@ -142,6 +142,9 @@ export interface ProjectSettings {
 
   // Append "· N か所" to the intro/outro subtitle (default on).
   intro_place_count?: boolean;
+  // Intro look: photo slideshow + title (absent), or a silent two-scene, text-led intro.
+  intro_style?: "slideshow" | "cinematic" | "documentary";
+  intro_lines?: string[]; // [opening, closing] for the text-led styles; empty = written by the script model
   // Look for attraction place names on the text track (editor's "Apply to all").
   place_label_look?: {
     position?: "top" | "middle" | "bottom";

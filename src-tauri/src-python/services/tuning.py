@@ -14,7 +14,7 @@ import gc
 import logging
 import os
 import time
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # --- GPU stage cooldown ------------------------------------------------------
 # Pause inserted in pipeline.py between the ComfyUI/Wan2.2 attraction-video
@@ -1660,6 +1660,9 @@ INTRO_VOICE_LEAD_SECONDS = 0.5
 # The intro ends this long BEFORE the voice reaches {start}, so the overview map is already on
 # screen when "これが全体のルートです" begins instead of the line starting on the cut.
 INTRO_MAP_LEAD_SECONDS = 1.2
+# When the opening narration is its own file (audio_step.overview_pieces), the intro runs this long past
+# its last word, and the overview's own voice starts INTRO_MAP_LEAD_SECONDS into the overview.
+INTRO_VOICE_TAIL_SECONDS = 0.4
 INTRO_MIN_SECONDS = 4.0
 INTRO_MAX_SECONDS = 26.0
 INTRO_MAX_IMAGE_COUNT = 5
@@ -1729,6 +1732,53 @@ INTRO_LABEL_SCALE_START_PCT = 65
 INTRO_SUBTITLE_DELAY_SECONDS = 0.8
 INTRO_SUBTITLE_FADE_SECONDS = 0.7
 INTRO_SUBTITLE_RISE_PX = 28
+
+# settings.intro_style: "slideshow" (above) or a two-scene, text-led style. The new styles are silent
+# (the overview voice starts on the map) and show settings.intro_lines (else written, see intro_lines.py).
+# Scene 1 = the most detailed footage (close-up), scene 2 = the plainest (wide); attraction clips are
+# preferred, photos (and held-photo clips) get the zoom/pan. Every photo move ends on the whole photo
+# (zoom ..., 1.0), centred: the user framed it on the place, and a push-in crops off what sits at its
+# edges (the 経塚's name post). zoom: 1.0 = whole frame, smaller = tighter. pan: centre
+# drift, a fraction of the free crop room (-1..1). dim: brightness multiply; sat: saturation (1 = as is).
+# text: the line's look on the timeline (position/align/margins as on any text item, style = TextStyle keys).
+DEFAULT_INTRO_STYLE = "slideshow"
+INTRO_STYLES = ("slideshow", "cinematic", "documentary")
+INTRO_STYLE_SCENES: Dict[str, List[Dict[str, Any]]] = {
+    # Japanese-cinema minimalism: dark, quiet, small type with lots of empty space.
+    "cinematic": [
+        {"seconds": 5.5, "zoom": (0.94, 1.0), "pan": (0.0, 0.0), "dim": 0.40, "sat": 0.6,
+         "text": {"position": "middle", "style": {"font_size": 46, "bold": False, "letter_spacing": 6, "outline_width": 0, "shadow": 2}}},
+        {"seconds": 6.0, "zoom": (0.90, 1.0), "pan": (0.0, 0.0), "dim": 0.60, "sat": 0.85,
+         "text": {"position": "middle", "align": "left", "margin_h": 160,
+                  "style": {"font_size": 46, "bold": False, "letter_spacing": 6, "outline_width": 0, "shadow": 2}}},
+        # "title": the route's name (intro_heading: location kicker, title, subtitle) closes the intro.
+        {"seconds": 5.5, "zoom": (0.92, 1.0), "pan": (0.0, 0.0), "dim": 0.45, "sat": 0.8, "title": True,
+         "text": {"position": "middle",
+                  "kicker": {"font_size": 34, "bold": False, "letter_spacing": 10, "outline_width": 0, "shadow": 2},
+                  "style": {"font_size": 110, "bold": False, "letter_spacing": 14, "outline_width": 0, "shadow": 3},
+                  "subtitle": {"font_size": 38, "bold": False, "letter_spacing": 6, "outline_width": 0, "shadow": 2}}},
+    ],
+    # NHK-style documentary: a close-up easing back, then a wide shot pulling out under a bold line.
+    "documentary": [
+        {"seconds": 5.0, "zoom": (0.86, 1.0), "pan": (0.0, 0.0), "dim": 0.70, "sat": 1.0,
+         "text": {"position": "bottom", "align": "right", "margin_h": 120, "margin_v": 180,
+                  "style": {"font_size": 54, "bold": False, "letter_spacing": 3, "outline_width": 0, "shadow": 3}}},
+        {"seconds": 5.5, "zoom": (0.80, 1.0), "pan": (0.0, 0.0), "dim": 0.60, "sat": 1.0,
+         "text": {"position": "middle", "style": {"font_size": 80, "bold": True, "letter_spacing": 4, "outline_width": 0, "shadow": 3}}},
+        {"seconds": 5.5, "zoom": (0.85, 1.0), "pan": (0.0, 0.0), "dim": 0.50, "sat": 1.0, "title": True,
+         "text": {"position": "middle",
+                  "kicker": {"font_size": 40, "bold": False, "letter_spacing": 6, "outline_width": 0, "shadow": 2},
+                  "style": {"font_size": 130, "bold": True, "letter_spacing": 6, "outline_width": 0, "shadow": 4},
+                  "subtitle": {"font_size": 46, "bold": False, "letter_spacing": 3, "outline_width": 0, "shadow": 2}}},
+    ],
+}
+# The lines' own fade, and how far inside its scene each line starts/ends (it waits out the crossfade).
+INTRO_LINE_INSET_SECONDS = 0.4
+# A clip whose frames at 20% and 80% differ less than this (mean grey level, 0-255) is a held photo:
+# the intro gives it the photo zoom/pan instead of freezing on it.
+INTRO_STILL_DIFF = 1.0
+# Stops whose name matches this are transport, not intro scenery (with the first and last stop).
+INTRO_TRANSPORT_PATTERN = r"駅|バス停|停留所|桟橋|港|汽船|フェリー|乗り場|station|bus stop|pier|port|ferry|terminal"
 
 # --- Outro card grid (end-of-video "places visited" summary) ---------------
 # A single composited frame (project title + a thumbnail grid of every

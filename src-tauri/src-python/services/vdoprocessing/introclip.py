@@ -16,6 +16,7 @@ dependency to load just for three lines of crop math.
 from __future__ import annotations
 
 import math
+import re
 import random
 import shutil
 import subprocess
@@ -119,30 +120,36 @@ def _crop_rect(cx: float, cy: float, half_w: float, half_h: float, sw: int, sh: 
     return int(cx - half_w), int(cy - half_h), int(cx + half_w), int(cy + half_h)
 
 
-def _render_zoom_in(image_bgr: np.ndarray, raw_output_path: str, duration_sec: float) -> None:
-    """Renders a centered Ken Burns zoom-in over a still image: the visible
-    crop shrinks from INTRO_ZOOM_START to INTRO_ZOOM_END (ease-in-out) while
-    staying centered on the image, giving the impression of pushing in."""
-    # [NOTE] [Animation] Ease-in-out crop shrink around a fixed center is the whole
-    # Ken Burns effect — no keyframe/spline library needed for a single push-in.
+def _render_zoom_in(
+    image_bgr: np.ndarray, raw_output_path: str, duration_sec: float,
+    zoom: Tuple[float, float] = (tuning.INTRO_ZOOM_START, tuning.INTRO_ZOOM_END),
+    pan: Tuple[float, float] = (0.0, 0.0),
+    dim: float = tuning.INTRO_IMAGE_DIM_FACTOR,
+    sat: float = 1.0,
+) -> None:
+    """Renders a Ken Burns move over a still image: the visible crop goes from
+    zoom[0] to zoom[1] (ease-in-out) while its centre drifts by `pan` (a
+    fraction of the free crop room, from -pan to +pan), then dims/desaturates."""
     sh, sw = image_bgr.shape[:2]
     out_w, out_h = tuning.INTRO_WIDTH, tuning.INTRO_HEIGHT
     fit_w, fit_h = _cover_fit(sw, sh, out_w / out_h)
-    cx, cy = sw / 2, sh / 2
 
     num_frames = max(1, round(duration_sec * tuning.INTRO_FPS))
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(raw_output_path, fourcc, tuning.INTRO_FPS, (out_w, out_h))
 
-    dim = tuning.INTRO_IMAGE_DIM_FACTOR
-
     for i in range(num_frames):
         t = _ease_in_out(i / max(1, num_frames - 1))
-        zoom = tuning.INTRO_ZOOM_START + (tuning.INTRO_ZOOM_END - tuning.INTRO_ZOOM_START) * t
-        half_w, half_h = fit_w * zoom / 2, fit_h * zoom / 2
+        z = zoom[0] + (zoom[1] - zoom[0]) * t
+        half_w, half_h = fit_w * z / 2, fit_h * z / 2
+        cx = sw / 2 + pan[0] * (2 * t - 1) * max(0.0, sw / 2 - half_w)
+        cy = sh / 2 + pan[1] * (2 * t - 1) * max(0.0, sh / 2 - half_h)
         x0, y0, x1, y1 = _crop_rect(cx, cy, half_w, half_h, sw, sh)
         crop = image_bgr[y0:y1, x0:x1]
         frame = cv2.resize(crop, (out_w, out_h), interpolation=cv2.INTER_LANCZOS4)
+        if sat < 1.0:
+            gray = cv2.cvtColor(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
+            frame = cv2.addWeighted(frame, sat, gray, 1.0 - sat, 0)
         if dim < 1.0:
             frame = cv2.convertScaleAbs(frame, alpha=dim, beta=0)
         writer.write(frame)
@@ -150,11 +157,48 @@ def _render_zoom_in(image_bgr: np.ndarray, raw_output_path: str, duration_sec: f
     writer.release()
 
 
+def _render_clip_slice(src: str, out: str, duration_sec: float, dim: float, sat: float) -> None:
+    """`duration_sec` from the middle of a video clip (its own camera move is the motion), cover-fit to
+    the intro size, dimmed and desaturated; held on its last frame if the clip is shorter."""
+    try:
+        length = float(FFmpegManager.get_media_duration(src))
+    except Exception:
+        length = 0.0
+    start = max(0.0, (length - duration_sec) / 2)
+    w, h = tuning.INTRO_WIDTH, tuning.INTRO_HEIGHT
+    vf = (
+        f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps={tuning.INTRO_FPS},"
+        f"eq=saturation={sat:.3f},colorchannelmixer=rr={dim:.3f}:gg={dim:.3f}:bb={dim:.3f},"
+        f"tpad=stop_mode=clone:stop_duration={duration_sec:.3f},setsar=1"
+    )
+    cmd = [
+        FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_log_args(),
+        "-ss", f"{start:.3f}", "-i", src, "-vf", vf, "-t", f"{duration_sec:.3f}", "-an",
+        "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p", out,
+    ]
+    result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+    if result.returncode != 0:
+        raise RuntimeError(f"Clip slice failed: {result.stderr.strip()}")
+
+
+def scene_starts(durations: List[float], crossfade_sec: float) -> List[float]:
+    """When each crossfaded clip starts on the joined timeline (clip i fades in over the end of clip i-1)."""
+    starts, t = [], 0.0
+    for d in durations:
+        starts.append(round(t, 3))
+        t += d - crossfade_sec
+    return starts
+
+
+def xfade_offsets(durations: List[float], crossfade_sec: float) -> List[float]:
+    return scene_starts(durations, crossfade_sec)[1:]
+
+
 def _crossfade_chain(
-    clip_paths: List[str], per_clip_sec: float, crossfade_sec: float, output_path: str
+    clip_paths: List[str], durations: List[float], crossfade_sec: float, output_path: str
 ) -> None:
-    """Chains N same-length, same-resolution clips into one video, each
-    crossfading into the next via ffmpeg's `xfade` filter. Raises
+    """Chains N same-resolution clips (durations[i] seconds each) into one
+    video, each crossfading into the next via ffmpeg's `xfade` filter. Raises
     RuntimeError on failure — the caller decides how to handle that."""
     if len(clip_paths) == 1:
         # [NOTE] [Transition] A single clip has nothing to crossfade into — skip
@@ -171,16 +215,13 @@ def _crossfade_chain(
     # cumulative timeline, chaining N clips through N-1 successive xfade filters.
     filter_parts = []
     prev_label = "0:v"
-    cumulative = per_clip_sec
-    for i in range(1, len(clip_paths)):
-        offset = cumulative - crossfade_sec
+    for i, offset in enumerate(xfade_offsets(durations, crossfade_sec), start=1):
         out_label = f"v{i}"
         filter_parts.append(
             f"[{prev_label}][{i}:v]xfade=transition=fade:"
             f"duration={crossfade_sec:.3f}:offset={offset:.3f}[{out_label}]"
         )
         prev_label = out_label
-        cumulative += per_clip_sec - crossfade_sec
 
     cmd = [
         ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(),
@@ -504,9 +545,7 @@ def generate_intro_clip(
     run_id = uuid.uuid4().hex[:8]
     per_clip_raw_paths: List[str] = []
     combined_path = video_dir_path / f".intro_combined_{run_id}.mp4"
-    partial_path = video_dir_path / f".intro_partial_{run_id}.mp4"
     title_path: Optional[Path] = None
-    logo_path: Optional[Path] = None
 
     crossfade_sec = tuning.INTRO_CROSSFADE_SECONDS
     total_sec = (
@@ -532,13 +571,8 @@ def generate_intro_clip(
             len(per_clip_raw_paths) * per_clip_sec
             - (len(per_clip_raw_paths) - 1) * crossfade_sec
         )
-        _crossfade_chain(per_clip_raw_paths, per_clip_sec, crossfade_sec, str(combined_path))
+        _crossfade_chain(per_clip_raw_paths, [per_clip_sec] * len(per_clip_raw_paths), crossfade_sec, str(combined_path))
 
-        fade_sec = tuning.INTRO_FADE_SECONDS
-        fades = (
-            f"fade=t=in:st=0:d={fade_sec:.2f},"
-            f"fade=t=out:st={max(0.0, total_sec - fade_sec):.2f}:d={fade_sec:.2f}"
-        )
         base = "null"
         if burn_text:
             title_path = _write_title_ass(
@@ -553,42 +587,268 @@ def generate_intro_clip(
             escaped_title_path = str(title_path.resolve()).replace("\\", "/").replace(":", r"\:")
             base = f"subtitles=filename='{escaped_title_path}':force_style='{_TITLE_STYLE.to_force_style()}'"
 
-        inputs = ["-i", str(combined_path)]
-        graph = f"[0:v]{base}[base];[base]{fades}"
-        logo_path = _write_logo_badge(video_dir_path, run_id)
-        if logo_path is not None:
-            inputs += ["-i", str(logo_path)]
-            m = tuning.INTRO_LOGO_MARGIN
-            graph = f"[0:v]{base}[base];[base][1:v]overlay=W-w-{m}:H-h-{m},{fades}"
-
-        ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
-        cmd = [
-            ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(),
-            *inputs,
-            "-filter_complex", graph,
-            "-an",
-            "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
-            str(partial_path),
-        ]
-        result = subprocess.run(
-            cmd, capture_output=True, encoding="utf-8", errors="replace"
-        )
-        if result.returncode != 0:
-            logger.error("Intro generation failed: %s", result.stderr.strip())
+        if not _finish_intro(combined_path, total_sec, base, video_dir_path, run_id, output_path):
             return None
-        replace_into(partial_path, output_path)  # a cancelled run leaves the last intro, never a cut-off one
     except Exception as exc:
         logger.error("Intro generation failed: %s", exc)
         return None
     finally:
         if title_path is not None:
             title_path.unlink(missing_ok=True)
-        if logo_path is not None:
-            logo_path.unlink(missing_ok=True)
         combined_path.unlink(missing_ok=True)
-        partial_path.unlink(missing_ok=True)
         for p in per_clip_raw_paths:
             Path(p).unlink(missing_ok=True)
 
     logger.info("Intro clip generated: %s (%d pictures)", output_path, len(per_clip_raw_paths))
     return str(output_path)
+
+
+def _finish_intro(combined_path: Path, total_sec: float, base: str, video_dir: Path, run_id: str, output_path: Path) -> bool:
+    """Fade from/to black + the logo badge over the joined scenes, written to a temp file and swapped in.
+    Cut to exactly `total_sec` (padded with its last frame if the joins came out a frame short): the
+    overview voice is shifted by the intro's length, so a frame's wobble would re-render the overview."""
+    fade_sec = tuning.INTRO_FADE_SECONDS
+    fades = (
+        f"fade=t=in:st=0:d={fade_sec:.2f},"
+        f"fade=t=out:st={max(0.0, total_sec - fade_sec):.2f}:d={fade_sec:.2f},"
+        "tpad=stop_mode=clone:stop_duration=0.5"
+    )
+    partial_path = video_dir / f".intro_partial_{run_id}.mp4"
+    logo_path = _write_logo_badge(video_dir, run_id)
+    inputs = ["-i", str(combined_path)]
+    graph = f"[0:v]{base}[base];[base]{fades}"
+    if logo_path is not None:
+        inputs += ["-i", str(logo_path)]
+        m = tuning.INTRO_LOGO_MARGIN
+        graph = f"[0:v]{base}[base];[base][1:v]overlay=W-w-{m}:H-h-{m},{fades}"
+    cmd = [
+        FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_log_args(),
+        *inputs,
+        "-filter_complex", graph,
+        "-t", f"{total_sec:.3f}",
+        "-an",
+        "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
+        str(partial_path),
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+        if result.returncode != 0:
+            logger.error("Intro generation failed: %s", result.stderr.strip())
+            return False
+        replace_into(partial_path, output_path)  # a cancelled run leaves the last intro, never a cut-off one
+        return True
+    finally:
+        if logo_path is not None:
+            logo_path.unlink(missing_ok=True)
+        partial_path.unlink(missing_ok=True)
+
+
+def _frame_at(path: str, fraction: float = 0.5) -> Optional[np.ndarray]:
+    """A photo, or a video's frame `fraction` of the way in (through ffmpeg: cv2 can't open non-ASCII paths)."""
+    if Path(path).suffix.lower() not in _VIDEO_EXTS:
+        return _read_image_safe(path)
+    try:
+        at = float(FFmpegManager.get_media_duration(path)) * fraction
+        result = subprocess.run(
+            [FFmpegManager.resolve_ffmpeg_bin(), "-v", "error", "-ss", f"{at:.2f}", "-i", path,
+             "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"],
+            capture_output=True,
+        )
+        return cv2.imdecode(np.frombuffer(result.stdout, dtype=np.uint8), cv2.IMREAD_COLOR) if result.stdout else None
+    except Exception as exc:
+        logger.warning("Intro: could not read a frame of '%s': %s", path, exc)
+        return None
+
+
+def is_still(a: np.ndarray, b: np.ndarray) -> bool:
+    """Two frames of a clip barely differ: a held photo (camera preset "none"), not a camera move."""
+    small = lambda f: cv2.cvtColor(cv2.resize(f, (320, 180)), cv2.COLOR_BGR2GRAY).astype(np.float32)  # noqa: E731
+    return float(np.abs(small(a) - small(b)).mean()) < tuning.INTRO_STILL_DIFF
+
+
+def edge_density(image_bgr: np.ndarray) -> float:
+    """Share of edge pixels: high = close detail (moss, a sign), low = an open wide view."""
+    gray = cv2.cvtColor(cv2.resize(image_bgr, (480, 270)), cv2.COLOR_BGR2GRAY)
+    return float((cv2.Canny(gray, 80, 200) > 0).mean())
+
+
+def pick_scenes(densities: Dict[str, float], count: int = 2) -> List[str]:
+    """[close-up, wide, middle...]: the most detailed source, the plainest, then a mid one for the title
+    scene; sources repeat when there are fewer than `count`."""
+    ranked = sorted(densities, key=lambda p: densities[p], reverse=True)
+    if not ranked:
+        return []
+    order = [0, len(ranked) - 1, len(ranked) // 2]
+    order += [i for i in range(len(ranked)) if i not in order]
+    distinct = list(dict.fromkeys(order))
+    return [ranked[distinct[i % len(distinct)]] for i in range(count)]
+
+
+_VIDEO_EXTS = (".mp4", ".mov", ".webm", ".mkv")
+
+
+def _source_seconds(src: str) -> float:
+    """A clip's length; a photo never runs out (the zoom is drawn for any length)."""
+    if Path(src).suffix.lower() not in _VIDEO_EXTS:
+        return float("inf")
+    try:
+        return float(FFmpegManager.get_media_duration(src))
+    except Exception:
+        return 0.0
+
+
+def plan_shots(seconds: float, main: str, pool: List[str], lengths: Dict[str, float], cf: float, scene: int) -> List[str]:
+    """The sources a scene of `seconds` plays: `main`, plus clips taken from `pool` (busiest first; the
+    close-up scene takes from the busy end, the wide one from the plain end, others from the middle)
+    until every shot's equal share fits inside its clip. Takes them out of `pool`."""
+    shots = [main]
+    while pool and (seconds + (len(shots) - 1) * cf) / len(shots) > min(lengths.get(s, 0.0) for s in shots):
+        shots.append(pool.pop(0 if scene == 0 else -1 if scene == 1 else len(pool) // 2))
+    return shots
+
+
+def raw_footage(attraction_videos: List[str]) -> List[str]:
+    """One kept raw generation (raw_<clip stem>_<key>.mp4, beside the clip) per stop: the camera move
+    alone, with no label, hold or slow-move tail."""
+    raws = []
+    for clip in attraction_videos:
+        if clip:
+            found = sorted(Path(clip).parent.glob(f"raw_{Path(clip).stem}_*.mp4"))
+            if found:
+                raws.append(str(found[0]))
+    return raws
+
+
+_TRANSPORT = re.compile(tuning.INTRO_TRANSPORT_PATTERN, re.I)
+
+
+def is_transport_stop(clip: str, waypoint_count: int) -> bool:
+    """The start/end stop, or a station / bus stop / pier by name: not intro scenery."""
+    m = re.match(r"04_attraction_(\d+)_(.*)", Path(clip).stem)
+    if not m:
+        return False
+    idx = int(m.group(1))
+    return idx == 0 or idx >= waypoint_count - 1 or bool(_TRANSPORT.search(m.group(2)))
+
+
+def _scene_sources(waypoints: List[Dict[str, Any]], attraction_videos: List[str]) -> List[str]:
+    from services.vdoprocessing.place_label import unburned_place_label
+
+    scenic = [p for p in attraction_videos if p and not is_transport_stop(p, len(waypoints))]
+    attraction_videos = scenic or attraction_videos
+    # The finished attraction videos (colour-matched, framed by the stop's camera preset). Older ones
+    # have the place name burned in; those stops use their kept raw generation instead.
+    clips = [p for p in attraction_videos if p and Path(p).is_file()]
+    clean = [p for p in clips if unburned_place_label(p) is not None]
+    sources = clean + raw_footage([p for p in clips if p not in clean])
+    if sources:
+        return sources
+    seen: List[str] = []
+    n = len(waypoints)
+    scenic_wps = [w for i, w in enumerate(waypoints)
+                  if 0 < i < n - 1 and not _TRANSPORT.search(str(w.get("label") or w.get("name") or ""))]
+    for wp in scenic_wps if any(w.get("popup_image") for w in scenic_wps) else waypoints:
+        popup_image = wp.get("popup_image")
+        for img in popup_image if isinstance(popup_image, list) else [popup_image]:
+            if img and img not in seen and Path(img).is_file():
+                seen.append(img)
+    return seen
+
+
+def styled_intro_seconds(style: str, duration_sec: Optional[float] = None) -> float:
+    scenes = styled_scenes(style, duration_sec)
+    return sum(s["seconds"] for s in scenes) - (len(scenes) - 1) * tuning.INTRO_CROSSFADE_SECONDS
+
+
+def styled_scenes(style: str, duration_sec: Optional[float] = None, cuts: Optional[List[float]] = None) -> List[Dict[str, Any]]:
+    """INTRO_STYLE_SCENES[style] lasting `duration_sec` (the overview voice's opening, see
+    intro_step.plan_intro_seconds). `cuts`: intro seconds where scene 2, 3... take over (the voice's
+    {scene} cues), each crossfade centred on its cut; else every scene stretches by the same factor.
+    Cuts that leave a scene shorter than two crossfades are ignored."""
+    scenes = tuning.INTRO_STYLE_SCENES[style]
+    if not duration_sec:
+        return [dict(s) for s in scenes]
+    cf = tuning.INTRO_CROSSFADE_SECONDS
+    if cuts and len(cuts) == len(scenes) - 1:
+        starts = [0.0] + [c - cf / 2 for c in cuts]
+        ends = [s + cf for s in starts[1:]] + [duration_sec]
+        lengths = [e - s for s, e in zip(starts, ends)]
+        if all(n >= 2 * cf for n in lengths):
+            return [{**s, "seconds": n} for s, n in zip(scenes, lengths)]
+    factor = (duration_sec + (len(scenes) - 1) * cf) / sum(s["seconds"] for s in scenes)
+    return [{**s, "seconds": max(2 * cf, s["seconds"] * factor)} for s in scenes]
+
+
+def generate_styled_intro(
+    video_dir: str,
+    style: str,
+    waypoints: List[Dict[str, Any]],
+    attraction_videos: List[str],
+    output_filename: str = tuning.INTRO_OUTPUT_FILENAME,
+    duration_sec: Optional[float] = None,
+    cuts: Optional[List[float]] = None,
+) -> Optional[str]:
+    """A text-led intro (tuning.INTRO_STYLE_SCENES[style]): a close-up scene, then a wide one, from the
+    attraction clips (else the waypoint photos), crossfaded, faded from/to black, with the logo badge.
+    The lines ride on the timeline's text track (intro_step.intro_text_items). None (logged) on failure."""
+    scenes = styled_scenes(style, duration_sec, cuts)
+    densities: Dict[str, float] = {}
+    stills: Dict[str, np.ndarray] = {}  # held-photo clips: drawn like photos, with the zoom/pan
+    for src in _scene_sources(waypoints, attraction_videos):
+        frame = _frame_at(src)
+        if frame is None:
+            continue
+        densities[src] = edge_density(frame)
+        if Path(src).suffix.lower() in _VIDEO_EXTS:
+            early, late = _frame_at(src, 0.2), _frame_at(src, 0.8)
+            if early is not None and late is not None and is_still(early, late):
+                stills[src] = frame
+    picks = pick_scenes(densities, len(scenes))
+    if not picks:
+        logger.warning("Intro: no attraction clips or waypoint photos to build a %s intro from.", style)
+        return None
+    logger.info("Intro (%s): scenes %s", style, picks)
+
+    video_dir_path = Path(video_dir)
+    video_dir_path.mkdir(parents=True, exist_ok=True)
+    run_id = uuid.uuid4().hex[:8]
+    combined_path = video_dir_path / f".intro_combined_{run_id}.mp4"
+    raws: List[str] = []
+    cf = tuning.INTRO_CROSSFADE_SECONDS
+    lengths = {src: float("inf") if src in stills else _source_seconds(src) for src in densities}
+    pool = [p for p in sorted(densities, key=lambda p: densities[p], reverse=True) if p not in picks]
+    try:
+        for idx, (scene, src) in enumerate(zip(scenes, picks)):
+            raw = str(video_dir_path / f".intro_raw_{run_id}_{idx}.mp4")
+            shots = plan_shots(scene["seconds"], src, pool, lengths, cf, idx)
+            if len(shots) > 1:
+                logger.info("Intro: scene %d (%.1fs) runs on %d shots: %s", idx + 1, scene["seconds"], len(shots), shots)
+            shot_sec = (scene["seconds"] + (len(shots) - 1) * cf) / len(shots)
+            parts = []
+            for j, shot in enumerate(shots):
+                part = raw if len(shots) == 1 else str(video_dir_path / f".intro_raw_{run_id}_{idx}_{j}.mp4")
+                raws.append(part)
+                parts.append(part)
+                if Path(shot).suffix.lower() in _VIDEO_EXTS and shot not in stills:
+                    _render_clip_slice(shot, part, shot_sec, scene["dim"], scene["sat"])
+                else:
+                    image = stills[shot] if shot in stills else _read_image_safe(shot)
+                    if image is None:
+                        return None
+                    _render_zoom_in(image, part, shot_sec, scene["zoom"], scene["pan"], scene["dim"], scene["sat"])
+            if len(parts) > 1:
+                _crossfade_chain(parts, [shot_sec] * len(parts), cf, raw)
+                raws.append(raw)
+        scene_raws = [str(video_dir_path / f".intro_raw_{run_id}_{i}.mp4") for i in range(len(scenes))]
+        _crossfade_chain(scene_raws, [s["seconds"] for s in scenes], cf, str(combined_path))
+        if not _finish_intro(combined_path, sum(s["seconds"] for s in scenes) - (len(scenes) - 1) * tuning.INTRO_CROSSFADE_SECONDS, "null", video_dir_path, run_id,
+                             video_dir_path / output_filename):
+            return None
+    except Exception as exc:
+        logger.error("Intro generation failed: %s", exc)
+        return None
+    finally:
+        combined_path.unlink(missing_ok=True)
+        for p in raws:
+            Path(p).unlink(missing_ok=True)
+    return str(video_dir_path / output_filename)

@@ -270,11 +270,23 @@ def add_overview_cues(project_config_path: str) -> bool:
         return False
     base = project.get("overview_narration") or ""
     store = CueStore(config_path.parent)
-    if not base.strip() or store.cued_text(OVERVIEW_CUE_KEY, base):
+    if not base.strip():
         return False
-    labels = [w.get("label") or w.get("name") or "" for w in visible_waypoints(project)]
-    tagged = auto_tag_overview(base, labels)
-    if not tagged or tagged == base:
+    stored = store.cued_text(OVERVIEW_CUE_KEY, base)
+    if stored:
+        tagged = stored
+    else:
+        labels = [w.get("label") or w.get("name") or "" for w in visible_waypoints(project)]
+        tagged = auto_tag_overview(base, labels) or base
+    # A text-led intro cuts its scenes on the opening's {scene} cues (the user's win).
+    from .intro_step import intro_style
+
+    style = intro_style(project.get("settings") or {})
+    if style != "slideshow":
+        from services.localization.overview_cues import add_scene_cues
+
+        tagged = add_scene_cues(tagged, [s["seconds"] for s in tuning.INTRO_STYLE_SCENES[style]])
+    if tagged == (stored or base):
         return False
     store.put_text(OVERVIEW_CUE_KEY, base, tagged)
     store.save()

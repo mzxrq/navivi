@@ -29,13 +29,14 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|goPre\d+|go|\d+)\}")
+CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|scene|goPre\d+|go|\d+)\}")
 
 
 @dataclass(frozen=True)
 class Cue:
     # "start" | "arrive" | "end" | "1", "2", ... | "go1", "go2", ...; the "course"
-    # overview also has "route" (the trace starts) and "extras" (the stop-bys appear)
+    # overview also has "route" (the trace starts) and "extras" (the stop-bys appear); each {scene}
+    # in the opening becomes "scene2", "scene3", ...: the text-led intro cuts to its next scene there
     tag: str
     char_index: int  # offset into the CLEAN text: the cue sits right before this char
 
@@ -49,6 +50,7 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
     length = 0
     pos = 0
     stop = None  # the last {n}: a {go} ends that stop's description
+    scene = 1
     for match in CUE_RE.finditer(text):
         piece = text[pos:match.start()]
         parts.append(piece)
@@ -56,7 +58,10 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
         tag = match.group(1)
         if tag.isdigit():
             stop = tag
-        if tag != "go":
+        if tag == "scene":
+            scene += 1
+            cues.append(Cue(f"scene{scene}", length))
+        elif tag != "go":
             cues.append(Cue(tag, length))
         elif stop is not None:
             cues.append(Cue("go" + stop, length))

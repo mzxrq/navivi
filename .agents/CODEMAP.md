@@ -48,6 +48,11 @@ prefers lean source files). Update it when you move or rewrite something listed 
 - `OverviewPanel.tsx`: intro title card row (text only). My size/color/bold controls (`settings.intro_style`, `introLook.ts`, `introclip.intro_look`) were dropped in the merge with
   origin/main, whose intro title and subtitle are text-track items styled per line (`settings.intro_title_style` / `intro_subtitle_style`, `localization/text_style.py`, `intro_step.intro_text_item`, `burn_text=False`),
   edited in the timeline Inspector.
+  Now `settings.intro_style` is a string again: `slideshow` (default) | `cinematic` | `documentary` (picker in this panel), plus
+  `settings.intro_lines` [opening, closing]. The text-led styles take the overview voice too: `plan_intro_seconds` sizes them and `introclip.styled_scenes` stretches every scene by one factor (the text items use the same timing), built by
+  `introclip.generate_styled_intro` from attraction clips (else photos; Canny edge density picks close-up then wide), scene table
+  `tuning.INTRO_STYLE_SCENES`; lines from `localization/intro_lines.py` (typed > script model, cached in `.navivi/intro_lines.json` > template),
+  one `kind: "intro"` text item per scene (`intro_step.intro_text_items`). The opening narration is its own voice file (`00_intro_narration.wav`, see src-python notes). Scene cuts follow the opening's `{scene}` cues (`cues.strip_cues` numbers them scene2, scene3; `intro_step.scene_cuts`); `narration_step.add_overview_cues` places them at sentence ends when the opening has none (`overview_cues.add_scene_cues`); a course introduction keeps them.
 - Per-leg colour: `Waypoint.lineColor` (RGB, colour of the leg *leaving* that stop; unset = `settings.line_color`).
   Saved to job_config by `fileSystem.ts`. Edited via `LegColorButton.tsx` (leg row dot) and the leg menu's "Line colour"
   submenu (`useStopMenus.ts`); hidden for direct/curve (`legColorable`). `RouteLayer.tsx` maps segment i → i-th routed

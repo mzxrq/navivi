@@ -147,16 +147,18 @@ def build_overview_subtitle(
     audio_path: Optional[str],
     output_dir,
     force: bool = False,
+    script: Optional[str] = None,
 ) -> Optional[str]:
     """Builds (or, if already present and not `force`, reuses) the .srt
-    subtitle for job_config.json's top-level "overview_narration" script —
+    subtitle for job_config.json's top-level "overview_narration" script
+    (`script`: the part this audio file speaks, when the opening has its own) —
     the one clip that isn't a waypoint, so it needs its own entry point
     rather than going through build_waypoint_subtitle. Returns None when
     there's no narration text configured or no matching audio to time
     cues against (mirrors build_waypoint_subtitle's own ValueError/
     FileNotFoundError cases, just swallowed here since the pipeline has
     nothing waypoint-shaped to skip-and-continue past for this one)."""
-    script = clean_text(project_config.get("overview_narration") or "").strip()
+    script = clean_text(script or project_config.get("overview_narration") or "").strip()
     if not script or not audio_path or not Path(audio_path).exists():
         return None
 

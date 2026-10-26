@@ -3,7 +3,7 @@
 import json
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from services.vdoprocessing.cliptiming import read_audio_offset
 
@@ -142,10 +142,13 @@ def build_timeline(
     attraction_subtitle_paths: Optional[list[str]] = None,
     leg_narration_splits: Optional[dict[str, tuple[Optional[str], Optional[str]]]] = None,
     attraction_fade_seconds: float = 0.0,
-    intro_text: Optional[dict] = None,
+    intro_text: Optional[Union[dict, list]] = None,
     outro_text: Optional[dict] = None,
     place_label_look: Optional[dict] = None,
     overview_voice_start: Optional[float] = None,
+    intro_audio_path: Optional[str] = None,
+    intro_subtitle_path: Optional[str] = None,
+    overview_audio_offset: float = 0.0,
     waypoints: Optional[list] = None,
 ) -> str:
     """Builds timeline.json with clips ordered intro -> overview -> for each
@@ -371,6 +374,12 @@ def build_timeline(
         # Seconds the narration starts into the clip (a leg's opening
         # before the walker moves) - applied at export; 0 otherwise.
         audio_offset = read_audio_offset(source_or_name) if audio_path and kind == "route" else 0.0
+        # The opening narration's own file plays on the intro; the overview's own voice starts a little in.
+        if is_intro and intro_audio_path:
+            audio_path, subtitle_path = intro_audio_path, intro_subtitle_path
+            audio_offset = tuning.INTRO_VOICE_LEAD_SECONDS
+        elif kind == "overview" and audio_path and overview_audio_offset:
+            audio_offset = overview_audio_offset
         free_voice = voice_over_intro and kind == "overview"
         length = _clip_length(burned, None if free_voice else audio_path, audio_offset)
         if voice_over_intro and (is_intro or free_voice):
@@ -388,10 +397,11 @@ def build_timeline(
             {"start": round(clip_start + c["start"], 3), "end": round(clip_start + c["end"], 3), "text": c["text"]}
             for c in clip_cues
         )
-        # The intro's title + subtitle ride on the text track, over the whole intro.
+        # The intro's text items ride on the text track: over the whole intro unless an item has its own times.
         clip_texts = []
         if intro_text and is_intro:
-            clip_texts.append({"start": 0.0, "end": round(length, 3), **intro_text})
+            for item in intro_text if isinstance(intro_text, list) else [intro_text]:
+                clip_texts.append({"start": 0.0, **item, "end": round(min(float(item.get("end", length)), length), 3)})
         # The outro's title rides on the text track too, until its logo end card starts.
         if outro_text and source_name == tuning.OUTRO_OUTPUT_FILENAME:
             shown = {k: v for k, v in outro_text.items() if k != "trim_end"}
