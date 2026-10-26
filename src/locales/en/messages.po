@@ -190,15 +190,15 @@ msgstr "{0} subtitles imported"
 msgid "{0} subtitles selected"
 msgstr "{0} subtitles selected"
 
-#: src/components/ui/RenderOverlay.tsx:800
+#: src/components/ui/RenderOverlay.tsx:808
 msgid "{backgroundLabel} ready to check"
 msgstr "{backgroundLabel} ready to check"
 
-#: src/components/ui/RenderOverlay.tsx:600
+#: src/components/ui/RenderOverlay.tsx:608
 msgid "{clips} clips"
 msgstr "{clips} clips"
 
-#: src/components/ui/RenderOverlay.tsx:556
+#: src/components/ui/RenderOverlay.tsx:564
 msgid "{count} clips are ready to be redone. Change their photo, script or route, then choose Resume Generation."
 msgstr "{count} clips are ready to be redone. Change their photo, script or route, then choose Resume Generation."
 
@@ -284,7 +284,7 @@ msgstr "{unnamedRemaining} more steps"
 msgid "{viaCount} via"
 msgstr "{viaCount} via"
 
-#: src/components/ui/RenderOverlay.tsx:600
+#: src/components/ui/RenderOverlay.tsx:608
 msgid "{voices} voices"
 msgstr "{voices} voices"
 
@@ -293,7 +293,7 @@ msgstr "{voices} voices"
 msgid "~{0} to render"
 msgstr "~{0} to render"
 
-#: src/components/ui/RenderOverlay.tsx:1222
+#: src/components/ui/RenderOverlay.tsx:1230
 msgid "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 msgstr "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 
@@ -301,7 +301,7 @@ msgstr "💡 <0>Quick Export Notice:</0> To customize individual video clips or 
 msgid "0 = no limit"
 msgstr "0 = no limit"
 
-#: src/components/ui/RenderOverlay.tsx:600
+#: src/components/ui/RenderOverlay.tsx:608
 msgid "1 clip"
 msgstr "1 clip"
 
@@ -337,7 +337,7 @@ msgstr "1 stop"
 msgid "1 stop has no narration and will be silent"
 msgstr "1 stop has no narration and will be silent"
 
-#: src/components/ui/RenderOverlay.tsx:600
+#: src/components/ui/RenderOverlay.tsx:608
 msgid "1 voice"
 msgstr "1 voice"
 
@@ -477,7 +477,7 @@ msgstr "Accent color"
 #~ msgid "Accept and apply to project"
 #~ msgstr "Accept and apply to project"
 
-#: src/components/ui/RenderOverlay.tsx:1322
+#: src/components/ui/RenderOverlay.tsx:1330
 msgid "Accept and export"
 msgstr "Accept and export"
 
@@ -703,7 +703,7 @@ msgstr "All"
 msgid "All changes safely stored to disk"
 msgstr "All changes safely stored to disk"
 
-#: src/components/ui/RenderOverlay.tsx:1215
+#: src/components/ui/RenderOverlay.tsx:1223
 msgid "All media was automatically generated, stitched, and exported to your project folder without stopping for manual review"
 msgstr "All media was automatically generated, stitched, and exported to your project folder without stopping for manual review"
 
@@ -729,8 +729,8 @@ msgstr "All voices"
 msgid "Also save subtitles as .srt"
 msgstr "Also save subtitles as .srt"
 
-#: src/components/ui/RenderOverlay.tsx:798
-#: src/components/ui/RenderOverlay.tsx:1163
+#: src/components/ui/RenderOverlay.tsx:806
+#: src/components/ui/RenderOverlay.tsx:1171
 msgid "An unknown error occurred during rendering."
 msgstr "An unknown error occurred during rendering."
 
@@ -819,7 +819,7 @@ msgstr "Arriving Script"
 msgid "Ask or add details…"
 msgstr "Ask or add details…"
 
-#: src/components/ui/RenderOverlay.tsx:1216
+#: src/components/ui/RenderOverlay.tsx:1224
 msgid "Assets accepted and stitched into your final deliverable video"
 msgstr "Assets accepted and stitched into your final deliverable video"
 
@@ -829,7 +829,7 @@ msgstr "Assets accepted and stitched into your final deliverable video"
 msgid "Assistant"
 msgstr "Assistant"
 
-#: src/components/ui/RenderOverlay.tsx:396
+#: src/components/ui/RenderOverlay.tsx:400
 msgid "At {stopName}"
 msgstr "At {stopName}"
 
@@ -900,11 +900,11 @@ msgstr "Auto-save"
 msgid "Auto-save failed"
 msgstr "Auto-save failed"
 
-#: src/components/ui/RenderOverlay.tsx:1016
+#: src/components/ui/RenderOverlay.tsx:1024
 msgid "Auto-skipped (Quick Export)"
 msgstr "Auto-skipped (Quick Export)"
 
-#: src/components/ui/RenderOverlay.tsx:1022
+#: src/components/ui/RenderOverlay.tsx:1030
 msgid "Auto-stitched Video"
 msgstr "Auto-stitched Video"
 
@@ -1042,7 +1042,7 @@ msgstr "Boxed"
 msgid "Boxed keeps the photo in a card with its caption; full photo fills the frame."
 msgstr "Boxed keeps the photo in a card with its caption; full photo fills the frame."
 
-#: src/components/ui/RenderOverlay.tsx:1009
+#: src/components/ui/RenderOverlay.tsx:1017
 msgid "Build Assets"
 msgstr "Build Assets"
 
@@ -1089,8 +1089,8 @@ msgstr "Cancel"
 #: src/components/ui/ExportProjectDialog.tsx:88
 #: src/components/ui/NewProject.tsx:401
 #: src/components/ui/OnlineAiSettings.tsx:249
-#: src/components/ui/RenderOverlay.tsx:828
-#: src/components/ui/RenderOverlay.tsx:987
+#: src/components/ui/RenderOverlay.tsx:836
+#: src/components/ui/RenderOverlay.tsx:995
 #: src/components/ui/SaveAs.tsx:105
 #: src/components/ui/SetupGate.tsx:127
 #: src/components/ui/UnsavedChanges.tsx:35
@@ -1120,11 +1120,11 @@ msgstr "Cancel download"
 msgid "Cancel install"
 msgstr "Cancel install"
 
-#: src/components/ui/RenderOverlay.tsx:1143
+#: src/components/ui/RenderOverlay.tsx:1151
 msgid "Cancelling process..."
 msgstr "Cancelling process..."
 
-#: src/components/ui/RenderOverlay.tsx:794
+#: src/components/ui/RenderOverlay.tsx:802
 msgid "Cancelling..."
 msgstr "Cancelling..."
 
@@ -1157,7 +1157,7 @@ msgstr "Cards and overlays"
 msgid "Centre"
 msgstr "Centre"
 
-#: src/components/ui/RenderOverlay.tsx:1017
+#: src/components/ui/RenderOverlay.tsx:1025
 msgid "Check Audio & Video"
 msgstr "Check Audio & Video"
 
@@ -1337,7 +1337,7 @@ msgstr "Clones a voice from a recording in about a third of the natural voice's 
 #: src/components/ui/FontDownloadDialog.tsx:80
 #: src/components/ui/InstallToast.tsx:43
 #: src/components/ui/NewProject.tsx:232
-#: src/components/ui/RenderOverlay.tsx:1335
+#: src/components/ui/RenderOverlay.tsx:1343
 #: src/components/ui/StatusBar.tsx:454
 #: src/components/ui/TitleBar.tsx:495
 #: src/features/assistant/AssistantPanel.tsx:21
@@ -1391,7 +1391,7 @@ msgstr "Colour, and width in pixels (0 = none)"
 msgid "Columns"
 msgstr "Columns"
 
-#: src/components/ui/RenderOverlay.tsx:1194
+#: src/components/ui/RenderOverlay.tsx:1202
 msgid "Combining all route segments, narration voiceovers, and transitions into your completed master navigation video."
 msgstr "Combining all route segments, narration voiceovers, and transitions into your completed master navigation video."
 
@@ -1519,7 +1519,7 @@ msgid "Could not delete this version"
 msgstr "Could not delete this version"
 
 #. placeholder {0}: row.title
-#: src/components/ui/RenderOverlay.tsx:421
+#: src/components/ui/RenderOverlay.tsx:427
 msgid "Could not load audio for {0}"
 msgstr "Could not load audio for {0}"
 
@@ -1560,7 +1560,7 @@ msgid "Could not read the file: {0}"
 msgstr "Could not read the file: {0}"
 
 #. placeholder {0}: err?.message ?? err
-#: src/components/ui/RenderOverlay.tsx:632
+#: src/components/ui/RenderOverlay.tsx:640
 msgid "Could not redo that: {0}"
 msgstr "Could not redo that: {0}"
 
@@ -1651,7 +1651,7 @@ msgstr "Custom Color"
 msgid "Custom Marker"
 msgstr "Custom Marker"
 
-#: src/components/ui/RenderOverlay.tsx:1302
+#: src/components/ui/RenderOverlay.tsx:1310
 msgid "Customize in Timeline"
 msgstr "Customize in Timeline"
 
@@ -1802,7 +1802,7 @@ msgstr "Destination"
 #: src/components/ui/AboutPanel.tsx:76
 #: src/components/ui/AboutPanel.tsx:92
 #: src/components/ui/PipelineLogPanel.tsx:119
-#: src/components/ui/RenderOverlay.tsx:859
+#: src/components/ui/RenderOverlay.tsx:867
 msgid "Details"
 msgstr "Details"
 
@@ -1826,13 +1826,13 @@ msgstr "Dictionaries"
 msgid "Direct"
 msgstr "Direct"
 
-#: src/components/ui/RenderOverlay.tsx:915
+#: src/components/ui/RenderOverlay.tsx:923
 msgid "Discard"
 msgstr "Discard"
 
 #: src/components/ui/InstallToast.tsx:85
 #: src/components/ui/InstallToast.tsx:86
-#: src/components/ui/RenderOverlay.tsx:833
+#: src/components/ui/RenderOverlay.tsx:841
 #: src/components/ui/Toast.tsx:68
 #: src/components/ui/Toast.tsx:69
 msgid "Dismiss"
@@ -1907,7 +1907,7 @@ msgstr "Don't Save"
 
 #: src/components/ui/ExportCsvDialog.tsx:94
 #: src/components/ui/ExportProjectDialog.tsx:82
-#: src/components/ui/RenderOverlay.tsx:1266
+#: src/components/ui/RenderOverlay.tsx:1274
 #: src/components/ui/SetupGate.tsx:72
 #: src/features/editor/ExportDialog.tsx:104
 #: src/features/map/components/DrawBar.tsx:382
@@ -2051,11 +2051,11 @@ msgstr "Edit Stop"
 msgid "Edit the drawn path on the map"
 msgstr "Edit the drawn path on the map"
 
-#: src/components/ui/RenderOverlay.tsx:901
+#: src/components/ui/RenderOverlay.tsx:909
 msgid "Edit the image, script, or route mode in the Waypoint Editor. Click Resume when ready to re-render"
 msgstr "Edit the image, script, or route mode in the Waypoint Editor. Click Resume when ready to re-render"
 
-#: src/components/ui/RenderOverlay.tsx:887
+#: src/components/ui/RenderOverlay.tsx:895
 msgid "Editing Waypoint on Map"
 msgstr "Editing Waypoint on Map"
 
@@ -2078,7 +2078,7 @@ msgstr "Elevation profile"
 msgid "Enable 3D Terrain"
 msgstr "Enable 3D Terrain"
 
-#: src/components/ui/RenderOverlay.tsx:378
+#: src/components/ui/RenderOverlay.tsx:382
 #: src/features/map/components/MapToolbar.tsx:91
 #: src/hooks/useFileActions.ts:284
 msgid "End"
@@ -2093,7 +2093,7 @@ msgstr "End"
 msgid "End pin"
 msgstr "End pin"
 
-#: src/components/ui/RenderOverlay.tsx:402
+#: src/components/ui/RenderOverlay.tsx:408
 msgid "Ending card"
 msgstr "Ending card"
 
@@ -2120,7 +2120,7 @@ msgstr "Erase"
 msgid "Erase points (E)"
 msgstr "Erase points (E)"
 
-#: src/components/ui/RenderOverlay.tsx:1159
+#: src/components/ui/RenderOverlay.tsx:1167
 msgid "Error Details:"
 msgstr "Error Details:"
 
@@ -2174,11 +2174,11 @@ msgstr "Exit"
 msgid "Expand"
 msgstr "Expand"
 
-#: src/components/ui/RenderOverlay.tsx:894
+#: src/components/ui/RenderOverlay.tsx:902
 msgid "Expand Review"
 msgstr "Expand Review"
 
-#: src/components/ui/RenderOverlay.tsx:1021
+#: src/components/ui/RenderOverlay.tsx:1029
 #: src/features/editor/EditorView.tsx:451
 #: src/features/editor/ExportDialog.tsx:113
 msgid "Export"
@@ -2197,7 +2197,7 @@ msgid "Export CSV..."
 msgstr "Export CSV..."
 
 #. placeholder {0}: err?.message || err
-#: src/components/ui/RenderOverlay.tsx:691
+#: src/components/ui/RenderOverlay.tsx:699
 msgid "Export failed: {0}"
 msgstr "Export failed: {0}"
 
@@ -2218,7 +2218,7 @@ msgstr "Export video"
 msgid "Export…"
 msgstr "Export…"
 
-#: src/components/ui/RenderOverlay.tsx:687
+#: src/components/ui/RenderOverlay.tsx:695
 msgid "exportSuccessToastMsg"
 msgstr "Export process completed successfully!"
 
@@ -2248,7 +2248,7 @@ msgid "Fades into the next clip"
 msgstr "Fades into the next clip"
 
 #: src/components/ui/InstallToast.tsx:33
-#: src/components/ui/RenderOverlay.tsx:994
+#: src/components/ui/RenderOverlay.tsx:1002
 msgid "Failed"
 msgstr "Failed"
 
@@ -2269,8 +2269,8 @@ msgstr "Failed to generate script"
 #~ msgid "Failed to geocode any locations. Tried: {0}"
 #~ msgstr "Failed to geocode any locations. Tried: {0}"
 
-#: src/components/ui/RenderOverlay.tsx:255
-#: src/components/ui/RenderOverlay.tsx:263
+#: src/components/ui/RenderOverlay.tsx:256
+#: src/components/ui/RenderOverlay.tsx:264
 msgid "Failed to invoke Python render: {err}"
 msgstr "Failed to invoke Python render: {err}"
 
@@ -2379,7 +2379,7 @@ msgstr "Fetching..."
 msgid "File Path"
 msgstr "File Path"
 
-#: src/components/ui/RenderOverlay.tsx:314
+#: src/components/ui/RenderOverlay.tsx:315
 msgid "Finalizing Project Timeline..."
 msgstr "Finalizing Project Timeline..."
 
@@ -2526,15 +2526,15 @@ msgstr "Generate only makes what is missing and reuses the rest, so running it a
 msgid "Generate the video first"
 msgstr "Generate the video first"
 
-#: src/components/ui/RenderOverlay.tsx:1122
+#: src/components/ui/RenderOverlay.tsx:1130
 msgid "Generating Assets (Quick Export Mode)..."
 msgstr "Generating Assets (Quick Export Mode)..."
 
-#: src/components/ui/RenderOverlay.tsx:1123
+#: src/components/ui/RenderOverlay.tsx:1131
 msgid "Generating Assets..."
 msgstr "Generating Assets..."
 
-#: src/components/ui/RenderOverlay.tsx:308
+#: src/components/ui/RenderOverlay.tsx:309
 msgid "Generating Subtitles{prog}..."
 msgstr "Generating Subtitles{prog}..."
 
@@ -2554,11 +2554,11 @@ msgstr "Generating..."
 msgid "Generation"
 msgstr "Generation"
 
-#: src/components/ui/RenderOverlay.tsx:1155
+#: src/components/ui/RenderOverlay.tsx:1163
 msgid "Generation Failed"
 msgstr "Generation Failed"
 
-#: src/components/ui/RenderOverlay.tsx:880
+#: src/components/ui/RenderOverlay.tsx:888
 msgid "Generation On Hold"
 msgstr "Generation On Hold"
 
@@ -2770,7 +2770,7 @@ msgstr "Included"
 msgid "Increase"
 msgstr "Increase"
 
-#: src/components/ui/RenderOverlay.tsx:295
+#: src/components/ui/RenderOverlay.tsx:296
 msgid "Initializing pipeline..."
 msgstr "Initializing pipeline..."
 
@@ -2902,11 +2902,11 @@ msgstr "Keep its sound"
 msgid "Keep the sound of this video"
 msgstr "Keep the sound of this video"
 
-#: src/components/ui/RenderOverlay.tsx:979
+#: src/components/ui/RenderOverlay.tsx:987
 msgid "Keep working"
 msgstr "Keep working"
 
-#: src/components/ui/RenderOverlay.tsx:822
+#: src/components/ui/RenderOverlay.tsx:830
 msgid "Keep working in the timeline editor. Export is available when it finishes."
 msgstr "Keep working in the timeline editor. Export is available when it finishes."
 
@@ -2997,7 +2997,7 @@ msgstr "Leave this stop out"
 msgid "Left"
 msgstr "Left"
 
-#: src/components/ui/RenderOverlay.tsx:383
+#: src/components/ui/RenderOverlay.tsx:387
 msgid "Leg {n}: {fromName} → {toName}"
 msgstr "Leg {n}: {fromName} → {toName}"
 
@@ -3142,7 +3142,7 @@ msgstr "Looks on Wikimedia Commons for free photos of this place. Sends the plac
 msgid "Low-spec Mode"
 msgstr "Low-spec Mode"
 
-#: src/components/ui/RenderOverlay.tsx:882
+#: src/components/ui/RenderOverlay.tsx:890
 msgid "Low-Spec Mode"
 msgstr "Low-Spec Mode"
 
@@ -3154,7 +3154,7 @@ msgstr "Low-spec system detected: {gpuRenderer} (Integrated graphics / no discre
 msgid "Lower turns the camera more gently."
 msgstr "Lower turns the camera more gently."
 
-#: src/components/ui/RenderOverlay.tsx:553
+#: src/components/ui/RenderOverlay.tsx:561
 msgid "lowSpecGenSessionMessage"
 msgstr "System in low-spec mode. Opened Waypoint Editor on map to adjust images, script, or route mode before re-running generation"
 
@@ -3219,7 +3219,7 @@ msgstr "Making the intro again..."
 msgid "Making the new voice for this stop. The first one can take a while."
 msgstr "Making the new voice for this stop. The first one can take a while."
 
-#: src/components/ui/RenderOverlay.tsx:619
+#: src/components/ui/RenderOverlay.tsx:627
 msgid "Making the new voice. The first one can take a while."
 msgstr "Making the new voice. The first one can take a while."
 
@@ -3680,7 +3680,7 @@ msgstr "Nothing found. Try another spelling, or type the coordinates below."
 msgid "Nothing is installed outside Navivi's own folder."
 msgstr "Nothing is installed outside Navivi's own folder."
 
-#: src/components/ui/RenderOverlay.tsx:1279
+#: src/components/ui/RenderOverlay.tsx:1287
 msgid "Nothing selected. Accept to export, or mark what to redo."
 msgstr "Nothing selected. Accept to export, or mark what to redo."
 
@@ -3809,7 +3809,7 @@ msgstr "Open Project"
 msgid "Open Project File..."
 msgstr "Open Project File..."
 
-#: src/components/ui/RenderOverlay.tsx:1245
+#: src/components/ui/RenderOverlay.tsx:1253
 msgid "Open Project Folder"
 msgstr "Open Project Folder"
 
@@ -3829,7 +3829,7 @@ msgstr "Open the photo's page on Wikimedia Commons"
 msgid "Opening line"
 msgstr "Opening line"
 
-#: src/components/ui/RenderOverlay.tsx:533
+#: src/components/ui/RenderOverlay.tsx:541
 msgid "Opening the timeline editor so you can change the clip by hand."
 msgstr "Opening the timeline editor so you can change the clip by hand."
 
@@ -3942,7 +3942,7 @@ msgstr "Pan Right"
 msgid "Pan Up"
 msgstr "Pan Up"
 
-#: src/components/ui/RenderOverlay.tsx:304
+#: src/components/ui/RenderOverlay.tsx:305
 msgid "Parsing Maps & GPS Data{prog}..."
 msgstr "Parsing Maps & GPS Data{prog}..."
 
@@ -4221,11 +4221,11 @@ msgstr "Purple"
 msgid "Quick export"
 msgstr "Quick export"
 
-#: src/components/ui/RenderOverlay.tsx:962
+#: src/components/ui/RenderOverlay.tsx:970
 msgid "Quick Export"
 msgstr "Quick Export"
 
-#: src/components/ui/RenderOverlay.tsx:1210
+#: src/components/ui/RenderOverlay.tsx:1218
 msgid "Quick Export Complete!"
 msgstr "Quick Export Complete!"
 
@@ -4241,11 +4241,11 @@ msgstr "Quick Render complete for "
 msgid "Quick Render started for "
 msgstr "Quick Render started for "
 
-#: src/components/ui/RenderOverlay.tsx:646
+#: src/components/ui/RenderOverlay.tsx:654
 msgid "quickExportToastMsg1"
 msgstr "Quick Export: Stitching and exporting video automatically..."
 
-#: src/components/ui/RenderOverlay.tsx:646
+#: src/components/ui/RenderOverlay.tsx:654
 msgid "quickExportToastMsg2"
 msgstr "Stitching videos together and exporting..."
 
@@ -4333,16 +4333,16 @@ msgstr "Redo"
 msgid "Redo clip"
 msgstr "Redo clip"
 
-#: src/components/ui/RenderOverlay.tsx:794
+#: src/components/ui/RenderOverlay.tsx:802
 msgid "Redo finished"
 msgstr "Redo finished"
 
-#: src/components/ui/RenderOverlay.tsx:1284
-#: src/components/ui/RenderOverlay.tsx:1285
+#: src/components/ui/RenderOverlay.tsx:1292
+#: src/components/ui/RenderOverlay.tsx:1293
 msgid "Redo in the background"
 msgstr "Redo in the background"
 
-#: src/components/ui/RenderOverlay.tsx:1310
+#: src/components/ui/RenderOverlay.tsx:1318
 msgid "Redo selected"
 msgstr "Redo selected"
 
@@ -4358,11 +4358,11 @@ msgstr "Redoing a video clip opens the map editor with that stop selected, so yo
 msgid "Redoing a video clip opens the timeline editor on this computer."
 msgstr "Redoing a video clip opens the timeline editor on this computer."
 
-#: src/components/ui/RenderOverlay.tsx:794
+#: src/components/ui/RenderOverlay.tsx:802
 msgid "Redoing in the background"
 msgstr "Redoing in the background"
 
-#: src/components/ui/RenderOverlay.tsx:605
+#: src/components/ui/RenderOverlay.tsx:613
 msgid "Redoing in the background. You can keep working in the timeline editor."
 msgstr "Redoing in the background. You can keep working in the timeline editor."
 
@@ -4441,15 +4441,15 @@ msgstr "Rename"
 msgid "Rename Project"
 msgstr "Rename Project"
 
-#: src/components/ui/RenderOverlay.tsx:240
+#: src/components/ui/RenderOverlay.tsx:241
 msgid "renderFinishCancelMessage"
 msgstr "Rendering cancelled"
 
-#: src/components/ui/RenderOverlay.tsx:244
+#: src/components/ui/RenderOverlay.tsx:245
 msgid "renderFinishErrorMessage"
 msgstr "Rendering error"
 
-#: src/components/ui/RenderOverlay.tsx:221
+#: src/components/ui/RenderOverlay.tsx:222
 msgid "renderFinishSuccessMessage"
 msgstr "Asset generation finished successfully"
 
@@ -4457,19 +4457,19 @@ msgstr "Asset generation finished successfully"
 msgid "Rendering"
 msgstr "Rendering"
 
-#: src/components/ui/RenderOverlay.tsx:1010
+#: src/components/ui/RenderOverlay.tsx:1018
 msgid "Rendering & Synthesis"
 msgstr "Rendering & Synthesis"
 
-#: src/components/ui/RenderOverlay.tsx:310
+#: src/components/ui/RenderOverlay.tsx:311
 msgid "Rendering Media & Animations{prog}..."
 msgstr "Rendering Media & Animations{prog}..."
 
-#: src/components/ui/RenderOverlay.tsx:312
+#: src/components/ui/RenderOverlay.tsx:313
 msgid "Rendering Route Video{prog}..."
 msgstr "Rendering Route Video{prog}..."
 
-#: src/components/ui/RenderOverlay.tsx:190
+#: src/components/ui/RenderOverlay.tsx:191
 msgid "renderTerminalMessage"
 msgstr "Starting Python generation pipeline..."
 
@@ -4543,7 +4543,7 @@ msgstr "Restore"
 msgid "Restore version"
 msgstr "Restore version"
 
-#: src/components/ui/RenderOverlay.tsx:928
+#: src/components/ui/RenderOverlay.tsx:936
 #: src/features/map/components/Sidebar.tsx:315
 msgid "Resume Generation"
 msgstr "Resume Generation"
@@ -4552,8 +4552,8 @@ msgstr "Resume Generation"
 msgid "Retrace previous path"
 msgstr "Retrace previous path"
 
-#: src/components/ui/RenderOverlay.tsx:847
-#: src/components/ui/RenderOverlay.tsx:1352
+#: src/components/ui/RenderOverlay.tsx:855
+#: src/components/ui/RenderOverlay.tsx:1360
 msgid "Retry"
 msgstr "Retry"
 
@@ -4564,16 +4564,16 @@ msgstr "Retry"
 msgid "Reveal in File Explorer"
 msgstr "Reveal in File Explorer"
 
-#: src/components/ui/RenderOverlay.tsx:859
+#: src/components/ui/RenderOverlay.tsx:867
 msgid "Review"
 msgstr "Review"
 
-#: src/components/ui/RenderOverlay.tsx:921
-#: src/components/ui/RenderOverlay.tsx:1014
+#: src/components/ui/RenderOverlay.tsx:929
+#: src/components/ui/RenderOverlay.tsx:1022
 msgid "Review Assets"
 msgstr "Review Assets"
 
-#: src/components/ui/RenderOverlay.tsx:819
+#: src/components/ui/RenderOverlay.tsx:827
 msgid "Review them, or carry on in the timeline editor."
 msgstr "Review them, or carry on in the timeline editor."
 
@@ -4636,7 +4636,7 @@ msgstr "Route marker"
 msgid "Route only. Skips voiceover and photo clips."
 msgstr "Route only. Skips voiceover and photo clips."
 
-#: src/components/ui/RenderOverlay.tsx:371
+#: src/components/ui/RenderOverlay.tsx:375
 msgid "Route overview"
 msgstr "Route overview"
 
@@ -4851,7 +4851,7 @@ msgstr "Select all"
 msgid "Select:"
 msgstr "Select:"
 
-#: src/components/ui/RenderOverlay.tsx:1280
+#: src/components/ui/RenderOverlay.tsx:1288
 msgid "Selected to redo: clips {pickedClips}, voices {pickedVoices}"
 msgstr "Selected to redo: clips {pickedClips}, voices {pickedVoices}"
 
@@ -4865,11 +4865,11 @@ msgstr "Send"
 msgid "Send photos"
 msgstr "Send photos"
 
-#: src/components/ui/RenderOverlay.tsx:758
+#: src/components/ui/RenderOverlay.tsx:766
 msgid "Sending cancellation signal to backend..."
 msgstr "Sending cancellation signal to backend..."
 
-#: src/components/ui/RenderOverlay.tsx:1146
+#: src/components/ui/RenderOverlay.tsx:1154
 msgid "Sending interrupt signal to renderer."
 msgstr "Sending interrupt signal to renderer."
 
@@ -5012,7 +5012,7 @@ msgstr "Show the list of points"
 msgid "Show video"
 msgstr "Show video"
 
-#: src/components/ui/RenderOverlay.tsx:1237
+#: src/components/ui/RenderOverlay.tsx:1245
 msgid "Show Video"
 msgstr "Show Video"
 
@@ -5157,7 +5157,7 @@ msgstr "Spoken while the route travels to this stop."
 msgid "Stacked"
 msgstr "Stacked"
 
-#: src/components/ui/RenderOverlay.tsx:377
+#: src/components/ui/RenderOverlay.tsx:381
 #: src/features/map/components/MapToolbar.tsx:90
 #: src/features/map/components/WaypointEditor.tsx:449
 #: src/features/map/hooks/useStopMenus.ts:221
@@ -5217,11 +5217,11 @@ msgstr "Stitch the clips and export when done, without pausing to review."
 msgid "Stitching clips, narration and subtitles."
 msgstr "Stitching clips, narration and subtitles."
 
-#: src/components/ui/RenderOverlay.tsx:1191
+#: src/components/ui/RenderOverlay.tsx:1199
 msgid "Stitching Videos & Finalizing Export..."
 msgstr "Stitching Videos & Finalizing Export..."
 
-#: src/components/ui/RenderOverlay.tsx:391
+#: src/components/ui/RenderOverlay.tsx:395
 #: src/features/map/components/MapToolbar.tsx:88
 #: src/features/map/components/WaypointEditor.tsx:454
 #: src/features/map/hooks/useStopMenus.ts:222
@@ -5349,7 +5349,7 @@ msgstr "Summary card"
 msgid "Sync with the editor's map"
 msgstr "Sync with the editor's map"
 
-#: src/components/ui/RenderOverlay.tsx:306
+#: src/components/ui/RenderOverlay.tsx:307
 msgid "Synthesizing AI Voiceovers{prog}..."
 msgstr "Synthesizing AI Voiceovers{prog}..."
 
@@ -5464,7 +5464,7 @@ msgstr "The editor's map is {editorLabel}."
 #~ msgid "The fast voice needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few minutes and needs an internet connection. Keep this window open while it runs."
 #~ msgstr "The fast voice needs a one-time setup: a small separate Python environment and the model files (about 2 GB in all). It takes a few minutes and needs an internet connection. Keep this window open while it runs."
 
-#: src/components/ui/RenderOverlay.tsx:821
+#: src/components/ui/RenderOverlay.tsx:829
 msgid "The files that were removed will be made again the next time you generate."
 msgstr "The files that were removed will be made again the next time you generate."
 
@@ -5532,15 +5532,15 @@ msgstr "The photo clip is ready."
 msgid "The places-visited clip at the end of the video."
 msgstr "The places-visited clip at the end of the video."
 
-#: src/components/ui/RenderOverlay.tsx:794
+#: src/components/ui/RenderOverlay.tsx:802
 msgid "The redo failed"
 msgstr "The redo failed"
 
-#: src/components/ui/RenderOverlay.tsx:590
+#: src/components/ui/RenderOverlay.tsx:598
 msgid "The redone clips are ready to check."
 msgstr "The redone clips are ready to check."
 
-#: src/components/ui/RenderOverlay.tsx:590
+#: src/components/ui/RenderOverlay.tsx:598
 msgid "The redone clips are ready. Your timeline edits were kept."
 msgstr "The redone clips are ready. Your timeline edits were kept."
 
@@ -5572,7 +5572,7 @@ msgstr "The voice is ready."
 msgid "The voice is ready. If its length changed, redo the photo clip so it fits."
 msgstr "The voice is ready. If its length changed, redo the photo clip so it fits."
 
-#: src/components/ui/RenderOverlay.tsx:621
+#: src/components/ui/RenderOverlay.tsx:629
 msgid "The voice is ready. Listen to check it."
 msgstr "The voice is ready. Listen to check it."
 
@@ -5743,7 +5743,8 @@ msgid "Title and ending cards"
 msgstr "Title and ending cards"
 
 #: src/components/ui/NewProject.tsx:362
-#: src/components/ui/RenderOverlay.tsx:402
+#: src/components/ui/RenderOverlay.tsx:406
+#: src/components/ui/RenderOverlay.tsx:408
 #: src/features/map/components/GenerateDialog.tsx:99
 msgid "Title card"
 msgstr "Title card"
@@ -6036,7 +6037,7 @@ msgstr "Video"
 msgid "Video exported"
 msgstr "Video exported"
 
-#: src/components/ui/RenderOverlay.tsx:1211
+#: src/components/ui/RenderOverlay.tsx:1219
 msgid "Video Exported Successfully!"
 msgstr "Video Exported Successfully!"
 
@@ -6049,7 +6050,7 @@ msgstr "Video style"
 msgid "Videos"
 msgstr "Videos"
 
-#: src/components/ui/RenderOverlay.tsx:1259
+#: src/components/ui/RenderOverlay.tsx:1267
 msgid "View in Timeline"
 msgstr "View in Timeline"
 

@@ -37,7 +37,8 @@ import {
 import { detectHardwareSpec } from "../../utils/hardwareDetection";
 import { exportOptionsFrom } from "../../features/editor/model";
 import type { TimelineData } from "../../features/editor/model";
-import { refreshStopMedia } from "../../services/stopRegen";
+import { refreshRouteClip, refreshStopMedia } from "../../services/stopRegen";
+import { splitOpening } from "../../utils/overviewScript";
 import {
   appendPipelineOutput,
   appendSystemMessage,
@@ -355,6 +356,9 @@ export function RenderOverlay() {
 
     const manifest = await loadTimelineManifest(dir);
     const rows: ReviewRow[] = [];
+    // The overview narration's opening has its own voice file when it plays on the intro: each clip shows its own part.
+    const overviewScript = metadata.overview_narration || "";
+    const openingVoice = await voiceFor("00_intro_narration", splitOpening(overviewScript).opening);
     for (const track of manifest?.video_tracks ?? []) {
       const filePath: string = track.file_path;
       const fileName = filePath.split(/[/\\]/).pop() || "clip";
@@ -369,7 +373,7 @@ export function RenderOverlay() {
           id: "overview",
           kind: "overview",
           title: t`Route overview`,
-          voice: await voiceFor("00_overview", metadata.overview_narration || ""),
+          voice: await voiceFor("00_overview", openingVoice ? splitOpening(overviewScript).body : overviewScript),
         });
       } else if (leg) {
         const n = parseInt(leg[1]);
@@ -398,6 +402,8 @@ export function RenderOverlay() {
           wpIndex: idx,
           voice: await voiceFor(`04_attraction_${pad2(idx)}_`, wp?.attractionNarration || ""),
         });
+      } else if (lower.includes("intro") && openingVoice) {
+        rows.push({ ...base, id: "intro", kind: "overview", title: t`Title card`, voice: openingVoice });
       } else {
         const title = lower.includes("intro") ? t`Title card` : lower.includes("outro") ? t`Ending card` : fileName;
         rows.push({ ...base, id: `other-${fileName}`, kind: "other", title });
@@ -494,6 +500,8 @@ export function RenderOverlay() {
     const indexes = new Set(rows.map((r) => waypoints.findIndex((w) => w.id === r.wpId)).filter((i) => i >= 0));
     let next = base;
     for (const index of indexes) next = (await refreshStopMedia(next, index, "voice", io)) ?? next;
+    // The intro and overview voices (either file): their clips' lengths and subtitles.
+    if (rows.some((r) => r.kind === "overview")) next = (await refreshRouteClip(next, "overview", "voice", io)) ?? next;
     return next;
   };
 
