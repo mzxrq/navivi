@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
@@ -61,6 +62,8 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # v8: stop-bys are framed too, and the summary card sits lower;
 # v9: the 3D leg HUD card sits as low as the 2D one).
 LEG_RENDER_VERSION = 9
+# Bumped when the heatmap legs' elevation profile card changes (only those legs re-render; v1: the card).
+LEG_ELEVATION_CARD_VERSION = 1
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
@@ -153,6 +156,9 @@ def _leg_fingerprint_parts(
     if route_inputs:
         parts["route_inputs"] = route_inputs
     parts.update({f"kw.{k}": h(v) for k, v in leg_kwargs.items()})
+    if "leg_elevations" in leg_kwargs:
+        # Heatmap legs also draw the elevation profile card: re-render only them when it changes.
+        parts["kw.leg_elevations"] = h([leg_kwargs["leg_elevations"], LEG_ELEVATION_CARD_VERSION])
     parts["photos"] = photo_inputs_hash(leg_kwargs)
     if video_text.current_language() != video_text.DEFAULT_LANGUAGE:
         parts["video_text"] = video_text.current_language()  # absent for Japanese: old clips stay valid
@@ -186,6 +192,36 @@ def _stored_leg_inputs(path: Path) -> Dict[str, Any]:
         return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
+
+
+def stash_leg(files: List[Path], variant_dir: Path) -> None:
+    """Copies a leg's finished files (clips, sidecars, inputs.json) aside, replacing the variant kept there."""
+    tmp = variant_dir.with_name(variant_dir.name + ".part")
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    for f in files:
+        if f.exists():
+            shutil.copy2(f, tmp / f.name)
+    shutil.rmtree(variant_dir, ignore_errors=True)
+    tmp.rename(variant_dir)
+
+
+def restore_leg(variant_dir: Path, inputs_name: str, leg_parts: Dict[str, str], current: List[Path], out_dir: Path) -> List[Path]:
+    """When the leg's kept variant was rendered from these inputs (a setting switched off and back on), swaps it in:
+    the current files become the kept variant. Returns the restored clips; [] when there is nothing to restore."""
+    kept = _stored_leg_inputs(variant_dir / inputs_name).get("parts") or {}
+    clips = sorted(p for p in variant_dir.glob("*.mp4") if _output_is_valid(p))
+    if not kept or not clips or leg_changed_parts(leg_parts, kept):
+        return []
+    swap = variant_dir.with_name(variant_dir.name + ".swap")
+    stash_leg(current, swap)
+    for f in current:
+        f.unlink(missing_ok=True)
+    for f in variant_dir.iterdir():
+        shutil.copy2(f, out_dir / f.name)
+    shutil.rmtree(variant_dir, ignore_errors=True)
+    swap.rename(variant_dir)
+    return [out_dir / p.name for p in clips]
 
 
 def _stored_fingerprint(path: Path) -> Optional[str]:
@@ -813,7 +849,17 @@ class RouteAnimator:
                     old for old in self.out_dir.glob(f"{leg_glob_prefix}*")
                     if old.suffix in (".mp4", ".json") and old.name != fingerprint_path.name
                 ]
-                existing_leg_files = []
+                # One earlier variant per leg is kept: switching a setting back (the heatmap off and on again)
+                # restores it instead of rendering the leg again.
+                variant_dir = self.out_dir / ".variants" / leg_glob_prefix.rstrip("_")
+                existing_leg_files = restore_leg(
+                    variant_dir, fingerprint_path.name, leg_parts, stale_leg_files + [fingerprint_path], self.out_dir,
+                )
+                if existing_leg_files:
+                    logger.info("Residential leg %d: restored the version rendered from these inputs.", leg_file_num)
+                    stale_leg_files, changed = [], []
+                else:
+                    stash_leg(stale_leg_files + [fingerprint_path], variant_dir)
             else:
                 stale_leg_files = []
             if existing_leg_files:

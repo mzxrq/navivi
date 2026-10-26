@@ -457,6 +457,10 @@ COURSE_PIVOT_HOLD_SECONDS = 2.5
 # bottom margin moves the card down.
 LEG_CARD_MARGIN_PX = 4
 LEG_CARD_MARGIN_BOTTOM_PX = -10
+# The leg's elevation profile (only with settings.show_route_heatmap and GPX heights): px on a 1080p frame,
+# stacked this far above the summary card. pydeckrecorder/elevation.profile_card draws it.
+LEG_ELEVATION_CARD_SIZE = (520, 190)
+LEG_ELEVATION_CARD_GAP_PX = -8
 # A place the trace only passes may be reached up to this long after its cue (never before it),
 # so the pace between cues stays natural; every cue still lands within 0..this.
 COURSE_CUE_WINDOW_SECONDS = 0.75

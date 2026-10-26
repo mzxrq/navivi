@@ -7,7 +7,7 @@ renderer asks for one colour per segment.
 """
 
 import math
-from typing import List, Optional, Sequence
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 SMOOTH_WINDOW_M = 60.0
 SLOPE_SPAN_M = 60.0
@@ -158,3 +158,71 @@ def leg_segment_colors(latlon: Sequence[Sequence[float]], ele: Optional[Sequence
 def quantize(colors: Sequence[Sequence[int]], step: int = 8) -> List[List[int]]:
     """Rounds colour channels to multiples of `step` so neighbouring segments share a colour and merge into one feature."""
     return [[min(255, int(round(c / step)) * step) for c in col[:3]] + list(col[3:]) for col in colors]
+
+
+def climb(ele: Sequence[float]) -> Tuple[float, float]:
+    """(metres up, metres down) over a smoothed profile."""
+    up = sum(max(0.0, b - a) for a, b in zip(ele, ele[1:]))
+    down = sum(max(0.0, a - b) for a, b in zip(ele, ele[1:]))
+    return up, down
+
+
+def profile_card(
+    latlon: Sequence[Sequence[float]], ele: Optional[Sequence[float]], size: Tuple[int, int], title: str,
+    colors: Dict[str, str], max_points: int = 240,
+) -> Optional[Tuple[str, Callable[[float], Tuple[float, float]]]]:
+    """The leg's elevation profile as an SVG card (title, "1.2 km · +61 m · −29 m", the curve in the heatmap's
+    colours over a soft fill, and a marker <g id="elev-marker"> drawn at the start), plus a function from the
+    share of the leg walked (0..1) to the marker's (x, y) in the card. None without usable elevation.
+    `colors`: CSS colours for "text", "label", "fill"."""
+    seg_colors = leg_segment_colors(latlon, ele)
+    if seg_colors is None:
+        return None
+    dist = cumulative_m(latlon)
+    total = dist[-1]
+    if total <= 0:
+        return None
+    prof = smooth(dist, ele)
+    w, h = size
+    pad, top, bottom = 22.0, 58.0, 18.0
+    lo, hi = min(prof), max(prof)
+    span = max(hi - lo, 10.0)  # a nearly flat leg stays nearly flat instead of filling the card
+
+    def xy(d: float, e: float) -> Tuple[float, float]:
+        return pad + d / total * (w - 2 * pad), top + (1 - (e - lo) / span) * (h - top - bottom)
+
+    step = max(1, len(dist) // max_points)
+    keep = list(range(0, len(dist), step))
+    if keep[-1] != len(dist) - 1:
+        keep.append(len(dist) - 1)
+    pts = [xy(dist[i], prof[i]) for i in keep]
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    base_y = h - bottom
+    area = f"M{pts[0][0]:.1f},{base_y:.1f} L{line.replace(' ', ' L')} L{pts[-1][0]:.1f},{base_y:.1f} Z"
+    segs = []
+    for a, b in zip(keep, keep[1:]):
+        r, g, bl = seg_colors[a][:3]
+        (x1, y1), (x2, y2) = xy(dist[a], prof[a]), xy(dist[b], prof[b])
+        segs.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="rgb({r},{g},{bl})"/>')
+    up, down = climb(prof)
+    stats = f"{total / 1000:.1f} km · +{up:.0f} m · −{down:.0f} m"
+    x0, y0 = pts[0]
+    svg = (
+        f'<svg id="hud-elev" width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
+        f'<text x="{pad}" y="36" fill="{colors["text"]}" font-size="22" font-weight="700">{title}</text>'
+        f'<text x="{w - pad}" y="36" fill="{colors["label"]}" font-size="20" text-anchor="end">{stats}</text>'
+        f'<path d="{area}" fill="{colors["fill"]}"/>'
+        f'<g stroke-width="5" stroke-linecap="round">{"".join(segs)}</g>'
+        f'<g id="elev-marker" transform="translate({x0:.1f},{y0:.1f})">'
+        f'<line x1="0" y1="0" x2="0" y2="{base_y - y0:.1f}" stroke="{colors["text"]}" stroke-width="2" stroke-dasharray="4 4"/>'
+        f'<circle r="10" fill="#ffffff" stroke="{colors["text"]}" stroke-width="4"/></g>'
+        "</svg>"
+    )
+
+    def marker(share: float) -> Tuple[float, float]:
+        d = min(1.0, max(0.0, share)) * total
+        i = max(1, min(len(dist) - 1, next((k for k, v in enumerate(dist) if v >= d), len(dist) - 1)))
+        f = (d - dist[i - 1]) / (dist[i] - dist[i - 1]) if dist[i] > dist[i - 1] else 0.0
+        return xy(d, prof[i - 1] + (prof[i] - prof[i - 1]) * f)
+
+    return svg, marker

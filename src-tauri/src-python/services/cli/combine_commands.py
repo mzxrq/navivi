@@ -96,7 +96,8 @@ def test_video_concat(
     output_path = output_dir / "03_concat.mp4"
     # [NOTE] [Editor] Explicit clip_paths (from the CLI/frontend) take priority; with none given, fall back to every *.mp4 already in the output dir (including its route/attraction subfolders), alphabetically — relying on the "0N_..." filename prefixes each stage writes to land clips in pipeline order.
     inputs = [Path(path) for path in clip_paths] if clip_paths else sorted(
-        path for path in output_dir.rglob("*.mp4") if path.name != output_path.name
+        path for path in output_dir.rglob("*.mp4")
+        if path.name != output_path.name and not any(p.startswith(".") for p in path.relative_to(output_dir).parts)
     )
     if not inputs:
         raise ValueError(f"No video clips found in {output_dir}")

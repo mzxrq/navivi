@@ -20,6 +20,7 @@
   "separator": " · ",
   "mode_join": " / ",
   "total_label": "Total",
+  "elevation_profile": "Elevation",
   "distance_label": "Distance",
   "taskbar_card_title": "Trip overview",
   "waypoint_fallback": "Stop",
