@@ -117,6 +117,7 @@ pub fn delete(conn: &Connection, project_id: &str, id: &str) -> DbResult<bool> {
     )? > 0)
 }
 
+#[cfg(test)]
 pub fn delete_all(conn: &Connection, project_id: &str) -> DbResult<usize> {
     Ok(conn.execute("DELETE FROM project_versions WHERE project_id = ?1", [project_id])?)
 }

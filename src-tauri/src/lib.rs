@@ -4,13 +4,13 @@ mod oauth;
 mod secrets;
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Mutex;
 use std::{thread};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::fs;
 
 mod db;
@@ -71,6 +71,7 @@ fn lock_slot(slot: &Mutex<Option<Child>>) -> std::sync::MutexGuard<'_, Option<Ch
 }
 
 fn kill_tracked_children(state: &BlueprintState) {
+    state.render_cancelled.store(true, Ordering::SeqCst);
     for slot in [&state.process, &state.install_process, &state.render_process] {
         if let Some(mut child) = lock_slot(slot).take() {
             kill_tree(&mut child);
@@ -92,22 +93,42 @@ fn vc_runtime_guard() -> Result<(), String> {
     }
 }
 
-fn python_command(app: &AppHandle) -> Result<Command, String> {
+/// `with_keys`: hand over the AI keys and map tokens, only for the modes that call an online model or fetch tiles
+/// and street photos (the pipeline and the script modes); utilities, exports and installs never see them.
+fn python_command(with_keys: bool) -> Result<Command, String> {
     let rt = runtime::get();
     if !rt.python_ready() {
         return Err("SETUP_REQUIRED: the media tools are not installed yet.".into());
     }
     let mut cmd = rt.command();
+    if !with_keys {
+        return Ok(cmd);
+    }
     secrets::export_keys(&mut cmd);
     for (name, var) in [("mapbox", "NAVIVI_MAPBOX_TOKEN"), ("mapillary", "NAVIVI_MAPILLARY_TOKEN")] {
-        let token = app
-            .try_state::<db::DbState>()
-            .and_then(|state| state.0.lock().ok().and_then(|conn| db::app_settings::api_key(&conn, name)));
-        if let Some(token) = token {
+        if let Some(token) = secrets::map_key(name) {
             cmd.env(var, token);
         }
     }
     Ok(cmd)
+}
+
+// Windows caps a command line at 32,767 chars; a longer payload (a whole script) goes on stdin (main.py reads it back).
+const ARG_PAYLOAD_MAX: usize = 8000;
+
+fn add_payload(cmd: &mut Command, payload: &str) {
+    if payload.len() <= ARG_PAYLOAD_MAX {
+        cmd.arg(payload);
+    } else {
+        cmd.arg("").env("NAVIVI_PAYLOAD_STDIN", "1").stdin(Stdio::piped());
+    }
+}
+
+fn send_payload(child: &mut Child, payload: &str) -> Result<(), String> {
+    match child.stdin.take() {
+        Some(mut stdin) => stdin.write_all(payload.as_bytes()).map_err(|e| e.to_string()),
+        None => Ok(()),
+    }
 }
 
 #[tauri::command]
@@ -115,7 +136,7 @@ async fn run_python_blueprint(app: AppHandle, action: String, payload: String) -
     // Blocking work (it waits for the process): keep it off the async workers.
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<BlueprintState>();
-        run_in_slot(&app, &action, &payload, &state.process, None)
+        run_in_slot(&app, &action, &payload, &state.process, None, true)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -131,13 +152,13 @@ async fn run_python_install(app: AppHandle, action: String, payload: String) -> 
     }
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<BlueprintState>();
-        run_in_slot(&app, &action, &payload, &state.install_process, Some("install-log"))
+        run_in_slot(&app, &action, &payload, &state.install_process, Some("install-log"), false)
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn cancel_python_install(state: State<'_, BlueprintState>) -> Result<String, String> {
     let mut lock = lock_slot(&state.install_process);
     if let Some(mut child) = lock.take() {
@@ -151,14 +172,21 @@ fn cancel_python_install(state: State<'_, BlueprintState>) -> Result<String, Str
 
 /// Runs `python main.py <action> <payload>` and keeps it in `slot`; a new call on the same slot kills the previous one.
 /// With `log_event`, every stderr line is also sent to the window under that event name (installs show progress from it).
-fn run_in_slot(app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option<Child>>, log_event: Option<&'static str>) -> Result<String, String> {
+fn run_in_slot(
+    app: &AppHandle, action: &str, payload: &str, slot: &Mutex<Option<Child>>, log_event: Option<&'static str>,
+    with_keys: bool,
+) -> Result<String, String> {
     // Spawn instead of output()
-    let mut cmd = python_command(app)?;
-    cmd.arg(action)
-        .arg(payload)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    let mut cmd = python_command(with_keys)?;
+    cmd.arg(action);
+    add_payload(&mut cmd, payload);
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    if let Err(e) = send_payload(&mut child, payload) {
+        kill_tree(&mut child);
+        let _ = child.wait();
+        return Err(e);
+    }
 
     // Extract the pipes before moving the child to the state
     let mut stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
@@ -229,16 +257,20 @@ const UTILITY_MODES: &[&str] = &[
 ];
 
 #[tauri::command]
-async fn run_python_utility(app: AppHandle, action: String, payload: String) -> Result<String, String> {
+async fn run_python_utility(action: String, payload: String) -> Result<String, String> {
     if !UTILITY_MODES.contains(&action.as_str()) {
         return Err(format!("Not a utility mode: {action}"));
     }
-    let mut cmd = python_command(&app)?;
-    cmd.arg(&action).arg(&payload);
-    let out = tauri::async_runtime::spawn_blocking(move || cmd.output())
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())?;
+    let mut cmd = python_command(false)?;
+    cmd.arg(&action);
+    add_payload(&mut cmd, &payload);
+    let out = tauri::async_runtime::spawn_blocking(move || {
+        let mut child = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| e.to_string())?;
+        send_payload(&mut child, &payload)?;
+        child.wait_with_output().map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     if out.status.success() {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     } else {
@@ -247,7 +279,7 @@ async fn run_python_utility(app: AppHandle, action: String, payload: String) -> 
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn cancel_python_blueprint(state: State<'_, BlueprintState>) -> Result<String, String>{
     let mut lock = lock_slot(&state.process);
 
@@ -260,7 +292,7 @@ fn cancel_python_blueprint(state: State<'_, BlueprintState>) -> Result<String, S
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn cancel_render(app: AppHandle, state: State<'_, BlueprintState>) -> Result<String, String> {
     state.render_cancelled.store(true, Ordering::SeqCst);
     let mut lock = lock_slot(&state.render_process);
@@ -282,13 +314,14 @@ fn start_render(
     state: State<'_, BlueprintState>,
 ) -> Result<String, String> {
     vc_runtime_guard()?;
-    let mut command = python_command(&app)?;
+    let mut command = python_command(true)?;
     command.arg("full_pipeline").arg(&config_path);
     if force.unwrap_or(false) {
         // Bypasses the checkpoint/resume logic so every stage regenerates
         // from scratch, instead of skipping steps whose output already exists.
         command.arg("--force");
     }
+    state.render_cancelled.store(false, Ordering::SeqCst);
     let mut child = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -297,8 +330,6 @@ fn start_render(
 
     let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
     let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
-
-    state.render_cancelled.store(false, Ordering::SeqCst);
 
     // Track this child the same way run_python_blueprint's is tracked, so
     // an app exit (or a future cancel-render command) can find and kill it.
@@ -309,11 +340,18 @@ fn start_render(
             kill_tree(&mut old_child);
             let _ = old_child.wait();
         }
+        // A Cancel (or quit) that came while this was spawning found no child to kill.
+        if state.render_cancelled.load(Ordering::SeqCst) {
+            kill_tree(&mut child);
+            let _ = child.wait();
+            let _ = app.emit("render-finish", "Cancelled");
+            return Ok("Cancelled".to_string());
+        }
         *lock = Some(child);
     }
 
     let app_stdout = app.clone();
-    thread::spawn(move || {
+    let stdout_reader = thread::spawn(move || {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
             if let Ok(line) = line {
@@ -323,7 +361,7 @@ fn start_render(
     });
 
     let app_stderr = app.clone();
-    thread::spawn(move || {
+    let stderr_reader = thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines() {
             if let Ok(line) = line {
@@ -356,6 +394,9 @@ fn start_render(
         }
 
         if let Some(success) = finished {
+            // The last log lines (often the error) must reach the window before the finish event.
+            let _ = stdout_reader.join();
+            let _ = stderr_reader.join();
             let payload = if child_state.render_cancelled.load(Ordering::SeqCst) {
                 "Cancelled"
             } else if success {
@@ -424,13 +465,14 @@ static EXPORT_PID: AtomicU32 = AtomicU32::new(0);
 static EXPORT_CANCELLED: AtomicBool = AtomicBool::new(false);
 
 fn kill_export() {
+    EXPORT_CANCELLED.store(true, Ordering::SeqCst);
     let pid = EXPORT_PID.swap(0, Ordering::SeqCst);
     if pid != 0 && pid != u32::MAX {
         runtime::kill_pid_tree(pid);
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn cancel_export() -> Result<String, String> {
     let running = EXPORT_PID.load(Ordering::SeqCst) != 0;
     if running {
@@ -462,7 +504,7 @@ fn export_blocking(app: &tauri::AppHandle, project_dir: &str) -> Result<String, 
 
     let timeline_path = format!("{}/timeline.json", project_dir);
 
-    let spawned = python_command(app).and_then(|mut cmd| {
+    let spawned = python_command(false).and_then(|mut cmd| {
         cmd.arg("render_timeline")
             .arg(&timeline_path)
             .stdout(Stdio::piped())
@@ -478,6 +520,9 @@ fn export_blocking(app: &tauri::AppHandle, project_dir: &str) -> Result<String, 
         }
     };
     EXPORT_PID.store(child.id(), Ordering::SeqCst);
+    if EXPORT_CANCELLED.load(Ordering::SeqCst) {
+        runtime::kill_pid_tree(child.id()); // cancelled while it was starting
+    }
 
     // "EXPORT_PROGRESS <pct>" lines become export-progress events; the rest is kept for errors.
     let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
@@ -522,19 +567,40 @@ fn export_blocking(app: &tauri::AppHandle, project_dir: &str) -> Result<String, 
 #[tauri::command]
 async fn copy_asset_file(source_path: String, target_dir: String) -> Result<String, String> {
     let source = Path::new(&source_path);
-    
-    let file_name = source.file_name().ok_or("Invalid file name")?;
-    
-    let target = Path::new(&target_dir).join(file_name);
-    
+    if source.file_name().is_none() {
+        return Err("Invalid file name".into());
+    }
     if let Err(e) = fs::create_dir_all(&target_dir) {
         return Err(format!("Failed to create directory: {}", e));
     }
-
-    match fs::copy(&source, &target) {
-        Ok(_) => Ok(target.to_string_lossy().to_string()),
-        Err(e) => Err(format!("Failed to copy file: {}", e)),
+    let (target, already_there) = asset_target(source, Path::new(&target_dir));
+    if !already_there {
+        fs::copy(source, &target).map_err(|e| format!("Failed to copy file: {}", e))?;
     }
+    Ok(target.to_string_lossy().to_string())
+}
+
+/// Where an imported file goes: the file itself when it is already there (the same file, or one with the same
+/// bytes under that name), else its name, or "name (2).ext", "name (3).ext"... when another file has it. Two
+/// different DSC_0001.JPG imports used to overwrite each other, swapping one stop's photo for another's.
+fn asset_target(source: &Path, dir: &Path) -> (PathBuf, bool) {
+    let name = source.file_name().unwrap_or_default();
+    let stem = Path::new(name).file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let ext = Path::new(name).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    let same_file = |candidate: &Path| {
+        fs::canonicalize(candidate).ok() == fs::canonicalize(source).ok()
+            || matches!((fs::read(candidate), fs::read(source)), (Ok(a), Ok(b)) if a == b)
+    };
+    for n in 1.. {
+        let candidate = if n == 1 { dir.join(name) } else { dir.join(format!("{stem} ({n}){ext}")) };
+        if !candidate.exists() {
+            return (candidate, false);
+        }
+        if same_file(&candidate) {
+            return (candidate, true);
+        }
+    }
+    unreachable!()
 }
 
 #[tauri::command(async)]
@@ -659,6 +725,7 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             fs::create_dir_all(&dir)?;
             let conn = db::open(&dir.join("navivi.db"))?;
+            secrets::move_map_keys_from_db(&conn);
             app.manage(db::DbState(Mutex::new(conn)));
             app.manage(StartedAt(std::time::Instant::now()));
             // If the page never reports in (a crash while loading), don't leave the user on the splash.
@@ -705,40 +772,25 @@ pub fn run() {
             project_files::duplicate_project_folder,
             unzip_project,
             convert_gps_to_gpx,
-            db::commands::project_create,
             db::commands::project_upsert,
             db::commands::project_get,
-            db::commands::project_get_by_dir,
             db::commands::project_list,
             db::commands::project_update,
             db::commands::project_touch_opened,
             db::commands::project_forget_opened,
-            db::commands::project_delete,
-            db::commands::project_restore,
-            db::commands::project_purge,
             db::commands::project_import_legacy,
             db::commands::settings_get,
             db::commands::settings_put,
             db::commands::settings_patch,
-            db::commands::settings_delete,
             db::commands::version_create,
             db::commands::version_list,
             db::commands::version_get,
             db::commands::version_rename,
             db::commands::version_delete,
-            db::commands::version_delete_all,
             db::commands::route_cache_get_all,
-            db::commands::route_cache_get,
-            db::commands::route_cache_put,
-            db::commands::route_cache_put_many,
             db::commands::route_cache_replace,
-            db::commands::route_cache_delete,
-            db::commands::route_cache_prune,
-            db::commands::route_cache_clear,
             db::commands::app_setting_get,
             db::commands::app_setting_set,
-            db::commands::app_setting_delete,
-            db::commands::app_setting_list,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -760,7 +812,16 @@ use zip::ZipArchive;
 
 #[tauri::command]
 async fn unzip_project(source_file: String, dest_dir: String) -> Result<(), String> {
-    let file = fs::File::open(&source_file).map_err(|e| e.to_string())?;
+    let created = !Path::new(&dest_dir).exists();
+    unzip_into(&source_file, &dest_dir).inspect_err(|_| {
+        if created {
+            let _ = fs::remove_dir_all(&dest_dir);
+        }
+    })
+}
+
+fn unzip_into(source_file: &str, dest_dir: &str) -> Result<(), String> {
+    let file = fs::File::open(source_file).map_err(|e| e.to_string())?;
     let mut archive = ZipArchive::new(file).map_err(|e| e.to_string())?;
 
     for i in 0..archive.len() {

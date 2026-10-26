@@ -147,6 +147,8 @@ class AttractionVideoGenerator:
         sig = style if style != "photo" else f"photo|{tuning.ATTRACTION_TAIL_PHOTO_FADE_SECONDS}|full-animation|first-shot"
         if tuning.HANDHELD:
             sig += f"|handheld|{tuning.HANDHELD_DRIFT}|{tuning.HANDHELD_ROLL_DEG}"
+        if tuning.ATTRACTION_DENOISE or not tuning.ATTRACTION_UPSCALE_SHARPEN:
+            sig += f"|finish|{tuning.ATTRACTION_DENOISE}|{tuning.ATTRACTION_UPSCALE_SHARPEN}"
         return sig
 
     @staticmethod
@@ -562,6 +564,7 @@ class AttractionVideoGenerator:
                     scale_to=(self._TARGET_WIDTH, self._TARGET_HEIGHT),
                     sharpen=tuning.ATTRACTION_UPSCALE_SHARPEN,
                     label_text=burned_label,
+                    denoise=tuning.ATTRACTION_DENOISE if handheld_pan is not None else None,  # generated clips only
                 )
                 os.replace(work_path, final_path)
                 record_place_label(final_path, place_label, burned=not on_track)

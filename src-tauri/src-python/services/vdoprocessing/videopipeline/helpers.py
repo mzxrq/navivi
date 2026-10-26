@@ -1,6 +1,5 @@
 """Shared constants and small pure helpers used across the pipeline steps."""
 
-import os
 from pathlib import Path
 from typing import Optional
 
@@ -39,10 +38,6 @@ DEFAULT_MAP_BACKGROUND = (
 _WGS84_TO_WEBMERCATOR = pyproj.Transformer.from_crs(
     "EPSG:4326", "EPSG:3857", always_xy=True
 )
-
-
-def clear_console():
-    os.system("cls" if os.name == "nt" else "clear")
 
 
 def skip_rich_media(settings: dict) -> bool:

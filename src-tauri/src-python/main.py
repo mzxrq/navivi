@@ -11,6 +11,7 @@ services/vdoprocessing/videopipeline/.
 ---------------------------------------------------------------------------
 """
 
+import os
 import sys
 import json
 import traceback
@@ -95,6 +96,9 @@ if __name__ == "__main__":
         )
         sys.exit(1)
 
+    # The app sends a payload too long for the Windows command line (a whole script) on stdin.
+    if os.environ.pop("NAVIVI_PAYLOAD_STDIN", None) and len(sys.argv) > 2:
+        sys.argv[2] = sys.stdin.buffer.read().decode("utf-8")
     sys.argv = split_mode_payload(sys.argv)
 
     # [NOTE] [Core] --force can appear anywhere on the command line (it's a

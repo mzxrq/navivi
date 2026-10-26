@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@lingui/core/macro";
-import { Music, Subtitles, Type, UnlinkIcon, Video, Volume2, VolumeX } from "../../components/ui/icons";
+import { Loader2, Music, Subtitles, Type, UnlinkIcon, Video, Volume2, VolumeX } from "../../components/ui/icons";
+import { regenTargetOf } from "../../services/stopRegen";
 import {
   anchorCue,
   isUnlinked,
@@ -40,6 +41,8 @@ interface PaneProps {
   onTextMenu: (e: React.MouseEvent, text: PlacedText) => void;
   onLaneMenu: (e: React.MouseEvent, time: number, lane: Lane) => void;
   onAddText: (time: number) => void;
+  /** The stop being made again ("Make again for this stop"): its clips show a spinner. */
+  busyStop?: number | "intro" | "overview" | null;
 }
 
 const LABEL_W = 36;
@@ -394,6 +397,12 @@ export function TimelinePane(props: PaneProps) {
                   <div className="absolute left-2 bottom-1 text-[10px] tabular-nums text-zinc-700 dark:text-zinc-200 pointer-events-none">{p.length.toFixed(1)}s</div>
                   {p.seg.fadeIntoNext > 0 && (
                     <div className="absolute right-0 bottom-0 w-4 h-4 bg-navi/70 pointer-events-none" style={{ clipPath: "polygon(100% 0,100% 100%,0 100%)" }} title={t`Fades into the next clip`} />
+                  )}
+                  {props.busyStop != null && regenTargetOf(p.seg) === props.busyStop && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center gap-1.5 bg-black/45 text-[11px] font-medium text-white pointer-events-none" title={t`Making this stop again...`}>
+                      <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                      {p.length * pps > 110 && <span className="truncate">{t`Making this stop again...`}</span>}
+                    </div>
                   )}
                   <div onPointerDown={(e) => onTrim(e, p.seg, "in")} className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-navi/60" />
                   <div onPointerDown={(e) => onTrim(e, p.seg, "out")} className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-navi/60" />

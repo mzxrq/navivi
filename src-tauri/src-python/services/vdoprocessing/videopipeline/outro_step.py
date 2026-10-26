@@ -24,14 +24,14 @@ def _route_frame_size(video_dir: Path) -> Optional[Tuple[int, int]]:
 
 
 def _outro_heading(job_config: JobConfigManager) -> dict:
-    """The intro's heading with the outro's own look on top: text styles settings.outro_*_style, the box
-    behind the title settings.outro_header_height (1080-line px) / outro_header_color."""
+    """The intro's words with the outro's own look: text styles settings.outro_*_style (never the intro's;
+    unset = the defaults), the box behind the title settings.outro_header_height (1080-line px) / outro_header_color."""
     from .intro_step import intro_heading
 
     settings = job_config.get("settings", {}) or {}
     heading = intro_heading(job_config)
     for line in ("kicker", "title", "subtitle"):
-        heading[f"{line}_style"] = settings.get(f"outro_{line}_style") or heading[f"{line}_style"]
+        heading[f"{line}_style"] = settings.get(f"outro_{line}_style")
     heading["header_height"] = settings.get("outro_header_height")
     heading["header_color"] = settings.get("outro_header_color")
     return heading

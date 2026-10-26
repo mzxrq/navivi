@@ -51,6 +51,42 @@ const pad = (n: number) => String(n).padStart(2, "0");
 export const arrivalAudioPrefix = (index: number) => `02_waypoint_${pad(index + 1)}_`;
 export const attractionPrefix = (index: number) => `04_attraction_${pad(index)}_`;
 
+/** The stop a timeline clip belongs to, from those names (its photo clip or narration); null for other clips. */
+export function stopIndexOf(seg: Pick<Segment, "video" | "audio">): number | null {
+  const attraction = /^04_attraction_(\d+)_/.exec(base(seg.video)) ?? /^04_attraction_(\d+)_/.exec(base(seg.audio));
+  if (attraction) return Number(attraction[1]);
+  const arrival = /^02_waypoint_(\d+)_/.exec(base(seg.audio));
+  return arrival ? Number(arrival[1]) - 1 : null;
+}
+
+/** The intro or overview clip: not a stop, made again through its own modes. */
+export type RouteClip = "intro" | "overview";
+
+export function routeClipOf(seg: Pick<Segment, "video">): RouteClip | null {
+  const name = base(seg.video);
+  return name === "00_intro.mp4" ? "intro" : name.startsWith("01_overview") ? "overview" : null;
+}
+
+/** What a timeline clip is made from: a stop's index, the intro or the overview; null for other clips. */
+export const regenTargetOf = (seg: Pick<Segment, "video" | "audio">) => stopIndexOf(seg) ?? routeClipOf(seg);
+
+// The overview narration is one script for both clips (the opening plays on the intro), so "voice" redoes both files.
+// No --force on the voice: only a file whose words changed is voiced again, so the other clip stays as it is.
+export function routeClipModes(clip: RouteClip, kind: "voice" | "video"): string[] {
+  if (kind === "voice") return ["overview-tts", "subtitle-all"];
+  return [clip === "intro" ? "intro" : "overview --force"];
+}
+
+const OVERVIEW_VOICES = ["00_intro_narration", "00_overview_narration"];
+
+/** refreshStopMedia for the intro or overview clip. */
+export function refreshRouteClip(timeline: TimelineData, clip: RouteClip, kind: "voice" | "video", io: RefreshIo) {
+  return refreshMedia(timeline, kind === "voice" ? "voice" : "photo", {
+    audio: (name) => OVERVIEW_VOICES.some((v) => name.startsWith(v)),
+    video: (name) => routeClipOf({ video: name }) === clip,
+  }, io);
+}
+
 export interface RefreshIo {
   probe: (relPath: string, kind: "video" | "audio") => Promise<number>;
   readText: (relPath: string) => Promise<string>;
@@ -58,8 +94,17 @@ export interface RefreshIo {
 
 // The timeline keeps what it read from timeline.json, so after a stop's files were remade the clips that play them are read again:
 // narration length, the subtitle cues made from the new .srt, and the photo clip's length. Edits elsewhere stay. Null = nothing to change.
-export async function refreshStopMedia(timeline: TimelineData, index: number, kind: RegenKind, io: RefreshIo): Promise<TimelineData | null> {
+export function refreshStopMedia(timeline: TimelineData, index: number, kind: RegenKind, io: RefreshIo): Promise<TimelineData | null> {
   const voicePrefixes = [arrivalAudioPrefix(index), attractionPrefix(index)];
+  return refreshMedia(timeline, kind, {
+    audio: (name) => voicePrefixes.some((p) => name.startsWith(p)),
+    video: (name) => name.startsWith(attractionPrefix(index)),
+  }, io);
+}
+
+async function refreshMedia(
+  timeline: TimelineData, kind: RegenKind, match: { audio: (name: string) => boolean; video: (name: string) => boolean }, io: RefreshIo,
+): Promise<TimelineData | null> {
   let changed = false;
   const replaced = new Set<string>();
   const cues: TimelineData["subtitles"] = [];
@@ -68,7 +113,7 @@ export async function refreshStopMedia(timeline: TimelineData, index: number, ki
   for (const seg of timeline.segments) {
     let next = seg;
     const audioName = base(seg.audio);
-    if (kind !== "photo" && seg.audio && voicePrefixes.some((p) => audioName.startsWith(p))) {
+    if (kind !== "photo" && seg.audio && match.audio(audioName)) {
       if (kind === "voice") {
         const length = await io.probe(seg.audio, "audio");
         if (length > 0 && Math.abs(length - (seg.audioDuration ?? 0)) > 0.01) next = { ...next, audioDuration: length };
@@ -83,7 +128,7 @@ export async function refreshStopMedia(timeline: TimelineData, index: number, ki
         }
       }
     }
-    if (kind === "photo" && base(seg.video).startsWith(attractionPrefix(index))) {
+    if (kind === "photo" && match.video(base(seg.video))) {
       const length = await io.probe(seg.video, "video");
       if (length > 0 && Math.abs(length - seg.videoDuration) > 0.01) {
         const untrimmed = seg.trimOut >= seg.videoDuration - 0.01;

@@ -63,4 +63,6 @@ def place_text_item(text: str, look: Optional[dict] = None) -> dict:
             item[line]["animation"] = look[f"{line}_animation"]
         if isinstance(look.get(f"{line}_delay"), (int, float)):
             item[line]["delay"] = look[f"{line}_delay"]
+        if isinstance(look.get(f"{line}_margin_top"), (int, float)):
+            item[line]["margin_top"] = look[f"{line}_margin_top"]
     return item

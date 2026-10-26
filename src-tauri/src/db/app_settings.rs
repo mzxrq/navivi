@@ -1,5 +1,5 @@
 use rusqlite::{params, Connection, OptionalExtension};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 use super::error::{DbError, DbResult};
 use super::now_ms;
@@ -28,10 +28,11 @@ pub fn delete(conn: &Connection, key: &str) -> DbResult<bool> {
 }
 
 /// All settings, or only keys starting with `prefix`.
-pub fn list(conn: &Connection, prefix: Option<&str>) -> DbResult<Map<String, Value>> {
+#[cfg(test)]
+pub fn list(conn: &Connection, prefix: Option<&str>) -> DbResult<serde_json::Map<String, Value>> {
     let mut stmt = conn.prepare("SELECT key, value_json FROM app_settings ORDER BY key")?;
     let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
-    let mut out = Map::new();
+    let mut out = serde_json::Map::new();
     for row in rows {
         let (k, v) = row?;
         if prefix.map_or(true, |p| k.starts_with(p)) {
@@ -41,15 +42,8 @@ pub fn list(conn: &Connection, prefix: Option<&str>) -> DbResult<Map<String, Val
     Ok(out)
 }
 
-/// The app-wide map keys (`{ mapbox?, ors? }`), saved by the frontend. They are never part of a project.
+/// Where versions before 2026-10-22 kept the map keys in plain text; secrets::move_map_keys_from_db empties it.
 pub const API_KEYS: &str = "api_keys";
-
-/// One non-empty key out of the `api_keys` setting, e.g. `api_key(conn, "mapbox")`.
-pub fn api_key(conn: &Connection, name: &str) -> Option<String> {
-    let value = get(conn, API_KEYS).ok().flatten()?;
-    let key = value.get(name)?.as_str()?.trim();
-    (!key.is_empty()).then(|| key.to_string())
-}
 
 #[cfg(test)]
 mod tests {
@@ -57,17 +51,6 @@ mod tests {
     use crate::db::open_in_memory;
     use serde_json::json;
 
-    #[test]
-    fn api_key_reads_one_non_empty_entry() {
-        let conn = open_in_memory().unwrap();
-        assert_eq!(api_key(&conn, "mapbox"), None);
-        set(&conn, API_KEYS, &json!({ "mapbox": " pk.abc ", "ors": "" })).unwrap();
-        assert_eq!(api_key(&conn, "mapbox").as_deref(), Some("pk.abc"));
-        assert_eq!(api_key(&conn, "ors"), None);
-        assert_eq!(api_key(&conn, "other"), None);
-        set(&conn, API_KEYS, &json!("not an object")).unwrap();
-        assert_eq!(api_key(&conn, "mapbox"), None);
-    }
 
     #[test]
     fn crud() {

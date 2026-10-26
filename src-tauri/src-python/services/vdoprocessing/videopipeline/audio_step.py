@@ -8,14 +8,16 @@ up independently re-derived in four different places)."""
 
 import asyncio
 import json
+import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from services import tuning
 from services.localization.cue_alignment import measured_cue_times
 from services.localization.cues import clean_text, strip_cues
 from services.logger.progress import tracker
 from services.tts.errors import TTSNotReady
+from services.projectfiles import write_json_atomic
 
 from .helpers import (
     attraction_audio_filename,
@@ -142,6 +144,29 @@ def overview_tagged_script(project_config: dict, project_dir) -> str:
     return base
 
 
+INTRO_NARRATION_FILENAME = "00_intro_narration.wav"
+OVERVIEW_NARRATION_FILENAME = "00_overview_narration.wav"
+
+
+def overview_pieces(project_config: dict, project_dir) -> Tuple[Optional[str], str]:
+    """(opening, rest) of the tagged overview narration. When the voice starts on the intro, the opening
+    (before {start}) is voiced on its own, so editing it re-voices only the intro and the overview's
+    audio and cues stay as they were (its render is reused); the rest starts with {start}. (None, whole
+    script) when there is no intro voice or no opening."""
+    tagged = overview_tagged_script(project_config, project_dir)
+    settings = project_config.get("settings") or {}
+    if (
+        project_config.get("enable_intro") is False
+        or not settings.get("overview_voice_over_intro", tuning.DEFAULT_OVERVIEW_VOICE_OVER_INTRO)
+        or "{start}" not in tagged
+    ):
+        return None, tagged
+    at = tagged.index("{start}")
+    if not clean_text(tagged[:at]).strip():
+        return None, tagged
+    return tagged[:at], tagged[at:]
+
+
 def _resolve_narration_script(waypoint: dict) -> Optional[str]:
     """The spoken text of a waypoint's narration: its script without cue tags.
     TTS and subtitles both go through this, so a tag is never read aloud or
@@ -201,9 +226,25 @@ def _write_voice_note(audio_path, client: Any) -> None:
     if fp is None:
         return
     try:
-        _voice_note_path(audio_path).write_text(json.dumps(fp), encoding="utf-8")
+        write_json_atomic(_voice_note_path(audio_path), fp, indent=None)
     except OSError:
         pass
+
+
+def require_some_voice(waypoints: list, audio_data: dict) -> None:
+    """Fails the run when stops have scripts but not one voice clip was made (a dead or unreachable voice
+    server): every stop's TTS failure is only logged, so the render used to finish silent as a success."""
+    scripted = any(
+        isinstance(wp, dict) and (_resolve_narration_script(wp) or _resolve_attraction_narration_script(wp))
+        for wp in waypoints
+    )
+    made = (any(audio_data.get("audio_paths") or []) or any(audio_data.get("attraction_audio_paths") or [])
+            or audio_data.get("overview_audio_path"))
+    if scripted and not made:
+        raise RuntimeError(
+            "No narration audio was made although the stops have scripts: the voice engine did not answer. "
+            "Check Settings > Voice (or restart the app) and render again."
+        )
 
 
 def _remake_reason(existing_path, same_text: bool, client: Any, force: bool) -> str:
@@ -262,6 +303,27 @@ def _spoken_form(entry: dict) -> Optional[str]:
     return japanese_words.to_katakana(reading)
 
 
+def _replace_words(text: str, word: str, spoken: str) -> str:
+    """`word` -> `spoken` only where it is whole words: 場 → バ must not turn 場所 into バ所 (2026-10-23).
+    Without the analyser, every occurrence as before."""
+    from services.localization.japanese_words import _tagger
+
+    tagger = _tagger()
+    if tagger is None:
+        return text.replace(word, spoken)
+    edges, at = {0}, 0
+    for token in tagger(text):
+        at = text.find(token.surface, at)
+        edges |= {at, at + len(token.surface)}  # both: whitespace between tokens is skipped
+        at += len(token.surface)
+    out, i = [], 0
+    while (j := text.find(word, i)) != -1:
+        whole = j in edges and j + len(word) in edges
+        out.append(text[i:j] + (spoken if whole else word))
+        i = j + len(word)
+    return "".join(out) + text[i:]
+
+
 def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
     from services.tts import name_check
 
@@ -276,7 +338,7 @@ def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
             name_check.remember_kanji(entry["word"], entry["reading"], spoken)
             continue
         name_check.remember(spoken, entry["word"])
-        text = text.replace(entry["word"], spoken)
+        text = _replace_words(text, entry["word"], spoken)
     return text
 
 async def generate_attraction_audio_for_waypoint(
@@ -311,6 +373,7 @@ async def generate_attraction_audio_for_waypoint(
     except OSError:
         # no note: made before it existed, so only trust it when the dictionary changes nothing
         same_text = tts_script == script
+    same_text = same_text or _keep_old_voice(existing_path, tts_script)
     if not force and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
         logger.info(
             "Step 2: [%d] '%s' attraction narration already exists — skipping TTS.",
@@ -348,19 +411,39 @@ async def generate_overview_audio(
     pronunciation_dict: list = [],
 ) -> Optional[Dict[str, Any]]:
     """Generates (or reuses) the TTS audio for job_config.json's top-level
-    "overview_narration" script -- the map-editor's OverviewPanel.tsx lets
-    a project set a narration for the whole-route overview clip, separate
-    from any per-waypoint narration, but nothing downstream ever read that
-    field: no audio was ever generated for it, so the overview clip always
-    played silent regardless of what was typed there. Returns None (same
-    as a waypoint with no script) when the field is empty/missing."""
-    tagged = overview_tagged_script(project_config, project_dir)
+    "overview_narration" script (OverviewPanel.tsx). When the voice starts on
+    the intro, its opening is a separate file (overview_pieces), returned under
+    "intro". Returns None when the field is empty/missing."""
+    opening, rest = overview_pieces(project_config, project_dir)
+    args = (project_config, client, processor, output_dir, force, pronunciation_dict)
+    result = await _voice_piece(rest, OVERVIEW_NARRATION_FILENAME, *args)
+    if result is None:
+        return None
+    result["intro"] = await _voice_piece(opening, INTRO_NARRATION_FILENAME, *args) if opening else None
+    # The overview is sized first (60-120s) and its script to it: say when
+    # the real voice misses that by more than the 3s the video can absorb.
+    from services.localization.overview_script import (
+        in_overview_range, overview_target_seconds, visible_waypoints,
+    )
+
+    target = overview_target_seconds(project_config, len(visible_waypoints(project_config)))
+    spoken = result["duration_seconds"] + (result["intro"] or {}).get("duration_seconds", 0.0)
+    (logger.info if in_overview_range(spoken) else logger.warning)(
+        "Overview narration is %.1fs (aimed at %.0fs; the overview must be 60-120s).",
+        spoken, target,
+    )
+    return result
+
+
+async def _voice_piece(
+    tagged: Optional[str], audio_filename: str, project_config: dict, client: Any, processor: Any,
+    output_dir: Path, force: bool, pronunciation_dict: list,
+) -> Optional[Dict[str, Any]]:
+    """One overview narration file: reused while its spoken text and voice are unchanged."""
     script = clean_text(tagged).strip()
     if not script:
         return None
     tts_script = apply_pronunciation_dictionary(script, pronunciation_dict)
-
-    audio_filename = "00_overview_narration.wav"
     existing_path = Path(output_dir) / audio_filename
 
     try:
@@ -368,12 +451,13 @@ async def generate_overview_audio(
         same_text = _spoken_text_path(existing_path).read_text(encoding="utf-8") == tts_script
     except OSError:
         same_text = False
+    same_text = same_text or _keep_old_voice(existing_path, tts_script)
     if not force and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
-        logger.info("Step 2: Overview narration audio already exists — skipping TTS.")
+        logger.info("Step 2: %s already exists — skipping TTS.", audio_filename)
         audio_path = str(existing_path)
     else:
         logger.info(
-            "Step 2: Generating overview narration audio (%s).",
+            "Step 2: Generating %s (%s).", audio_filename,
             _remake_reason(existing_path, same_text, client, force),
         )
         audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
@@ -384,25 +468,13 @@ async def generate_overview_audio(
         _write_voice_note(audio_path, client)
 
     analysis = processor.analyze_pauses(audio_path)
-    # Where each cue ({start}, {1}, {2}, {end}) falls in the real audio: the
-    # overview animation lands its stops on them (overview.py).
+    # Where each cue ({start}, {1}, {2}, {end}, {scene}) falls in the real audio: the
+    # overview animation lands its stops on them (overview.py), the intro its scene cuts.
     clean, cues = strip_cues(tagged)
     cue_seconds = measured_cue_times(
         audio_path, cues, clean, analysis.get("duration_seconds", 0.0), analysis.get("pauses", []),
         enabled=project_config.get("settings", {}).get("align_cues_to_voice", True),
     ) if cues else {}
-    # The overview is sized first (60-120s) and its script to it: say when
-    # the real voice misses that by more than the 3s the video can absorb.
-    from services.localization.overview_script import (
-        in_overview_range, overview_target_seconds, visible_waypoints,
-    )
-
-    target = overview_target_seconds(project_config, len(visible_waypoints(project_config)))
-    spoken = analysis.get("duration_seconds", 0.0)
-    (logger.info if in_overview_range(spoken) else logger.warning)(
-        "Overview narration is %.1fs (aimed at %.0fs; the overview must be 60-120s).",
-        spoken, target,
-    )
     return {
         "text": script,
         "audio_path": audio_path,
@@ -415,6 +487,19 @@ async def generate_overview_audio(
 def _spoken_text_path(audio_path) -> Path:
     """Beside each waypoint's audio: the exact text it speaks."""
     return Path(str(audio_path) + ".txt")
+
+
+def _keep_old_voice(audio_path, tts_script: str) -> bool:
+    """NAVIVI_KEEP_VOICE=1: a recording on disk is kept although its text changed, and its note is
+    updated so later runs keep it too. shortcut: an env var for a one-off run, a setting if users need it."""
+    if os.environ.get("NAVIVI_KEEP_VOICE") != "1" or not output_is_valid(audio_path):
+        return False
+    try:
+        _spoken_text_path(audio_path).write_text(tts_script, encoding="utf-8")
+    except OSError:
+        return False
+    logger.info("Step 2: keeping the recorded voice of %s (NAVIVI_KEEP_VOICE).", Path(audio_path).name)
+    return True
 
 
 def _spoken_text_matches(audio_path, script: str, waypoint: dict, tts_script: Optional[str] = None) -> bool:
@@ -461,7 +546,8 @@ async def generate_waypoint_audio(
     audio_filename = waypoint_audio_filename(idx, label)
     existing_path = Path(output_dir) / audio_filename
 
-    same_text = output_is_valid(existing_path) and _spoken_text_matches(existing_path, script, waypoint, tts_script)
+    same_text = output_is_valid(existing_path) and (
+        _spoken_text_matches(existing_path, script, waypoint, tts_script) or _keep_old_voice(existing_path, tts_script))
     if not force and same_text and _voice_matches(existing_path, client):
         logger.info(
             "Step 2: [%d] '%s' already exists — skipping TTS.", idx + 1, label
@@ -528,29 +614,38 @@ def existing_audio_data(project_config_path: str) -> dict:
         data["attraction_audio_durations"].append(attraction["duration_seconds"] if attraction else 0.0)
         data["attraction_audio_paths"].append(str(attraction_path) if attraction else None)
 
-    tagged = overview_tagged_script(project_config, config_path.parent)
-    overview_path = audio_dir / "00_overview_narration.wav"
-    overview = analyse(overview_path) if clean_text(tagged).strip() else None
-    if overview:
+    p_dict = project_config.get("settings", {}).get("pronunciation_dictionary", [])
+    align = project_config.get("settings", {}).get("align_cues_to_voice", True)
+
+    def piece(tagged: Optional[str], path: Path) -> Optional[dict]:
+        found = analyse(path) if clean_text(tagged).strip() else None
+        if not found:
+            return None
         try:
-            spoken = _spoken_text_path(overview_path).read_text(encoding="utf-8")
+            spoken = _spoken_text_path(path).read_text(encoding="utf-8")
         except OSError:
             spoken = None
-        p_dict = project_config.get("settings", {}).get("pronunciation_dictionary", [])
-        if spoken not in (clean_text(tagged).strip(), apply_pronunciation_dictionary(clean_text(tagged).strip(), p_dict)):
+        text = clean_text(tagged).strip()
+        if spoken not in (text, apply_pronunciation_dictionary(text, p_dict)):
             logger.warning(
-                "Overview narration audio may not match the current script; "
-                "its cues can land on the wrong stops. Re-run TTS for the overview."
+                "%s may not match the current script; its cues can land on the wrong stops. "
+                "Re-run TTS for the overview.", path.name,
             )
         clean, cues = strip_cues(tagged)
-        data["overview_audio_path"] = str(overview_path)
+        times = measured_cue_times(path, cues, clean, found["duration_seconds"], found["pauses"], enabled=align) if cues else {}
+        return {"audio_path": str(path), "duration_seconds": found["duration_seconds"], "cue_times": times, "text": text}
+
+    opening, rest = overview_pieces(project_config, config_path.parent)
+    if opening and not output_is_valid(audio_dir / INTRO_NARRATION_FILENAME):
+        # Voiced before the opening had its own file: the old recording still speaks all of it.
+        opening, rest = None, overview_tagged_script(project_config, config_path.parent)
+    overview = piece(rest, audio_dir / OVERVIEW_NARRATION_FILENAME)
+    if overview:
+        data["overview_audio_path"] = overview["audio_path"]
         data["overview_audio_duration"] = overview["duration_seconds"]
-        data["overview_cue_times"] = (
-            measured_cue_times(
-                overview_path, cues, clean, overview["duration_seconds"], overview["pauses"],
-                enabled=project_config.get("settings", {}).get("align_cues_to_voice", True),
-            ) if cues else {}
-        )
+        data["overview_cue_times"] = overview["cue_times"]
+        data["overview_text"] = overview["text"]
+        data["intro_voice"] = piece(opening, audio_dir / INTRO_NARRATION_FILENAME) if opening else None
     return data
 
 
@@ -591,6 +686,8 @@ def generate_audio(
     overview_audio_path = None
     overview_audio_duration = 0.0
     overview_cue_times: Dict[str, float] = {}
+    intro_voice: Optional[Dict[str, Any]] = None  # the opening's own file (overview_pieces)
+    overview_text: Optional[str] = None
 
     try:
         config_path = Path(project_config_path)
@@ -651,7 +748,7 @@ def generate_audio(
                 await asyncio.sleep(2.0)
 
         async def _generate_all_speech():
-            nonlocal overview_audio_path, overview_audio_duration, overview_cue_times
+            nonlocal overview_audio_path, overview_audio_duration, overview_cue_times, intro_voice, overview_text
 
             tracker.show("Generating overview narration audio")
             try:
@@ -666,6 +763,8 @@ def generate_audio(
                 overview_audio_path = overview_clip["audio_path"]
                 overview_audio_duration = overview_clip["duration_seconds"]
                 overview_cue_times = overview_clip.get("cue_times") or {}
+                overview_text = overview_clip.get("text")
+                intro_voice = overview_clip.get("intro")
 
             for idx, wp in enumerate(waypoints):
                 label = wp.get("label", f"Waypoint {idx + 1}") if isinstance(wp, dict) else f"Waypoint {idx + 1}"
@@ -780,6 +879,8 @@ def generate_audio(
             "overview_audio_path": overview_audio_path,
             "overview_audio_duration": overview_audio_duration,
             "overview_cue_times": overview_cue_times,
+            "overview_text": overview_text,
+            "intro_voice": intro_voice,
         }
 
     except TTSNotReady:
@@ -829,4 +930,6 @@ def generate_audio(
             "overview_audio_path": overview_audio_path,
             "overview_audio_duration": overview_audio_duration,
             "overview_cue_times": overview_cue_times,
+            "overview_text": overview_text,
+            "intro_voice": intro_voice,
         }

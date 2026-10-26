@@ -24,6 +24,7 @@ from .audio_step import OVERVIEW_CUE_KEY, base_narration_script, raw_narration_s
 from .helpers import logger
 
 from services.projectfiles import NARRATION_CUES, OVERVIEW_NARRATION, ROUTE_CACHE, meta_file, meta_path
+from services.projectfiles import write_json_atomic
 _SENTENCE_END = SENTENCE_END
 
 # How much of the narration is left to speak after the walker arrives. 0: the
@@ -72,7 +73,7 @@ class CueStore:
         self._data.setdefault(key, {})["cue_times"] = {t: round(v, 2) for t, v in times.items()}
 
     def save(self) -> None:
-        self.path.write_text(json.dumps(self._data, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_json_atomic(self.path, self._data)
 
 
 def cued_script(waypoint: dict) -> Optional[str]:
@@ -211,7 +212,7 @@ def ensure_overview_narration(project_config_path: str) -> bool:
         project["overview_narration"] = saved["script"]
         project["overview_narration_is_auto"] = True
         project["overview_narration_source_ids"] = current_ids
-        config_path.write_text(json.dumps(project, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_json_atomic(config_path, project)
         logger.info("Step 2: reused the saved overview_narration (waypoints unchanged).")
         return False
 
@@ -235,12 +236,9 @@ def ensure_overview_narration(project_config_path: str) -> bool:
     project["overview_narration"] = script
     project["overview_narration_is_auto"] = True
     project["overview_narration_source_ids"] = current_ids
-    config_path.write_text(json.dumps(project, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json_atomic(config_path, project)
     try:
-        saved_path.write_text(
-            json.dumps({"source_ids": current_ids, "script": script}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        write_json_atomic(saved_path, {"source_ids": current_ids, "script": script})
     except OSError as e:
         logger.warning("Step 2: could not save the overview_narration copy: %s", e)
     logger.info("Step 2: auto-generated overview_narration (%d chars).", len(script))
@@ -272,11 +270,23 @@ def add_overview_cues(project_config_path: str) -> bool:
         return False
     base = project.get("overview_narration") or ""
     store = CueStore(config_path.parent)
-    if not base.strip() or store.cued_text(OVERVIEW_CUE_KEY, base):
+    if not base.strip():
         return False
-    labels = [w.get("label") or w.get("name") or "" for w in visible_waypoints(project)]
-    tagged = auto_tag_overview(base, labels)
-    if not tagged or tagged == base:
+    stored = store.cued_text(OVERVIEW_CUE_KEY, base)
+    if stored:
+        tagged = stored
+    else:
+        labels = [w.get("label") or w.get("name") or "" for w in visible_waypoints(project)]
+        tagged = auto_tag_overview(base, labels) or base
+    # A text-led intro cuts its scenes on the opening's {scene} cues (the user's win).
+    from .intro_step import intro_style
+
+    style = intro_style(project.get("settings") or {})
+    if style != "slideshow":
+        from services.localization.overview_cues import add_scene_cues
+
+        tagged = add_scene_cues(tagged, [s["seconds"] for s in tuning.INTRO_STYLE_SCENES[style]])
+    if tagged == (stored or base):
         return False
     store.put_text(OVERVIEW_CUE_KEY, base, tagged)
     store.save()

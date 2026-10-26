@@ -50,6 +50,15 @@ def _existing_narration(config_path: str) -> dict:
         record_cue_times(config_path, audio)
     else:
         audio["overview_cue_times"] = {}
+    if audio.get("intro_voice") and audio.get("overview_audio_duration"):
+        # As the pipeline places it: the overview's own voice starts INTRO_MAP_LEAD_SECONDS in.
+        from services import tuning
+
+        lead = tuning.INTRO_MAP_LEAD_SECONDS
+        audio["overview_cue_times"] = {
+            k: float(v) + lead for k, v in (audio.get("overview_cue_times") or {}).items() if not str(k).startswith("scene")
+        }
+        audio["overview_audio_duration"] += lead
     return audio
 
 

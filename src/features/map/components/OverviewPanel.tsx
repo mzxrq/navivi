@@ -33,6 +33,15 @@ export function OverviewPanel() {
   const location = settings.intro_location ?? "";
   const showCount = settings.intro_place_count !== false;
   const count = placeCount(waypoints);
+  // Old projects may hold an object here from a dropped look setting.
+  const style = settings.intro_style === "cinematic" || settings.intro_style === "documentary" ? settings.intro_style : "slideshow";
+  const lines = settings.intro_lines ?? [];
+  const styles = [
+    ["slideshow", t`Slideshow`],
+    ["cinematic", t`Cinematic`],
+    ["documentary", t`Documentary`],
+  ] as const;
+  const lineLabels = [t`Opening line`, t`Closing line`];
   const subtitleLine = [metadata.video_subtitle?.trim(), showCount && count ? `${count} か所` : ""]
     .filter(Boolean)
     .join(" · ");
@@ -137,7 +146,55 @@ export function OverviewPanel() {
         <div className="px-3 pb-3 pt-1 space-y-2.5 border-t border-zinc-100 dark:border-white/5 animate-in fade-in duration-150">
           {isEnabled ? (
             <>
-              <label className="block pt-1.5">
+              <div className="pt-1.5">
+                <span className="block text-[11px] font-medium text-zinc-500 mb-1">
+                  <Trans>Style</Trans>
+                </span>
+                <div className="grid grid-cols-3 gap-1 p-0.5 rounded-lg bg-zinc-100 dark:bg-white/5">
+                  {styles.map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={style === value}
+                      onClick={() => updateSetting({ intro_style: value })}
+                      className={`h-7 rounded-md text-[11px] transition-colors ${
+                        style === value
+                          ? "bg-white dark:bg-zinc-800 text-navi font-medium shadow-sm"
+                          : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <span className="block text-[10px] text-zinc-400 mt-1">
+                  {style === "slideshow" ? (
+                    <Trans>Photos with the title. The overview voice starts here.</Trans>
+                  ) : (
+                    <Trans>Three scenes from the attraction videos (or photos): your two lines, then the route name. The overview voice starts here.</Trans>
+                  )}
+                </span>
+              </div>
+
+              {style !== "slideshow" &&
+                lineLabels.map((label, i) => (
+                  <label key={i} className="block">
+                    <span className="block text-[11px] font-medium text-zinc-500 mb-1">{label}</span>
+                    <input
+                      type="text"
+                      value={lines[i] ?? ""}
+                      onChange={(e) => {
+                        const next = [lines[0] ?? "", lines[1] ?? ""];
+                        next[i] = e.target.value;
+                        updateSetting({ intro_lines: next });
+                      }}
+                      placeholder={t`Written automatically when empty`}
+                      className={inputClass}
+                    />
+                  </label>
+                ))}
+
+              <label className="block">
                 <span className="block text-[11px] font-medium text-zinc-500 mb-1">
                   <Trans>Location</Trans>
                 </span>

@@ -2,7 +2,6 @@
 two real crops of the photo, with the 3D photo as the fallback."""
 
 import json
-from pathlib import Path
 
 import cv2
 import numpy as np
@@ -350,13 +349,29 @@ class TestDepthKeyframes:
         assert first[2] == 0 and last[2] == tuning.LTXV_DEPTH_DOLLY
         assert ltx_keyframed.depth_cams("zoomout")[:2] == (last, first)
 
-    def test_walk_back_is_walk_in_reversed_and_ends_on_the_photo(self):
-        first, last, _ = ltx_keyframed.depth_cams("walkin")
-        assert ltx_keyframed.depth_cams("walkback")[:2] == (last, first)
-        assert ltx_keyframed.depth_cams("walkback")[1] == (0.0, 0.0, 0.0)
+    def test_walk_back_is_a_walk_in_played_backwards(self, tmp_path, monkeypatch):
+        import cv2
+
         assert normalize_camera_pan("walk-back") == "walkback"
         assert "walkback" in tuning.ATTRACTION_LTX_PRESETS
-        assert "walkback" in tuning.LTXV_PROMPTS and len(ltx_keyframed.mid_guides("walkback", Path("."))) > 0
+        asked = []
+
+        def walk_in(photo, out, hint, duration_sec=0.0, place=None):
+            asked.append(hint)
+            frames = [np.full((32, 48, 3), v, np.uint8) for v in (0, 120, 240)]  # dark -> bright
+            w = cv2.VideoWriter(out, cv2.VideoWriter_fourcc(*"mp4v"), 24, (48, 32))
+            for fr in frames:
+                w.write(fr)
+            w.release()
+            return out
+
+        real = ltx_keyframed.generate_ltx_move
+        monkeypatch.setattr(ltx_keyframed, "generate_ltx_move",
+                            lambda p, o, h, d=0.0, pl=None: walk_in(p, o, h) if h == "walkin" else real(p, o, h, d, pl))
+        out = real("photo.png", str(tmp_path / "o.mp4"), "walk-back")
+        frames, _ = ltx_keyframed._read_frames(out)
+        assert asked == ["walkin"]
+        assert frames[0].mean() > frames[-1].mean()  # bright -> dark: played backwards
 
     def test_mid_guides_are_evenly_spaced_latent_frames(self, tmp_path):
         mids = ltx_keyframed.mid_guides("panleft", tmp_path)
@@ -404,7 +419,7 @@ class TestContinuousHalves:
             whole = ltx_keyframed.keyframe_rects(1600, 1200, move)
             a, b = ltx_keyframed._half(*whole, 0, whole=True), ltx_keyframed._half(*whole, 1, whole=True)
             assert a[1] == b[0] and a[0] == whole[0] and b[1] == whole[1], move
-        cams = ltx_keyframed.depth_cams("walkback")[:2]
+        cams = ltx_keyframed.depth_cams("zoomout")[:2]
         assert ltx_keyframed._half(*cams, 0)[1] == ltx_keyframed._half(*cams, 1)[0]
         assert ltx_keyframed._half(*cams, None) == cams
 
@@ -431,9 +446,25 @@ class TestContinuousHalves:
         out = ltx_keyframed.generate_ltx_move(str(photo), str(tmp_path / "o.mp4"), "pan-right", duration_sec=seconds)
         return parts, out
 
-    def test_a_short_share_renders_only_the_first_half(self, tmp_path, monkeypatch):
+    def test_a_short_share_renders_the_whole_move_in_one_clip(self, tmp_path, monkeypatch):
         parts, _ = self._render(monkeypatch, tmp_path, 3.0)
-        assert parts == [("panright", 0)]
+        assert parts == [("panright", None)]
+
+    def test_two_halves_cover_a_longer_path_still_inside_the_photo(self):
+        w, h = 1600, 1200
+        for move in ("panright", "zoomin", "closein", "closepanleft"):
+            one = ltx_keyframed.keyframe_rects(w, h, move)
+            two = ltx_keyframed.keyframe_rects(w, h, move, travel=tuning.LTXV_HALVES_TRAVEL)
+
+            def gap(r):
+                (ax, ay, aw, ah), (bx, by, bw, bh) = r
+                return abs(bx - ax) + abs(by - ay) + abs(bw - aw)
+
+            assert gap(two) > gap(one), move
+            assert all(x >= 0 and y >= 0 and x + cw <= w and y + ch <= h for x, y, cw, ch in two), move
+        first, last, margin = ltx_keyframed.depth_cams("zoomin", tuning.LTXV_HALVES_TRAVEL)
+        assert last[2] == min(tuning.LTXV_DEPTH_DOLLY * tuning.LTXV_HALVES_TRAVEL, tuning.LTXV_DEPTH_MAX_DOLLY)
+        assert ltx_keyframed.depth_cams("zoomout", 10)[0][2] == tuning.LTXV_DEPTH_MAX_DOLLY
 
     def test_a_long_share_renders_both_halves_joined_without_a_repeated_frame(self, tmp_path, monkeypatch):
         import cv2
@@ -441,7 +472,7 @@ class TestContinuousHalves:
         parts, out = self._render(monkeypatch, tmp_path, 10.0)
         assert parts == [("panright", 0), ("panright", 1)]
         frames = int(cv2.VideoCapture(out).get(cv2.CAP_PROP_FRAME_COUNT))
-        assert frames == 2 * 4 * 24 - 1
+        assert frames == 2 * 4 * 24 - tuning.LTXV_JOIN_FADE_FRAMES
         assert ltx_keyframed.first_shot_end(out, "unused") is None  # one shot: no dissolve point
 
     def test_a_failed_walk_falls_back_to_a_move_rendered_in_two_halves(self, tmp_path, monkeypatch):
@@ -462,3 +493,15 @@ class TestContinuousHalves:
         ltx_keyframed.generate_ltx_move(str(photo), str(tmp_path / "o.mp4"), "walk-in", duration_sec=10.0)
         fallback = tuning.LTXV_WALK_FAILED_FALLBACK
         assert parts == [(fallback, 0), (fallback, 1)]
+
+
+def test_the_second_half_is_graded_to_meet_the_first_without_a_jump(tmp_path):
+    from services.tuning import LTXV_JOIN_FADE_FRAMES
+
+    dark = [np.full((64, 96, 3), 80, np.uint8) for _ in range(24)]
+    bright = [np.full((64, 96, 3), 150, np.uint8) for _ in range(24)]
+    out = ltx_keyframed.join_frames(dark, bright, 24.0, str(tmp_path / "j.mp4"))
+    frames, _ = ltx_keyframed._read_frames(out)
+    assert len(frames) == 48 - LTXV_JOIN_FADE_FRAMES
+    means = [float(f.mean()) for f in frames]
+    assert max(abs(x - y) for x, y in zip(means, means[1:])) < 4  # no brightness step at the join

@@ -94,7 +94,10 @@ def test_without_a_voice_start_the_overview_is_unchanged(tmp_path, monkeypatch):
     )
     tracks = json.loads(Path(path).read_text(encoding="utf-8"))["video_tracks"]
     assert "audio_start" not in tracks[1]
-    assert json.loads(Path(path).read_text(encoding="utf-8"))["total_duration_seconds"] == 68.0
+    # intro 10 s + the overview held for its 58 s voice and the export's end hold (fix.md #5)
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    assert data["total_duration_seconds"] == 68.0 + tuning.AUDIO_END_HOLD_SECONDS
+    assert tracks[1]["duration"] == 58.0 + tuning.AUDIO_END_HOLD_SECONDS  # what the export uses as is
 
 
 def test_a_timed_narration_is_exported_as_unlinked_audio():

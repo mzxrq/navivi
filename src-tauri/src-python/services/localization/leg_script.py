@@ -197,6 +197,10 @@ BRIEF_ARRIVALS = ("{to}が見えてきます。", "その先に{to}がありま�
                   "{to}はすぐ先です。", "{to}に到着です。")
 BRIEF_ARRIVALS_AFTER_TURN = ("{to}が見えてきます。", "{to}はすぐそこです。", "{to}が目の前です。")
 BRIEF_MAX_TURNS = 2
+# Many turns, told as one line; the first sentence already gave the heading. Varied per stop: one line repeated at
+# every leg sounded mechanical (2026-10-23).
+BRIEF_MANY_TURNS = ("何度か角を曲がりながら進んでいきます。", "いくつかの角を折れて、道を進みます。",
+                    "曲がり角の多い道を抜けていきます。", "角をいくつか曲がりながら歩いていきます。")
 
 
 def _far(points: List[List[float]]) -> str:
@@ -221,7 +225,7 @@ def _brief_walk(origin: str, to: str, points: List[List[float]], variant: int) -
     last_near = bool(turns) and turns[-1]["to_end"] <= ARRIVE_NEAR_M
     told = list(enumerate(turns))
     if summarized:
-        sentences.append(f"何度か角を曲がりながら、{overall}へ進んでいきます。")
+        sentences.append(BRIEF_MANY_TURNS[variant % len(BRIEF_MANY_TURNS)])
         told = told[-1:] if last_near else []
     for k, (i, turn) in enumerate(told):
         # Told from the two stretches' headings, so the turn and the heading after it agree.

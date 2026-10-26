@@ -31,6 +31,7 @@ logger = setup_logger("LtxKeyframed")
 
 
 Rect = Tuple[int, int, int, int]  # x0, y0, width, height
+LTXV_MIN_CROP_SHARE = 0.3  # a crop below this share of the photo is too soft to animate
 
 
 def _half(first: Sequence[float], last: Sequence[float], part: Optional[int], whole: bool = False) -> Tuple[tuple, tuple]:
@@ -46,13 +47,19 @@ def _half(first: Sequence[float], last: Sequence[float], part: Optional[int], wh
     return at(0.5 * part), at(0.5 * part + 0.5)
 
 
+def _farther(start: float, end: float, travel: float, floor: float = LTXV_MIN_CROP_SHARE) -> float:
+    """`end` moved `travel` times as far from `start` (a crop share), never below `floor`."""
+    return max(floor, start + (end - start) * travel)
+
+
 def keyframe_rects(
-    w: int, h: int, move: str, target: Optional[Tuple[float, float]] = None,
+    w: int, h: int, move: str, target: Optional[Tuple[float, float]] = None, travel: float = 1.0,
 ) -> Tuple[Rect, Rect]:
     """(first, last) crop windows in a w x h photo, at the LTXV aspect. Pans
     slide a LTXV_CROP_WIDTH share of the widest window from edge to edge;
     zooms and the close-in shot scale about the middle. `target`: where a
-    pinned walk ends up (the photo's sign), else straight ahead."""
+    pinned walk ends up (the photo's sign), else straight ahead. `travel`: how many
+    times today's path to cover (LTXV_HALVES_TRAVEL for a two-half clip)."""
     aspect = tuning.LTXV_WIDTH / tuning.LTXV_HEIGHT
     full_w = min(w, round(h * aspect))
 
@@ -63,7 +70,7 @@ def keyframe_rects(
         y0 = int(min(max(round(cy - ch / 2), 0), h - ch))
         return x0, y0, cw, ch
 
-    s = tuning.LTXV_CROP_WIDTH
+    s = _farther(1.0, tuning.LTXV_CROP_WIDTH, travel)
     mid_x, mid_y = w / 2, h / 2
     if move in ("panright", "panleft"):
         left, right = window(s, 0, mid_y), window(s, w, mid_y)
@@ -72,39 +79,42 @@ def keyframe_rects(
         top, bottom = window(s, mid_x, 0), window(s, mid_x, h)
         return (bottom, top) if move == "panup" else (top, bottom)
     if move in ("closein", "closeout"):
-        wide, tight = window(tuning.LTXV_CLOSE_WIDE, mid_x, mid_y), window(tuning.LTXV_CLOSE_TIGHT, mid_x, mid_y)
+        tight_share = _farther(tuning.LTXV_CLOSE_WIDE, tuning.LTXV_CLOSE_TIGHT, travel)
+        wide, tight = window(tuning.LTXV_CLOSE_WIDE, mid_x, mid_y), window(tight_share, mid_x, mid_y)
         return (wide, tight) if move == "closein" else (tight, wide)
     if move in tuning.LTXV_FREE_MOVES:
         whole = window(1.0, mid_x, mid_y)
         return whole, whole
     if move.startswith("walkfwd"):
-        turn = {"walkfwdleft": -1, "walkfwdright": 1}.get(move, 0) * tuning.LTXV_WALK_TURN * full_w
+        turn = {"walkfwdleft": -1, "walkfwdright": 1}.get(move, 0) * tuning.LTXV_WALK_TURN * travel * full_w
         end_x, end_y = target if target and move == "walkfwd" else (mid_x + turn, mid_y)
         return (window(tuning.LTXV_CLOSE_WIDE, mid_x, mid_y),
-                window(tuning.LTXV_WALK_TIGHT, end_x, end_y))
+                window(_farther(tuning.LTXV_CLOSE_WIDE, tuning.LTXV_WALK_TIGHT, travel), end_x, end_y))
     if move.startswith("closepan"):
         c = tuning.LTXV_CLOSE_WIDE
-        dx = tuning.LTXV_CLOSE_PAN * full_w / 2
-        dy = tuning.LTXV_CLOSE_PAN * round(full_w / aspect) / 2
+        dx = tuning.LTXV_CLOSE_PAN * travel * full_w / 2
+        dy = tuning.LTXV_CLOSE_PAN * travel * round(full_w / aspect) / 2
         steps = {"closepanright": (-dx, 0, dx, 0), "closepanleft": (dx, 0, -dx, 0),
                  "closepanup": (0, dy, 0, -dy), "closepandown": (0, -dy, 0, dy)}
         ax, ay, bx, by = steps[move]
         return window(c, mid_x + ax, mid_y + ay), window(c, mid_x + bx, mid_y + by)
     # zoomin, zoomout, walkshort (and walkai without its AI wide shot).
-    wide, tight = window(tuning.LTXV_ZOOM_WIDE, mid_x, mid_y), window(tuning.LTXV_ZOOM_TIGHT, mid_x, mid_y)
+    tight_share = _farther(tuning.LTXV_ZOOM_WIDE, tuning.LTXV_ZOOM_TIGHT, travel)
+    wide, tight = window(tuning.LTXV_ZOOM_WIDE, mid_x, mid_y), window(tight_share, mid_x, mid_y)
     return (tight, wide) if move == "zoomout" else (wide, tight)
 
 
-def depth_cams(move: str) -> Tuple[Tuple[float, ...], Tuple[float, ...], float]:
-    """(first, last) 3D-photo cameras for a LTXV_DEPTH_KEYFRAMES move, and the margin they need."""
-    t, u = tuning.LTXV_DEPTH_TRUCK / 2, tuning.LTXV_DEPTH_PAN / 2
+def depth_cams(move: str, travel: float = 1.0) -> Tuple[Tuple[float, ...], Tuple[float, ...], float]:
+    """(first, last) 3D-photo cameras for a LTXV_DEPTH_KEYFRAMES move, and the margin they need;
+    `travel` times today's path (dollies capped at LTXV_DEPTH_MAX_DOLLY, past which the 3D photo stretches)."""
+    t, u = tuning.LTXV_DEPTH_TRUCK * travel / 2, tuning.LTXV_DEPTH_PAN * travel / 2
     if move in ("panright", "panleft"):
         left, right = (-t, 0.0, 0.0, -u), (t, 0.0, 0.0, u)
         return (left, right, t + u + 0.02) if move == "panright" else (right, left, t + u + 0.02)
-    if move in ("walkin", "walkback"):
-        near, far = (0.0, 0.0, 0.0), (0.0, 0.0, tuning.LTXV_WALK_ANCHOR_DOLLY)
-        return (near, far, 0.02) if move == "walkin" else (far, near, 0.02)
-    near, far = (0.0, 0.0, 0.0), (0.0, 0.0, tuning.LTXV_DEPTH_DOLLY)
+    if move == "walkin":
+        dolly = min(tuning.LTXV_WALK_ANCHOR_DOLLY * travel, tuning.LTXV_DEPTH_MAX_DOLLY)
+        return (0.0, 0.0, 0.0), (0.0, 0.0, dolly), 0.02
+    near, far = (0.0, 0.0, 0.0), (0.0, 0.0, min(tuning.LTXV_DEPTH_DOLLY * travel, tuning.LTXV_DEPTH_MAX_DOLLY))
     return (near, far, 0.02) if move == "zoomin" else (far, near, 0.02)
 
 
@@ -141,6 +151,11 @@ def walk_target(image, place: Optional[str] = None) -> Optional[Tuple[float, flo
     return (x0 + x1) / 2, (y0 + y1) / 2
 
 
+def _travel(part: Optional[int]) -> float:
+    """A two-half clip covers LTXV_HALVES_TRAVEL times the path, so it moves as fast as a single one."""
+    return 1.0 if part is None else tuning.LTXV_HALVES_TRAVEL
+
+
 def _tag(move: str, part: Optional[int]) -> str:
     return move if part is None else f"{move}{part}"
 
@@ -148,7 +163,7 @@ def _tag(move: str, part: Optional[int]) -> str:
 def _depth_keyframes(photo_path: str, move: str, work_dir: Path, part: Optional[int] = None) -> Tuple[str, str]:
     from services.vdoprocessing.parallax_generator import render_views_to_files
 
-    first, last, margin = depth_cams(move)
+    first, last, margin = depth_cams(move, _travel(part))
     first, last = _half(first, last, part)
     n = 0 if move in tuning.LTXV_FREE_MOVES else tuning.LTXV_DEPTH_MID_GUIDES
     mids = [tuple(a + (b - a) * k / (n + 1) for a, b in zip(first, last)) for k in range(1, n + 1)]
@@ -185,7 +200,8 @@ def crop_keyframes(
         return _depth_keyframes(photo_path, move, work_dir, part)
     paths = []
     target = walk_target(image, place) if move == "walkfwd" else None
-    for name, (x0, y0, cw, ch) in zip(("first", "last"), _half(*keyframe_rects(w, h, move, target), part, whole=True)):
+    rects = keyframe_rects(w, h, move, target, _travel(part))
+    for name, (x0, y0, cw, ch) in zip(("first", "last"), _half(*rects, part, whole=True)):
         path = work_dir / f"{_tag(move, part)}_{name}.png"
         frame = cv2.resize(image[y0:y0 + ch, x0:x0 + cw], (tuning.LTXV_WIDTH, tuning.LTXV_HEIGHT),
                            interpolation=cv2.INTER_AREA)
@@ -675,30 +691,88 @@ def needs_second_half(duration_sec: float) -> bool:
     return duration_sec <= 0 or duration_sec > tuning.LTXV_FRAMES / tuning.LTXV_FPS
 
 
+def _read_frames(path: str) -> Tuple[List[np.ndarray], float]:
+    cap = cv2.VideoCapture(path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or float(tuning.LTXV_FPS)
+    frames = []
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        frames.append(frame)
+    cap.release()
+    return frames, fps
+
+
+def join_frames(a: List[np.ndarray], b: List[np.ndarray], fps: float, output_path: str) -> str:
+    """`b` after `a` without a seam: `b` graded so it opens with `a`'s closing colours (each half was matched
+    to its own crop, so their colours differ), then LTXV_JOIN_FADE_FRAMES dissolved over the cut, which hides
+    the small pop and speed change where both halves meet the middle keyframe."""
+    from services.tts.ttsengine import FFmpegManager
+    from services.vdoprocessing.color_match import _lab_stats, correct_frame
+
+    src, dst = _lab_stats(b[0]), _lab_stats(a[-1])
+    b = [correct_frame(f, src, dst, 1.0) for f in b]
+    k = max(0, min(tuning.LTXV_JOIN_FADE_FRAMES, len(a) - 1, len(b) - 1))
+    blend = [cv2.addWeighted(a[len(a) - k + i], 1 - (i + 1) / (k + 1), b[i], (i + 1) / (k + 1), 0) for i in range(k)]
+    frames = a[:len(a) - k] + blend + b[k:]
+    h, w = frames[0].shape[:2]
+    tmp = str(Path(output_path).with_suffix(".join.mp4"))
+    proc = subprocess.Popen(
+        [FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_pipe_log_args(),
+         "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}", "-r", f"{fps:.3f}", "-i", "-",
+         "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "16", "-preset", "fast", "-pix_fmt", "yuv420p", tmp],
+        stdin=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    try:
+        for frame in frames:
+            proc.stdin.write(frame.tobytes())
+        proc.stdin.close()
+        if proc.wait() != 0:
+            raise RuntimeError("Joining the halves failed in ffmpeg.")
+    except Exception:
+        proc.kill()
+        Path(tmp).unlink(missing_ok=True)
+        raise
+    os.replace(tmp, output_path)
+    return output_path
+
+
 def join_halves(first: str, second: str, output_path: str) -> str:
-    """The two halves as one clip; the second's opening frame (the same real crop the first ends on) is dropped."""
+    """The two halves as one clip (join_frames)."""
+    a, fps = _read_frames(first)
+    b, _ = _read_frames(second)
+    if not a or not b:
+        raise RuntimeError("Joining the halves failed: a half has no frames.")
+    return join_frames(a, b, fps, output_path)
+
+
+def reverse_clip(path: str) -> str:
+    """`path` played backwards, in place."""
+    from services.projectfiles import replace_into
     from services.tts.ttsengine import FFmpegManager
 
-    tmp = str(Path(output_path).with_suffix(".join.mp4"))
+    tmp = str(Path(path).with_suffix(".reversed.mp4"))
     result = subprocess.run(
-        [FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_log_args(), "-i", first, "-i", second,
-         "-filter_complex", "[1:v]trim=start_frame=1,setpts=PTS-STARTPTS[b];[0:v][b]concat=n=2:v=1:a=0[v]",
-         "-map", "[v]", "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "16", "-preset", "fast",
-         "-pix_fmt", "yuv420p", tmp],
+        [FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_log_args(), "-i", path, "-vf", "reverse", "-an",
+         "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "16", "-preset", "fast", "-pix_fmt", "yuv420p", tmp],
         capture_output=True, encoding="utf-8", errors="replace",
     )
     if result.returncode != 0:
         Path(tmp).unlink(missing_ok=True)
-        raise RuntimeError(f"Joining the halves failed: {result.stderr.strip()[-300:]}")
-    os.replace(tmp, output_path)
-    return output_path
+        raise RuntimeError(f"Reversing {Path(path).name} failed: {result.stderr.strip()[-300:]}")
+    replace_into(tmp, path)
+    return path
 
 
 def generate_ltx_move(
     photo_path: str, output_path: str, camera_pan_hint, duration_sec: float = 0.0, place: Optional[str] = None,
 ) -> str:
     """The chosen move, then the second shot, dissolved together. A failed
-    second shot leaves the first alone; a failed first raises."""
+    second shot leaves the first alone; a failed first raises. Walk Back is a
+    Walk In played backwards: it walks away and ends on the real photo."""
+    if normalize_camera_pan(camera_pan_hint) == "walkback":
+        return reverse_clip(generate_ltx_move(photo_path, output_path, "walkin", duration_sec, place))
     preset = sharp_enough_preset(pinned_preset(normalize_camera_pan(camera_pan_hint)), photo_path)
     if preset == "walkai" and tuning.WALKAI_STYLE == "parallax":
         return walkai_parallax(photo_path, output_path, duration_sec)
@@ -710,7 +784,8 @@ def generate_ltx_move(
     try:
         shots, cached = [], []
         seed = _photo_seed(photo_path)
-        halves = tuning.LTXV_CONTINUE and preset not in tuning.LTXV_FREE_MOVES
+        # A share one half covers gets the whole move in one clip (as fast as before the halves).
+        halves = tuning.LTXV_CONTINUE and preset not in tuning.LTXV_FREE_MOVES and needs_second_half(duration_sec)
         for i, move in enumerate(shot_list(preset, seed, photo_path)):
             path = str(work / f"shot{i}.mp4")
             free = move in tuning.LTXV_FREE_MOVES
@@ -735,7 +810,7 @@ def generate_ltx_move(
                         logger.warning("%s - LTXV %s instead.", exc, fallback)
                         move, free = fallback, False
                         prompt = prompt_for(move, seed)
-                        if tuning.LTXV_CONTINUE and i == 0:  # a pinned move: two halves like any other
+                        if tuning.LTXV_CONTINUE and i == 0 and needs_second_half(duration_sec):  # two halves, like any pinned move
                             preset, halves, part = move, True, 0
                         keep = _shot_cache(output_path, seed, move if part is None else f"{move}#0", prompt)
                         cached[-1] = keep
@@ -757,7 +832,7 @@ def generate_ltx_move(
                                move, type(exc).__name__, exc)
         from services.tts.ttsengine import FFmpegManager
 
-        if halves and needs_second_half(duration_sec):
+        if halves:
             path = str(work / "half1.mp4")
             prompt = prompt_for(preset, seed)
             keep = _shot_cache(output_path, seed, f"{preset}#1", prompt)

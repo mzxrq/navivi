@@ -414,6 +414,7 @@ function TextLookSection({ text, timeline, commit }: { text: TextClip; timeline:
         saved[`${which}_style`] = text[which].style;
         saved[`${which}_animation`] = text[which].animation;
         saved[`${which}_delay`] = text[which].delay;
+        saved[`${which}_margin_top`] = text[which].margin_top;
       }
       for (const k of TEXT_LOOK_KEYS) saved[k] = text[k];
       updateSettings({ place_label_look: JSON.parse(JSON.stringify(saved)) });

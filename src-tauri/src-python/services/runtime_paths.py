@@ -90,3 +90,18 @@ def uv_exe() -> Optional[str]:
     home = Path.home()
     found = _first_existing([home / ".local" / "bin" / f"uv{EXE}", home / ".cargo" / "bin" / f"uv{EXE}"])
     return str(found) if found else None
+
+
+# The app hands these to the pipeline only (online scripts, map tiles, street photos).
+_SECRET_ENV_VARS = (
+    "NAVIVI_MAPBOX_TOKEN", "NAVIVI_MAPILLARY_TOKEN",
+    "MAPBOX_API_KEY", "MAPBOX_ACCESS_TOKEN", "VITE_MAPBOX_TOKEN", "VITE_ORS_API_KEY",
+)
+
+
+def server_environ(**extra: str) -> dict:
+    """The environment for a helper server we start (ComfyUI and its custom nodes, the TTS servers,
+    Ollama): ours without the API keys and tokens, which none of them needs."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("NAVIVI_AI_KEY_") and k not in _SECRET_ENV_VARS}
+    env.update(extra)
+    return env

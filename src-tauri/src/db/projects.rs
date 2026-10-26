@@ -65,6 +65,7 @@ pub fn find(conn: &Connection, id: &str) -> DbResult<Option<Project>> {
         .optional()?)
 }
 
+#[cfg(test)]
 pub fn get_by_dir(conn: &Connection, dir: &str) -> DbResult<Option<Project>> {
     Ok(conn
         .query_row(
@@ -245,6 +246,7 @@ pub fn forget_opened(conn: &Connection, id: &str) -> DbResult<bool> {
     Ok(conn.execute("UPDATE projects SET last_opened_at = NULL WHERE id = ?1", [id])? > 0)
 }
 
+#[cfg(test)]
 pub fn soft_delete(conn: &Connection, id: &str) -> DbResult<bool> {
     Ok(conn.execute(
         "UPDATE projects SET deleted_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
@@ -252,6 +254,7 @@ pub fn soft_delete(conn: &Connection, id: &str) -> DbResult<bool> {
     )? > 0)
 }
 
+#[cfg(test)]
 pub fn restore(conn: &Connection, id: &str) -> DbResult<bool> {
     Ok(conn.execute(
         "UPDATE projects SET deleted_at = NULL WHERE id = ?1 AND deleted_at IS NOT NULL",
@@ -260,6 +263,7 @@ pub fn restore(conn: &Connection, id: &str) -> DbResult<bool> {
 }
 
 /// Hard delete; settings, versions and route cache cascade.
+#[cfg(test)]
 pub fn purge(conn: &Connection, id: &str) -> DbResult<bool> {
     Ok(conn.execute("DELETE FROM projects WHERE id = ?1", [id])? > 0)
 }

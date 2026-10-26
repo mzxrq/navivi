@@ -39,7 +39,7 @@ from .geomath import cumulative_distance_km, haversine_km
 from .httpserver import start_local_server
 from .popupsequence import _wait_for_paint
 from .recorder import _route_gradient_feature, _route_linestring_feature
-from .elevation import leg_segment_colors, quantize, usable_heights
+from .elevation import leg_segment_colors, profile_card, quantize, usable_heights
 from .routedata import interpolate_route_data, patch_pydeck_html
 
 # ---------------------------------------------------------------------------
@@ -2483,9 +2483,62 @@ async def _record_leg(
                 hud_card_cache: Dict[Tuple[int, int, bool], str] = {}
                 hud_card_shown: List[Optional[str]] = [None]
 
+                # [NOTE] [Heatmap] With the heatmap's heights, an elevation profile sits above the summary card and
+                # its marker follows the walker.
+                elev = None
+                if "ele" in df_raw.columns:
+                    scale = output_size[1] / 1080.0
+                    palette = tuning.ui_theme(theme)
+                    label = palette["card_label"]
+                    elev = profile_card(
+                        df_raw[["lat", "lon"]].values.tolist(), df_raw["ele"].tolist(),
+                        (int(tuning.LEG_ELEVATION_CARD_SIZE[0]), int(tuning.LEG_ELEVATION_CARD_SIZE[1])),
+                        hud_labels["elevation_profile"],
+                        {"text": _css_rgba(palette["card_text"]), "label": _css_rgba(label),
+                         "fill": _css_rgba((*label[:3], 40))},
+                    )
+                    if elev is not None:
+                        await page.evaluate(
+                            """([svg, bg, right, scale]) => {
+                                const card = document.createElement('div');
+                                card.id = 'hud-elev-card';
+                                card.innerHTML = svg;
+                                Object.assign(card.style, {
+                                    position: 'fixed', right: right + 'px', bottom: '32px', zIndex: 1000,
+                                    background: bg, borderRadius: '24px', boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
+                                    fontFamily: '"Noto Sans JP", sans-serif', transformOrigin: 'bottom right',
+                                    transform: `scale(${scale})`, lineHeight: 0,
+                                });
+                                document.body.appendChild(card);
+                            }""",
+                            [elev[0], _css_rgba(palette["card_bg"]), tuning.LEG_CARD_MARGIN_PX + 20, scale],
+                        )
+
+                async def _set_elev(share: float) -> None:
+                    """The profile's marker at this share of the leg, the card kept just above the summary card."""
+                    if elev is None:
+                        return
+                    x, y = elev[1](share)
+                    await page.evaluate(
+                        """([x, y, gap]) => {
+                            const marker = document.getElementById('elev-marker');
+                            if (marker) marker.setAttribute('transform', `translate(${x},${y})`);
+                            const card = document.getElementById('hud-elev-card');
+                            const below = document.getElementById('hud-card-img') || document.getElementById('hud-card');
+                            if (card && below && below.offsetHeight) {
+                                const top = below.getBoundingClientRect().top;
+                                card.style.bottom = (window.innerHeight - top + gap) + 'px';
+                            }
+                        }""",
+                        [x, y, tuning.LEG_ELEVATION_CARD_GAP_PX],
+                    )
+
                 async def _set_hud_card(rem_m: float, rem_min: int, arrived: bool = False) -> None:
                     """Swaps in the summary-card image for these numbers (rendered
-                    once per distinct value) and waits for it to decode."""
+                    once per distinct value) and waits for it to decode; moves the
+                    elevation marker along with it."""
+                    path_km = total_leg_km if arrived else float(remaining_km.iloc[0])
+                    await _set_elev(1.0 if arrived else 1.0 - rem_m / (path_km * 1000.0) if path_km > 0 else 0.0)
                     if hud_card_png is None:
                         return
                     key = (int(round(rem_m)), int(rem_min), arrived)
