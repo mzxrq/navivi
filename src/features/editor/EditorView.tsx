@@ -8,7 +8,7 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
 import { Copy, FileText, Film, LinkIcon, Loader2, Maximize, Mic, Music, Plus, RotateCcw, Sparkles, Subtitles, Trash2, Type, UnlinkIcon, Video, VolumeX, ZoomIn, ZoomOut } from "../../components/ui/icons";
 import { useStopRegen } from "../../hooks/useStopRegen";
-import { type RegenKind, stopIndexOf } from "../../services/stopRegen";
+import { type RegenKind, routeClipOf, stopIndexOf } from "../../services/stopRegen";
 import { Tip } from "../../components/ui/Tip";
 import { openContextMenu, separator } from "../../components/ui/menuItems";
 import { probeDuration, toAbsoluteProjectPath, toRelativeProjectPath } from "../../services/fileSystem";
@@ -51,7 +51,7 @@ const toolButton =
 export function EditorView() {
   const { timeline, setTimeline, metadata, autoLoadTimeline, waypoints } = useWorkspace();
   const { showToast, isBackgroundBusy, isRendering } = useUI();
-  const { busy: regenBusy, regenerate, stopInfo } = useStopRegen();
+  const { busy: regenBusy, regenerate, regenerateClip, stopInfo } = useStopRegen();
   const dir = metadata.directory_path;
 
   const [draft, setDraft] = useState<TimelineData | null>(null);
@@ -306,7 +306,18 @@ export function EditorView() {
     const stopIndex = stopIndexOf(seg);
     const stop = stopIndex === null ? null : stopInfo(stopIndex);
     const remake = (kind: RegenKind) => () => void regenerate(stopIndex!, kind);
+    const clip = routeClipOf(seg);
     openContextMenu(e, [
+      !!clip && {
+        label: clip === "intro" ? t`Make the intro again` : t`Make the overview again`,
+        icon: RotateCcw,
+        disabled: !!regenBusy || isRendering,
+        submenu: [
+          { label: t`Narration`, icon: Mic, onSelect: () => void regenerateClip(clip, "voice") },
+          { label: t`Video`, icon: Film, onSelect: () => void regenerateClip(clip, "video") },
+        ],
+      },
+      !!clip && separator,
       !!stop && {
         label: t`Make again for this stop`,
         icon: RotateCcw,
@@ -425,7 +436,9 @@ export function EditorView() {
           <span role="status" className="ml-2 flex items-center gap-1.5 h-7 max-w-64 px-2.5 rounded-md bg-navi/10 text-navi text-[12px] font-medium">
             <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
             <span className="truncate">
-              {t`Making this stop again...`} {waypoints[regenBusy.index]?.name ?? ""}
+              {typeof regenBusy.index === "number"
+                ? `${t`Making this stop again...`} ${waypoints[regenBusy.index]?.name ?? ""}`
+                : regenBusy.index === "intro" ? t`Making the intro again...` : t`Making the overview again...`}
             </span>
           </span>
         )}

@@ -4,7 +4,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 import { emptyTimeline, type Segment, type TimelineData } from "../../src/features/editor/model";
-import { lastJson, refreshStopMedia, regenModes, runRegen, stopIndexOf } from "../../src/services/stopRegen";
+import { lastJson, refreshRouteClip, refreshStopMedia, regenModes, regenTargetOf, routeClipModes, runRegen, stopIndexOf } from "../../src/services/stopRegen";
 
 beforeEach(() => invoke.mockReset());
 
@@ -104,5 +104,36 @@ describe("stopIndexOf", () => {
     expect(stopIndexOf({ video: "assets/video/attraction/04_attraction_06_九品寺.mp4" })).toBe(6);
     expect(stopIndexOf({ video: "assets/video/route/02_leg.mp4", audio: "assets/audio/02_waypoint_07_九品寺.wav" })).toBe(6);
     expect(stopIndexOf({ video: "assets/video/route/01_overview.mp4", audio: "assets/audio/00_overview_narration.wav" })).toBeNull();
+  });
+});
+
+describe("intro and overview clips", () => {
+  const io = {
+    probe: vi.fn(async (_p: string, kind: string) => (kind === "audio" ? 21 : 22.5)),
+    readText: vi.fn(async () => "1\n00:00:00,000 --> 00:00:02,000\nようこそ\n"),
+  };
+  const clips = (): TimelineData => ({
+    ...emptyTimeline(),
+    segments: [
+      seg({ id: "intro", video: "assets/video/00_intro.mp4", videoDuration: 20, trimOut: 20, audio: "assets/audio/00_intro_narration.wav", audioDuration: 19, subtitleFile: "assets/subtitles/00_intro_narration.srt" }),
+      seg({ id: "overview", video: "assets/video/route/01_overview.mp4", videoDuration: 80, trimOut: 80, audio: "assets/audio/00_overview_narration.wav", audioDuration: 75 }),
+      seg({ id: "leg", audio: "assets/audio/02_waypoint_02_Park.wav", audioDuration: 4 }),
+    ],
+  });
+
+  it("are made again through their own modes; the voice is never forced", () => {
+    expect(regenTargetOf({ video: "assets/video/00_intro.mp4" })).toBe("intro");
+    expect(regenTargetOf({ video: "assets/video/route/01_overview.mp4", audio: "assets/audio/00_overview_narration.wav" })).toBe("overview");
+    expect(routeClipModes("intro", "video")).toEqual(["intro"]);
+    expect(routeClipModes("overview", "video")).toEqual(["overview --force"]);
+    expect(routeClipModes("intro", "voice")).toEqual(["overview-tts", "subtitle-all"]);
+  });
+
+  it("re-reads only their own files", async () => {
+    const out = await refreshRouteClip(clips(), "intro", "video", io);
+    expect(out?.segments.map((s) => s.videoDuration)).toEqual([22.5, 80, 10]);
+    const voiced = await refreshRouteClip(clips(), "overview", "voice", io);
+    expect(voiced?.segments.map((s) => s.audioDuration)).toEqual([21, 21, 4]);
+    expect(voiced?.subtitles.map((c) => c.text)).toEqual(["ようこそ"]);
   });
 });

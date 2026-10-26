@@ -5,13 +5,14 @@ import { t } from "@lingui/core/macro";
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
 import { probeDuration, toAbsoluteProjectPath } from "../services/fileSystem";
-import { RegenKind, refreshStopMedia, regenModes, runRegen } from "../services/stopRegen";
+import { RegenKind, RouteClip, refreshRouteClip, refreshStopMedia, regenModes, routeClipModes, runRegen } from "../services/stopRegen";
 
 /** "Make again" for one stop's voice, subtitles or photo clip (stop editor and timeline editor). */
 export function useStopRegen() {
   const { waypoints, metadata, settings, saveProject, timeline, setTimeline } = useWorkspace();
   const { showToast, isRendering } = useUI();
-  const [busy, setBusy] = useState<{ index: number; kind: RegenKind } | null>(null);
+  // index: the stop, or the intro / overview clip.
+  const [busy, setBusy] = useState<{ index: number | RouteClip; kind: RegenKind | "video" } | null>(null);
   const liveTimeline = useRef(timeline);
   liveTimeline.current = timeline;
 
@@ -60,5 +61,30 @@ export function useStopRegen() {
     }
   };
 
-  return { busy, regenerate, stopInfo };
+  // The intro or overview clip: its voice (the overview narration, both files) or its video.
+  const regenerateClip = async (clip: RouteClip, kind: "voice" | "video") => {
+    const dir = metadata.directory_path;
+    if (!dir || busy || isRendering) return;
+    setBusy({ index: clip, kind });
+    showToast(kind === "voice" ? t`Making the overview narration again.` : t`Making this clip again. This can take a few minutes.`, "info");
+    try {
+      await saveProject();
+      const { skipped } = await runRegen(`${dir}/job_config.json`, routeClipModes(clip, kind));
+      const next = await refreshRouteClip(liveTimeline.current, clip, kind, {
+        probe: async (rel, mediaKind) => probeDuration(convertFileSrc(await toAbsoluteProjectPath(rel, dir)), mediaKind, 0),
+        readText: async (rel) => readTextFile(await toAbsoluteProjectPath(rel, dir)),
+      });
+      if (next) setTimeline(next);
+      if (skipped) showToast(t`Nothing was made: ${skipped}`, "warning");
+      else showToast(kind === "voice" ? t`The narration is ready. If its length changed, make the clip again so it fits.` : t`The clip is ready.`, "success");
+    } catch (err: any) {
+      const message = String(err?.message ?? err);
+      if (/process was cancelled/i.test(message)) showToast(t`Stopped before it finished.`, "info");
+      else showToast(t`Could not make that again: ${message}`, "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return { busy, regenerate, regenerateClip, stopInfo };
 }
