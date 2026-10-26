@@ -255,7 +255,7 @@ class TestQwen3Client:
 
     def test_it_sends_the_text_and_the_path_of_the_recording_and_applies_the_speed_after(self, client, voice_lib):
         audio = asyncio.run(client.call_api("こんにちは"))
-        assert client.sent == [{"input": "こんにちは", "ref_audio": str(voice_lib / "alice.wav")}]
+        assert client.sent == [{"input": "こんにちは", "ref_audio": str(voice_lib / "alice.wav"), "language": "Japanese"}]
         assert audio == "WAV-こんにちは@1.25".encode("utf-8")
 
     def test_a_repeated_line_comes_from_the_cache_at_the_speed_it_was_made(self, client):

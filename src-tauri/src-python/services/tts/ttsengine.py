@@ -947,6 +947,14 @@ def _atempo_filter(speed: float) -> str:
     return ",".join(stages)
 
 
+def qwen3_language(text: str) -> str:
+    """The language Qwen3 reads a line in: Japanese when it has any kana or kanji, else English (an English
+    narration read as Japanese comes out with a heavy Japanese accent)."""
+    from services.localization.localization import is_japanese
+
+    return "Japanese" if is_japanese(text) else "English"
+
+
 def qwen3_device() -> str:
     """Where the Qwen3 server runs its model: NAVIVI_TTS_DEVICE, else tuning.QWEN3_DEVICE ("auto" means the GPU)."""
     device = (os.environ.get("NAVIVI_TTS_DEVICE") or tuning.QWEN3_DEVICE).strip().lower()
@@ -1013,14 +1021,21 @@ class Qwen3TTSClient(_VenvEngineClient):
             from services.localization.japanese_words import spoken_kana
 
             text = spoken_kana(text)
-        key = phrase_cache.cache_key({"engine": "qwen3", "input": text, "speed": self.config.speed}, self._voice_sha256())
+        language = qwen3_language(text)
+        # Japanese lines keep their old key (cached before the language was sent).
+        key = phrase_cache.cache_key(
+            {"engine": "qwen3", "input": text, "speed": self.config.speed, **({"language": language} if language != "Japanese" else {})},
+            self._voice_sha256(),
+        )
         cached = self._cached_line(key)
         if cached is not None:
             logger.info("TTS line served from the cache (%d characters).", len(text))
             return cached
         if qwen3_device() == "cuda":
             await asyncio.to_thread(wait_for_gpu_cooldown, "the next TTS line")
-        audio = await self._post_starting_the_server({"input": text, "ref_audio": str(reference)})
+        audio = await self._post_starting_the_server(
+            {"input": text, "ref_audio": str(reference), "language": language}
+        )
         audio = await asyncio.to_thread(apply_speed, audio, self.config.speed)
         phrase_cache.put(key, audio)
         return audio

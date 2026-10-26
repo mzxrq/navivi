@@ -20,14 +20,14 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MODEL_ID = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
-LANGUAGE = "Japanese"
+LANGUAGE = "Japanese"  # when a request names none
 LOAD_WAIT_SECONDS = 300  # how long a request waits for the model before giving up
 MAX_ATTEMPTS = 3
 TAIL_SECONDS = 0.08  # the end of the clip that is checked
 TAIL_OK = 0.15  # its energy against the whole clip's: measured 0.00-0.12 for lines that end properly, 0.19-0.31 for cut-off ones
 END_PAUSE_SECONDS = 0.25  # silence after every line so a clip never ends on a click
 REF_MAX_SECONDS = 15  # how much of the reference recording is used
-ADD_FULL_STOP = True  # end a line without final punctuation with "。"
+ADD_FULL_STOP = True  # end a line without final punctuation with "。" ("." in English)
 LINE_ENDS = "。！？!?」』）)…．."
 
 _model = None
@@ -113,12 +113,13 @@ def tail_ratio(audio, sample_rate: int) -> float:
     return float(np.sqrt(np.mean(audio[-n:] ** 2))) / body
 
 
-def synthesize(text: str, ref_audio: str) -> bytes:
+def synthesize(text: str, ref_audio: str, language: str = LANGUAGE) -> bytes:
     import numpy as np
     import soundfile as sf
     import torch
 
-    spoken = text + "。" if ADD_FULL_STOP and text and text[-1] not in LINE_ENDS else text
+    stop = "。" if language == "Japanese" else "."
+    spoken = text + stop if ADD_FULL_STOP and text and text[-1] not in LINE_ENDS else text
 
     def takes():
         best = None
@@ -127,7 +128,7 @@ def synthesize(text: str, ref_audio: str) -> bytes:
         for attempt in range(MAX_ATTEMPTS):
             torch.manual_seed(base_seed + attempt)
             wavs, sample_rate = _model.generate_voice_clone(
-                text=spoken, language=LANGUAGE, voice_clone_prompt=prompt, max_new_tokens=len(spoken) * 4 + 40
+                text=spoken, language=language, voice_clone_prompt=prompt, max_new_tokens=len(spoken) * 4 + 40
             )
             audio = np.asarray(wavs[0], dtype=np.float32)
             ratio = tail_ratio(audio, sample_rate)
@@ -191,7 +192,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("'input' is empty.")
             if not os.path.isfile(ref_audio):
                 raise FileNotFoundError("The reference recording was not found: %s" % ref_audio)
-            self._reply(200, synthesize(text, ref_audio), "audio/wav")
+            self._reply(200, synthesize(text, ref_audio, str(body.get("language") or LANGUAGE)), "audio/wav")
         except Exception as exc:
             self._reply(500, json.dumps({"error": f"{type(exc).__name__}: {exc}"}).encode("utf-8"), "application/json")
         finally:
