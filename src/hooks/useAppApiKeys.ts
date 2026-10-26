@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { db } from "../services/db";
-import { adoptLegacyKeys, API_KEYS_SETTING, AppApiKeys, cleanApiKeys, hasApiKeys, sameApiKeys } from "../utils/apiKeys";
+import { loadMapKeys, saveMapKeys } from "../services/mapKeys";
+import { adoptLegacyKeys, AppApiKeys, hasApiKeys, sameApiKeys } from "../utils/apiKeys";
 
 /**
- * The Mapbox and OpenRouteService keys, kept in the app settings (same pattern as the AI choices in useWorkspace).
- * A change made before the saved record has been read is held back from the database and wins once it arrives,
+ * The map service keys (Mapbox, OpenRouteService, Mapillary), kept in the OS credential store like the AI keys.
+ * A change made before the saved keys have been read is held back from the store and wins once they arrive,
  * and a key found in an opened project fills only what is still empty.
  */
 export function useAppApiKeys() {
@@ -19,17 +19,15 @@ export function useAppApiKeys() {
     setKeys(next);
   }, []);
   const persist = useCallback((next: AppApiKeys) => {
-    db.appSettings.set(API_KEYS_SETTING, next).catch((err) => console.error("Could not save the map keys:", err));
+    saveMapKeys(next).catch((err) => console.error("Could not save the map keys:", err));
   }, []);
 
   useEffect(() => {
     let attempts = 0;
     const load = () =>
-      db.appSettings
-        .get<unknown>(API_KEYS_SETTING)
-        .then((saved) => {
+      loadMapKeys()
+        .then((stored) => {
           const early = earlyRef.current;
-          const stored = cleanApiKeys(saved);
           const merged = adoptLegacyKeys({ ...keysRef.current, ...stored, ...early }, adoptRef.current);
           loadedRef.current = true;
           commit(merged);

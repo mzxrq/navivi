@@ -1,7 +1,7 @@
 import type { ProjectSettings } from "../types";
 
-/** The map keys belong to the app: one `api_keys` record in the app settings, never a project file, version or shared archive. */
-export const API_KEYS_SETTING = "api_keys";
+/** The map keys belong to the app: kept in the OS credential store (src-tauri/src/secrets.rs, `map-key:<name>`), never in
+ * the database, a project file, a version or a shared archive. */
 
 export interface AppApiKeys {
   mapbox?: string;
@@ -12,16 +12,9 @@ export interface AppApiKeys {
 const FIELDS = { mapbox: "mapbox_api_key", ors: "ors_api_key", mapillary: "mapillary_api_key" } as const;
 type KeyName = keyof typeof FIELDS;
 const NAMES = Object.keys(FIELDS) as KeyName[];
+export const API_KEY_NAMES: readonly KeyName[] = NAMES;
 
 const filled = (value: unknown): value is string => typeof value === "string" && value.trim() !== "";
-
-/** What was read from the database, reduced to the two known string fields. */
-export function cleanApiKeys(value: unknown): AppApiKeys {
-  const source = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
-  const out: AppApiKeys = {};
-  for (const name of NAMES) if (typeof source[name] === "string") out[name] = source[name] as string;
-  return out;
-}
 
 /** The keys a settings object carries (an empty value counts as no key). Used for projects saved by earlier versions. */
 export function legacyApiKeys(settings: unknown): AppApiKeys {

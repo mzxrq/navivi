@@ -4,7 +4,7 @@ import json
 import math
 
 from services.cli.script_commands import leg_scripts
-from services.localization.leg_script import brief_directions, build_leg_scripts, leg_turns, walking_directions
+from services.localization.leg_script import BRIEF_MANY_TURNS, brief_directions, build_leg_scripts, leg_turns, walking_directions
 
 LAT0, LNG0 = 35.0, 139.0
 M_LAT = 1 / 110540.0
@@ -102,6 +102,9 @@ def test_a_winding_leg_is_summed_up_not_told_turn_by_turn():
     stairs = [(300.0 * (i // 2 + i % 2), 300.0 * (i // 2)) for i in range(8)]
     text = brief_directions("A", "B", "walking", [], _path(*stairs))
     assert "何度か角を曲がりながら" in text and text.count("。") <= 5
+    lines = {next(m for m in BRIEF_MANY_TURNS if m in brief_directions("A", "B", "walking", [], _path(*stairs), v))
+             for v in range(len(BRIEF_MANY_TURNS))}
+    assert len(lines) == len(BRIEF_MANY_TURNS)  # neighbouring stops word it differently
 
 
 def test_a_long_first_stretch_does_not_say_shibaraku_twice():

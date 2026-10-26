@@ -19,7 +19,7 @@ from services.vdoprocessing.stopby_visits import set_visit_all_stopbys
 from services.vdoprocessing.vdoexporter import VideoExporter, sweep_stale_temp_files
 
 from .attraction_step import render_attraction_videos
-from .audio_step import apply_cued_scripts, generate_audio, set_route_only_legs, stop_tts_server
+from .audio_step import apply_cued_scripts, generate_audio, require_some_voice, set_route_only_legs, stop_tts_server
 from .gps_step import process_gps
 from .helpers import (
     attraction_videos_enabled,
@@ -29,7 +29,7 @@ from .helpers import (
     project_video_dir,
     skip_rich_media,
 )
-from .intro_step import intro_text_item, plan_intro_seconds, render_intro_clip
+from .intro_step import intro_text_items, place_overview_voice, render_intro_clip
 from .leg_pieces import compute_leg_narration_splits
 from .narration_step import add_default_cues, add_overview_cues, record_cue_times
 from .outro_step import outro_text_item, render_outro_clip
@@ -133,6 +133,7 @@ def run_full_pipeline(
         audio_data = generate_audio(
             cleaned_route, str(config_file_path), force=force_regenerate
         )
+        require_some_voice(waypoints, audio_data)
         # Where each cue falls in the real audio; render_step sizes each walk from it.
         if use_cues:
             record_cue_times(str(config_file_path), audio_data)
@@ -153,6 +154,7 @@ def run_full_pipeline(
         logger.info("Step 2b: settings.skip_rich_media is on — skipping subtitles.")
         subtitle_paths = []
         overview_subtitle_path = None
+        intro_subtitle_path = None
         attraction_subtitle_paths = []
     else:
         tracker.stage("Generating subtitles...")
@@ -168,7 +170,13 @@ def run_full_pipeline(
             audio_data.get("overview_audio_path"),
             str(subtitle_dir),
             force=force_regenerate,
+            script=audio_data.get("overview_text"),
         )
+        intro_voice_data = audio_data.get("intro_voice") or {}
+        intro_subtitle_path = build_overview_subtitle(
+            JobConfigManager(config_file_path).data, intro_voice_data.get("audio_path"), str(subtitle_dir),
+            force=force_regenerate, script=intro_voice_data.get("text"),
+        ) if intro_voice_data else None
         attraction_subtitle_paths = build_attraction_subtitles(
             waypoints,
             audio_data.get("attraction_audio_paths", []),
@@ -235,25 +243,16 @@ def run_full_pipeline(
 
     # --- STEP 4 ---
     tracker.stage("Rendering overview & residential video...")
-    # The overview voice starts on the intro: its opening (up to {start}) plays
-    # over the photos, so the intro is built first, as long as that opening,
-    # and the overview gets the voice from where the intro leaves it.
-    overview_cues = audio_data.get("overview_cue_times") if use_cues else None
-    overview_audio = audio_data.get("overview_audio_duration") or 0.0
-    intro_seconds = plan_intro_seconds(settings, overview_cues, overview_audio)
+    # The overview voice starts on the intro: its opening (up to {start}) plays over the intro.
     tracker.show("Building intro clip...")
-    intro_path = render_intro_clip(str(config_file_path), duration_sec=intro_seconds)
-    voice_start = tuning.INTRO_VOICE_LEAD_SECONDS if intro_path and intro_seconds else None
-    if voice_start is not None:
-        from services.tts.ttsengine import FFmpegManager
-
-        try:
-            intro_seconds = float(FFmpegManager.get_media_duration(intro_path)) or intro_seconds
-        except Exception as exc:  # the planned length is close enough
-            logger.warning("Intro: could not probe %s (%s); using the planned length.", intro_path, exc)
-        shift = max(0.0, intro_seconds - voice_start)
-        overview_cues = {k: max(0.0, float(v) - shift) for k, v in (overview_cues or {}).items()} or overview_cues
-        overview_audio = max(0.0, overview_audio - shift)
+    voice = place_overview_voice(
+        settings, audio_data, use_cues,
+        lambda seconds, cues: render_intro_clip(
+            str(config_file_path), duration_sec=seconds, attraction_videos=attraction_videos, cue_times=cues,
+        ),
+    )
+    intro_path, intro_seconds, intro_cues = voice["intro_path"], voice["intro_seconds"], voice["intro_cues"]
+    overview_cues, overview_audio = voice["overview_cues"], voice["overview_audio"]
 
     tuning.ensure_free_ram("video rendering", min_free_ram, relief=_stop_gpu_servers)
     video_paths = render_route_video(
@@ -319,10 +318,14 @@ def run_full_pipeline(
         attraction_fade_seconds=float(
             job_config.get("settings", {}).get("attraction_fade_seconds", 0.8)
         ),
-        intro_text=intro_text_item(str(config_file_path)) if intro_path else None,
+        intro_text=intro_text_items(str(config_file_path), duration_sec=intro_seconds, cue_times=intro_cues) if intro_path else None,
         outro_text=outro_text_item(str(config_file_path)) if outro_path else None,
         place_label_look=job_config.get("settings", {}).get("place_label_look"),
-        overview_voice_start=voice_start,
+        overview_voice_start=voice["voice_start"],
+        intro_audio_path=(voice["intro_voice"] or {}).get("audio_path"),
+        intro_subtitle_path=intro_subtitle_path if intro_path else None,
+        overview_audio_offset=voice["overview_lead"],
+        waypoints=waypoints,  # as the run started: job_config.json may be edited meanwhile
     )
     recorder.finish()
     tracker.on_stage = None

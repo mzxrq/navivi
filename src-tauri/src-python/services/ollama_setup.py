@@ -9,6 +9,7 @@ from typing import Any, Dict
 import httpx
 
 from services import install_progress
+from services.runtime_paths import server_environ
 
 INSTALL_COMMAND = "irm https://ollama.com/install.ps1 | iex"
 OLLAMA_URL = "http://127.0.0.1:11434"
@@ -24,7 +25,7 @@ def server_up() -> bool:
 def _start_server() -> None:
     exe = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / "ollama app.exe"
     if exe.exists():
-        subprocess.Popen([str(exe)], creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
+        subprocess.Popen([str(exe)], creationflags=getattr(subprocess, "DETACHED_PROCESS", 0), env=server_environ())
 
 
 def install_ollama(_payload: Dict[str, Any] = None) -> Dict[str, Any]:

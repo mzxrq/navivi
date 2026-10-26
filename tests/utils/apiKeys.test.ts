@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   adoptLegacyKeys,
   apiKeySettings,
-  cleanApiKeys,
   hasApiKeys,
   legacyApiKeys,
   patchedApiKeys,
@@ -28,14 +27,9 @@ describe("map keys are the app's, not a project's", () => {
     expect(patchedApiKeys({ fps: 24 })).toEqual({});
   });
 
-  it("cleanApiKeys reduces whatever the database held to the two string fields", () => {
-    expect(cleanApiKeys({ mapbox: "m", ors: 3, other: "x" })).toEqual({ mapbox: "m" });
-    expect(cleanApiKeys("junk")).toEqual({});
-    expect(cleanApiKeys(null)).toEqual({});
-  });
 
   it("apiKeySettings gives the fields the UI reads, empty when unset", () => {
-    expect(apiKeySettings({ mapbox: "m" })).toEqual({ mapbox_api_key: "m", ors_api_key: "" });
+    expect(apiKeySettings({ mapbox: "m" })).toEqual({ mapbox_api_key: "m", ors_api_key: "", mapillary_api_key: "" });
   });
 });
 

@@ -110,8 +110,10 @@ class TileDownloader:
         cache_override = settings.get("tile_cache_dir")
         if cache_override:
             override_path = Path(cache_override)
+            # Always its own subfolder: the 30-day sweep below deletes every old file under cache_dir, and a
+            # setting like "." would otherwise point it at the project's photos, audio and exports.
             self.cache_dir = (
-                override_path if override_path.is_absolute() else base_path / override_path
+                (override_path if override_path.is_absolute() else base_path / override_path) / "navivi_tiles"
             ).resolve()
         else:
             self.cache_dir = tile_cache_dir().resolve()

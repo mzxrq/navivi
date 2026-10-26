@@ -6,9 +6,11 @@ the root (`.routecache.json`, `.narration_cues.json`, ...): readers fall back to
 that has not been tidied yet still works, writers always use the new place.
 """
 
+import json
 import os
+import time
 from pathlib import Path
-from typing import Union
+from typing import Any, Union
 
 META_DIR = ".navivi"
 
@@ -62,3 +64,53 @@ def dictionary_cache_dir() -> Path:
 def tile_cache_dir() -> Path:
     """Map tiles are shared by every project (and never archived with one)."""
     return _shared_cache_base() / "tiles"
+
+
+def write_atomic(path: "PathLike", data: Union[str, bytes]) -> None:
+    """`data` written beside `path` first, then swapped in: a cancel or crash mid-write leaves the old
+    file (or none), never a cut-off one that is trusted later. Retries the swap briefly while another
+    process (the app reading it) has the file open, which Windows refuses."""
+    path = Path(path)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.part")
+    try:
+        if isinstance(data, bytes):
+            tmp.write_bytes(data)
+        else:
+            tmp.write_text(data, encoding="utf-8")
+        for attempt in range(5):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.1 * (attempt + 1))
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def write_json_atomic(path: "PathLike", obj: Any, **dump_kwargs: Any) -> None:
+    write_atomic(path, json.dumps(obj, **{"ensure_ascii": False, "indent": 2, **dump_kwargs}))
+
+
+def save_image_atomic(image: Any, path: "PathLike") -> None:
+    """A PIL image saved like write_atomic, in the format its file extension names."""
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    image.save(buf, format=Image.registered_extensions()[Path(path).suffix.lower()])
+    write_atomic(path, buf.getvalue())
+
+
+def replace_into(tmp: "PathLike", path: "PathLike") -> None:
+    """A finished file written beside `path` (by ffmpeg, say) swapped in, with write_atomic's retry."""
+    for attempt in range(5):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 4:
+                raise
+            time.sleep(0.1 * (attempt + 1))

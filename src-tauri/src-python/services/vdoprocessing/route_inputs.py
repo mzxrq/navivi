@@ -32,6 +32,12 @@ def route_inputs_hash(waypoints: Iterable) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
+def labels_hash(waypoints: Iterable) -> str:
+    """The stops' names, which the overview's cards and the legs' banners show."""
+    rows = [wp.get("label") if isinstance(wp, dict) else None for wp in waypoints or []]
+    return hashlib.sha256(json.dumps(rows, ensure_ascii=False).encode("utf-8")).hexdigest()[:16]
+
+
 def overview_flags_hash(waypoints: Iterable) -> str:
     """The per-waypoint toggles only the overview uses ("Pause at Location")."""
     rows = [

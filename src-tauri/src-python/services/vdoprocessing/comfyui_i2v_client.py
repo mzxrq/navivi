@@ -32,6 +32,7 @@ import httpx
 from services.logger.logger import setup_logger
 from services.logger.progress import tracker
 from services import runtime_paths, tuning
+from services.runtime_paths import server_environ
 
 logger = setup_logger("ComfyUII2VClient")
 
@@ -689,6 +690,7 @@ class ComfyUII2VClient:
                     cwd=str(self._SERVER_DIR),
                     stdout=log_file,
                     stderr=subprocess.STDOUT,
+                    env=server_environ(),  # no API keys for ComfyUI's custom nodes
                     **popen_kwargs,
                 )
                 log_file.close()  # the child has its own copy; ours would keep the log locked for the life of this process

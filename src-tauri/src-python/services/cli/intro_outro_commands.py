@@ -15,14 +15,24 @@ def test_intro_video(job_config_path: str, output_video_dir: Optional[str] = Non
     stages. output_video_dir is accepted for signature parity with the
     other test_* commands, but render_intro_clip derives its own video_dir
     from job_config's directory_path, so it's otherwise unused here."""
+    import json
+
     from services.vdoprocessing.videopipeline import render_intro_clip
+    from services.vdoprocessing.videopipeline.audio_step import existing_audio_data
+    from services.vdoprocessing.videopipeline.intro_step import place_overview_voice
 
     config_path = Path(job_config_path)
     if not config_path.exists():
         raise FileNotFoundError(f"job_config.json not found: {config_path}")
 
     _tracker.show("Rendering intro clip...")
-    intro_path = render_intro_clip(str(config_path))
+    # As long as the pipeline makes it: the opening voice already on disk (never generated here) and its {scene} cuts.
+    settings = json.loads(config_path.read_text(encoding="utf-8")).get("settings") or {}
+    voice = place_overview_voice(
+        settings, existing_audio_data(str(config_path)), bool(settings.get("use_narration_cues", True)),
+        lambda seconds, cues: render_intro_clip(str(config_path), duration_sec=seconds, cue_times=cues),
+    )
+    intro_path = voice["intro_path"]
     _tracker.clear()
 
     return {

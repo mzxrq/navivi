@@ -36,6 +36,8 @@ from services.tts.artifacts import cut_off_ratio, remove_stray_bursts
 from services.localization.sentence_split import SENTENCE_END
 from services.localization.subtitle import SubtitleStyle
 from services.logger.logger import setup_logger
+from services.projectfiles import replace_into, write_atomic
+from services.runtime_paths import server_environ
 
 # Logging configuration
 logger = setup_logger("TTSEngine")
@@ -361,7 +363,7 @@ class IrodoriTTSClient:
         from services.tts.voices import voices_dir
 
         server_env = {
-            **os.environ,
+            **server_environ(),
             "IRODORI_MODEL_DEVICE": device,
             "IRODORI_CODEC_DEVICE": device,
             "IRODORI_HF_CHECKPOINT": "Aratako/Irodori-TTS-v4.1-Small",
@@ -774,7 +776,7 @@ class IrodoriTTSClient:
         # speak it in short chunks, one request at a time, and join them.
         # Packed (split_text_for_tts groups whole sentences up to
         # TTS_MAX_CHUNK_CHARS per request) rather than one request per
-        # sentence (split_sentences_for_tts) - CPU inference (tuning's
+        # sentence - CPU inference (tuning's
         # current TTS_DEVICE default) makes many small sequential requests
         # far slower than a few packed ones. The gap inserted below still
         # lands at every CHUNK boundary (so a multi-sentence chunk plays
@@ -789,8 +791,7 @@ class IrodoriTTSClient:
         for chunk in chunks or [text]:
             takes += await self._speak_chunk(chunk)
         if len(takes) == 1:
-            with open(file_path, "wb") as f:
-                f.write(takes[0])
+            write_atomic(file_path, takes[0])
             self._remove_stray_bursts(file_path)
             return str(file_path)
 
@@ -826,7 +827,9 @@ class IrodoriTTSClient:
                     gaps.append(gap_path)
                     interleaved.append(gap_path)
 
-            processor.concatenate_files(interleaved, str(file_path))
+            joined = file_path.with_name(f".{file_path.stem}.joining{file_path.suffix}")
+            processor.concatenate_files(interleaved, str(joined))
+            replace_into(joined, file_path)
             self._remove_stray_bursts(file_path)
         finally:
             for p in parts + gaps:
@@ -859,7 +862,7 @@ class _VenvEngineClient(IrodoriTTSClient):
                 "--host", "127.0.0.1", "--port", str(port), "--idle-seconds", str(int(self._IDLE_TIMEOUT_SECONDS)),
             ],
             cwd=str(self._SERVER_DIR),
-            env={**os.environ, "PYTHONIOENCODING": "utf-8", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1", **self._server_env()},
+            env={**server_environ(), "PYTHONIOENCODING": "utf-8", "HF_HUB_DISABLE_SYMLINKS_WARNING": "1", **self._server_env()},
             stdout=log_file,
             stderr=subprocess.STDOUT,
             **popen_kwargs,
@@ -1061,10 +1064,8 @@ _CLAUSE_END = re.compile(r"(?<=[、，,])")
 
 def _cut_to_chars(piece: str, max_chars: int) -> List[str]:
     """A single sentence (or any piece), forced under `max_chars`: cut at its
-    commas, and only as a last resort in the middle of a clause. Shared by
-    split_text_for_tts (which then re-packs pieces up to max_chars) and
-    split_sentences_for_tts (which doesn't re-pack - see its own docstring
-    for why)."""
+    commas, and only as a last resort in the middle of a clause.
+    split_text_for_tts then re-packs the pieces up to max_chars."""
     if len(piece) <= max_chars:
         return [piece]
     out, cur = [], ""
@@ -1113,29 +1114,6 @@ def split_text_for_tts(text: str, max_chars: int, min_chars: int = 0) -> List[st
         tail = chunks.pop()  # NOTE: chunks[-2] after pop() is chunks[-1] before it - grab the tail first
         chunks[-1] += tail
     return chunks
-
-
-def split_sentences_for_tts(text: str, max_chars: int) -> List[str]:
-    """Splits `text` into ONE chunk per sentence - unlike split_text_for_tts,
-    never packs several short sentences into one chunk. Used by
-    generate_speech so every sentence becomes its own TTS request with a
-    short silence inserted after it (see tuning.TTS_SENTENCE_GAP_*_SECONDS):
-    concatenating whole-text-in-one-request audio (or even
-    split_text_for_tts's packed multi-sentence chunks) butt-joins sentences
-    with zero gap, which reads as rushed/robotic rather than naturally
-    spoken. A sentence longer than `max_chars` is still cut at its commas
-    (GPU-safety, same as split_text_for_tts) - it becomes several
-    consecutive chunks with no gap between them (they're one sentence, a
-    mid-sentence pause would sound wrong), only the boundary AFTER the full
-    sentence gets a gap."""
-    text = text or ""
-    if not text:
-        return []
-    return [
-        piece
-        for sentence in (s for s in _SENTENCE_END.split(text) if s)
-        for piece in _cut_to_chars(sentence, max_chars)
-    ]
 
 
 # [Core] AudioProcessor : Handles wave pause analysis, silence synthesis, and file concatenations.

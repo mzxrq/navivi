@@ -29,6 +29,7 @@ from services.mapfetcher.graphicengine.base import _GraphicsEngineBase
 from services.logger.logger import setup_logger
 from services.tts.ttsengine import FFmpegManager
 from services import tuning, video_text
+from services.projectfiles import replace_into
 
 logger = setup_logger("OutroCard")
 
@@ -1085,14 +1086,17 @@ def generate_outro_clip(
     video_dir_path.mkdir(parents=True, exist_ok=True)
     output_path = video_dir_path / output_filename
     frame_path = video_dir_path / f".outro_frame_{Path(output_filename).stem}.png"
+    # Rendered beside it and swapped in when complete: a cancelled run leaves the last outro, never a cut-off one.
+    partial_path = video_dir_path / f".{Path(output_filename).stem}.partial.mp4"
 
     try:
         if style == "scroll":
             size = size or (_CANVAS_W, _CANVAS_H)
             page = _build_scroll_page(project_name or "", waypoints_with_image, size, brief, heading)
             start_hold = tuning.OUTRO_SUMMARY_HOLD_SECONDS if has_route else None
-            if not _write_scroll_clip(page, output_path, tuning.INTRO_FPS, size, start_hold):
+            if not _write_scroll_clip(page, partial_path, tuning.INTRO_FPS, size, start_hold):
                 return None
+            replace_into(partial_path, output_path)
             logger.info(
                 "Outro clip generated: %s (%d places, scroll)", output_path, len(waypoints_with_image)
             )
@@ -1107,7 +1111,7 @@ def generate_outro_clip(
             "-loop", "1", "-i", str(frame_path),
             "-t", f"{duration_sec:.3f}",
             "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
-            str(output_path),
+            str(partial_path),
         ]
         result = subprocess.run(
             cmd, capture_output=True, encoding="utf-8", errors="replace"
@@ -1115,11 +1119,13 @@ def generate_outro_clip(
         if result.returncode != 0:
             logger.error("Outro generation failed: %s", result.stderr.strip())
             return None
+        replace_into(partial_path, output_path)
     except Exception as exc:
         logger.error("Outro generation failed: %s", exc)
         return None
     finally:
         frame_path.unlink(missing_ok=True)
+        partial_path.unlink(missing_ok=True)
 
     logger.info("Outro clip generated: %s (%d places)", output_path, len(waypoints_with_image))
     return str(output_path)

@@ -14,7 +14,7 @@ import gc
 import logging
 import os
 import time
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # --- GPU stage cooldown ------------------------------------------------------
 # Pause inserted in pipeline.py between the ComfyUI/Wan2.2 attraction-video
@@ -457,6 +457,10 @@ COURSE_PIVOT_HOLD_SECONDS = 2.5
 # bottom margin moves the card down.
 LEG_CARD_MARGIN_PX = 4
 LEG_CARD_MARGIN_BOTTOM_PX = -10
+# The leg's elevation profile (only with settings.show_route_heatmap and GPX heights): px on a 1080p frame,
+# stacked this far above the summary card. pydeckrecorder/elevation.profile_card draws it.
+LEG_ELEVATION_CARD_SIZE = (520, 190)
+LEG_ELEVATION_CARD_GAP_PX = -8
 # A place the trace only passes may be reached up to this long after its cue (never before it),
 # so the pace between cues stays natural; every cue still lands within 0..this.
 COURSE_CUE_WINDOW_SECONDS = 0.75
@@ -1190,7 +1194,15 @@ ATTRACTION_SECOND_SHOT: Optional[str] = "auto"
 # the second starting on the real middle crop the first ended on (so nothing drifts, unlike chaining from a
 # generated frame). The second half only when the narration share is longer than one half; past both, the
 # slow-move tail ("reverse") fills. Not in the clip digest: finished photos are not regenerated.
-LTXV_CONTINUE = True
+# 2026-10-23: off - the halves never met cleanly (pop at frame 97); LTXV_FRAMES = 161 renders the move in one pass.
+LTXV_CONTINUE = False
+# A two-half clip covers this many times the single clip's path (pan width, zoom, 3D truck/pan/dolly), so it
+# moves about as fast as before over twice the time. Dollies stop at LTXV_DEPTH_MAX_DOLLY: past it the
+# 3D photo stretches. The sharpness check (sharp_enough_preset) still guards tight crops.
+LTXV_HALVES_TRAVEL = 1.8
+LTXV_DEPTH_MAX_DOLLY = 0.6
+# Frames dissolved where the halves meet (2026-10-22: a hard cut showed a pop and a speed change there).
+LTXV_JOIN_FADE_FRAMES = 6
 # No walkthrough: unpinned, it invented a whole plaza at 札立山 (2026-10-06).
 ATTRACTION_SECOND_SHOT_MOVES: Tuple[str, ...] = (
     "closein", "closeout", "closepanleft", "closepanright", "closepanup", "closepandown",
@@ -1238,13 +1250,13 @@ LTXV_FILES: Dict[str, Dict[str, str]] = {
     },
 }
 LTXV_WIDTH, LTXV_HEIGHT = 960, 544  # 540p 16:9 (32 px grid); finalize upscales
-LTXV_FRAMES = 97  # 8k+1, ~4 s
+LTXV_FRAMES = 161  # 8k+1, ~6.7 s in one pass (no seam); was 97 (~4 s)
 LTXV_FPS = 24
 LTXV_SIGMAS = "1.0, 0.9937, 0.9875, 0.9812, 0.975, 0.9094, 0.725, 0.4219, 0.0"  # distilled, CFG 1
 # Decode in time chunks of this many frames: one chunk for the whole clip.
 # 32 (overlap 8) left a visible hitch at every seam - each second, frames
 # 24/48/72 (test 13, 2026-10-02). The decode runs alone in a fresh server.
-LTXV_DECODE_TEMPORAL_SIZE = 128
+LTXV_DECODE_TEMPORAL_SIZE = 168  # >= LTXV_FRAMES: the whole clip in one tile (128 left a hitch at frame 120 of 161)
 LTXV_DECODE_TEMPORAL_OVERLAP = 8
 # How firmly the last frame is pinned (1.0 = exact copy).
 LTXV_GUIDE_STRENGTH = 0.8
@@ -1271,7 +1283,7 @@ LTXV_WALK_TO_SIGN = True
 # walk-and-pan prompts a flat slide too (depth score 0.01 vs 0.56, 2026-10-07).
 # Pans: the camera steps DEPTH_TRUCK sideways (nearest things; far ones
 # PARALLAX_FAR_WEIGHT of it) while turning DEPTH_PAN; dollies travel DEPTH_DOLLY.
-LTXV_DEPTH_KEYFRAMES: Tuple[str, ...] = ("panleft", "panright", "zoomin", "zoomout", "walkback")
+LTXV_DEPTH_KEYFRAMES: Tuple[str, ...] = ("panleft", "panright", "zoomin", "zoomout")
 # Walk In, if added to LTXV_DEPTH_KEYFRAMES: a free POV walk softly pinned
 # (ANCHOR_STRENGTH) to a 3D view ANCHOR_DOLLY forward. Tried 2026-10-07 after the
 # unanchored 八王子峠 walk invented a corridor: LTXV then held still ~3 s and
@@ -1425,11 +1437,8 @@ LTXV_WALK_ATTEMPTS = 2
 # photo), never the CPU 3D photo - the user wants every picture made by LTX.
 LTXV_WALK_FAILED_FALLBACK = "zoomin"
 LTXV_PROMPTS["walkshort"] = LTXV_PROMPTS["walkfwd"]
-# Walk-in reversed: starts close, ends on the whole photo, so it never shows past its edges.
-LTXV_PROMPTS["walkback"] = (
-    "A smooth gimbal shot carried at eye height moves slowly backward away from {place}, step by step, the "
-    "view opening up to show more of it. The camera stays level." + _LTXV_WALK_END
-)
+# "walkback" (the editor's Walk Back) has no recipe of its own: it is "walkin" played backwards
+# (ltx_keyframed.generate_ltx_move), a natural walk away that ends on the real photo.
 # Unpinned, the gentle walkfwd wording only drifted (2026-10-06, 孝子駅).
 LTXV_PROMPTS["walkai"] = (
     "Point-of-view camera at eye height moving continuously straight forward through {place}, "
@@ -1655,6 +1664,9 @@ INTRO_VOICE_LEAD_SECONDS = 0.5
 # The intro ends this long BEFORE the voice reaches {start}, so the overview map is already on
 # screen when "これが全体のルートです" begins instead of the line starting on the cut.
 INTRO_MAP_LEAD_SECONDS = 1.2
+# When the opening narration is its own file (audio_step.overview_pieces), the intro runs this long past
+# its last word, and the overview's own voice starts INTRO_MAP_LEAD_SECONDS into the overview.
+INTRO_VOICE_TAIL_SECONDS = 0.4
 INTRO_MIN_SECONDS = 4.0
 INTRO_MAX_SECONDS = 26.0
 INTRO_MAX_IMAGE_COUNT = 5
@@ -1724,6 +1736,53 @@ INTRO_LABEL_SCALE_START_PCT = 65
 INTRO_SUBTITLE_DELAY_SECONDS = 0.8
 INTRO_SUBTITLE_FADE_SECONDS = 0.7
 INTRO_SUBTITLE_RISE_PX = 28
+
+# settings.intro_style: "slideshow" (above) or a two-scene, text-led style. The new styles are silent
+# (the overview voice starts on the map) and show settings.intro_lines (else written, see intro_lines.py).
+# Scene 1 = the most detailed footage (close-up), scene 2 = the plainest (wide); attraction clips are
+# preferred, photos (and held-photo clips) get the zoom/pan. Every photo move ends on the whole photo
+# (zoom ..., 1.0), centred: the user framed it on the place, and a push-in crops off what sits at its
+# edges (the 経塚's name post). zoom: 1.0 = whole frame, smaller = tighter. pan: centre
+# drift, a fraction of the free crop room (-1..1). dim: brightness multiply; sat: saturation (1 = as is).
+# text: the line's look on the timeline (position/align/margins as on any text item, style = TextStyle keys).
+DEFAULT_INTRO_STYLE = "slideshow"
+INTRO_STYLES = ("slideshow", "cinematic", "documentary")
+INTRO_STYLE_SCENES: Dict[str, List[Dict[str, Any]]] = {
+    # Japanese-cinema minimalism: dark, quiet, small type with lots of empty space.
+    "cinematic": [
+        {"seconds": 5.5, "zoom": (0.94, 1.0), "pan": (0.0, 0.0), "dim": 0.40, "sat": 0.6,
+         "text": {"position": "middle", "style": {"font_size": 46, "bold": False, "letter_spacing": 6, "outline_width": 0, "shadow": 2}}},
+        {"seconds": 6.0, "zoom": (0.90, 1.0), "pan": (0.0, 0.0), "dim": 0.60, "sat": 0.85,
+         "text": {"position": "middle", "align": "left", "margin_h": 160,
+                  "style": {"font_size": 46, "bold": False, "letter_spacing": 6, "outline_width": 0, "shadow": 2}}},
+        # "title": the route's name (intro_heading: location kicker, title, subtitle) closes the intro.
+        {"seconds": 5.5, "zoom": (0.92, 1.0), "pan": (0.0, 0.0), "dim": 0.45, "sat": 0.8, "title": True,
+         "text": {"position": "middle",
+                  "kicker": {"font_size": 34, "bold": False, "letter_spacing": 10, "outline_width": 0, "shadow": 2},
+                  "style": {"font_size": 110, "bold": False, "letter_spacing": 14, "outline_width": 0, "shadow": 3},
+                  "subtitle": {"font_size": 38, "bold": False, "letter_spacing": 6, "outline_width": 0, "shadow": 2}}},
+    ],
+    # NHK-style documentary: a close-up easing back, then a wide shot pulling out under a bold line.
+    "documentary": [
+        {"seconds": 5.0, "zoom": (0.86, 1.0), "pan": (0.0, 0.0), "dim": 0.70, "sat": 1.0,
+         "text": {"position": "bottom", "align": "right", "margin_h": 120, "margin_v": 180,
+                  "style": {"font_size": 54, "bold": False, "letter_spacing": 3, "outline_width": 0, "shadow": 3}}},
+        {"seconds": 5.5, "zoom": (0.80, 1.0), "pan": (0.0, 0.0), "dim": 0.60, "sat": 1.0,
+         "text": {"position": "middle", "style": {"font_size": 80, "bold": True, "letter_spacing": 4, "outline_width": 0, "shadow": 3}}},
+        {"seconds": 5.5, "zoom": (0.85, 1.0), "pan": (0.0, 0.0), "dim": 0.50, "sat": 1.0, "title": True,
+         "text": {"position": "middle",
+                  "kicker": {"font_size": 40, "bold": False, "letter_spacing": 6, "outline_width": 0, "shadow": 2},
+                  "style": {"font_size": 130, "bold": True, "letter_spacing": 6, "outline_width": 0, "shadow": 4},
+                  "subtitle": {"font_size": 46, "bold": False, "letter_spacing": 3, "outline_width": 0, "shadow": 2}}},
+    ],
+}
+# The lines' own fade, and how far inside its scene each line starts/ends (it waits out the crossfade).
+INTRO_LINE_INSET_SECONDS = 0.4
+# A clip whose frames at 20% and 80% differ less than this (mean grey level, 0-255) is a held photo:
+# the intro gives it the photo zoom/pan instead of freezing on it.
+INTRO_STILL_DIFF = 1.0
+# Stops whose name matches this are transport, not intro scenery (with the first and last stop).
+INTRO_TRANSPORT_PATTERN = r"駅|バス停|停留所|桟橋|港|汽船|フェリー|乗り場|station|bus stop|pier|port|ferry|terminal"
 
 # --- Outro card grid (end-of-video "places visited" summary) ---------------
 # A single composited frame (project title + a thumbnail grid of every
@@ -1940,7 +1999,10 @@ ATTRACTION_LABEL_MARGIN_LEFT = 4
 # mild unsharp pass right after that upscale claws back some of the softness the
 # resize itself introduces. Off by default elsewhere since it's tuned for exactly
 # this upscale ratio, not a general-purpose sharpen.
-ATTRACTION_UPSCALE_SHARPEN = True
+# 2026-10-22: off - it sharpened LTX's grain along with the edges. ATTRACTION_DENOISE (a light temporal
+# denoise, CPU) runs on generated clips first, at their own 960x544, before the upscale.
+ATTRACTION_UPSCALE_SHARPEN = False
+ATTRACTION_DENOISE: Optional[str] = "hqdn3d=1.5:1.5:6:6"
 
 # --- Burned-in captions (timeline export and the per-clip subtitle burn) -----
 # A translucent dark box with the text on it, narrow and centred at the bottom so

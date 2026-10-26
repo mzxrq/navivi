@@ -1,14 +1,16 @@
-//! API keys for online AI providers, kept in the operating system's credential store (Windows Credential
-//! Manager, macOS Keychain, Secret Service). They never go into a project folder, the database or a `.nvv`.
+//! API keys for online AI providers and the map services, kept in the operating system's credential store
+//! (Windows Credential Manager, macOS Keychain, Secret Service). They never go into a project folder, the
+//! database or a `.nvv`.
 
 use keyring::Entry;
 
 const SERVICE: &str = "Navivi";
 const MAX_VALUE_BYTES: usize = 2000; // Windows stores a credential blob of at most 2560 bytes
 
-/// Names are `ai-key:<provider>`; anything else is refused so the webview cannot read other entries.
+/// Names are `ai-key:<provider>` or `map-key:<service>`; anything else is refused so the webview cannot
+/// read other entries.
 fn valid_name(name: &str) -> bool {
-    match name.strip_prefix("ai-key:") {
+    match name.strip_prefix("ai-key:").or_else(|| name.strip_prefix("map-key:")) {
         Some(provider) => {
             !provider.is_empty()
                 && provider.len() <= 40
@@ -26,6 +28,34 @@ fn entry(name: &str) -> Result<Entry, String> {
 }
 
 const PROVIDERS: [&str; 5] = ["anthropic", "openai", "gemini", "openrouter", "custom"];
+
+/// The map services' keys (Settings > Services), the frontend's `AppApiKeys`.
+pub const MAP_KEYS: [&str; 3] = ["mapbox", "ors", "mapillary"];
+
+/// One map service's key, if it is set.
+pub fn map_key(service: &str) -> Option<String> {
+    let key = secret_get(format!("map-key:{service}")).ok().flatten()?;
+    let key = key.trim();
+    (!key.is_empty()).then(|| key.to_string())
+}
+
+/// Versions before 2026-10-22 kept the map keys in plain text in the `api_keys` app setting: moved into the
+/// credential store once, and the setting removed only when every key made it.
+pub fn move_map_keys_from_db(conn: &rusqlite::Connection) {
+    use crate::db::app_settings;
+    let Ok(Some(saved)) = app_settings::get(conn, app_settings::API_KEYS) else { return };
+    let mut all_moved = true;
+    for service in MAP_KEYS {
+        if let Some(key) = saved.get(service).and_then(|v| v.as_str()).map(str::trim).filter(|k| !k.is_empty()) {
+            if secret_set(format!("map-key:{service}"), key.to_string()).is_err() {
+                all_moved = false;
+            }
+        }
+    }
+    if all_moved {
+        let _ = app_settings::delete(conn, app_settings::API_KEYS);
+    }
+}
 
 fn env_name(provider: &str) -> String {
     format!("NAVIVI_AI_KEY_{}", provider.to_ascii_uppercase())
@@ -78,6 +108,8 @@ mod tests {
         assert!(!valid_name("ai-key:Open AI"));
         assert!(!valid_name("other:anthropic"));
         assert!(!valid_name("ai-key:../x"));
+        assert!(valid_name("map-key:mapbox") && valid_name("map-key:mapillary"));
+        assert!(!valid_name("map-key:") && !valid_name("map-key:../db"));
         assert!(!valid_name(&format!("ai-key:{}", "a".repeat(41))));
     }
 

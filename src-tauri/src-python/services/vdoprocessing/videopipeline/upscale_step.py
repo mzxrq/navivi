@@ -22,6 +22,7 @@ from PIL import Image, ImageFilter, ImageOps
 from services import tuning
 from services.config.upscaled_images import IMAGE_KEYS, map_path, upscale_dir, upscale_enabled
 from services.logger.progress import tracker
+from services.projectfiles import replace_into, save_image_atomic, write_json_atomic
 
 from .helpers import logger, output_is_valid
 
@@ -82,9 +83,11 @@ def _download(url: str, dest: Path) -> None:
         "GET", url, follow_redirects=True, timeout=tuning.IMAGE_UPSCALE_DOWNLOAD_TIMEOUT_SECONDS
     ) as response:
         response.raise_for_status()
-        with open(dest, "wb") as f:
+        part = dest.with_name(dest.name + ".part")
+        with open(part, "wb") as f:
             for chunk in response.iter_bytes(1 << 20):
                 f.write(chunk)
+    replace_into(part, dest)
 
 
 def ensure_model() -> Optional[Path]:
@@ -143,7 +146,7 @@ def _upright_rgb(src: str) -> Image.Image:
 def _cpu_upscale(src: str, out: Path) -> None:
     im = _upright_rgb(src)
     im = im.resize(cover_size(*im.size), Image.LANCZOS)
-    im.filter(ImageFilter.UnsharpMask(radius=1.2, percent=60, threshold=2)).save(out)
+    save_image_atomic(im.filter(ImageFilter.UnsharpMask(radius=1.2, percent=60, threshold=2)), out)
 
 
 def _gpu_upscale(client, src: str, out: Path) -> None:
@@ -164,7 +167,7 @@ def _gpu_upscale(client, src: str, out: Path) -> None:
             keep = tuning.IMAGE_UPSCALE_KEEP_SCALE
             if keep and keep < model_scale():
                 up = up.resize((im.width * keep, im.height * keep), Image.LANCZOS)
-            up.resize(cover_size(*up.size), Image.LANCZOS).save(out)
+            save_image_atomic(up.resize(cover_size(*up.size), Image.LANCZOS), out)
     finally:
         for tmp in (staged, raw):
             tmp.unlink(missing_ok=True)
@@ -258,9 +261,7 @@ def upscale_waypoint_images(config_file_path: str, force: bool = False) -> dict:
     if client is not None:
         client.free_memory()
 
-    map_path(project_dir).write_text(
-        json.dumps(result["map"], indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    write_json_atomic(map_path(project_dir), result["map"])
     logger.info(
         "Step 2c: %d upscaled on GPU, %d on CPU, %d cached, %d already large enough, %d failed.",
         result["gpu"], result["cpu"], result["cached"], result["skipped"], result["failed"],

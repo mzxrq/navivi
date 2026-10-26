@@ -12,9 +12,9 @@ from functools import lru_cache
 from typing import Dict, Iterable, List, Optional
 
 # Endings with one reading, kept in kanji after a spelled-out name (サルサカ峠, not サルサカトウゲ): a shorter katakana run, which the
-# voice slurs less.
+# voice slurs less. Not 寺/城/港: read alone they are also てら/しろ/みなと (クホン寺 came out くほんじら, 2026-10-23).
 PLAIN_SUFFIXES = {"展望台": "てんぼうだい", "神社": "じんじゃ", "公園": "こうえん", "海岸": "かいがん", "温泉": "おんせん", "峠": "とうげ", "駅": "えき",
-                  "院": "いん", "寺": "じ", "城": "じょう", "港": "こう"}
+                  "院": "いん"}
 
 _NOUNISH = {"名詞", "接頭辞", "接尾辞"}
 _CONTENT = {"動詞", "形容詞", "形状詞", "副詞", "連体詞", "接続詞", "感動詞", "代名詞"}

@@ -71,8 +71,14 @@ def test_subtitles(
     subtitle_paths = build_subtitles(waypoints, audio["audio_paths"], str(output_dir), force=force, layout=layout)
     overview_path = build_overview_subtitle(
         json.loads(config_path.read_text(encoding="utf-8")),
-        audio.get("overview_audio_path"), str(output_dir), force=force,
+        audio.get("overview_audio_path"), str(output_dir), force=force, script=audio.get("overview_text"),
     )
+    intro = audio.get("intro_voice") or {}
+    if intro:
+        build_overview_subtitle(
+            json.loads(config_path.read_text(encoding="utf-8")),
+            intro.get("audio_path"), str(output_dir), force=force, script=intro.get("text"),
+        )
     attraction_paths = build_attraction_subtitles(
         waypoints, audio["attraction_audio_paths"], str(output_dir), force=force, layout=layout
     )

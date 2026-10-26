@@ -527,6 +527,7 @@ const carryLine = (fresh: TextLine, old?: TextLine): TextLine =>
         ...(old.style ? { style: old.style } : {}),
         ...(old.animation ? { animation: old.animation } : {}),
         ...(old.delay !== undefined ? { delay: old.delay } : {}),
+        ...(old.margin_top !== undefined ? { margin_top: old.margin_top } : {}),
       }
     : fresh;
 

@@ -20,7 +20,7 @@ from services.projectfiles import NARRATION_CUES, ROUTE_CACHE, meta_file
 from services.mapfetcher.mapfetcher import MapFetcher
 from services.mapfetcher.maplanguage import map_style_inputs
 from services.vdoprocessing.route2vdo import RouteAnimator
-from services.vdoprocessing.route_inputs import overview_flags_hash, photo_inputs_hash, route_inputs_hash
+from services.vdoprocessing.route_inputs import labels_hash, overview_flags_hash, photo_inputs_hash, route_inputs_hash
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.localization.localization import format_waypoint_label
 from services.config.job_config import JobConfigManager
@@ -304,6 +304,7 @@ def _checkpoint_parts(
         if key == "waypoints" and isinstance(value, list):
             parts["route.waypoints"] = route_inputs_hash(value)
             parts["route.overview_flags"] = overview_flags_hash(value)
+            parts["route.labels"] = labels_hash(value)
             parts["config.waypoints.count"] = _short_hash(len(value))
             for i, wp in enumerate(value):
                 label = wp.get("label", "") if isinstance(wp, dict) else ""
@@ -345,7 +346,7 @@ def _checkpoint_parts(
 # route.map_language: the label/on-screen text language (absent for a config that never had one).
 ROUTE_CHECKPOINT_PARTS = (
     "route.waypoints", "route.overview_flags", "route.photos", "route.markers", "route.map_style",
-    "route.overview_voice", "route.map_language",
+    "route.overview_voice", "route.map_language", "route.labels",
 )
 
 
@@ -631,6 +632,8 @@ def render_route_video(
                 "route.overview_flags",
                 overview_flags_hash([{}] * _wp_count),
             )
+            # Recorded before stop names were checked: taken as unchanged, so no project re-renders for it.
+            old_parts.setdefault("route.labels", checkpoint_parts.get("route.labels"))
             route_changed = [k for k in keys if old_parts.get(k) != checkpoint_parts.get(k)]
         else:
             route_changed = [] if cached_key == checkpoint_key else ["(no per-input record)"]
@@ -1091,7 +1094,8 @@ def render_route_video(
         _end_pt = project_config.get("end_point") or {}
         res_waypoints = list(waypoints)
         res_wp_indices = list(wp_indices)
-        if _start_pt.get("lat") is not None and (not res_wp_indices or res_wp_indices[0] != 0):
+        added_start = _start_pt.get("lat") is not None and (not res_wp_indices or res_wp_indices[0] != 0)
+        if added_start:
             res_waypoints = [{
                 "lat": _start_pt["lat"],
                 "lng": _start_pt.get("lng", _start_pt.get("lon")),
@@ -1404,7 +1408,9 @@ def render_route_video(
                     # mirrored lookup can resolve the correct narration by
                     # position instead of a blind per-clip counter, which
                     # stop-by merging would otherwise throw out of sync.
-                    "start_pos": start_pos,
+                    # -1 for the leg from a separate start point (file 02_waypoint_00_*): it has no waypoint of
+                    # its own and would otherwise share 01 with the first stop's leg, each run deleting the other.
+                    "start_pos": -1 if added_start and seq_idx == 0 else start_pos,
                     # The leg's checkpoint key (route2vdo): its waypoints' route inputs.
                     "route_inputs": route_inputs_hash(waypoints[start_pos:end_pos + 1]),
                     # Which waypoints this leg runs between: route2vdo writes

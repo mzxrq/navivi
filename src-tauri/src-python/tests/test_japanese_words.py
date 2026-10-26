@@ -82,7 +82,14 @@ def test_every_dictionary_word_is_spelled_out_by_default():
     from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary
 
     entries = [{"word": "慈眼院", "reading": "じげんいん", "auto": True}, {"word": "西念寺", "reading": "さいねんじ", "auto": True}]
-    assert apply_pronunciation_dictionary("慈眼院と西念寺", entries) == "ジゲン院とサイネン寺"
+    assert apply_pronunciation_dictionary("慈眼院と西念寺", entries) == "ジゲン院とサイネンジ"
+
+
+def test_a_dictionary_word_is_only_replaced_as_a_whole_word():
+    from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary
+
+    entries = [{"word": "場", "reading": "ば"}, {"word": "九品寺", "reading": "くほんじ", "auto": True}]
+    assert apply_pronunciation_dictionary("生まれた場所と、この場で。\n九品寺へ", entries) == "生まれた場所と、このバで。\nクホンジへ"
 
 
 def test_an_auto_place_name_the_analyser_reads_right_keeps_its_kanji_and_is_checked(monkeypatch):
@@ -157,3 +164,17 @@ def test_an_ending_with_one_reading_stays_in_kanji():
 
     entries = [{"word": "猿坂峠", "reading": "さるさかとうげ"}, {"word": "三輪神社", "reading": "みわじんじゃ"}]
     assert apply_pronunciation_dictionary("猿坂峠から三輪神社へ", entries) == "サルサカ峠からミワ神社へ"
+
+
+def test_keep_voice_accepts_an_existing_recording_and_updates_its_note(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from services.vdoprocessing.videopipeline import audio_step
+
+    wav = tmp_path / "00_overview_narration.wav"
+    wav.write_bytes(b"x")
+    monkeypatch.setattr(audio_step, "output_is_valid", lambda p: Path(p).exists())
+    assert not audio_step._keep_old_voice(wav, "クホンジ")
+    monkeypatch.setenv("NAVIVI_KEEP_VOICE", "1")
+    assert audio_step._keep_old_voice(wav, "クホンジ")
+    assert (tmp_path / "00_overview_narration.wav.txt").read_text(encoding="utf-8") == "クホンジ"

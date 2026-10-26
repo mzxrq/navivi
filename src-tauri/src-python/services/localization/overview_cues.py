@@ -24,7 +24,7 @@ from __future__ import annotations
 import re
 from typing import List, Optional, Sequence
 
-from services.localization.cues import cue_tags
+from services.localization.cues import clean_text, cue_tags
 from services.localization.sentence_split import SENTENCE_END
 
 _SENTENCE_END = SENTENCE_END
@@ -65,6 +65,31 @@ def name_variants(label: str) -> List[str]:
 def is_transition(sentence: str) -> bool:
     s = sentence.strip()
     return s.startswith(TRANSITION_OPENERS) or bool(TRANSITION_ENDINGS.search(s))
+
+
+def add_scene_cues(script: Optional[str], shares: Sequence[float]) -> Optional[str]:
+    """`script` with a {scene} before each sentence of the opening (the part before {start}) that
+    starts the text-led intro's next scene, so the opening is split in `shares` (each scene's part of
+    the intro) by spoken length. Unchanged when the opening already has a {scene}, has no {start},
+    or has too few sentences to give every scene one."""
+    if not script or "{scene}" in script or "{start}" not in script or len(shares) < 2:
+        return script
+    at = script.index("{start}")
+    sentences = _sentences(script[:at])
+    if len(sentences) < len(shares):
+        return script
+    sizes = [len(clean_text(s)) for s in sentences]
+    total = sum(sizes) or 1
+    ends = [sum(sizes[: i + 1]) / total for i in range(len(sizes) - 1)]  # after sentence i
+    picks, first = [], 0
+    for k in range(1, len(shares)):
+        target = sum(shares[:k]) / sum(shares)
+        last = len(ends) - (len(shares) - 1 - k)  # leave a sentence for every later scene
+        best = min(range(first, last), key=lambda i: abs(ends[i] - target))
+        picks.append(best)
+        first = best + 1
+    opening = "".join(s + ("{scene}" if i in picks else "") for i, s in enumerate(sentences))
+    return opening + script[at:]
 
 
 def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[str]:

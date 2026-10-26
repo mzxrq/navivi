@@ -3,12 +3,13 @@
 import json
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from services.vdoprocessing.cliptiming import read_audio_offset
 
 from .helpers import logger, project_subtitle_dir
 from services import tuning
+from services.projectfiles import write_json_atomic
 
 # [NOTE] [Core] Waypoint index embedded in attraction clip filenames, e.g. "04_attraction_03_Kabutoyama.mp4" -> waypoint index 3 (matches attraction_step.py's `f"04_attraction_{idx:02d}_{safe_label}.mp4"`).
 _ATTRACTION_RE = re.compile(r"04_attraction_(\d+)_")
@@ -24,26 +25,25 @@ _RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
 _OVERVIEW_FILENAME = "01_overview.mp4"
 
 
-def _unvisited_stopbys(project_dir: str) -> set:
+def _read_waypoints(project_dir: str) -> list:
+    try:
+        with open(Path(project_dir) / "job_config.json", "r", encoding="utf-8") as f:
+            return json.load(f).get("waypoints", [])
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+def _unvisited_stopbys(waypoints: list) -> set:
     """0-based positions of waypoints the walker only passes (unconnected
     stop-bys, and waypoints skipped in video export): no attraction clip."""
     from .audio_step import is_passed_only
 
-    try:
-        with open(Path(project_dir) / "job_config.json", "r", encoding="utf-8") as f:
-            waypoints = json.load(f).get("waypoints", [])
-    except (OSError, json.JSONDecodeError):
-        return set()
     return {pos for pos, wp in enumerate(waypoints) if is_passed_only(wp)}
 
 
-def _waypoint_ids(project_dir: str) -> dict:
-    """{waypoint id: 0-based position} from the project's job_config.json."""
-    try:
-        with open(Path(project_dir) / "job_config.json", "r", encoding="utf-8") as f:
-            waypoints = json.load(f).get("waypoints", [])
-    except (OSError, json.JSONDecodeError):
-        return {}
+def _waypoint_ids(project_dir: str, waypoints: Optional[list] = None) -> dict:
+    """{waypoint id: 0-based position}, from `waypoints` or else the project's job_config.json."""
+    waypoints = _read_waypoints(project_dir) if waypoints is None else waypoints
     return {wp.get("id"): pos for pos, wp in enumerate(waypoints) if wp.get("id")}
 
 
@@ -122,8 +122,9 @@ def _duration(path: Optional[str]) -> float:
 
 
 def _clip_length(video: Optional[str], audio: Optional[str], audio_offset: float) -> float:
-    """Clip length as the editor and exporter lay it out: video, held for the narration."""
-    narration = audio_offset + _duration(audio) if audio else 0.0
+    """Clip length as the editor and exporter lay it out: video, held for the narration and the
+    exporter's AUDIO_END_HOLD_SECONDS after it (each track's `duration`, which the export then uses as is)."""
+    narration = audio_offset + _duration(audio) + tuning.AUDIO_END_HOLD_SECONDS if audio else 0.0
     return max(_MIN_SEGMENT, _duration(video), narration)
 
 
@@ -141,10 +142,14 @@ def build_timeline(
     attraction_subtitle_paths: Optional[list[str]] = None,
     leg_narration_splits: Optional[dict[str, tuple[Optional[str], Optional[str]]]] = None,
     attraction_fade_seconds: float = 0.0,
-    intro_text: Optional[dict] = None,
+    intro_text: Optional[Union[dict, list]] = None,
     outro_text: Optional[dict] = None,
     place_label_look: Optional[dict] = None,
     overview_voice_start: Optional[float] = None,
+    intro_audio_path: Optional[str] = None,
+    intro_subtitle_path: Optional[str] = None,
+    overview_audio_offset: float = 0.0,
+    waypoints: Optional[list] = None,
 ) -> str:
     """Builds timeline.json with clips ordered intro -> overview -> for each
     leg in travel order, that leg's departure waypoint's own attraction
@@ -211,7 +216,9 @@ def build_timeline(
     # end (right before outro) instead of next to a leg they can't be
     # matched to.
     attractions_by_idx: dict[int, list[tuple[str, str]]] = {}
-    unvisited = _unvisited_stopbys(project_dir)
+    # The waypoints the run started with (fix.md #4): job_config.json may have been edited during the render.
+    run_waypoints = _read_waypoints(project_dir) if waypoints is None else waypoints
+    unvisited = _unvisited_stopbys(run_waypoints)
     for source, burned in attraction_pairs:
         match = _ATTRACTION_RE.search(Path(source).name)
         wp_idx = int(match.group(1)) if match else -1
@@ -223,10 +230,8 @@ def build_timeline(
         leg_match = _RESIDENTIAL_LEG_RE.search(source_name)
         if not leg_match:
             return None, None
-        # 1-based in the filename; audio_paths/subtitle_paths are 0-based.
+        # 1-based in the filename; audio_paths/subtitle_paths are 0-based (00 = the separate start point's leg).
         idx = int(leg_match.group(1)) - 1
-        if not (0 <= idx < len(audio_paths)):
-            return None, None
         # A leg cut into multiple pieces (connectToRoute stop-by mid-leg
         # pause) has each piece's own TARGET waypoint's narration resolved
         # by leg_pieces.compute_leg_narration_splits, keyed by that piece's
@@ -236,6 +241,8 @@ def build_timeline(
         split = leg_narration_splits.get(Path(source_name).stem)
         if split is not None:
             return split
+        if not (0 <= idx < len(audio_paths)):
+            return None, None
         audio_path = audio_paths[idx]
         subtitle_path = (
             subtitle_paths[idx]
@@ -283,7 +290,7 @@ def build_timeline(
     # waypoint no leg arrives at (the trip's first one) gets its video before
     # the leg that leaves it; a stop-by merged into a leg, with no piece of
     # its own, gets its video just before that leg.
-    waypoint_ids = _waypoint_ids(project_dir)
+    waypoint_ids = _waypoint_ids(project_dir, run_waypoints)
     placed: set[int] = set()
     arrived: set[int] = set()
 
@@ -298,7 +305,8 @@ def build_timeline(
         start_pos = leg_num - 1
         pieces = legs_by_number[leg_num]
         targets = [_piece_target(source, waypoint_ids) for source, _ in pieces]
-        if start_pos not in arrived or all(t is None for t in targets):
+        # start_pos -1: the separate start point's leg, which has no attraction (key -1 holds unmatched clips).
+        if start_pos >= 0 and (start_pos not in arrived or all(t is None for t in targets)):
             add_attraction(start_pos)
         if targets[-1] is not None:
             # Stop-bys the leg passes without a piece of their own come before
@@ -356,7 +364,7 @@ def build_timeline(
             audio_path, subtitle_path = _attraction_audio(source_name)
 
         # The user's own footage keeps its sound beside the clip when they asked for it.
-        extra_audio = None
+        extra_audio, extra_volume = None, 0.5
         if kind == "attraction":
             from services.vdoprocessing.user_videos import original_sound_path
 
@@ -366,6 +374,14 @@ def build_timeline(
         # Seconds the narration starts into the clip (a leg's opening
         # before the walker moves) - applied at export; 0 otherwise.
         audio_offset = read_audio_offset(source_or_name) if audio_path and kind == "route" else 0.0
+        # The opening narration's own file plays on the intro; the overview's own voice starts a little in.
+        if is_intro and intro_audio_path:
+            audio_path, subtitle_path = intro_audio_path, intro_subtitle_path
+            audio_offset = tuning.INTRO_VOICE_LEAD_SECONDS
+        elif kind == "overview" and audio_path and overview_audio_offset:
+            audio_offset = overview_audio_offset
+            if intro_audio_path and not intro_pair:  # no intro clip: the opening plays at the overview's start
+                extra_audio, extra_volume = _resolve(intro_audio_path), 1.0
         free_voice = voice_over_intro and kind == "overview"
         length = _clip_length(burned, None if free_voice else audio_path, audio_offset)
         if voice_over_intro and (is_intro or free_voice):
@@ -383,10 +399,11 @@ def build_timeline(
             {"start": round(clip_start + c["start"], 3), "end": round(clip_start + c["end"], 3), "text": c["text"]}
             for c in clip_cues
         )
-        # The intro's title + subtitle ride on the text track, over the whole intro.
+        # The intro's text items ride on the text track: over the whole intro unless an item has its own times.
         clip_texts = []
         if intro_text and is_intro:
-            clip_texts.append({"start": 0.0, "end": round(length, 3), **intro_text})
+            for item in intro_text if isinstance(intro_text, list) else [intro_text]:
+                clip_texts.append({"start": 0.0, **item, "end": round(min(float(item.get("end", length)), length), 3)})
         # The outro's title rides on the text track too, until its logo end card starts.
         if outro_text and source_name == tuning.OUTRO_OUTPUT_FILENAME:
             shown = {k: v for k, v in outro_text.items() if k != "trim_end"}
@@ -414,9 +431,10 @@ def build_timeline(
             {
                 "order": order,
                 "extra_audio_path": extra_audio,
-                "extra_audio_volume": 0.5 if extra_audio else None,
+                "extra_audio_volume": extra_volume if extra_audio else None,
                 "clip_name": Path(burned).stem,
                 "file_path": _resolve(burned),
+                "duration": round(length, 3),
                 "audio_path": _resolve(audio_path),
                 "audio_offset": audio_offset,
                 "subtitle_path": _resolve(subtitle_path),
@@ -456,8 +474,7 @@ def build_timeline(
 
     output_path = Path(timeline_path) if timeline_path else Path(project_dir) / "timeline.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(timeline_data, f, indent=2, ensure_ascii=False)
+    write_json_atomic(output_path, timeline_data)
 
     logger.info("Step 6 complete: timeline written to %s (%d clip(s)).", output_path, len(tracks))
     return str(output_path)
