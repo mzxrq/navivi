@@ -965,21 +965,27 @@ def course_taglines(project: dict, brief: dict, limit: int = 6) -> List[str]:
     """Headline lines the "course" overview cycles through at the top: the
     title and subtitle, start -> farthest stop, one per travel mode in route
     order (a ferry is "海をわたり、Xへ"), and the area."""
+    from services import video_text
     from services.localization.route_brief import _length_km
+
+    settings = project.get("settings", {})
+    lang = video_text.resolve_language(settings.get("video_text_language"), project.get("map_language"))
+    phrase = video_text.labels_for(lang)["course_tagline"]
 
     def spoken(text: str) -> str:
         text = (text or "").strip()
-        return "" if not text or text.isascii() else text  # an English working title is not shown
+        # A Japanese video doesn't show an English working title ("Untitled Project").
+        return "" if not text or (lang == "ja" and text.isascii()) else text
 
-    settings = project.get("settings", {})
     legs = brief["legs"]
     start = brief["start"]
-    lines = [spoken(project.get("video_title") or project.get("project_name")), spoken(project.get("video_subtitle"))]
+    title = project.get("video_title") or (project.get("project_name") if lang == "ja" else "")  # not a folder name
+    lines = [spoken(title), spoken(project.get("video_subtitle"))]
     if legs:
         origin = legs[0]["from_at"]
         far = max(legs, key=lambda leg: _length_km([origin, leg["to_at"]]))
         if far["to"] != start:
-            lines.append(f"{start}から、{far['to']}へ")
+            lines.append(phrase["far"].format(start=start, to=far["to"]))
     seen = set()
     for leg in legs:
         for piece in leg.get("pieces") or [leg]:
@@ -987,14 +993,9 @@ def course_taglines(project: dict, brief: dict, limit: int = 6) -> List[str]:
             if mode in seen:
                 continue
             seen.add(mode)
-            if mode == "ferry":
-                lines.append(f"海をわたり、{leg['to']}へ")
-            elif mode == "walking":
-                lines.append(f"{start}から歩いてめぐる道")
-            elif mode in ("car", "driving"):
-                lines.append(f"車で走る、{leg['to']}への道")
-            elif mode == "airplane":
-                lines.append(f"空をこえて、{leg['to']}へ")
+            key = "driving" if mode == "car" else mode
+            if key in phrase:
+                lines.append(phrase[key].format(start=start, to=leg["to"]))
     lines.append(spoken(settings.get("intro_location")))
     out: List[str] = []
     for line in lines:

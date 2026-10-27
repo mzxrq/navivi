@@ -8,6 +8,8 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from services import tuning, video_text
 
+from .glyphs import drawable
+
 # The card-relevant labels (mode names, "distance"/"total", the taskbar
 # card's title) are a subset of tuning.LABELS_JA — the single combined
 # assets/config/labels_ja.json every on-video Japanese string lives in
@@ -1227,6 +1229,7 @@ class _CardMixin:
 
     def top_banner_width(self, text: str, font_px: int = 22) -> int:
         """Width in px of the pill render_top_banner draws for `text`."""
+        text = drawable(text)
         scale = 2
         font = self._card_font(self.FONT_CANDIDATES_BOLD, font_px * scale)
         bbox = ImageDraw.Draw(Image.new("RGBA", (1, 1))).textbbox((0, 0), text, font=font)
@@ -1249,6 +1252,7 @@ class _CardMixin:
             return frame
 
         scale = 2  # supersampled for antialiased text/corners, then downscaled
+        text = drawable(text)
         font = self._card_font(self.FONT_CANDIDATES_BOLD, font_px * scale)
         measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
         bbox = measure.textbbox((0, 0), text, font=font)

@@ -14,6 +14,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from services import tuning
+from services.mapfetcher.graphicengine.glyphs import drawable
 from services.logger.progress import tracker
 from services.vdoprocessing.vdoexporter import VideoExporter
 
@@ -462,7 +463,7 @@ class _CourseOverviewMixin:
 
     def _course_label_sprite(self, text: str) -> Optional[np.ndarray]:
         """A stop-by's name beside its dot: white text with a dark outline (BGRA)."""
-        text = (text or "").strip()
+        text = drawable((text or "").strip())
         if not text:
             return None
         font = self.graphics._card_font(self.graphics.FONT_CANDIDATES_BOLD, 22)

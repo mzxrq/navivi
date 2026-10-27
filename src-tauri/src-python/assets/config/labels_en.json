@@ -20,6 +20,13 @@
   "separator": " · ",
   "mode_join": " / ",
   "total_label": "Total",
+  "course_tagline": {
+    "far": "From {start} to {to}",
+    "ferry": "Across the sea to {to}",
+    "walking": "A walk from {start}",
+    "driving": "A drive to {to}",
+    "airplane": "Flying to {to}"
+  },
   "elevation_profile": "Elevation",
   "distance_label": "Distance",
   "taskbar_card_title": "Trip overview",

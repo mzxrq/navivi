@@ -20,6 +20,13 @@
   "separator": " ・ ",
   "mode_join": "・",
   "total_label": "合計",
+  "course_tagline": {
+    "far": "{start}から、{to}へ",
+    "ferry": "海をわたり、{to}へ",
+    "walking": "{start}から歩いてめぐる道",
+    "driving": "車で走る、{to}への道",
+    "airplane": "空をこえて、{to}へ"
+  },
   "elevation_profile": "標高",
   "distance_label": "距離",
   "taskbar_card_title": "旅の概要",

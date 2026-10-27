@@ -9,6 +9,8 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from services import tuning
 
+from .glyphs import drawable
+
 # Horizontal gap between a marker's own radius and its landmark label
 # chip — how far the chip's near edge sits from the pin's anchor point.
 _LABEL_CHIP_GAP: Final[int] = 4
@@ -28,6 +30,7 @@ class _SpriteMixin:
         # Bold, not regular — at this small a size on a busy map tile,
         # Noto Sans's regular weight reads as too thin/hard to make out.
         font = self._load_font(self.FONT_CANDIDATES_BOLD, font_size)
+        label = drawable(label)
         measure_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
         bbox = measure_draw.textbbox((0, 0), label, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]

@@ -8,10 +8,12 @@ import cv2
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
+from services.localization.localization import is_japanese
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services import tuning
 
 from .base import _GraphicsEngineBase
+from .glyphs import drawable
 
 
 class _PopupBoxMixin:
@@ -72,17 +74,22 @@ class _PopupBoxMixin:
         doesn't fit even after splitting. Returns (lines, font) — `font`
         may be a smaller instance than the one passed in."""
 
+        text = drawable(text)
         if draw.textlength(text, font=font) <= max_width:
             return [text], font
 
         best_split, best_diff = 1, None
-        for i in range(1, len(text)):
+        # Text with no Japanese breaks between words ("Katsuragi Mi|kumari" read as two broken words).
+        spaces = [i for i, ch in enumerate(text) if ch == " "] if not is_japanese(text) else []
+        for i in spaces or range(1, len(text)):
             diff = abs(
                 draw.textlength(text[:i], font=font) - draw.textlength(text[i:], font=font)
             )
             if best_diff is None or diff < best_diff:
                 best_diff, best_split = diff, i
         lines = [text[:best_split], text[best_split:]]
+        if spaces:
+            lines = [lines[0].rstrip(), lines[1].lstrip()]
 
         size = font.size
         longest = max(draw.textlength(line, font=font) for line in lines)
