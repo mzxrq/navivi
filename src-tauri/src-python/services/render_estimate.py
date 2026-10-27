@@ -117,15 +117,14 @@ def _chars(*texts) -> int:
 
 def _tts_requests(texts) -> int:
     """How many requests the narration takes: each text is cut into chunks, and every chunk is one request to the voice server."""
-    from services import tuning
-    from services.tts.ttsengine import split_text_for_tts
+    from services.tts.ttsengine import chunk_limits, split_text_for_tts
 
     count = 0
     for t in texts:
         if isinstance(t, str):
             clean = re.sub(r"\{[a-z_]+\}", "", t).strip()
             if clean:
-                count += len(split_text_for_tts(clean, tuning.TTS_MAX_CHUNK_CHARS, tuning.TTS_MIN_CHUNK_CHARS))
+                count += len(split_text_for_tts(clean, *chunk_limits(clean)))
     return count
 
 

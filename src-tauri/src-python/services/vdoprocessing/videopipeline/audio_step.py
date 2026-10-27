@@ -218,29 +218,35 @@ def _voice_matches(audio_path, client: Any) -> bool:
         stored = json.loads(_voice_note_path(audio_path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         stored = LEGACY_FINGERPRINT
-    if current.get("engine") == "qwen3" and stored.get("language") != _qwen3_language_of(audio_path):
-        return False  # English read as Japanese before Qwen3 was told each line's language
+    if any(stored.get(k) != v for k, v in _text_marks(audio_path, current).items()):
+        return False  # English made the old way: read as Japanese, or cut into 60-character pieces
     return fingerprints_match(stored, current)
 
 
-def _qwen3_language_of(audio_path) -> Optional[str]:
-    """The language Qwen3 reads this clip's spoken text in; None (not checked) for Japanese, so Japanese clips
-    made before the language was recorded stay valid."""
+# Bumped when non-Japanese clips are spoken differently (2: whole English sentences per request, chunk_limits).
+LATIN_CHUNKING = 2
+
+
+def _text_marks(audio_path, fingerprint: Dict[str, Any]) -> Dict[str, Any]:
+    """What a non-Japanese clip's note must record: how its text was chunked and, for Qwen3, the language it was
+    read in. Empty for Japanese, so Japanese clips made before these marks stay valid."""
     from services.tts.ttsengine import qwen3_language
 
     try:
-        language = qwen3_language(_spoken_text_path(audio_path).read_text(encoding="utf-8"))
+        text = _spoken_text_path(audio_path).read_text(encoding="utf-8")
     except OSError:
-        return None
-    return None if language == "Japanese" else language
+        return {}
+    language = qwen3_language(text)
+    if language == "Japanese":
+        return {}
+    return {"chunking": LATIN_CHUNKING, **({"language": language} if fingerprint.get("engine") == "qwen3" else {})}
 
 
 def _write_voice_note(audio_path, client: Any) -> None:
     fp = _client_fingerprint(client)
     if fp is None:
         return
-    if fp.get("engine") == "qwen3" and _qwen3_language_of(audio_path):
-        fp = {**fp, "language": _qwen3_language_of(audio_path)}
+    fp = {**fp, **_text_marks(audio_path, fp)}
     try:
         write_json_atomic(_voice_note_path(audio_path), fp, indent=None)
     except OSError:

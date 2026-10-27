@@ -51,10 +51,12 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
     pos = 0
     stop = None  # the last {n}: a {go} ends that stop's description
     scene = 1
+    last = ""  # the last character kept
     for match in CUE_RE.finditer(text):
         piece = text[pos:match.start()]
         parts.append(piece)
         length += len(piece)
+        last = piece[-1:] or last
         tag = match.group(1)
         if tag.isdigit():
             stop = tag
@@ -66,6 +68,9 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
         elif stop is not None:
             cues.append(Cue("go" + stop, length))
         pos = match.end()
+        # "pass {1} Katsuragi": a tag between two spaces takes one with it, or the voice reads a double space.
+        if last == " " and text[pos:pos + 1] == " ":
+            pos += 1
     parts.append(text[pos:])
     return "".join(parts), cues
 

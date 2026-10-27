@@ -33,3 +33,22 @@ def test_english_voiced_as_japanese_is_remade(tmp_path, monkeypatch):
 def test_japanese_clips_stay_valid(tmp_path, monkeypatch):
     monkeypatch.setattr(audio_step, "_client_fingerprint", lambda client: dict(QWEN))
     assert audio_step._voice_matches(_clip(tmp_path, "西へ歩きます。", QWEN), None)
+
+
+def test_english_is_voiced_in_whole_sentences_japanese_as_before():
+    from services import tuning
+    from services.tts.ttsengine import chunk_limits, split_text_for_tts
+
+    en = ("Take a moment to explore ancient shrines and temples nestled amid beautiful natural scenery. "
+          "Welcome to “The Katsuragi Trail,” a historic land where ancient beliefs still thrive today.")
+    assert all(c.strip().endswith(".") for c in split_text_for_tts(en, *chunk_limits(en)))
+    assert chunk_limits("西へ歩きます。") == (tuning.TTS_MAX_CHUNK_CHARS, tuning.TTS_MIN_CHUNK_CHARS)
+
+
+def test_english_clips_cut_the_old_way_are_remade(tmp_path, monkeypatch):
+    kokoro = {"voice": "af_heart", "sha256": None, "speed": 1.0, "caption": None, "engine": "kokoro"}
+    monkeypatch.setattr(audio_step, "_client_fingerprint", lambda client: dict(kokoro))
+    old = _clip(tmp_path, "Walk west for a while.", kokoro)
+    assert not audio_step._voice_matches(old, None)
+    audio_step._write_voice_note(old, None)
+    assert audio_step._voice_matches(old, None)

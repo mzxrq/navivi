@@ -148,3 +148,13 @@ def test_spaces_after_japanese_sentences_stay_dropped():
 
     ja = {"arrivingNarration": "近づきます。  道は穏やかです。  木々の間を歩きます。", "attractionNarration": "こちらです。"}
     assert cued_script(ja) == "近づきます。{start}道は穏やかです。木々の間を歩きます。{end}こちらです。"
+
+
+def test_a_tag_between_spaces_leaves_one_space():
+    from services.localization.cues import clean_text, strip_cues
+
+    text = "From the {route} Teradabashi bus stop, pass {1} {go} Katsuragi Shrine.{2}Next."
+    clean, cues = strip_cues(text)
+    assert clean == "From the Teradabashi bus stop, pass Katsuragi Shrine.Next."
+    assert clean[cues[0].char_index:].startswith("Teradabashi")
+    assert clean_text("西へ{1}歩きます。{start}これが全体のルートです。") == "西へ歩きます。これが全体のルートです。"

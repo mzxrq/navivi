@@ -1939,6 +1939,10 @@ TTS_MAX_CHUNK_CHARS = 60
 # past TTS_MAX_CHUNK_CHARS - a slightly long chunk is far safer than an
 # isolated short one that invents its own ending.
 TTS_MIN_CHUNK_CHARS = 20
+# The same ~15 s for text with no Japanese (English reads ~14 characters a second): at 60, English sentences were cut
+# mid-phrase ("temples nestled | amid") and each piece voiced apart, pausing mid-sentence.
+TTS_MAX_CHUNK_CHARS_LATIN = 200
+TTS_MIN_CHUNK_CHARS_LATIN = 60
 # generate_speech now always splits multi-sentence text at sentence
 # boundaries (never packing two sentences into one TTS request, unlike the
 # old chunking that only split when TTS_MAX_CHUNK_CHARS was exceeded) and

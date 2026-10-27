@@ -784,7 +784,7 @@ class IrodoriTTSClient:
         # a whole) - less granular than a pause after every single
         # sentence, but still nowhere near as rushed/robotic as one
         # continuous zero-gap synthesis of the whole text.
-        chunks = split_text_for_tts(text, tuning.TTS_MAX_CHUNK_CHARS, tuning.TTS_MIN_CHUNK_CHARS)
+        chunks = split_text_for_tts(text, *chunk_limits(text))
         if len(chunks) > 1:
             logger.info("TTS text of %d characters split into %d chunk(s).", len(text), len(chunks))
         takes: List[bytes] = []
@@ -1083,6 +1083,15 @@ def _cut_to_chars(piece: str, max_chars: int) -> List[str]:
     if cur:
         out.append(cur)
     return out
+
+
+def chunk_limits(text: str) -> Tuple[int, int]:
+    """(max, min) characters per TTS request: about 15 s of speech in the text's own script."""
+    from services.localization.localization import is_japanese
+
+    if is_japanese(text):
+        return tuning.TTS_MAX_CHUNK_CHARS, tuning.TTS_MIN_CHUNK_CHARS
+    return tuning.TTS_MAX_CHUNK_CHARS_LATIN, tuning.TTS_MIN_CHUNK_CHARS_LATIN
 
 
 def split_text_for_tts(text: str, max_chars: int, min_chars: int = 0) -> List[str]:
