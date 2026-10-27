@@ -130,3 +130,21 @@ def test_old_single_recording_is_read_as_one_file(tmp_path, monkeypatch):
     data = audio_step.existing_audio_data(str(config))
     assert data.get("intro_voice") is None and "start" in data["overview_cue_times"]
     assert data["overview_cue_times"]["start"] > 0  # measured in the whole old recording
+
+
+def test_auto_cues_keep_english_spaces_and_japanese_as_is():
+    from services.localization.cues import clean_text
+    from services.vdoprocessing.videopipeline.narration_step import cued_script
+
+    en = {"arrivingNarration": "Walk west for a while. Along the way, turn twice. You'll soon arrive.",
+          "attractionNarration": "This is the shrine. It is old."}
+    assert clean_text(cued_script(en)) == "Walk west for a while. Along the way, turn twice. You'll soon arrive. This is the shrine. It is old."
+    ja = {"arrivingNarration": "西へ歩きます。角を曲がります。", "attractionNarration": "こちらが神社です。"}
+    assert cued_script(ja) == "西へ歩きます。{start}角を曲がります。{end}こちらが神社です。"
+
+
+def test_spaces_after_japanese_sentences_stay_dropped():
+    from services.vdoprocessing.videopipeline.narration_step import cued_script
+
+    ja = {"arrivingNarration": "近づきます。  道は穏やかです。  木々の間を歩きます。", "attractionNarration": "こちらです。"}
+    assert cued_script(ja) == "近づきます。{start}道は穏やかです。木々の間を歩きます。{end}こちらです。"

@@ -17,6 +17,7 @@ from typing import Optional
 
 from services.localization.cue_alignment import measured_cue_times
 from services.localization.cues import cue_tags, strip_cues
+from services.localization.localization import is_japanese
 from services.localization.sentence_split import SENTENCE_END
 
 from . import audio_step
@@ -40,7 +41,12 @@ MIN_WALK_SECONDS = 4.0
 
 
 def _sentences(text: str) -> list[str]:
-    return [s for s in (p.strip() for p in _SENTENCE_END.split(text or "")) if s]
+    # A sentence after an English one keeps the space before it ("while. Along"); after "。" it is dropped, as before.
+    out: list[str] = []
+    for piece in _SENTENCE_END.split((text or "").strip()):
+        if piece.strip():
+            out.append(piece.rstrip() if out and out[-1][-1:].isascii() else piece.strip())
+    return out
 
 
 def _hash(text: str) -> str:
@@ -98,7 +104,7 @@ def cued_script(waypoint: dict) -> Optional[str]:
         out += "{start}" + "".join(arriving_sentences[1:])
     attraction_sentences = _sentences(attraction)
     if attraction_sentences:
-        out += "{end}" + "".join(attraction_sentences)
+        out += "{end}" + ("" if not out or is_japanese(attraction) else " ") + "".join(attraction_sentences)
     return out if cue_tags(out) else base
 
 
@@ -120,9 +126,9 @@ def add_default_cues(project_config_path: str) -> int:
         if not base:
             continue
         key = waypoint_cue_key(wp, pos)
-        if store.cued_text(key, base):
-            continue
         cued = cued_script(wp)
+        if store.cued_text(key, base) == cued:
+            continue
         if cued and cued != base:
             store.put_text(key, base, cued)
             added += 1
