@@ -92,6 +92,14 @@ def test_a_dictionary_word_is_only_replaced_as_a_whole_word():
     assert apply_pronunciation_dictionary("生まれた場所と、この場で。\n九品寺へ", entries) == "生まれた場所と、このバで。\nクホンジへ"
 
 
+def test_stray_spaces_in_an_entry_are_ignored():
+    from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary
+
+    entries = [{"word": "Kisshousouji ", "reading": "Kisshowso-ji "}]
+    assert apply_pronunciation_dictionary("turn,Kisshousouji Temple. This is Kisshousouji  Temple.", entries) == \
+        "turn,Kisshowso-ji Temple. This is Kisshowso-ji  Temple."
+
+
 def test_an_auto_place_name_the_analyser_reads_right_keeps_its_kanji_and_is_checked(monkeypatch):
     from services import tuning
     from services.tts import name_check

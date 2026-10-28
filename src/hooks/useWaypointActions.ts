@@ -76,8 +76,9 @@ export function useWaypointActions() {
       narration: "",
       arrivingNarration: "",
       attractionNarration: "",
-      images: [],
-      imagePans: [],
+      // Same photos for the arrival, held still: no camera move, so the return stop never needs a generated clip.
+      images: [...(wpToClone.images ?? [])],
+      imagePans: (wpToClone.images ?? []).map(() => "none"),
       videos: [],
       videoSound: [],
       isStopBy: false,

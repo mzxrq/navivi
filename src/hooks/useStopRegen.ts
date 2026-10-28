@@ -5,7 +5,7 @@ import { t } from "@lingui/core/macro";
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
 import { probeDuration, toAbsoluteProjectPath } from "../services/fileSystem";
-import { RegenKind, RouteClip, refreshRouteClip, refreshStopMedia, regenModes, routeClipModes, runRegen } from "../services/stopRegen";
+import { RegenKind, RouteClip, StopNarration, onlyNarration, refreshRouteClip, refreshStopMedia, regenModes, routeClipModes, runRegen } from "../services/stopRegen";
 
 /** "Make again" for one stop's voice, subtitles or photo clip (stop editor and timeline editor). */
 export function useStopRegen() {
@@ -32,9 +32,11 @@ export function useStopRegen() {
   };
 
   // Redo one stop's files through the single-stop CLI modes (one sidecar call at a time), then re-read them in the timeline.
-  const regenerate = async (index: number, kind: RegenKind) => {
+  // `narration`: from a timeline clip, only the narration that clip plays.
+  const regenerate = async (index: number, kind: RegenKind, narration: StopNarration | null = null) => {
     const dir = metadata.directory_path;
-    const stop = stopInfo(index);
+    const info = stopInfo(index);
+    const stop = info && onlyNarration(info, narration);
     if (!dir || !stop || busy || isRendering) return;
     setBusy({ index, kind });
     showToast(

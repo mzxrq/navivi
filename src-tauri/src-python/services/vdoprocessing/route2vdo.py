@@ -64,6 +64,8 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 LEG_RENDER_VERSION = 9
 # Bumped when the heatmap legs' elevation profile card changes (only those legs re-render; v1: the card).
 LEG_ELEVATION_CARD_VERSION = 1
+# Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
+LEG_CHAIN_FIT_VERSION = 1
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
@@ -156,6 +158,9 @@ def _leg_fingerprint_parts(
     if route_inputs:
         parts["route_inputs"] = route_inputs
     parts.update({f"kw.{k}": h(v) for k, v in leg_kwargs.items()})
+    if leg_kwargs.get("route_chain"):
+        # Legs with a stop chain on top re-render once when its fitting changes (v1: shrinks to clear the pill).
+        parts["kw.route_chain"] = h([leg_kwargs["route_chain"], LEG_CHAIN_FIT_VERSION])
     if "leg_elevations" in leg_kwargs:
         # Heatmap legs also draw the elevation profile card: re-render only them when it changes.
         parts["kw.leg_elevations"] = h([leg_kwargs["leg_elevations"], LEG_ELEVATION_CARD_VERSION])

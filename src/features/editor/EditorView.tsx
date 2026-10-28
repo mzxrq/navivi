@@ -8,7 +8,7 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
 import { Copy, FileText, Film, LinkIcon, Loader2, Maximize, Mic, Music, Plus, RotateCcw, Sparkles, Subtitles, Trash2, Type, UnlinkIcon, Video, VolumeX, ZoomIn, ZoomOut } from "../../components/ui/icons";
 import { useStopRegen } from "../../hooks/useStopRegen";
-import { type RegenKind, routeClipOf, stopIndexOf } from "../../services/stopRegen";
+import { type RegenKind, narrationOf, onlyNarration, routeClipOf, stopIndexOf } from "../../services/stopRegen";
 import { Tip } from "../../components/ui/Tip";
 import { openContextMenu, separator } from "../../components/ui/menuItems";
 import { probeDuration, toAbsoluteProjectPath, toRelativeProjectPath } from "../../services/fileSystem";
@@ -304,8 +304,10 @@ export function EditorView() {
 
   const segmentMenu = (e: React.MouseEvent, seg: Segment) => {
     const stopIndex = stopIndexOf(seg);
-    const stop = stopIndex === null ? null : stopInfo(stopIndex);
-    const remake = (kind: RegenKind) => () => void regenerate(stopIndex!, kind);
+    const narration = narrationOf(seg);
+    const info = stopIndex === null ? null : stopInfo(stopIndex);
+    const stop = info && onlyNarration(info, narration);
+    const remake = (kind: RegenKind) => () => void regenerate(stopIndex!, kind, narration);
     const clip = routeClipOf(seg);
     openContextMenu(e, [
       !!clip && {
@@ -324,7 +326,7 @@ export function EditorView() {
         disabled: !!regenBusy || isRendering,
         submenu: [
           { label: t`Voice`, icon: Mic, disabled: !stop.hasArrivalVoice && !stop.hasAttractionVoice, onSelect: remake("voice") },
-          { label: t`Subtitles`, icon: Subtitles, disabled: !stop.hasArrivalVoice, onSelect: remake("subtitles") },
+          { label: t`Subtitles`, icon: Subtitles, disabled: !stop.hasArrivalVoice && !stop.hasAttractionVoice, onSelect: remake("subtitles") },
           { label: t`Photo clip`, icon: Film, disabled: !stop.hasPhotos, onSelect: remake("photo") },
         ],
       },

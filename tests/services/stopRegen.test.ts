@@ -4,7 +4,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 import { emptyTimeline, type Segment, type TimelineData } from "../../src/features/editor/model";
-import { lastJson, refreshRouteClip, refreshStopMedia, regenModes, regenTargetOf, routeClipModes, runRegen, stopIndexOf } from "../../src/services/stopRegen";
+import { lastJson, narrationOf, onlyNarration, refreshRouteClip, refreshStopMedia, regenModes, regenTargetOf, routeClipModes, runRegen, stopIndexOf } from "../../src/services/stopRegen";
 
 beforeEach(() => invoke.mockReset());
 
@@ -135,5 +135,20 @@ describe("intro and overview clips", () => {
     const voiced = await refreshRouteClip(clips(), "overview", "voice", io);
     expect(voiced?.segments.map((s) => s.audioDuration)).toEqual([21, 21, 4]);
     expect(voiced?.subtitles.map((c) => c.text)).toEqual(["ようこそ"]);
+  });
+});
+
+describe("one narration from a timeline clip", () => {
+  it("knows which narration a clip plays", () => {
+    expect(narrationOf({ video: "assets/video/route/02_waypoint_03_A.mp4", audio: "assets/audio/02_waypoint_03_A.wav" })).toBe("arrival");
+    expect(narrationOf({ video: "assets/video/attraction/04_attraction_02_A.mp4", audio: "assets/audio/04_attraction_02_A.wav" })).toBe("attraction");
+    expect(narrationOf({ video: "assets/video/route/01_overview.mp4" })).toBeNull();
+  });
+
+  it("redoes only that narration and its subtitles", () => {
+    expect(regenModes("voice", 3, onlyNarration(both, "arrival"))).toEqual(["tts 3 --force", "subtitle 3 --force"]);
+    expect(regenModes("voice", 3, onlyNarration(both, "attraction"))).toEqual(["attraction-tts 3 --force", "subtitle-all"]);
+    expect(regenModes("subtitles", 3, onlyNarration(both, "attraction"))).toEqual(["subtitle-all --force"]);
+    expect(onlyNarration(both, null)).toEqual(both);
   });
 });

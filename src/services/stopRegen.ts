@@ -11,7 +11,8 @@ export interface RegenStop {
 
 // The single-stop CLI modes of main.py, in the order they must run. The stop's index is its place in job_config's waypoints.
 export function regenModes(kind: RegenKind, index: number, stop: RegenStop): string[] {
-  if (kind === "subtitles") return [`subtitle ${index} --force`];
+  // The attraction narration's subtitles have no single-stop mode; subtitle-all remakes them (all subtitles are cheap).
+  if (kind === "subtitles") return [stop.hasArrivalVoice ? `subtitle ${index} --force` : "subtitle-all --force"];
   if (kind === "photo") return [...(stop.hasAttractionVoice ? [`attraction-tts ${index}`] : []), `attraction ${index} --force`];
   return [
     ...(stop.hasArrivalVoice ? [`tts ${index} --force`] : []),
@@ -85,6 +86,20 @@ export function refreshRouteClip(timeline: TimelineData, clip: RouteClip, kind: 
     audio: (name) => OVERVIEW_VOICES.some((v) => name.startsWith(v)),
     video: (name) => routeClipOf({ video: name }) === clip,
   }, io);
+}
+
+export type StopNarration = "arrival" | "attraction";
+
+/** Which of its stop's narrations a timeline clip plays: the walk's arrival one or the place clip's attraction one. */
+export function narrationOf(seg: Pick<Segment, "video" | "audio">): StopNarration | null {
+  if (base(seg.audio).startsWith("02_waypoint_")) return "arrival";
+  return /^04_attraction_/.test(base(seg.video)) || /^04_attraction_/.test(base(seg.audio)) ? "attraction" : null;
+}
+
+/** The stop limited to one narration, so "Make again" from a clip redoes only what that clip plays. */
+export function onlyNarration<T extends RegenStop>(stop: T, which: StopNarration | null): T {
+  if (!which) return stop;
+  return { ...stop, hasArrivalVoice: which === "arrival" && stop.hasArrivalVoice, hasAttractionVoice: which === "attraction" && stop.hasAttractionVoice };
 }
 
 export interface RefreshIo {

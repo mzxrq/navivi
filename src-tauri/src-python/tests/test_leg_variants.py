@@ -28,3 +28,13 @@ def test_switching_back_restores_the_kept_render(tmp_path):
     # The plain render is now the kept one: switching off again swaps it back.
     again = restore_leg(variants, "02_waypoint_01_inputs.json", OFF, [restored[0], out / "02_waypoint_01_inputs.json"], out)
     assert again[0].read_bytes()[:1] == b"p"
+
+
+def test_only_legs_with_a_stop_chain_rerender_for_its_new_fit(monkeypatch):
+    from services.vdoprocessing import route2vdo
+
+    parts = lambda kw: route2vdo._leg_fingerprint_parts([(34.0, 135.0)], "B", kw, route_inputs="r1")  # noqa: E731
+    with_chain, plain = parts({"route_chain": ["A", "B"]}), parts({})
+    monkeypatch.setattr(route2vdo, "LEG_CHAIN_FIT_VERSION", 99)
+    assert parts({"route_chain": ["A", "B"]})["kw.route_chain"] != with_chain["kw.route_chain"]
+    assert parts({}) == plain

@@ -352,7 +352,9 @@ def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
     if not text or not dictionary:
         return text
     # Longest words first, so 三段壁 is replaced before a shorter entry such as 三段 can cut into it.
-    for entry in sorted(dictionary, key=lambda e: len(e.get("word") or ""), reverse=True):
+    # Typed entries can carry stray spaces ("Kisshousouji "), which glue or miss the word.
+    entries = [{**e, "word": (e.get("word") or "").strip(), "reading": (e.get("reading") or "").strip()} for e in dictionary if isinstance(e, dict)]
+    for entry in sorted(entries, key=lambda e: len(e["word"]), reverse=True):
         spoken = _spoken_form(entry)
         if not spoken:
             continue

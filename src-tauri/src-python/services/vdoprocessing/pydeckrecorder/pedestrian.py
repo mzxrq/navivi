@@ -2471,6 +2471,24 @@ async def _record_leg(
                                 chain.appendChild(place);
                             });
                             document.body.appendChild(chain);
+                            // A long chain shrinks (then ends in "...") to clear the destination pill, which
+                            // changes size with its text; refitted before the next paint whenever it does.
+                            const fit = () => {
+                                const pill = document.getElementById('hud-banner');
+                                if (!pill) return;
+                                const room = pill.getBoundingClientRect().left - 16 - chain.getBoundingClientRect().left;
+                                chain.style.fontSize = '';
+                                chain.style.maxWidth = '';
+                                let size = 30;
+                                while (chain.getBoundingClientRect().width > room && size > 18) {
+                                    size -= 1;
+                                    chain.style.fontSize = size + 'px';
+                                }
+                                if (chain.getBoundingClientRect().width > room) {
+                                    Object.assign(chain.style, { boxSizing: 'border-box', maxWidth: room + 'px', overflow: 'hidden', textOverflow: 'ellipsis' });
+                                }
+                            };
+                            new ResizeObserver(fit).observe(document.getElementById('hud-banner'));
                         }
                     }""",
                     [_hud_css(theme), mode_hud["banner_icon"], mode_hud["time_label"], mode_hud["icon"], route_chain,
