@@ -215,7 +215,7 @@ def restore_leg(variant_dir: Path, inputs_name: str, leg_parts: Dict[str, str], 
     """When the leg's kept variant was rendered from these inputs (a setting switched off and back on), swaps it in:
     the current files become the kept variant. Returns the restored clips; [] when there is nothing to restore."""
     kept = _stored_leg_inputs(variant_dir / inputs_name).get("parts") or {}
-    clips = sorted(p for p in variant_dir.glob("*.mp4") if _output_is_valid(p))
+    clips = sorted(p for p in variant_dir.glob("*.mp4") if _output_is_valid(p) and "_padded" not in p.stem)
     if not kept or not clips or leg_changed_parts(leg_parts, kept):
         return []
     swap = variant_dir.with_name(variant_dir.name + ".swap")
@@ -830,7 +830,8 @@ class RouteAnimator:
             fingerprint_path = self.out_dir / f"{leg_glob_prefix}inputs.json"
             existing_leg_files = sorted(
                 p for p in self.out_dir.glob(f"{leg_glob_prefix}*.mp4")
-                if _output_is_valid(p)
+                # leg_pieces.py's "_padded" copies are not pieces of their own
+                if _output_is_valid(p) and "_padded" not in p.stem
             ) if self.config.get("checkpoint_enabled", False) else []
             leg_parts = _leg_fingerprint_parts(
                 leg_latlon, dest_label, leg_kwargs, route_inputs=res_data.get("route_inputs"),
