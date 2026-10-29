@@ -40,7 +40,8 @@ def trace_anchors(
     `stop_dists` is (cue seconds or None, distance[, stops]) per place in route
     order; places without a cue are passed on the way. A cued place with
     stops=False (named mid-sentence, no {go}) becomes (seconds, distance, False):
-    the trace goes through it without slowing. Without any cue the trace runs
+    the trace goes through it without slowing. (seconds, distance, True, until)
+    arrives at `seconds` and waits there until `until`. Without any cue the trace runs
     COURSE_SECONDS_PER_LEG per leg, within COURSE_TRACE_MIN..MAX_SECONDS."""
     anchors: List[Tuple] = [(route_at, 0.0)]
     for cue, dist, *rest in stop_dists:
@@ -49,6 +50,8 @@ def trace_anchors(
         if cue < anchors[-1][0] + _MIN_ANCHOR_GAP_SECONDS:
             continue
         anchors.append((float(cue), float(dist)) if not rest or rest[0] else (float(cue), float(dist), False))
+        if len(rest) > 1 and rest[1] is not None and rest[1] > cue + _MIN_ANCHOR_GAP_SECONDS:
+            anchors.append((float(rest[1]), float(dist)))
     if end_at is not None and end_at > anchors[-1][0] + _MIN_ANCHOR_GAP_SECONDS:
         arrive = float(end_at)
         if len(anchors) > 1 and anchors[-1][1] < total_dist:
@@ -67,7 +70,26 @@ def trace_anchors(
             rest = min(tuning.COURSE_TRACE_MAX_SECONDS,
                        max(tuning.COURSE_TRACE_MIN_SECONDS, legs * tuning.COURSE_SECONDS_PER_LEG))
         anchors.append((anchors[-1][0] + max(2.0, rest), total_dist))
-    return relax_anchors(anchors)
+    return hold_before_slow_stretches(relax_anchors(anchors))
+
+
+def hold_before_slow_stretches(anchors: List[Tuple], share: float = tuning.COURSE_MIN_PACE_SHARE) -> List[Tuple]:
+    """A stretch slower than `share` of the trace's average pace (places close together, named seconds apart)
+    waits where it starts and then goes at that pace, still arriving on time, instead of crawling."""
+    span = anchors[-1][0] - anchors[0][0] if len(anchors) > 1 else 0.0
+    if span <= 0 or share <= 0:
+        return anchors
+    floor = share * (anchors[-1][1] - anchors[0][1]) / span
+    out = [anchors[0]]
+    for b in anchors[1:]:
+        a = out[-1]
+        dd, dt = b[1] - a[1], b[0] - a[0]
+        need = dd / floor if floor > 0 else dt
+        if dd > 0 and dt - need > _MIN_ANCHOR_GAP_SECONDS:
+            out[-1] = (a[0], a[1])  # it now stops there
+            out.append((b[0] - need, a[1]))
+        out.append(b)
+    return out
 
 
 def pin_reveal_time(reached: float, said: float, route_at: float, window: float = tuning.COURSE_CUE_WINDOW_SECONDS) -> float:
@@ -202,17 +224,19 @@ class _CourseOverviewMixin:
         any_go = any(str(k).startswith("go") for k in cues)
 
         def arrive_cue(ap: Dict) -> Tuple:
-            # A group's names are listed in a few seconds, then its walk time is
-            # read; the trace reaches its {go} stop as the next sentence starts.
-            # A stop named without a {go} is passed at the second its name is
-            # said (not spread by distance, which put its pin seconds late).
+            # A {go} stop is reached when its name is said and the walker waits
+            # there until {go} (arriving at {go} spread the walk over the whole
+            # description: a crawl between close stops). A stop named without a
+            # {go} is passed at the second its name is said.
             name = cues.get(str(ap.get("order")))
             if not any_go:
                 return (name, ap["course_dist"])
             go = cues.get(f"go{ap.get('order')}")
             if go is None:
                 return (name, ap["course_dist"], False)
-            return (max(float(go), float(name if name is not None else go)), ap["course_dist"])
+            if name is not None and float(name) < float(go):
+                return (float(name), ap["course_dist"], True, float(go))
+            return (float(go), ap["course_dist"])
 
         anchors = trace_anchors(
             [arrive_cue(ap) for ap in numbered],

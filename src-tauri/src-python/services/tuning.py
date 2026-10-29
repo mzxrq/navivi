@@ -277,6 +277,8 @@ LEG_ELEVATION_CARD_SIZE = (520, 190)
 # A place the trace only passes may be reached up to this long after its cue (never before it),
 # so the pace between cues stays natural; every cue still lands within 0..this.
 COURSE_CUE_WINDOW_SECONDS = 0.75
+# The trace never crawls slower than this share of its average pace: it waits at a place, then goes on.
+COURSE_MIN_PACE_SHARE = 0.5
 # Without cues: seconds of trace per leg (kept within MIN..MAX in total).
 COURSE_SECONDS_PER_LEG = 3.0
 COURSE_TRACE_MIN_SECONDS = 8.0
