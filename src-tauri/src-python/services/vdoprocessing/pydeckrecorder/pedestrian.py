@@ -33,6 +33,7 @@ from .geomath import cumulative_distance_km, haversine_km
 from .httpserver import start_local_server
 from .popupsequence import _wait_for_paint
 from .recorder import _route_gradient_feature, _route_linestring_feature
+from .frame_sink import FrameSink
 from .elevation import leg_segment_colors, profile_card, quantize, usable_heights
 from .routedata import interpolate_route_data, patch_pydeck_html
 from .leg_camera import (
@@ -476,95 +477,15 @@ async def _record_leg(
     bottom_reserve_px: float = 0.0,
     segment_colors: Optional[List[List[int]]] = None,
 ):
-    from pathlib import Path
-
     from playwright.async_api import async_playwright
-    from services.vdoprocessing.vdoeditor import FFmpegEngine
-    from services.vdoprocessing.vdoexporter import VideoExporter, _replace_with_retry
 
-    editor = FFmpegEngine()
     hud_labels = video_text.current_labels()
     hud_minutes = hud_labels["hud_minutes"]
 
-    async def _spawn_ffmpeg(out_path: str):
-        # Encodes into a private temp file in out_path's own directory
-        # (same convention as VideoExporter, which the overview/waypoints
-        # renderers already use), not out_path itself -- see
-        # `_finalize_clip`, the only place that ever touches out_path, so
-        # a render killed mid-stream leaves only that throwaway temp file
-        # behind instead of a half-written/corrupted final video.
-        temp_path = VideoExporter._make_temp_path(out_path)
-        ffmpeg_cmd = [
-            editor.resolve_binary(), "-y", *tuning.ffmpeg_log_args(),
-            "-f", "image2pipe", "-vcodec", "mjpeg", "-framerate", str(fps), "-i", "-",
-            "-c:v", "libx264", *tuning.ffmpeg_thread_args(),
-            "-r", str(fps), "-pix_fmt", "yuv420p", temp_path,
-        ]
-        proc = await asyncio.create_subprocess_exec(
-            *ffmpeg_cmd, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.DEVNULL
-        )
-        return proc, temp_path
-
-    # A leg normally writes into ONE output file start to finish. A
-    # connected stop-by pause (see `landmarks` docstring) can CUT the leg
-    # into an extra file right at its fullscreen moment, though -- the
-    # underlying `page`/deck.gl canvas keeps running unbroken across that
-    # cut (only the ffmpeg SINK changes), so `proc_ref`/`produced_paths`
-    # are the only mutable state needed for it: every frame write below
-    # goes through `_write_frame`, which always targets whatever process
-    # `proc_ref["proc"]` currently points at, so swapping it mid-function
-    # (see `_cut_to_new_clip` near the main loop) is transparent to every
-    # call site.
-    _first_proc, _first_temp = await _spawn_ffmpeg(output_path)
-    proc_ref = {"proc": _first_proc, "temp_path": _first_temp, "real_path": output_path}
-    produced_paths = [output_path]
-
-    # Frames written so far and the latest one: the opening's length (see
-    # start_cue_seconds) is measured from this, not predicted.
-    frame_state = {"count": 0, "last": None, "cuts": 0, "clip_start": 0}
-
-    async def _write_frame(png_bytes: bytes) -> None:
-        proc_ref["proc"].stdin.write(png_bytes)
-        await proc_ref["proc"].stdin.drain()
-        frame_state["count"] += 1
-        frame_state["last"] = png_bytes
-
-    async def _finalize_clip() -> None:
-        """Closes the CURRENT clip's ffmpeg process and, only once it's
-        confirmed a clean exit, atomically renames its temp file onto its
-        real target path -- the one moment that real path is ever touched.
-        A crash/nonzero exit instead deletes the temp file and leaves
-        whatever was already at the real path (if anything) untouched."""
-        proc_ref["proc"].stdin.close()
-        await proc_ref["proc"].wait()
-        if proc_ref["proc"].returncode == 0:
-            _replace_with_retry(proc_ref["temp_path"], proc_ref["real_path"])
-        else:
-            logger.error(
-                f"[ERROR] FFmpeg exited {proc_ref['proc'].returncode} while "
-                f"producing '{proc_ref['real_path']}' -- leaving it untouched."
-            )
-            Path(proc_ref["temp_path"]).unlink(missing_ok=True)
-
-    async def _cut_to_new_clip() -> None:
-        """Finalizes the CURRENT output file (see `_finalize_clip`) and
-        opens a fresh one for `_write_frame` to target from here on -- see
-        `_play_stopby_photo_pause`, the only caller. The continuation file
-        keeps this leg's own "02_waypoint_{N:02d}_" filename prefix (just
-        with a "_cont{n}" suffix inserted) so timeline_step.py's filename
-        parse still resolves it to this SAME leg's narration/subtitle --
-        see route2vdo.py's own note and timeline_step.py's
-        _split_leg_narration_for_pieces for how the leg's one narration
-        track gets split proportionally across however many pieces this
-        produces."""
-        await _finalize_clip()
-        stem, ext = os.path.splitext(output_path)
-        new_path = f"{stem}_cont{len(produced_paths) + 1}{ext}"
-        new_proc, new_temp = await _spawn_ffmpeg(new_path)
-        proc_ref["proc"], proc_ref["temp_path"], proc_ref["real_path"] = new_proc, new_temp, new_path
-        produced_paths.append(new_path)
-        frame_state["cuts"] += 1
-        frame_state["clip_start"] = frame_state["count"]
+    # A leg normally writes into ONE output file; a stop-by's photo pause can cut it into more (frame_sink.py).
+    sink = await FrameSink.open(output_path, fps)
+    proc_ref, produced_paths, frame_state = sink.proc_ref, sink.produced_paths, sink.frame_state
+    _write_frame, _finalize_clip, _cut_to_new_clip = sink.write, sink.finalize, sink.cut
 
     async def _play_leg_photo_card(
         image_path, freeze_seconds_raw, card_key: str, marker_px=None, grow: bool = False,

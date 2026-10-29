@@ -1,58 +1,46 @@
 """Step 4: Render the visual map animation, synced to audio timing.
 
-Its helpers live beside it: render_look.py (pin glyphs/colors, look options),
-render_checkpoint.py (the render manifest's input hashes) and
-overview_framing.py (overview padding, bands, bounding box)."""
+Its parts live beside it: leg_sequence.py (each leg's render entry and the
+stops' pop-up data), animator_config.py (the renderer's config),
+render_look.py (pin glyphs/colors, look options), render_checkpoint.py (the
+render manifest) and overview_framing.py (overview padding, bands, bounding
+box)."""
 
 import json
-import math
 import re
 from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
-import pandas as pd
 
-from services.localization.cues import tags_at_sentence_start
-from services.localization.overview_script import overview_style
-from services.vdoprocessing.stopby_visits import visits_stopby
 from services.gpsparser.gpscalculator import GPSMath
 from services.logger.progress import tracker
 from services.projectfiles import ROUTE_CACHE, meta_file
 from services.mapfetcher.mapfetcher import MapFetcher
 from services.vdoprocessing.route2vdo import RouteAnimator
-from services.vdoprocessing.route_inputs import overview_flags_hash, route_inputs_hash
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
-from services.localization.localization import format_waypoint_label
 from services.config.job_config import JobConfigManager
-from services import tuning, video_text
+from services import tuning
 from services.mapfetcher.graphicengine.pinimage import marker_for
 
-from .audio_step import overview_tagged_script
-from .narration_step import MAX_EARLY_ARRIVAL_SECONDS, CueStore, leg_walk_plan
+from .animator_config import build_animator_config
+from .leg_sequence import build_leg_sequence, inject_waypoint_popups
+from .narration_step import CueStore
 from .helpers import (
     BASE_DIR,
     DEFAULT_FRONTEND_CONFIG,
     DEFAULT_MAP_BACKGROUND,
     _build_point_colors,
     _build_point_modes,
-    leg_line_color_rgb,
     _project_route_to_pixels,
-    _resolve_leg_geometry_from_cache,
-    attraction_videos_enabled,
     logger,
-    output_is_valid,
     project_route_video_dir,
 )
-from .overview_framing import _course_config, overview_bounding_box, purge_map_images_on_language_change
+from .overview_framing import overview_bounding_box, purge_map_images_on_language_change
 from .render_checkpoint import (
-    ROUTE_CHECKPOINT_PARTS, _RENDER_MANIFEST_NAME, _checkpoint_parts, _describe_changed_parts, _render_checkpoint_key,
-    _short_hash,
+    _RENDER_MANIFEST_NAME, _checkpoint_parts, _render_checkpoint_key, _short_hash, reuse_render_manifest,
 )
-from .render_look import (
-    _arrived_marker_color, _is_return_stop, _leg_pin, _mode_line_color_overrides, _project_color, _project_rgb,
-    look_options, overview_pin_glyphs,
-)
+from .render_look import _project_color
 
 # Residential-leg clip filename's embedded 1-based departure-waypoint
 # position (see waypoints.py's chunk_filename: "02_waypoint_{N:02d}_...") —
@@ -71,12 +59,6 @@ RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
 _FALLBACK_CAR_SPEED_KMH = 70.0
 
 _SECONDS_PER_HOUR = 3600.0
-
-# Bounds on how many points a synthetic straight-line ferry crossing is
-# sampled into when there's no cached routed polyline for that leg (see the
-# "No cached route for this leg" fallback below).
-_MIN_FERRY_SAMPLE_POINTS = 2
-_MAX_FERRY_SAMPLE_POINTS = 120
 
 # Overview animation pacing bounds/rates — see the "Pace the overview off
 # the route itself" comment further down for the full rationale.
@@ -178,63 +160,11 @@ def render_route_video(
         )
     overview_stale = False
     if is_full_pipeline_render and not force and manifest_path.exists():
-        try:
-            with open(manifest_path, "r", encoding="utf-8") as f:
-                manifest = json.load(f)
-            cached_paths = manifest.get("output_paths", [])
-            cached_key = manifest.get("input_hash")
-            cached_parts = manifest.get("input_parts")
-        except (OSError, json.JSONDecodeError):
-            cached_paths, cached_key, cached_parts = [], None, None
-        # Only the route itself (or a missing output) invalidates the render;
-        # other input changes are logged and ignored.
-        if cached_parts:
-            # A manifest from before route.waypoints existed falls back to the line itself.
-            keys = ROUTE_CHECKPOINT_PARTS if "route.waypoints" in cached_parts else ("route.geometry",)
-            old_parts = dict(cached_parts)
-            # Rendered before the pause toggle was read: every stop paused then.
-            try:
-                with open(project_config_path, "r", encoding="utf-8") as _f:
-                    _wp_count = len(json.load(_f).get("waypoints", []))
-            except (OSError, json.JSONDecodeError):
-                _wp_count = 0
-            old_parts.setdefault(
-                "route.overview_flags",
-                overview_flags_hash([{}] * _wp_count),
-            )
-            # Recorded before stop names were checked: taken as unchanged, so no project re-renders for it.
-            old_parts.setdefault("route.labels", checkpoint_parts.get("route.labels"))
-            route_changed = [k for k in keys if old_parts.get(k) != checkpoint_parts.get(k)]
-        else:
-            route_changed = [] if cached_key == checkpoint_key else ["(no per-input record)"]
-        outputs_ok = bool(cached_paths) and all(output_is_valid(p) for p in cached_paths)
-        if outputs_ok and not route_changed:
-            ignored = (
-                _describe_changed_parts(cached_parts, checkpoint_parts)
-                if cached_parts and cached_key != checkpoint_key else ""
-            )
-            logger.info(
-                "Step 4: route unchanged and all %d output(s) exist — skipping render.%s",
-                len(cached_paths), f" Ignored changes: {ignored}" if ignored else "",
-            )
-            return cached_paths
-        if cached_paths and route_changed:
-            logger.info(
-                "Step 4: route changed since the last render (%s) — re-rendering.",
-                ", ".join(route_changed),
-            )
-            # The overview also skips itself when its file exists; its script,
-            # cues and stops may be what changed, so it must be rendered again.
-            # The old file is NOT deleted: the new render is written aside and
-            # only replaces it once it is complete, so an interrupted run
-            # never leaves the project without an overview.
-            overview_stale = True
-        elif cached_paths:
-            missing = [p for p in cached_paths if not output_is_valid(p)]
-            logger.info(
-                "Step 4: route unchanged but %d output(s) missing/invalid — rendering those: %s",
-                len(missing), ", ".join(Path(p).name for p in missing[:10]),
-            )
+        cached, overview_stale = reuse_render_manifest(
+            manifest_path, checkpoint_key, checkpoint_parts, project_config_path
+        )
+        if cached is not None:
+            return cached
 
     route_df = cleaned_route.get("route")
     if route_df is None or route_df.empty:
@@ -453,124 +383,17 @@ def render_route_video(
         )
 
     # 3. Inject Waypoints
-    if waypoints:
-        logger.info("Step 4: Injecting %d custom waypoints.", len(waypoints))
-        start_label = project_config.get("start_point", {}).get("label")
-        end_label = project_config.get("end_point", {}).get("label")
-        text_labels = video_text.current_labels()
-
-        for idx, wp in enumerate(waypoints):
-            route_point_idx = wp_indices[idx]
-            _pin_image = marker_for(wp, settings, marker_base_dir)
-            raw_label = wp.get("label", text_labels["waypoint_fallback"])
-
-            if idx == 0 and start_label:
-                raw_label = start_label
-            elif idx == len(waypoints) - 1 and end_label:
-                raw_label = end_label
-
-            formatted = format_waypoint_label(raw_label, subtitle_lang)
-            prefix = (
-                text_labels["start_prefix"] if idx == 0
-                else text_labels["stop_prefix"] if idx == len(waypoints) - 1
-                else ""
-            )
-            route_labels[route_point_idx] = (
-                f"{prefix}{formatted}" if formatted else prefix.strip(": ")
-            )
-
-            popup_img = wp.get("popup_image")
-            wp_skipped = bool(wp.get("skipAssetGeneration")) and 0 < idx < len(waypoints) - 1
-            # This waypoint's own real narration TTS length (audio_step.py's
-            # audio_durations, 1:1 aligned with THIS SAME
-            # `enumerate(waypoints)`). Stashed on the waypoint dict ITSELF
-            # (mutated in place, not just into route_popups below) so it
-            # rides along for free wherever this exact dict object gets
-            # reused/copied downstream -- notably `res_waypoints = list(
-            # waypoints)` further down, whose entries mapfetcher.py's
-            # process_residential_sequence reads directly to build each
-            # residential leg's own mid_markers/landmarks, a completely
-            # separate code path from route_popups. Residential's
-            # fullscreen popup uses this to make sure its hold never cuts
-            # away before the narration muxed onto that same clip has
-            # actually finished playing -- "freeze_seconds" below is only
-            # ever a short user-set/capped fallback for when there's no
-            # narration at all. See pedestrian.py's `_min_hold_seconds`.
-            wp["_narration_audio_seconds"] = (
-                float(audio_durations[idx])
-                if idx < len(audio_durations) and audio_durations[idx]
-                else None
-            )
-            route_popups[route_point_idx] = {
-                "freeze_seconds": min(
-                    float(wp.get("freeze_seconds", 3.0)), tuning.POPUP_FREEZE_SECONDS_MAX
-                ),
-                "audio_duration": wp["_narration_audio_seconds"],
-                # A waypoint's own "popup_image" field can hold several
-                # photos (the map editor's multi-image field) -- the
-                # overview animation shows the FIRST one (its own long-
-                # standing behavior; this dict is shared with the overview
-                # path below, not residential-only), same as ever.
-                "popup_image": (
-                    str(popup_img[0])
-                    if isinstance(popup_img, list) and popup_img
-                    else (str(popup_img) if popup_img else None)
-                ),
-                # Residential-only variant: the LAST image, used for the
-                # leg's own fullscreen-to-card destination-photo intro (see
-                # route2vdo.py's _render_residential_pydeck and
-                # pydeckrecorder.pedestrian's `dest_popup_image` docstring)
-                # -- kept separate from "popup_image" above so the overview
-                # animation, which reads that same key, is unaffected.
-                "popup_image_last": (
-                    str(popup_img[-1])
-                    if isinstance(popup_img, list) and popup_img
-                    else (str(popup_img) if popup_img else None)
-                ),
-                "image_display": str(
-                    wp.get("image_display", "cover")
-                ).lower(),
-                "triggered": False,
-                **({"pin_image": _pin_image} if _pin_image else {}),
-                # Matches the map editor's own MapArea.tsx: a stop-by
-                # waypoint always renders as pinType="stopby" (dark brown, a
-                # "・" dot instead of a number) and is skipped entirely by
-                # the OTHER waypoints' sequential numbering — see
-                # spatial_renderer/pins.py's _draw_pin/_pin_color.
-                # A waypoint skipped in video export is drawn and numbered like
-                # a stop-by, but only pops up as the walker passes (is_skipped:
-                # never batched, never stopped at - see popups.py).
-                "is_stopby": bool(wp.get("isStopBy", False) or wp_skipped),
-                "is_skipped": wp_skipped,
-                # The editor's "Pause at Location" (default on): off, the
-                # overview walker doesn't stop here for the description.
-                "pause_at_waypoint": wp.get("pauseAtWaypoint") is not False,
-                # The map editor's stop-by-only "Connect to Route" toggle
-                # (see src/components/ui/ContextMenu.tsx). A CONNECTED
-                # stop-by is one the route actually runs through — the
-                # frontend's own routing already includes it in the route
-                # geometry for exactly that reason — so the renderer
-                # treats it as an ordinary stop that merely LOOKS
-                # different (its own arrival, its own popup where it
-                # sits, still drawn as a "・" dot and still skipped by the
-                # numbering). An unconnected one is a landmark the
-                # traveler never actually goes to, and is shown as part
-                # of the previous normal waypoint's stop instead — see
-                # overview.py's _attach_stopby_groups.
-                "connect_to_route": bool(wp.get("connectToRoute", False) and not wp_skipped),
-                # This waypoint's own true GPS coordinates — separate from
-                # route_points[c_idx] (the nearest point on the RECORDED
-                # TRACK, used for x/y). A stop-by that's only observed from
-                # a distance rather than actually walked to (a small
-                # offshore island seen from the trail, say) can sit well
-                # off the track; overview.py re-projects that kind of pin
-                # to its own lat/lng instead of snapping it onto the
-                # nearest track pixel, which used to draw it right on top
-                # of the route line despite the real place being nowhere
-                # near it.
-                "lat": wp.get("lat"),
-                "lng": wp.get("lng", wp.get("lon")),
-            }
+    inject_waypoint_popups(
+        audio_durations=audio_durations,
+        marker_base_dir=marker_base_dir,
+        project_config=project_config,
+        route_labels=route_labels,
+        route_popups=route_popups,
+        settings=settings,
+        subtitle_lang=subtitle_lang,
+        waypoints=waypoints,
+        wp_indices=wp_indices,
+    )
 
     # 4. Process Residential Sequence (3D Bypass vs 2D Generation)
     res_sequence = []
@@ -613,410 +436,29 @@ def render_route_video(
         else []
     )
 
-    if render_mode == "overview":
-        # Overview-only: skip building the residential sequence entirely —
-        # no per-leg residential map tile fetches, no residential clips
-        # produced. res_sequence stays [] (set above), which
-        # RouteAnimator.render already treats as "nothing to render" for
-        # the residential side.
-        logger.info("Step 4: render_mode=overview — skipping residential sequence.")
-    elif use_3d_res:
-        logger.info(
-            "Step 4: 3D residential rendering is enabled. Bypassing 2D map fetch."
-        )
-        for seq_idx in range(max(0, len(wp_indices) - 1)):
-            has_audio = seq_idx < len(audio_durations) and audio_durations[seq_idx] > 0
-            total_time = (
-                audio_durations[seq_idx]
-                if has_audio
-                else (seg_durations[seq_idx] if seq_idx < len(seg_durations) else 10.0)
-            )
-            res_sequence.append({"segment_duration": total_time})
-    else:
-        logger.info("Step 4: Generating residential leg sequence (lat/lon per leg)...")
-        # Stop-by leg-merging is toggleable per project (default: merge —
-        # see tuning.DEFAULT_MERGE_STOPBY_WAYPOINTS); multi-tile chunk
-        # splitting is deliberately kept off here (math.inf) even though
-        # process_residential_sequence now supports it — enabling it would
-        # also require reworking the audio-mux/timeline position lookups
-        # below to handle several clips sharing one leg's narration, which
-        # is real follow-up work, not something to fold in silently here.
-        # job_config's own "waypoints" array excludes the trip's TRUE
-        # start/end (those live in separate "start_point"/"end_point"
-        # keys) — passing it to process_residential_sequence unmodified
-        # meant the residential leg sequence's very first/last leg began/
-        # ended at the first/last WAYPOINT instead of the true start/end,
-        # so that point never got its own leg, intro pin, or "S"/"E"
-        # popup treatment in the residential video (only the separate
-        # overview pipeline ever showed it). Prepending/appending them
-        # here — as a LOCAL list used only for this call, not reassigning
-        # the shared `waypoints`/`wp_indices` — closes that gap without
-        # touching audio_durations/seg_durations/route_labels indexing
-        # elsewhere in this function, all of which are sized and indexed
-        # against the ORIGINAL waypoints list and would desync by one
-        # position if it shifted. Skipped when the true start/end already
-        # coincides with row 0 / the last row (nothing to add). Neither
-        # start_point nor end_point carries its own "popup_image" field
-        # in job_config's schema — only "waypoints" entries do — so this
-        # gives the true start/end a real leg + pin + "S"/"E" label, but
-        # not a photo unless a future schema change adds one.
-        _start_pt = project_config.get("start_point") or {}
-        _end_pt = project_config.get("end_point") or {}
-        res_waypoints = list(waypoints)
-        res_wp_indices = list(wp_indices)
-        added_start = _start_pt.get("lat") is not None and (not res_wp_indices or res_wp_indices[0] != 0)
-        if added_start:
-            res_waypoints = [{
-                "lat": _start_pt["lat"],
-                "lng": _start_pt.get("lng", _start_pt.get("lon")),
-                "label": _start_pt.get("label"),
-                "isStopBy": False,
-            }] + res_waypoints
-            res_wp_indices = [0] + res_wp_indices
-        if _end_pt.get("lat") is not None and (
-            not res_wp_indices or res_wp_indices[-1] != len(route_df) - 1
-        ):
-            res_waypoints = res_waypoints + [{
-                "lat": _end_pt["lat"],
-                "lng": _end_pt.get("lng", _end_pt.get("lon")),
-                "label": _end_pt.get("label"),
-                "isStopBy": False,
-            }]
-            res_wp_indices = res_wp_indices + [len(route_df) - 1]
-
-        sequence_data = fetcher.process_residential_sequence(
-            route_df,
-            res_waypoints,
-            output_size=(img_w, img_h),
-            max_chunk_distance_meters=math.inf,
-            precomputed_indices=res_wp_indices,
-            merge_stopbys=bool(
-                settings.get("merge_stopby_waypoints", tuning.DEFAULT_MERGE_STOPBY_WAYPOINTS)
-            ),
-            # Filtered HERE (not just on the returned res_sequence below) so
-            # a single-leg test run (main.py ... residential <leg_index>)
-            # skips every other leg's map tile fetch entirely instead of
-            # fetching all of them and discarding everything but one.
-            leg_index=leg_index,
-        )
-
-        # Maps a waypoint's job_config "id" back to its RAW position in the
-        # (unfiltered, includes stop-bys) `waypoints` list — audio_durations/
-        # audio_pauses/seg_durations are all indexed by that raw position
-        # (see audio_step.py's `for idx, wp in enumerate(waypoints)`), but
-        # once stop-by merging can skip a waypoint as a leg boundary, a
-        # leg's position in `sequence_data` no longer equals its departure
-        # waypoint's raw position — every lookup below must resolve through
-        # this map instead of indexing by `seq_idx` directly.
-        id_to_position = {
-            wp.get("id"): pos for pos, wp in enumerate(waypoints) if wp.get("id")
-        }
-        # Each leg's two pins show the overview's own glyphs (S, 1, 2 ... E).
-        # Counted over res_waypoints, which carries a separate start_point/
-        # end_point when the project has one, exactly as the overview does.
-        _glyph_by_pos = overview_pin_glyphs(res_waypoints)
-        glyph_by_id = {
-            wp.get("id"): _glyph_by_pos[pos]
-            for pos, wp in enumerate(res_waypoints) if wp.get("id")
-        }
-        pin_image_by_id = {
-            wp.get("id"): marker_for(wp, settings, marker_base_dir)
-            for wp in res_waypoints if wp.get("id")
-        }
-
-        for seq_idx, leg_item in enumerate(sequence_data):
-            start_idx, end_idx = leg_item["start_idx"], leg_item["end_idx"]
-            chunk = route_df.iloc[start_idx : end_idx + 1]
-
-            # This leg's departure/arrival RAW positions in `waypoints` —
-            # resolved by id (see id_to_position above), not by `seq_idx`,
-            # since a merged-away stop-by can make them diverge. Falls back
-            # to the old positional guess only if a waypoint is missing its
-            # "id" field (older data saved before ids were assigned).
-            start_pos = id_to_position.get(leg_item.get("start_waypoint_id"))
-            if start_pos is None:
-                start_pos = seq_idx
-            end_pos = id_to_position.get(leg_item.get("end_waypoint_id"))
-            if end_pos is None:
-                end_pos = seq_idx + 1
-
-            leg_mode = (
-                str(waypoints[start_pos].get("routeMode", "")).lower()
-                if start_pos < len(waypoints)
-                else ""
-            )
-            if not leg_mode and start_idx + 1 < len(point_modes):
-                leg_mode = point_modes[start_idx + 1]
-            leg_mode = leg_mode or "walking"
-            leg_mode = tuning.MODE_ALIASES.get(leg_mode, leg_mode)
-            if str(leg_mode).lower() == "ferry" and end_pos < len(waypoints):
-                start_wp, end_wp = waypoints[start_pos], waypoints[end_pos]
-                cached_geometry = _resolve_leg_geometry_from_cache(
-                    start_wp, end_wp, routing_cache
-                )
-                if cached_geometry:
-                    # Use the actual routed ferry line from .routecache.json
-                    # (the same polyline the map UI itself draws) instead of
-                    # route_df's own GPS track for this leg, which for a
-                    # ferry crossing may be sparse/inaccurate.
-                    ferry_lats = np.asarray(
-                        [float(pt[0]) for pt in cached_geometry]
-                    )
-                    ferry_lons = np.asarray(
-                        [float(pt[1]) for pt in cached_geometry]
-                    )
-                else:
-                    # No cached route for this leg — fall back to the direct
-                    # water crossing between stops rather than whatever
-                    # (possibly road-snapped) path route_df happens to have.
-                    ferry_count = max(
-                        _MIN_FERRY_SAMPLE_POINTS,
-                        min(_MAX_FERRY_SAMPLE_POINTS, end_idx - start_idx + 1),
-                    )
-                    ferry_lats = np.linspace(
-                        float(start_wp["lat"]), float(end_wp["lat"]), ferry_count
-                    )
-                    ferry_lons = np.linspace(
-                        float(start_wp["lng"]), float(end_wp["lng"]), ferry_count
-                    )
-                chunk = pd.DataFrame(
-                    {"latitude": ferry_lats, "longitude": ferry_lons}
-                )
-                ferry_map_path = str(
-                    Path(leg_item["img_path"]).with_name(f"res_map_ferry_{seq_idx + 1}.png")
-                )
-                leg_item["img_path"] = ferry_map_path
-                leg_item["extent"] = fetcher.downloader.fetch_residential_chunk(
-                    chunk, ferry_map_path, (img_w, img_h)
-                )
-
-            # Extract safe variables — indexed by start_pos (this leg's
-            # departure waypoint's RAW position), not seq_idx: with stop-by
-            # merging, a leg can span MULTIPLE raw waypoint-to-waypoint
-            # gaps (e.g. real -> merged stop-by -> real), so its distance-
-            # fallback duration sums every raw gap's own seg_durations
-            # entry across [start_pos, end_pos) rather than reading a
-            # single seg_durations[seq_idx]. audio_durations/audio_pauses
-            # only ever come from the true departure waypoint itself
-            # (start_pos) — a merged-in stop-by's own narration, if any,
-            # is intentionally not played (no dedicated arrival moment for
-            # it anymore, matching "just show its pin as we pass").
-            distance_fallback = sum(
-                seg_durations[p] for p in range(start_pos, end_pos) if p < len(seg_durations)
-            ) or 10.0
-            # Audio first: the narration that plays over each walk is its
-            # DESTINATION's (leg_pieces.py), so its length decides how long the
-            # walk is (see narration_step.leg_walk_plan): the walker may arrive
-            # early (waiting there, at most max_early_arrival_seconds) but never
-            # late. A leg cut at connected stop-bys is planned piece by piece,
-            # each toward its own stop.
-            use_cues = bool(settings.get("use_narration_cues", True))
-            max_wait = float(settings.get("max_early_arrival_seconds", MAX_EARLY_ARRIVAL_SECONDS))
-            stop_positions = [
-                p for p in range(start_pos + 1, min(end_pos, len(waypoints)))
-                if visits_stopby(waypoints[p]) and waypoints[p].get("popup_image")
-            ]
-            # Off-route stop-bys pop up at the departure stop, in waypoint order, before the walk.
-            at_start = {p for p in stop_positions if not waypoints[p].get("connectToRoute")}
-            stop_positions = sorted(at_start) + [p for p in stop_positions if p not in at_start]
-            piece_targets = stop_positions + [end_pos]
-            piece_plans: dict = {}
-            piece_log = []
-            previous = start_pos
-            for k, target in enumerate(piece_targets):
-                natural = sum(
-                    seg_durations[p] for p in range(previous, target) if p < len(seg_durations)
-                ) or 10.0
-                audio_seconds = audio_durations[target] if target < len(audio_durations) else 0.0
-                piece_plans[target] = (
-                    leg_walk_plan(
-                        cue_store, waypoints[target], target, audio_seconds,
-                        natural_seconds=natural, use_cues=use_cues, max_wait_seconds=max_wait,
-                        ignore_start=k > 0,
-                    )
-                    if target < len(waypoints) else None
-                )
-                if piece_plans[target] is not None and target in at_start:
-                    walk, start, wait = piece_plans[target]
-                    piece_plans[target] = (0.0, start, walk + wait)
-                if piece_plans[target] is not None:
-                    walk, _, wait = piece_plans[target]
-                    piece_log.append(
-                        f"-> {waypoints[target].get('label')}: walk {walk:.1f}s "
-                        f"({walk / natural:.2f}x natural pace), waits {wait:.1f}s"
-                    )
-                if target not in at_start:
-                    previous = target
-            if end_pos >= len(waypoints) or any(v is None for v in piece_plans.values()):
-                piece_plans = {}
-            if piece_plans:
-                total_time = sum(v[0] for v in piece_plans.values())
-                start_cue_seconds = piece_plans[piece_targets[0]][1]  # the first piece opens the leg
-                arrival_wait_seconds = piece_plans[end_pos][2]
-                marker_plans = {
-                    waypoints[p].get("id"): {"walk_seconds": piece_plans[p][0], "wait_seconds": piece_plans[p][2]}
-                    for p in stop_positions
-                }
-                logger.info(
-                    "Step 4: leg %d->%d follows its narration: %s.",
-                    start_pos + 1, end_pos + 1, "; ".join(piece_log),
-                )
-            else:
-                total_time = distance_fallback
-                start_cue_seconds = None
-                arrival_wait_seconds = None
-                marker_plans = {}
-            for p in at_start:
-                marker_plans.setdefault(waypoints[p].get("id"), {})["at_leg_start"] = True
-
-            lats_arr, lons_arr = leg_item["lats"], leg_item["lons"]
-            seg_dist = (
-                float(
-                    np.nansum(
-                        GPSMath.haversine_vectorized(
-                            lats_arr[:-1], lons_arr[:-1], lats_arr[1:], lons_arr[1:]
-                        )
-                    )
-                )
-                if len(lats_arr) > 1
-                else 0.0
-            )
-
-            raw_img = leg_item.get("img_path")
-            leg_popups = [None] * len(chunk)
-            if len(leg_popups) > 0:
-                leg_popups[-1] = route_popups[end_idx]
-
-            # [NOTE] [Heatmap] The app writes each track point's elevation into raw_track.gpx (GPSBabel's csv: `height`);
-            # only with the switch on, and only when it lines up with the leg's points (a ferry leg's chunk is synthetic).
-            leg_heights = (
-                chunk["height"].tolist()
-                if settings.get("show_route_heatmap") and "height" in chunk.columns and len(chunk) == len(lats_arr)
-                else None
-            )
-
-            res_sequence.append(
-                {
-                    **({"elevations": leg_heights} if leg_heights else {}),
-                    "img_path": (
-                        str(raw_img[0])
-                        if isinstance(raw_img, list) and raw_img
-                        else (str(raw_img) if raw_img else None)
-                    ),
-                    "extent": leg_item["extent"],
-                    "lats": lats_arr,
-                    "lons": lons_arr,
-                    "points": _project_route_to_pixels(
-                        chunk["latitude"].to_numpy(),
-                        chunk["longitude"].to_numpy(),
-                        leg_item["extent"],
-                        img_w,
-                        img_h,
-                    ),
-                    "labels": route_labels[start_idx : end_idx + 1],
-                    # A residential clip starts at the previous waypoint,
-                    # so only the destination popup may end its route
-                    # animation. Including the start popup makes the renderer
-                    # terminate on the first frame of every leg.
-                    "popups": leg_popups,
-                    # Every leg's own departure waypoint's popup -- shown at
-                    # this leg's OPENING (shrink), independent of whichever
-                    # PREVIOUS leg's arrival preview (grow, at actual
-                    # arrival) already showed the same waypoint's photo once
-                    # -- each leg gets its own self-contained departure +
-                    # arrival pair rather than relying on the previous leg's
-                    # ending to cover this one's beginning.
-                    "leg_start_popup": route_popups[start_idx],
-                    # Symmetric case at the other end: when a trailing
-                    # synthetic end_point leg is appended past the last REAL
-                    # waypoint (see this function's own start/end-point
-                    # padding above), THAT leg's own destination is the
-                    # synthetic end_point -- which, like start_point, has no
-                    # "popup_image" field in job_config's schema, so its
-                    # normal dest popup (leg_popups[-1] above) comes back
-                    # empty and the video's truly final clip would arrive on
-                    # no photo at all. route2vdo.py falls back to this (the
-                    # last REAL waypoint's own popup) only when the leg's
-                    # normal dest popup is empty, so the common case (no
-                    # trailing synthetic leg, the last real waypoint IS the
-                    # final destination) is unaffected -- this would just be
-                    # a duplicate of what leg_popups[-1] already has.
-                    "trip_end_popup": (
-                        route_popups[end_idx] if end_pos == len(waypoints) - 1 else None
-                    ),
-                    "mode": leg_mode,
-                    "line_color": (
-                        leg_line_color_rgb(waypoints[start_pos])
-                        if start_pos < len(waypoints)
-                        else None
-                    )
-                    or _project_rgb(settings, "line_color"),
-                    "travel_duration": total_time,
-                    "segment_duration": total_time,
-                    "start_cue_seconds": start_cue_seconds,
-                    # Arrived early: hold on the arrived map until the voice is
-                    # done, then the fullscreen photo transition.
-                    "arrival_wait_seconds": arrival_wait_seconds,
-                    "start_pin": _leg_pin(
-                        glyph_by_id.get(leg_item.get("start_waypoint_id"))
-                        or ("S" if seq_idx == 0 else None),
-                        settings, arrived=True,
-                        image=pin_image_by_id.get(leg_item.get("start_waypoint_id")),
-                    ),
-                    "dest_pin": False if _is_return_stop(waypoints, end_pos) else _leg_pin(
-                        glyph_by_id.get(leg_item.get("end_waypoint_id"))
-                        or ("E" if seq_idx == len(sequence_data) - 1 else None),
-                        settings, arrived=False,
-                        image=pin_image_by_id.get(leg_item.get("end_waypoint_id")),
-                    ),
-                    "real_duration_seconds": (
-                        (
-                            chunk["timestamp"].iloc[-1] - chunk["timestamp"].iloc[0]
-                        ).total_seconds()
-                        if "timestamp" in chunk.columns and len(chunk) > 1
-                        else 0.0
-                    ),
-                    "distance_km": seg_dist,
-                    "pauses": (
-                        audio_pauses[start_pos] if start_pos < len(audio_pauses) else []
-                    ),
-                    # This leg's departure waypoint's RAW position — embedded
-                    # into the output clip's filename (see waypoints.py) so
-                    # the audio-mux loop below and timeline_step.py's own
-                    # mirrored lookup can resolve the correct narration by
-                    # position instead of a blind per-clip counter, which
-                    # stop-by merging would otherwise throw out of sync.
-                    # -1 for the leg from a separate start point (file 02_waypoint_00_*): it has no waypoint of
-                    # its own and would otherwise share 01 with the first stop's leg, each run deleting the other.
-                    "start_pos": -1 if added_start and seq_idx == 0 else start_pos,
-                    # The leg's checkpoint key (route2vdo): its waypoints' route inputs.
-                    "route_inputs": route_inputs_hash(waypoints[start_pos:end_pos + 1]),
-                    # Which waypoints this leg runs between: route2vdo writes
-                    # the destination into the leg's _pieces.json so
-                    # leg_pieces.py plays the DESTINATION's narration over the
-                    # walk toward it.
-                    "start_waypoint_id": leg_item.get("start_waypoint_id"),
-                    "end_waypoint_id": leg_item.get("end_waypoint_id"),
-                    "wide_img_path": leg_item.get("wide_img_path"),
-                    "wide_extent": leg_item.get("wide_extent"),
-                    # "pos_in_chunk" (0-based index into this leg's own
-                    # `points`/res_points list, not the route_df row index)
-                    # is what waypoints.py actually needs to know when the
-                    # traveler has passed a merged-in stop-by along the way.
-                    # Pop-ups at the departure stop come first: the leg's pieces are cut in this order.
-                    "mid_markers": sorted(
-                        (
-                            {
-                                **m,
-                                "pos_in_chunk": m["row_idx"] - start_idx,
-                                **marker_plans.get(m.get("waypoint_id"), {}),
-                            }
-                            for m in leg_item.get("mid_markers", [])
-                        ),
-                        key=lambda m: (not m.get("at_leg_start"), id_to_position.get(m.get("waypoint_id"), 0) if m.get("at_leg_start") else 0),
-                    ),
-                }
-            )
+    build_leg_sequence(
+        audio_durations=audio_durations,
+        audio_pauses=audio_pauses,
+        cue_store=cue_store,
+        fetcher=fetcher,
+        img_h=img_h,
+        img_w=img_w,
+        leg_index=leg_index,
+        marker_base_dir=marker_base_dir,
+        point_modes=point_modes,
+        project_config=project_config,
+        render_mode=render_mode,
+        res_sequence=res_sequence,
+        route_df=route_df,
+        route_labels=route_labels,
+        route_popups=route_popups,
+        routing_cache=routing_cache,
+        seg_durations=seg_durations,
+        settings=settings,
+        use_3d_res=use_3d_res,
+        waypoints=waypoints,
+        wp_indices=wp_indices,
+    )
 
     # 5. Final Rendering Orchestration
 
@@ -1062,136 +504,25 @@ def render_route_video(
     # the project doesn't name one of its own (see _arrived_marker_color).
     marker_color_bgr = _project_color(settings, "marker_color", (235, 150, 60))
 
-    animator_config = {
-        "output_dir": output_video_dir,
-        # Gates the per-leg/per-clip "file already exists, skip it" checks
-        # in overview.py/route2vdo.py/waypoints.py — only a real
-        # run_full_pipeline render (render_mode == "both") should ever
-        # resume from partial output like this. A standalone
-        # render_mode="overview"/"residential" call (services/cli/
-        # gps_commands.py's test_overview_video/test_residential_video —
-        # the map editor's own "recreate this video" actions) exists
-        # specifically so a user can force ONE piece to redo; honoring
-        # leftover files from a previous run there would silently no-op
-        # the very action they asked for, exactly the bug this function's
-        # own manifest checkpoint above already had to be fixed for.
-        # --force redoes every clip, so no per-file "already exists" skipping either.
-        "checkpoint_enabled": is_full_pipeline_render and not force,
-        # Inputs changed since the last render: the existing overview is stale.
-        "overview_rerender": overview_stale,
-        "min_free_ram_gb": settings.get("min_free_ram_gb"),
-        "enable_attraction_videos": attraction_videos_enabled(settings),
-        # The at-arrival photo grows to fullscreen and the clip ends right
-        # there - no hold. The dissolve into the attraction video that follows
-        # runs on extra frames added at export (VideoExporter._crossfade_pair),
-        # so it starts the moment the photo is fullscreen.
-        "arrival_photo_hold_seconds": 0.0,
-        # A connected stop-by's fullscreen photo does the same (no hold, no
-        # blur-out) when an attraction video follows it.
-        "dissolve_into_attraction": (
-            attraction_videos_enabled(settings)
-            and float(settings.get("attraction_fade_seconds", 0.8)) > 0
-        ),
-        "use_3d_res": use_3d_res,
-        "use_pydeck_pedestrian": use_pydeck_pedestrian,
-        "use_pydeck_overview": bool(settings.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW)),
-        "mapbox_style_id": settings.get("mapbox_style_id"),
-        # Where the narration's cues fall: the overview reaches each cued stop
-        # then (spatial_renderer/overview.py).
-        "overview_cue_seconds": dict(overview_cue_times or {}),
-        # The narration's length: with cues, the overview's ending is fitted
-        # so the video ends with the voice.
-        "overview_audio_seconds": float(overview_audio_duration or 0.0),
-        # A cue at the start of a sentence: the voice starts talking about that
-        # stop at the cue, so the walker waits there a moment (this many seconds)
-        # to stay in step with it.
-        "overview_cue_wait_tags": tags_at_sentence_start(
-            overview_tagged_script(project_config, config_path.parent)
-        ),
-        "overview_cue_wait_seconds": float(settings.get("overview_cue_wait_seconds", 2.0)),
-        # The overview video type (each with its own script); "course" also
-        # cycles headline taglines taken from the route (overview_script.course_taglines).
-        "overview_style": overview_style(project_config),
-        **_course_config(project_config, config_path),
-        "res_route_path": project_config_path,
-        "leg_durations": seg_durations or None,
-        "duration": settings.get("duration", overview_duration),
-        **{
-            k: settings.get(k, default)
-            for k, default in [
-                ("fps", 30),
-                ("line_thickness", 10),
-                ("marker_radius", 16),
-                ("map_font_size", 24),
-                ("card_border_thickness", tuning.DEFAULT_CARD_BORDER_THICKNESS),
-                ("route_line_border_thickness", tuning.DEFAULT_LINE_BORDER_THICKNESS),
-                ("pause", 2.0),
-                ("summary_hold", 4.0),
-                ("summary_fade", 0.5),
-                ("clip_summary_hold", 2.0),
-                ("show_segment_summary", True),
-                ("res_duration", 12.0),
-                ("post_arrival_hold_seconds", 1.0),
-                ("default_transition_hold_seconds", 1.5),
-                ("hide_route_on_popup", False),
-                ("enable_fullscreen_popups", True),
-                ("hide_upcoming_pins_on_popup", False),
-            ]
-        },
-        # Colors: authored RGB in job_config.json, drawn BGR — see
-        # _project_color. The defaults passed here are already BGR.
-        "line_color": _project_color(settings, "line_color", (243, 150, 33)),
-        "mode_line_colors": _mode_line_color_overrides(settings),
-        "marker_color": marker_color_bgr,
-        "arrived_marker_color": _arrived_marker_color(settings, marker_color_bgr),
-        "card_border_color": _project_color(
-            settings, "card_border_color", tuning.DEFAULT_CARD_BORDER_COLOR
-        ),
-        "route_line_border_color": _project_color(
-            settings, "route_line_border_color", tuning.DEFAULT_LINE_BORDER_COLOR
-        ),
-        # Pin colors by role. Unset keys fall through to the defaults on
-        # SpatialRendererBase (start/end/drawn/stop-by) — a project only
-        # needs to name the ones it actually wants to change.
-        "start_pin_color": _project_color(settings, "start_pin_color", tuning.START_PIN_COLOR),
-        "end_pin_color": _project_color(settings, "end_pin_color", tuning.END_PIN_COLOR),
-        "drawn_pin_color": _project_color(settings, "drawn_pin_color", tuning.DRAWN_PIN_COLOR),
-        "stopby_pin_color": _project_color(settings, "stopby_pin_color", tuning.STOPBY_PIN_COLOR),
-        "trigger_radius_padding": settings.get("trigger_radius_padding", {}),
-        "route_marker": route_marker,
-        "marker_base_dir": marker_base_dir,
-        **look_options(settings),
-        "fullscreen_transition": settings.get("fullscreen_transition", {}),
-        # Real-world average speed (km/h) per travel mode — how much
-        # faster a car/ferry/etc. leg animates on screen relative to a
-        # walking one is derived from these ratios (see SpatialRenderer's
-        # _DEFAULT_MODE_SPEED_KMH for the fallback values). Set e.g.
-        # {"walking": 3, "car": 70, "ferry": 36} in job_config.json's
-        # settings to override per project.
-        "mode_speeds_kmh": settings.get("mode_speeds_kmh", {}),
-        "animation_speeds_kmh": settings.get("animation_speeds_kmh", {}),
-        # Which summary-card template the overview/per-leg cards render as
-        # ("glass" default, or "taskbar" for the notification-flyout-style
-        # template — see cards.py's render_summary_card). Was missing from
-        # this dict entirely, so job_config.json's settings.summary_card_style
-        # never reached RouteAnimator/GraphicsEngine no matter what a
-        # project set it to — self.config here IS this whole dict, not the
-        # raw settings (see RouteAnimator.__init__'s own note on that).
-        "summary_card_style": settings.get(
-            "summary_card_style", tuning.DEFAULT_SUMMARY_CARD_STYLE
-        ),
-        # Per-project override of any subset of assets/config/labels_ja.json's
-        # summary-card keys (mode_name, mode_duration_label, total_label,
-        # distance_label, taskbar_card_title) — see cards.py's
-        # merge_summary_card_labels. Same "must be forwarded through THIS
-        # dict, not just read off raw settings" requirement as
-        # summary_card_style above.
-        "summary_card_labels": settings.get("summary_card_labels"),
-        # HUD/card theme: settings.theme or top-level theme ("light"/"dark").
-        "theme": tuning.resolve_ui_theme(project_config),
-        # Legs keep their path above a band sized to the project's caption.
-        "caption_style": settings.get("caption_style"),
-    }
+    animator_config = build_animator_config(
+        config_path=config_path,
+        force=force,
+        is_full_pipeline_render=is_full_pipeline_render,
+        marker_base_dir=marker_base_dir,
+        marker_color_bgr=marker_color_bgr,
+        output_video_dir=output_video_dir,
+        overview_audio_duration=overview_audio_duration,
+        overview_cue_times=overview_cue_times,
+        overview_duration=overview_duration,
+        overview_stale=overview_stale,
+        project_config=project_config,
+        project_config_path=project_config_path,
+        route_marker=route_marker,
+        seg_durations=seg_durations,
+        settings=settings,
+        use_3d_res=use_3d_res,
+        use_pydeck_pedestrian=use_pydeck_pedestrian,
+    )
 
     animator = RouteAnimator(animator_config)
 

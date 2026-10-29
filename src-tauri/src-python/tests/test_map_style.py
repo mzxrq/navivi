@@ -47,18 +47,18 @@ def test_style_inputs_are_empty_for_a_project_that_sets_nothing():
 
 
 def test_map_style_changes_the_route_checkpoint_only_when_set(tmp_path):
-    from services.vdoprocessing.videopipeline import render_step
+    from services.vdoprocessing.videopipeline import render_checkpoint
 
     route = {"route": pd.DataFrame({"latitude": [35.0, 35.1], "longitude": [139.0, 139.1]}), "summary": {}}
 
     def parts(settings):
         cfg = tmp_path / "job_config.json"
         cfg.write_text(json.dumps({"waypoints": [], "settings": settings}), encoding="utf-8")
-        return render_step._checkpoint_parts(str(cfg), route, [], [])
+        return render_checkpoint._checkpoint_parts(str(cfg), route, [], [])
 
     plain, same, dark = parts({"fps": 30}), parts({"fps": 30, "mapbox_retina": True}), parts({"mapbox_style_id": "mapbox/dark-v11"})
     assert "route.map_style" not in plain and plain.get("route.map_style") == same.get("route.map_style")
-    assert dark["route.map_style"] and "route.map_style" in render_step.ROUTE_CHECKPOINT_PARTS
+    assert dark["route.map_style"] and "route.map_style" in render_checkpoint.ROUTE_CHECKPOINT_PARTS
 
 
 def test_raster_provider_uses_the_chosen_style_and_retina(monkeypatch):

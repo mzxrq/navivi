@@ -12,6 +12,8 @@ from services.vdoprocessing.route_inputs import labels_hash, overview_flags_hash
 from services.config.upscaled_images import IMAGE_KEYS, apply_upscaled_images
 from services.mapfetcher.graphicengine.pinimage import marker_inputs_hash
 
+from .helpers import logger, output_is_valid
+
 _RENDER_MANIFEST_NAME = ".render_manifest.json"
 
 
@@ -174,3 +176,67 @@ def _describe_changed_parts(old: dict, new: dict, limit: int = 25) -> str:
     ]
     more = f", +{len(labels) - limit} more" if len(labels) > limit else ""
     return ", ".join(labels[:limit]) + more if labels else "nothing per-part (hash format differs)"
+
+
+def reuse_render_manifest(manifest_path, checkpoint_key, checkpoint_parts, project_config_path):
+    """(the manifest's paths when the route is unchanged and every output exists, else None; whether the
+    overview must be rendered again because the route changed)."""
+    overview_stale = False
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+        cached_paths = manifest.get("output_paths", [])
+        cached_key = manifest.get("input_hash")
+        cached_parts = manifest.get("input_parts")
+    except (OSError, json.JSONDecodeError):
+        cached_paths, cached_key, cached_parts = [], None, None
+    # Only the route itself (or a missing output) invalidates the render;
+    # other input changes are logged and ignored.
+    if cached_parts:
+        # A manifest from before route.waypoints existed falls back to the line itself.
+        keys = ROUTE_CHECKPOINT_PARTS if "route.waypoints" in cached_parts else ("route.geometry",)
+        old_parts = dict(cached_parts)
+        # Rendered before the pause toggle was read: every stop paused then.
+        try:
+            with open(project_config_path, "r", encoding="utf-8") as _f:
+                _wp_count = len(json.load(_f).get("waypoints", []))
+        except (OSError, json.JSONDecodeError):
+            _wp_count = 0
+        old_parts.setdefault(
+            "route.overview_flags",
+            overview_flags_hash([{}] * _wp_count),
+        )
+        # Recorded before stop names were checked: taken as unchanged, so no project re-renders for it.
+        old_parts.setdefault("route.labels", checkpoint_parts.get("route.labels"))
+        route_changed = [k for k in keys if old_parts.get(k) != checkpoint_parts.get(k)]
+    else:
+        route_changed = [] if cached_key == checkpoint_key else ["(no per-input record)"]
+    outputs_ok = bool(cached_paths) and all(output_is_valid(p) for p in cached_paths)
+    if outputs_ok and not route_changed:
+        ignored = (
+            _describe_changed_parts(cached_parts, checkpoint_parts)
+            if cached_parts and cached_key != checkpoint_key else ""
+        )
+        logger.info(
+            "Step 4: route unchanged and all %d output(s) exist — skipping render.%s",
+            len(cached_paths), f" Ignored changes: {ignored}" if ignored else "",
+        )
+        return cached_paths, False
+    if cached_paths and route_changed:
+        logger.info(
+            "Step 4: route changed since the last render (%s) — re-rendering.",
+            ", ".join(route_changed),
+        )
+        # The overview also skips itself when its file exists; its script,
+        # cues and stops may be what changed, so it must be rendered again.
+        # The old file is NOT deleted: the new render is written aside and
+        # only replaces it once it is complete, so an interrupted run
+        # never leaves the project without an overview.
+        overview_stale = True
+    elif cached_paths:
+        missing = [p for p in cached_paths if not output_is_valid(p)]
+        logger.info(
+            "Step 4: route unchanged but %d output(s) missing/invalid — rendering those: %s",
+            len(missing), ", ".join(Path(p).name for p in missing[:10]),
+        )
+    return None, overview_stale
