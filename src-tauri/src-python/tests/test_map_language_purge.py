@@ -1,4 +1,4 @@
-from services.vdoprocessing.videopipeline.render_step import purge_map_images_on_language_change
+from services.vdoprocessing.videopipeline.overview_framing import purge_map_images_on_language_change
 
 
 def _folder(tmp_path):

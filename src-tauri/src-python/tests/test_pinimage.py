@@ -8,9 +8,9 @@ import pytest
 
 from services.mapfetcher.graphicengine import GraphicsEngine
 from services.mapfetcher.graphicengine import pinimage
-from services.vdoprocessing.pydeckrecorder import pedestrian
+from services.vdoprocessing.pydeckrecorder import pin_icons
 from services.vdoprocessing.spatial_renderer.pins import _PinMixin
-from services.vdoprocessing.videopipeline.render_step import _leg_pin
+from services.vdoprocessing.videopipeline.render_look import _leg_pin
 
 RED = (0, 0, 255)  # BGR
 GREEN = (0, 200, 0)
@@ -180,12 +180,12 @@ def test_draw_pin_passes_the_stops_image():
 def test_pydeck_leg_pin_uses_the_image_and_falls_back(icon, tmp_path):
     fallback = "data:image/svg+xml;fallback"
     pin = {"glyph": "2", "color": (1, 2, 3)}
-    assert pedestrian._leg_pin_url(pin, fallback).startswith("data:image/svg+xml")
-    with_image = pedestrian._leg_pin_url({**pin, "image": icon}, fallback)
+    assert pin_icons._leg_pin_url(pin, fallback).startswith("data:image/svg+xml")
+    with_image = pin_icons._leg_pin_url({**pin, "image": icon}, fallback)
     assert with_image.startswith("data:image/png;base64,")
-    broken = pedestrian._leg_pin_url({**pin, "image": str(tmp_path / "gone.png")}, fallback)
-    assert broken == pedestrian._leg_pin_url(pin, fallback)
-    assert pedestrian._leg_pin_url(None, fallback) == fallback
+    broken = pin_icons._leg_pin_url({**pin, "image": str(tmp_path / "gone.png")}, fallback)
+    assert broken == pin_icons._leg_pin_url(pin, fallback)
+    assert pin_icons._leg_pin_url(None, fallback) == fallback
 
 
 def test_pydeck_overview_icons(icon):
@@ -193,7 +193,7 @@ def test_pydeck_overview_icons(icon):
         {"lon": 1, "lat": 2, "order": 1, "pin_glyph": "S", "pin_color": (1, 2, 3), "pin_image": icon},
         {"lon": 3, "lat": 4, "order": 2, "pin_glyph": "E", "pin_color": (1, 2, 3)},
     ]
-    rows = pedestrian._overview_pin_icons(wps)
+    rows = pin_icons._overview_pin_icons(wps)
     assert rows[0]["icon"]["url"].startswith("data:image/png")
     assert rows[1]["icon"]["url"].startswith("data:image/svg+xml")
 

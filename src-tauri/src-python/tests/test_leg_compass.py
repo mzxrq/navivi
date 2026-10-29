@@ -1,4 +1,4 @@
-from services.vdoprocessing.pydeckrecorder.pedestrian import _heading_label, _walk_headings
+from services.vdoprocessing.pydeckrecorder.leg_hud import _heading_label, _walk_headings
 
 
 def _near(a, b, tol=2.0):

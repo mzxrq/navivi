@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from services.vdoprocessing.videopipeline.render_step import _reserve_overview_bands
+from services.vdoprocessing.videopipeline.overview_framing import _reserve_overview_bands
 
 R = 6378137.0
 

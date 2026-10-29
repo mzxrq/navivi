@@ -1,4 +1,4 @@
-from services.vdoprocessing.videopipeline.render_step import _mode_line_color_overrides
+from services.vdoprocessing.videopipeline.render_look import _mode_line_color_overrides
 
 
 def test_route_line_color_applies_to_every_ordinary_mode():

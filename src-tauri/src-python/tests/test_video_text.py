@@ -10,7 +10,7 @@ from services import tuning, video_text
 from services.config.job_config import JobConfigManager
 from services.mapfetcher.graphicengine import GraphicsEngine
 from services.vdoprocessing import outrocard
-from services.vdoprocessing.pydeckrecorder.pedestrian import _hud_text
+from services.vdoprocessing.pydeckrecorder.leg_hud import _hud_text
 
 
 def _flatten(d, prefix=""):

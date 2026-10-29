@@ -2,7 +2,7 @@
 
 from services import tuning
 from services.vdoprocessing.pydeckrecorder.legresolve import _resolve_leg
-from services.vdoprocessing.pydeckrecorder.pedestrian import _MODE_HUD, _hud_text
+from services.vdoprocessing.pydeckrecorder.leg_hud import _MODE_HUD, _hud_text
 from services.vdoprocessing.videopipeline.helpers import _build_point_modes
 
 

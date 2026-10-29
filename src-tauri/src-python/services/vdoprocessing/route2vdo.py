@@ -426,7 +426,7 @@ class RouteAnimator:
             return None
 
         from services.mapfetcher.mapgeometry import RouteGeometryProcessor
-        from services.vdoprocessing.pydeckrecorder.pedestrian import render_overview_video_pydeck
+        from services.vdoprocessing.pydeckrecorder.overview_pydeck import render_overview_video_pydeck
 
         bg = self.graphics.read_image_safe(str(img_path))
         if bg is None:

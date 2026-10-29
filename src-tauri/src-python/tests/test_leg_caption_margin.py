@@ -2,7 +2,7 @@
 
 import pytest
 
-from services.vdoprocessing.pydeckrecorder.pedestrian import (
+from services.vdoprocessing.pydeckrecorder.leg_camera import (
     _LEG_TOP_MARGIN_PX,
     _fit_view_for_path,
     _leg_bottom_margin_px,
