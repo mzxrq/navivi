@@ -65,6 +65,15 @@ def _pad_video_tail(ffmpeg_cmd: str, video_path: str, pad_seconds: float) -> Opt
     (caller keeps the original, unpadded file in that case)."""
     src = Path(video_path)
     padded = src.with_name(f"{src.stem}_padded{src.suffix}")
+    # Kept from an earlier run when made from this same piece and long enough (it was re-encoded every run).
+    if padded.exists() and padded.stat().st_mtime >= src.stat().st_mtime:
+        from services.tts.ttsengine import FFmpegManager
+
+        try:
+            if FFmpegManager.get_media_duration(str(padded)) >= FFmpegManager.get_media_duration(str(src)) + pad_seconds - 0.05:
+                return str(padded)
+        except (RuntimeError, OSError):
+            pass
     cmd = [
         ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(), "-i", str(src),
         "-vf", f"tpad=stop_mode=clone:stop_duration={pad_seconds:.3f}",

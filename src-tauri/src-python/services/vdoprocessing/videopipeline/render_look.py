@@ -74,10 +74,9 @@ def _is_return_stop(waypoints: list, pos: int) -> bool:
     """A stop made by "Add return stop": a copy of an earlier stop at the same spot."""
     if not 0 < pos < len(waypoints):
         return False
-    wp = waypoints[pos]
-    return wp.get("lat") is not None and any(
-        w.get("lat") == wp["lat"] and w.get("lng") == wp.get("lng") for w in waypoints[:pos]
-    )
+    from services.vdoprocessing.route_inputs import same_place
+
+    return any(same_place(waypoints[pos], w) for w in waypoints[:pos])
 
 
 def _leg_pin(glyph, settings: dict, arrived: bool, image: Optional[str] = None) -> Optional[dict]:

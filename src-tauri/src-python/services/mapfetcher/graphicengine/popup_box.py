@@ -424,8 +424,15 @@ class _PopupBoxMixin:
                 # glow around an otherwise borderless full-bleed photo
                 # read as a border that was never actually removed.
                 shadow_rgba = (0, 0, 0, 60) if is_cover else border_rgba[:3] + (60,)
-                draw.rounded_rectangle(shadow_box, radius=18, fill=shadow_rgba)
-                pil_canvas = pil_canvas.filter(ImageFilter.GaussianBlur(radius=11))
+                # Blurred on a small canvas around the shadow, not the whole frame (most of the overview's time).
+                m = 44
+                sx0, sy0 = int(shadow_box[0]) - m, int(shadow_box[1]) - m
+                small = Image.new("RGBA", (int(shadow_box[2]) - sx0 + m + 1, int(shadow_box[3]) - sy0 + m + 1), (0, 0, 0, 0))
+                ImageDraw.Draw(small).rounded_rectangle(
+                    [shadow_box[0] - sx0, shadow_box[1] - sy0, shadow_box[2] - sx0, shadow_box[3] - sy0],
+                    radius=18, fill=shadow_rgba,
+                )
+                pil_canvas.paste(small.filter(ImageFilter.GaussianBlur(radius=11)), (sx0, sy0))
                 draw = ImageDraw.Draw(pil_canvas)
 
                 # PIL's rectangle coordinates are INCLUSIVE of the second

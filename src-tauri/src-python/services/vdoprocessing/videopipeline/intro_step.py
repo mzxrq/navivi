@@ -108,12 +108,15 @@ def photo_cuts(cue_times: Optional[dict], waypoints: list) -> List[tuple]:
             continue
         name = str(key).split(":", 1)[1].strip()
         photo = None
-        for wp in waypoints or []:
-            label = str(wp.get("label") or "") if isinstance(wp, dict) else ""
-            images = wp.get("popup_image") if isinstance(wp, dict) else None
-            images = images if isinstance(images, list) else [images]
-            if name and label and (name in label or label in name) and images[0]:
-                photo = images[0]
+        for exact in (True, False):  # the stop called X, else the first whose name contains X
+            for wp in waypoints or []:
+                label = str(wp.get("label") or "") if isinstance(wp, dict) else ""
+                images = wp.get("popup_image") if isinstance(wp, dict) else None
+                images = images if isinstance(images, list) else [images]
+                if name and label and (label == name if exact else name in label) and images[0]:
+                    photo = images[0]
+                    break
+            if photo:
                 break
         if photo:
             cuts.append((tuning.INTRO_VOICE_LEAD_SECONDS + float(seconds), photo))

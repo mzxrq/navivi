@@ -19,7 +19,7 @@ _ATTRACTION_RE = re.compile(r"04_attraction_(\d+)_")
 # instead of a blind per-clip counter, which stop-by leg-merging (a leg can
 # skip over a merged-away stop-by) would otherwise throw out of sync with
 # audio_paths/subtitle_paths.
-_RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
+from .leg_pieces import _RESIDENTIAL_LEG_RE  # noqa: E402
 # Overview clip's fixed filename — hardcoded the same way in
 # route2vdo.py/overview.py (no shared tuning.py constant for it).
 _OVERVIEW_FILENAME = "01_overview.mp4"

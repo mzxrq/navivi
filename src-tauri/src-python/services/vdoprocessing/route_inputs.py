@@ -73,3 +73,15 @@ def photo_inputs_hash(obj) -> str:
     walk(obj)
     blob = json.dumps(found, ensure_ascii=False)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
+def same_place(a: dict, b: dict) -> bool:
+    """Two waypoints at the same real-world spot (a return stop and the stop it copies), within
+    tuning.LOOP_ROUTE_MATCH_DEGREES (~30 m) - the one rule the legs and the overview both use."""
+    from services import tuning
+
+    if a.get("lat") is None or b.get("lat") is None:
+        return False
+    tol = tuning.LOOP_ROUTE_MATCH_DEGREES
+    return (abs(float(a["lat"]) - float(b["lat"])) <= tol
+            and abs(float(a.get("lng", a.get("lon")) or 0) - float(b.get("lng", b.get("lon")) or 0)) <= tol)
