@@ -160,6 +160,12 @@ export function WaypointEditor({
       { label: t`Voice`, icon: Mic, disabled: !hasArrivalVoice && !hasAttractionVoice, onSelect: () => regenerate("voice") },
       { label: t`Subtitles`, icon: Subtitles, disabled: !hasArrivalVoice, onSelect: () => regenerate("subtitles") },
       { label: t`Photo clip`, icon: Film, disabled: wpImages.length === 0, onSelect: () => regenerate("photo") },
+      {
+        label: t`Voice and photo clip`,
+        icon: RotateCcw,
+        disabled: (!hasArrivalVoice && !hasAttractionVoice) || wpImages.length === 0,
+        onSelect: () => (regenerate("voice"), regenerate("photo")),
+      },
     ]);
   };
 
@@ -491,12 +497,12 @@ export function WaypointEditor({
               <button
                 type="button"
                 onClick={openRegenMenu}
-                disabled={!!regenBusy || isRendering}
-                title={regenBusy ? t`Making this stop again...` : t`Make this stop's files again`}
+                disabled={isRendering}
+                title={regenBusy?.index === wpIndex ? t`Making this stop again...` : t`Make this stop's files again`}
                 aria-label={t`Make this stop's files again`}
                 className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-white/5 transition-colors disabled:opacity-60"
               >
-                {regenBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                {regenBusy?.index === wpIndex ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
               </button>
             )}
             <button
