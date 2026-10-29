@@ -107,3 +107,12 @@ class TestStored:
         config = _project(tmp_path, {"auto_overview_cues": False})
         assert add_overview_cues(str(config)) is False
         assert overview_tagged_script({"overview_narration": SCRIPT}, tmp_path) == SCRIPT
+
+
+def test_cue_numbers_that_name_the_wrong_stop_are_reported():
+    from services.localization.overview_cues import cue_name_mismatches
+
+    labels = ["石標", "加太淡嶋神社", "友ヶ島 野奈浦桟橋 (Return)"]
+    assert cue_name_mismatches("{1}加太淡嶋神社へ。{go}", labels) == [(1, "加太淡嶋神社", "石標")]
+    assert cue_name_mismatches("{1}石標、{2}加太淡嶋神社、{3}友ヶ島 野奈浦桟橋へ。", labels) == []
+    assert cue_name_mismatches("{4}どこか", labels) == [(4, "どこか", "")]

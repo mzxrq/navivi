@@ -292,6 +292,13 @@ def add_overview_cues(project_config_path: str) -> bool:
         from services.localization.overview_cues import add_scene_cues
 
         tagged = add_scene_cues(tagged, [s["seconds"] for s in tuning.INTRO_STYLE_SCENES[style]])
+    from services.localization.overview_cues import cue_name_mismatches
+
+    for n, said, label in cue_name_mismatches(tagged, [w.get("label") or w.get("name") or "" for w in visible_waypoints(project)]):
+        logger.warning(
+            "Overview script: {%d} is followed by \"%s\", but stop %d is \"%s\" - the cues land on the wrong places.",
+            n, said, n, label or "(no such stop)",
+        )
     if tagged == (stored or base):
         return False
     store.put_text(OVERVIEW_CUE_KEY, base, tagged)
