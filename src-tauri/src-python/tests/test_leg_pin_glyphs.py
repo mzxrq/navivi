@@ -1,7 +1,7 @@
 """A leg's map shows the overview's own pin glyphs: S, 1, 2 ... E."""
 
 from services import tuning
-from services.vdoprocessing.videopipeline.render_step import _leg_pin, overview_pin_glyphs
+from services.vdoprocessing.videopipeline.render_look import _leg_pin, overview_pin_glyphs
 
 
 def _wps(*stopby_flags):

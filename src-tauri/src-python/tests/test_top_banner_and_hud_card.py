@@ -2,7 +2,7 @@ import numpy as np
 
 from services import tuning
 from services.mapfetcher.graphicengine import GraphicsEngine
-from services.vdoprocessing.pydeckrecorder.pedestrian import _hud_css
+from services.vdoprocessing.pydeckrecorder.leg_hud import _hud_css
 
 
 def _banner_columns(**kwargs):

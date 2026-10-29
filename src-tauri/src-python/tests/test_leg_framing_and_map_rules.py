@@ -1,7 +1,7 @@
 import pandas as pd
 
 from services.mapfetcher.maplanguage import needs_gl_labels
-from services.vdoprocessing.pydeckrecorder.pedestrian import _framed_points
+from services.vdoprocessing.pydeckrecorder.leg_camera import _framed_points
 from services.vdoprocessing.spatial_renderer.course import pin_reveal_time
 
 
@@ -49,7 +49,7 @@ class TestNeedsGlLabels:
 
 
 def test_photo_card_moves_off_the_route_line():
-    from services.vdoprocessing.pydeckrecorder.pedestrian import _clear_card_spot
+    from services.vdoprocessing.pydeckrecorder.leg_camera import _clear_card_spot
 
     spot = lambda route: _clear_card_spot(route, 960, 540, 200, 112, 26, 16, 1920, 1080)  # noqa: E731
     vertical = [(960, y) for y in range(0, 1080, 4)]  # the route runs straight up through the marker

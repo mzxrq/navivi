@@ -1,32 +1,32 @@
-"""Step 4: Render the visual map animation, synced to audio timing."""
+"""Step 4: Render the visual map animation, synced to audio timing.
 
-import hashlib
+Its helpers live beside it: render_look.py (pin glyphs/colors, look options),
+render_checkpoint.py (the render manifest's input hashes) and
+overview_framing.py (overview padding, bands, bounding box)."""
+
 import json
 import math
 import re
-from services.localization.cues import tags_at_sentence_start
-from services.localization.overview_script import course_summary, course_taglines, overview_style
-from services.localization.route_brief import load_brief
-from services.vdoprocessing.stopby_visits import visits_stopby
 from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
 
+from services.localization.cues import tags_at_sentence_start
+from services.localization.overview_script import overview_style
+from services.vdoprocessing.stopby_visits import visits_stopby
 from services.gpsparser.gpscalculator import GPSMath
 from services.logger.progress import tracker
-from services.projectfiles import NARRATION_CUES, ROUTE_CACHE, meta_file
+from services.projectfiles import ROUTE_CACHE, meta_file
 from services.mapfetcher.mapfetcher import MapFetcher
-from services.mapfetcher.maplanguage import map_style_inputs
 from services.vdoprocessing.route2vdo import RouteAnimator
-from services.vdoprocessing.route_inputs import labels_hash, overview_flags_hash, photo_inputs_hash, route_inputs_hash
+from services.vdoprocessing.route_inputs import overview_flags_hash, route_inputs_hash
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.localization.localization import format_waypoint_label
 from services.config.job_config import JobConfigManager
-from services.config.upscaled_images import IMAGE_KEYS, apply_upscaled_images
 from services import tuning, video_text
-from services.mapfetcher.graphicengine.pinimage import marker_for, marker_inputs_hash
+from services.mapfetcher.graphicengine.pinimage import marker_for
 
 from .audio_step import overview_tagged_script
 from .narration_step import MAX_EARLY_ARRIVAL_SECONDS, CueStore, leg_walk_plan
@@ -44,331 +44,15 @@ from .helpers import (
     output_is_valid,
     project_route_video_dir,
 )
-
-def _project_color(
-    settings: dict, key: str, default_bgr: tuple
-) -> tuple:
-    """Reads one color setting out of job_config.json, as BGR.
-
-    The app writes colors as RGB triples (it stores exactly what the color
-    picker produced — settings.marker_color [59, 130, 246] is #3B82F6, the
-    blue shown in the editor), while every renderer downstream draws in
-    OpenCV's BGR. Handing the value straight through — which is what this
-    used to do — rendered a project's chosen blue as #F6823B orange, i.e.
-    a configured color came out as its own channel-reversed twin. The
-    channels are swapped here, at the single point where a project's
-    settings become renderer config, so there is exactly one place that
-    knows about the difference.
-
-    `default_bgr` is used unchanged when the project didn't set the key:
-    the defaults live in tuning.py and are already authored in BGR.
-    """
-    raw = settings.get(key)
-    if raw is None:
-        return tuple(default_bgr)
-    try:
-        r, g, b = (int(v) for v in list(raw)[:3])
-    except (TypeError, ValueError):
-        logger.warning(
-            "Step 4: settings.%s is not an [r, g, b] triple (%r) — using the default.",
-            key, raw,
-        )
-        return tuple(default_bgr)
-    return (b, g, r)
-
-
-# How much darker a pin goes once its waypoint has been reached, when the
-# project sets marker_color but no arrived_marker_color of its own: the
-# two defaults in tuning.py sit about this far apart, so one configured
-# color still yields the same "deepens on arrival" pairing rather than
-# leaving every arrived pin on an unrelated stock blue.
-_ARRIVED_COLOR_DARKEN = 0.78
-
-
-def overview_pin_glyphs(waypoints: list) -> dict:
-    """{waypoint position: the glyph its pin shows on the overview}: "S" for
-    the first, "E" for the last, "・" for a stop-by, and 1, 2, 3... for the
-    rest in visit order - the same numbering as spatial_renderer's
-    _pin_label_and_color (S and stop-bys don't take a number), so a leg's
-    map can show "pin 1 -> pin 2" exactly as the overview does."""
-    glyphs = {}
-    order = 0
-    last = len(waypoints) - 1
-    for pos, wp in enumerate(waypoints):
-        # A waypoint skipped in video export is drawn like a stop-by too.
-        if wp.get("isStopBy") or (wp.get("skipAssetGeneration") and 0 < pos < last):
-            glyphs[pos] = "・"
-            continue
-        if pos == 0:
-            glyphs[pos] = "S"
-            continue
-        order += 1
-        glyphs[pos] = "E" if pos == last and order != 1 else str(order)
-    return glyphs
-
-
-def _is_return_stop(waypoints: list, pos: int) -> bool:
-    """A stop made by "Add return stop": a copy of an earlier stop at the same spot."""
-    if not 0 < pos < len(waypoints):
-        return False
-    wp = waypoints[pos]
-    return wp.get("lat") is not None and any(
-        w.get("lat") == wp["lat"] and w.get("lng") == wp.get("lng") for w in waypoints[:pos]
-    )
-
-
-def _leg_pin(glyph, settings: dict, arrived: bool, image: Optional[str] = None) -> Optional[dict]:
-    """One end of a leg's pin, in the overview's colors: S green, E red, a
-    stop-by brown, a numbered stop the marker color (the darker "arrived"
-    shade for the pin the leg departs from, which is already visited)."""
-    if not glyph:
-        return None
-    if glyph == "S":
-        color = _project_color(settings, "start_pin_color", tuning.START_PIN_COLOR)
-    elif glyph == "E":
-        color = _project_color(settings, "end_pin_color", tuning.END_PIN_COLOR)
-    elif glyph == "・":
-        color = _project_color(settings, "stopby_pin_color", tuning.STOPBY_PIN_COLOR)
-    else:
-        marker = _project_color(settings, "marker_color", (235, 150, 60))
-        color = _arrived_marker_color(settings, marker) if arrived else marker
-    pin = {"glyph": glyph, "color": tuple(int(c) for c in color)}
-    if image and glyph != "・":  # a stop-by stays a dot
-        pin["image"] = image
-    return pin
-
-
-def _arrived_marker_color(settings: dict, marker_bgr: tuple) -> tuple:
-    """The color a pin turns once its waypoint has been reached: the
-    project's own arrived_marker_color if it set one, else a darker shade
-    of its marker_color, else the stock default."""
-    if settings.get("arrived_marker_color") is not None:
-        return _project_color(
-            settings, "arrived_marker_color", tuning.DEFAULT_ARRIVED_MARKER_COLOR
-        )
-    if settings.get("marker_color") is not None:
-        return tuple(max(0, min(255, int(c * _ARRIVED_COLOR_DARKEN))) for c in marker_bgr)
-    return tuple(tuning.DEFAULT_ARRIVED_MARKER_COLOR)
-
-
-def _project_rgb(settings: dict, key: str) -> Optional[list]:
-    """A project colour setting as an RGB list (pydeck's order), or None."""
-    value = settings.get(key)
-    if isinstance(value, (list, tuple)) and len(value) >= 3:
-        return [int(c) for c in value[:3]]
-    return None
-
-
-# Modes drawn with the project's Route Line color, matching the editor.
-# Flights keep their own accent. "direct"/"draw" alias to walking.
-_LINE_COLOR_MODES = ("walking", "driving", "car", "ferry")
-
-
-def _mode_line_color_overrides(settings: dict) -> dict:
-    """Per-mode route-line colors as BGR: settings.line_color for every
-    ordinary mode, then settings.mode_line_colors per mode on top."""
-    overrides = {}
-    if settings.get("line_color") is not None:
-        for mode in _LINE_COLOR_MODES:
-            overrides[mode] = _project_color(settings, "line_color", tuning.MODE_LINE_COLORS[mode])
-    per_mode = settings.get("mode_line_colors") or {}
-    if isinstance(per_mode, dict):
-        for mode, value in per_mode.items():
-            key = str(mode).strip().lower()
-            key = tuning.MODE_ALIASES.get(key, key)
-            overrides[key] = _project_color(
-                {key: value}, key, tuning.MODE_LINE_COLORS.get(key, (110, 110, 110))
-            )
-    return overrides
-
-
-# [NOTE] [Config] Renderer options the "Look of the video" settings reach. Each default equals what the
-# reader downstream (spatial_renderer/*, route2vdo.py) falls back to, so a project that never sets one
-# renders as before. They used to be read downstream but never forwarded, so even a hand edit did nothing.
-_LOOK_OPTION_DEFAULTS = (
-    ("show_compass", True),
-    ("waypoint_map_border", True),
-    ("waypoint_intro_freeze", 2.0),
-    ("show_leg_wide_intro", False),
-    ("res_follow_pitch", 0.0),
-    ("street_photos_at_turns", tuning.STREET_PHOTOS_AT_TURNS),
-    ("overview_max_leg_seconds", 10.0),
-    ("overview_intro_card_scale", 1.3),
-    ("overview_intro_clean_hold_seconds", 1.5),
-    ("overview_title", None),
-    # overview_script.py reads the same key off the raw settings (default on): both now agree.
-    ("enable_ending_highlight", True),
+from .overview_framing import _course_config, overview_bounding_box, purge_map_images_on_language_change
+from .render_checkpoint import (
+    ROUTE_CHECKPOINT_PARTS, _RENDER_MANIFEST_NAME, _checkpoint_parts, _describe_changed_parts, _render_checkpoint_key,
+    _short_hash,
 )
-
-
-def look_options(settings: dict) -> dict:
-    """The renderer options of _LOOK_OPTION_DEFAULTS, read off the project's settings."""
-    return {key: settings.get(key, default) for key, default in _LOOK_OPTION_DEFAULTS}
-
-
-_RENDER_MANIFEST_NAME = ".render_manifest.json"
-
-
-def _render_checkpoint_key(
-    project_config_path: str,
-    cleaned_route: dict,
-    audio_durations: Optional[list[float]],
-    audio_pauses: Optional[list[Any]],
-) -> str:
-    """Fingerprint of every input that can change what render_route_video
-    produces. The checkpoint below used to trust bare output-file
-    existence alone: render once, then edit waypoints/settings/popups in
-    job_config.json and render again, and it silently handed back the
-    STALE video with nothing to say it hadn't actually re-rendered. This
-    hash is stored alongside the manifest and compared on the next run so
-    "the output files still exist" and "nothing that affects them has
-    changed" are no longer treated as the same thing.
-
-    Hashes job_config.json's raw bytes (the file the app writes every
-    edit to — waypoints, settings, popups, colors, all of it) plus the
-    route track and narration timing, since those two aren't part of
-    job_config.json but still change what gets rendered (a different GPS
-    source or re-recorded narration shifts the animation even if the
-    config file itself is untouched).
-
-    route_df's own "timestamp" column is normalized to seconds elapsed
-    since the route's first point before hashing, rather than hashed as
-    the absolute wall-clock values it comes in as. The map editor
-    regenerates raw_track.gpx with fresh `<time>` tags anchored to
-    whatever moment the project was last SAVED (see fileSystem.ts's
-    saveProjectData, not the route itself), on every save whether the
-    route actually changed or not — so the absolute timestamps drift on
-    every save even for byte-identical waypoints/geometry. Hashing them
-    as-is invalidated this checkpoint on every single render regardless
-    of whether anything a viewer would notice had changed. The RELATIVE
-    spacing between points (how long each leg took) is what actually
-    affects the render and is unaffected by when the file was saved, so
-    that's what gets hashed instead.
-    """
-    hasher = hashlib.sha256()
-    try:
-        with open(project_config_path, "r", encoding="utf-8") as f:
-            config_data = json.load(f)
-        # Rewritten by every save, whether or not anything was edited.
-        config_data.pop("updated_at", None)
-        hasher.update(json.dumps(config_data, sort_keys=True, ensure_ascii=False).encode("utf-8"))
-    except (OSError, ValueError):
-        pass
-    route_df = cleaned_route.get("route")
-    if route_df is not None:
-        # Geometry only: the GPX times are re-stamped on every save and the CSV
-        # keeps whole seconds, so times/durations shift by seconds run to run.
-        hasher.update(route_df[["latitude", "longitude"]].round(7).to_json(orient="split").encode("utf-8"))
-    summary = {
-        k: v for k, v in cleaned_route.get("summary", {}).items()
-        if "duration" not in k and "time" not in k
-    }
-    hasher.update(json.dumps(summary, sort_keys=True, default=str).encode("utf-8"))
-    try:
-        with open(meta_file(Path(project_config_path).parent, NARRATION_CUES), "rb") as f:
-            hasher.update(f.read())  # cue times decide each walk's length
-    except OSError:
-        pass
-    hasher.update(json.dumps(audio_durations or [], default=str).encode("utf-8"))
-    hasher.update(json.dumps(audio_pauses or [], default=str).encode("utf-8"))
-    return hasher.hexdigest()
-
-
-def _short_hash(value: Any) -> str:
-    raw = value if isinstance(value, bytes) else json.dumps(value, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()[:16]
-
-
-def _checkpoint_parts(
-    project_config_path: str,
-    cleaned_route: dict,
-    audio_durations: Optional[list[float]],
-    audio_pauses: Optional[list[Any]],
-) -> dict:
-    """Per-input hashes behind _render_checkpoint_key, so an invalidation can name what changed."""
-    parts: dict = {}
-    try:
-        with open(project_config_path, "r", encoding="utf-8") as f:
-            config_data = json.load(f)
-    except (OSError, ValueError):
-        config_data = {}
-    # The photos the render will show (upscaled copies where they exist).
-    shown = json.loads(json.dumps(config_data))
-    apply_upscaled_images(shown, Path(project_config_path).parent)
-    parts["route.photos"] = photo_inputs_hash(
-        [[wp.get(k) for k in IMAGE_KEYS] for wp in shown.get("waypoints") or [] if isinstance(wp, dict)]
-    )
-    # Map labels and on-screen text follow this; a project saved before it was written has none.
-    language = config_data.get("map_language")
-    if language:
-        parts["route.map_language"] = _short_hash(str(language))
-    style_part = map_style_inputs(config_data.get("settings"))
-    if style_part:
-        parts["route.map_style"] = _short_hash(style_part)
-    marker_part = marker_inputs_hash(shown, str(Path(project_config_path).parent))
-    if marker_part:
-        parts["route.markers"] = marker_part
-    for key, value in config_data.items():
-        if key == "updated_at":
-            continue
-        if key == "waypoints" and isinstance(value, list):
-            parts["route.waypoints"] = route_inputs_hash(value)
-            parts["route.overview_flags"] = overview_flags_hash(value)
-            parts["route.labels"] = labels_hash(value)
-            parts["config.waypoints.count"] = _short_hash(len(value))
-            for i, wp in enumerate(value):
-                label = wp.get("label", "") if isinstance(wp, dict) else ""
-                for field, field_value in (wp.items() if isinstance(wp, dict) else [("value", wp)]):
-                    parts[f"config.waypoints[{i}:{label}].{field}"] = _short_hash(field_value)
-        elif key == "settings" and isinstance(value, dict):
-            for field, field_value in value.items():
-                parts[f"config.settings.{field}"] = _short_hash(field_value)
-        else:
-            parts[f"config.{key}"] = _short_hash(value)
-    route_df = cleaned_route.get("route")
-    if route_df is not None:
-        parts["route.geometry"] = _short_hash(
-            route_df[["latitude", "longitude"]].round(7).to_json(orient="split").encode("utf-8")
-        )
-    for key, value in cleaned_route.get("summary", {}).items():
-        if "duration" not in key and "time" not in key:
-            parts[f"route.summary.{key}"] = _short_hash(value)
-    try:
-        cues = json.loads(meta_file(Path(project_config_path).parent, NARRATION_CUES).read_text(encoding="utf-8"))
-        for key, value in cues.items():
-            parts[f"narration_cues.{key}"] = _short_hash(value)
-    except (OSError, ValueError):
-        pass
-    for i, value in enumerate(audio_durations or []):
-        parts[f"audio_durations[{i}]"] = _short_hash(value)
-    for i, value in enumerate(audio_pauses or []):
-        parts[f"audio_pauses[{i}]"] = _short_hash(value)
-    return parts
-
-
-# The route render is reused unless the waypoints' route inputs changed (or
-# an output is missing). Not route.geometry: the app can save a different
-# GPX line for the same waypoints (see route_inputs.py).
-# route.photos: a new or upscaled pop-up photo has to reach the overview and legs.
-# route.markers: a new pin picture too (absent, so unchanged, for a project with none).
-# route.map_style: the video's map style or tile sharpness (absent, so unchanged, until a project sets one).
-# route.overview_voice: the overview's cue times and voice length (set by render_route_video).
-# route.map_language: the label/on-screen text language (absent for a config that never had one).
-ROUTE_CHECKPOINT_PARTS = (
-    "route.waypoints", "route.overview_flags", "route.photos", "route.markers", "route.map_style",
-    "route.overview_voice", "route.map_language", "route.labels",
+from .render_look import (
+    _arrived_marker_color, _is_return_stop, _leg_pin, _mode_line_color_overrides, _project_color, _project_rgb,
+    look_options, overview_pin_glyphs,
 )
-
-
-def _describe_changed_parts(old: dict, new: dict, limit: int = 25) -> str:
-    changed = sorted(k for k in set(old) | set(new) if old.get(k) != new.get(k))
-    labels = [
-        f"{k} ({'added' if k not in old else 'removed' if k not in new else 'changed'})"
-        for k in changed
-    ]
-    more = f", +{len(labels) - limit} more" if len(labels) > limit else ""
-    return ", ".join(labels[:limit]) + more if labels else "nothing per-part (hash format differs)"
-
 
 # Residential-leg clip filename's embedded 1-based departure-waypoint
 # position (see waypoints.py's chunk_filename: "02_waypoint_{N:02d}_...") —
@@ -401,130 +85,6 @@ _OVERVIEW_MAX_DURATION_SECONDS = 180.0
 _OVERVIEW_SECONDS_PER_LEG = 8.0
 _OVERVIEW_SECONDS_PER_KM = 1.5
 _OVERVIEW_MIN_FINAL_DURATION_SECONDS = 10.0
-
-
-def _adaptive_overview_padding(route_df: pd.DataFrame) -> float:
-    """Picks the overview map's padding_factor from the route's own
-    bounding-box diagonal distance (km) — see tuning.OVERVIEW_PADDING_BY_SPAN_KM.
-    Falls back to the old flat 10% if the span can't be computed (e.g. a
-    single-point route)."""
-    try:
-        min_lat, max_lat = route_df["latitude"].min(), route_df["latitude"].max()
-        min_lon, max_lon = route_df["longitude"].min(), route_df["longitude"].max()
-        span_km = float(
-            GPSMath.haversine_vectorized(
-                np.array([min_lat]), np.array([min_lon]),
-                np.array([max_lat]), np.array([max_lon]),
-            )[0]
-        )
-    except (KeyError, ValueError, IndexError):
-        return 0.10
-
-    for max_span, padding in tuning.OVERVIEW_PADDING_BY_SPAN_KM:
-        if span_km <= max_span:
-            return padding
-    return tuning.OVERVIEW_PADDING_MAX_SPAN
-
-
-# The overview map's size (MapFetcher.fetch_image's default output_size).
-OVERVIEW_FRAME_SIZE = (1920, 1080)
-
-
-def _reserve_overview_bands(
-    bbox: dict, frame_size: tuple[int, int], top_px: float, bottom_px: float
-) -> dict:
-    """Grows `bbox` to the frame's aspect (Web Mercator) so the route fits between
-    a top band of `top_px` and a bottom band of `bottom_px`, centered in that gap."""
-    R = 6378137.0
-    w, h = frame_size
-    usable_h = max(1.0, h - top_px - bottom_px)
-
-    def merc_y(lat):
-        return math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)) * R
-
-    def merc_lat(y):
-        return math.degrees(2 * math.atan(math.exp(y / R)) - math.pi / 2)
-
-    y_min, y_max = merc_y(bbox["min_lat"]), merc_y(bbox["max_lat"])
-    x_span = math.radians(bbox["max_lon"] - bbox["min_lon"]) * R
-    scale = max(x_span / w, (y_max - y_min) / usable_h)
-
-    top_y = y_max + top_px * scale + (usable_h * scale - (y_max - y_min)) / 2
-    half_lon = math.degrees(w * scale / R) / 2
-    mid_lon = (bbox["min_lon"] + bbox["max_lon"]) / 2
-    return {
-        "min_lat": merc_lat(top_y - h * scale),
-        "max_lat": merc_lat(top_y),
-        "min_lon": mid_lon - half_lon,
-        "max_lon": mid_lon + half_lon,
-    }
-
-
-_MAP_LANGUAGE_STAMP = ".map_language"
-
-
-def purge_map_images_on_language_change(project_dir, language: Optional[str]) -> bool:
-    """Deletes the project's map pictures (overview and each leg's tile) when the map
-    language they were made for is not the current one; they are fetched again right
-    after. The language is remembered in a small file beside them. True when purged."""
-    folder = Path(project_dir) / "assets" / "image" / "map"
-    stamp = folder / _MAP_LANGUAGE_STAMP
-    current = str(language or "")
-    try:
-        previous = stamp.read_text(encoding="utf-8").strip() if stamp.exists() else None
-    except OSError:
-        previous = None
-    purged = False
-    # Images with no note were made before the language was remembered: language unknown, so fetched again once.
-    if previous != current and (previous is not None or any(folder.glob("*.png"))):
-        for image in folder.glob("*.png"):
-            try:
-                image.unlink()
-                purged = True
-            except OSError as exc:
-                logger.warning("Could not delete the old map image %s: %s", image, exc)
-        logger.info("Map language changed (%s -> %s): old map images deleted, fetching them again.", previous if previous is not None else "unknown", current or "none")
-    if previous != current and folder.is_dir():
-        try:
-            stamp.write_text(current, encoding="utf-8")
-        except OSError:
-            pass
-    return purged
-
-
-def overview_bounding_box(fetcher, route_df: pd.DataFrame, project_config: dict) -> dict:
-    """The overview map's box: the route padded by its span; in the "course"
-    style also clear of the headline above, and both styles clear of the subtitles below."""
-    bbox = fetcher.get_bounding_box(route_df, padding_factor=_adaptive_overview_padding(route_df))
-    if overview_style(project_config) == "course":
-        bbox = _reserve_overview_bands(
-            bbox, OVERVIEW_FRAME_SIZE,
-            OVERVIEW_FRAME_SIZE[1] * tuning.COURSE_TOP_BAND_FRACTION,
-            OVERVIEW_FRAME_SIZE[1] * tuning.COURSE_BOTTOM_BAND_FRACTION,
-        )
-    else:
-        bbox = _reserve_overview_bands(
-            bbox, OVERVIEW_FRAME_SIZE, 0.0, OVERVIEW_FRAME_SIZE[1] * tuning.OVERVIEW_BOTTOM_BAND_FRACTION
-        )
-    return bbox
-
-
-def _course_config(project_config: dict, config_path: Path) -> dict:
-    """The overview type, plus what the "course" overview needs from the route:
-    headline taglines and the stats card's numbers (the same the script speaks)."""
-    style = overview_style(project_config)
-    if style != "course":
-        return {"overview_style": style}
-    try:
-        brief = load_brief(str(config_path))
-    except (OSError, ValueError, KeyError) as exc:
-        logger.warning("Course overview: could not read the route brief (%s).", exc)
-        return {"overview_style": style}
-    return {
-        "overview_style": style,
-        "overview_taglines": course_taglines(project_config, brief),
-        "course_summary": course_summary(brief),
-    }
 
 
 def render_route_video(

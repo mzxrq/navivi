@@ -7,7 +7,7 @@ from services.vdoprocessing.videopipeline.audio_step import (
     is_passed_only,
     passed_only_reason,
 )
-from services.vdoprocessing.videopipeline.render_step import overview_pin_glyphs
+from services.vdoprocessing.videopipeline.render_look import overview_pin_glyphs
 
 WP = {"lat": 34.1, "lng": 135.1, "attractionNarration": "x", "popup_image": ["1.jpg"]}
 

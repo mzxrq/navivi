@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from services import tuning
-from services.vdoprocessing.videopipeline.render_step import _adaptive_overview_padding
+from services.vdoprocessing.videopipeline.overview_framing import _adaptive_overview_padding
 
 
 def _route_df(min_lat, min_lon, max_lat, max_lon):
