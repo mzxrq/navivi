@@ -29,6 +29,19 @@ from .render_look import _is_return_stop, _leg_pin, _project_rgb, overview_pin_g
 _MIN_FERRY_SAMPLE_POINTS = 2
 _MAX_FERRY_SAMPLE_POINTS = 120
 
+def _play_order(markers: list, marker_plans: dict, id_to_position: dict):
+    """Sort key for a leg's markers: route order, an off-route stop-by ("pops_after") right after the stop-by it
+    pops up at ("" = the departure stop, first), several in waypoint order."""
+    route_index = {m.get("waypoint_id"): i for i, m in enumerate(markers)}
+
+    def key(m):
+        after = marker_plans.get(m.get("waypoint_id"), {}).get("pops_after")
+        if after is None:
+            return (route_index.get(m.get("waypoint_id"), 0), 0, 0)
+        return (route_index.get(after, -1), 1, id_to_position.get(m.get("waypoint_id"), 0))
+    return key
+
+
 def build_leg_sequence(
     *,
     audio_durations,
@@ -257,9 +270,16 @@ def build_leg_sequence(
                 p for p in range(start_pos + 1, min(end_pos, len(waypoints)))
                 if visits_stopby(waypoints[p]) and waypoints[p].get("popup_image")
             ]
-            # Off-route stop-bys pop up at the departure stop, in waypoint order, before the walk.
-            at_start = {p for p in stop_positions if not waypoints[p].get("connectToRoute")}
-            stop_positions = sorted(at_start) + [p for p in stop_positions if p not in at_start]
+            # An off-route stop-by pops up at the stop before it in waypoint order, without walking: the departure
+            # stop ("") or the connected stop-by before it, right after that one's photo.
+            pops_after: dict = {}
+            anchor = ""
+            for p in stop_positions:
+                if waypoints[p].get("connectToRoute"):
+                    anchor = waypoints[p].get("id") or ""
+                else:
+                    pops_after[p] = anchor
+            at_start = set(pops_after)
             piece_targets = stop_positions + [end_pos]
             piece_plans: dict = {}
             piece_log = []
@@ -307,8 +327,8 @@ def build_leg_sequence(
                 start_cue_seconds = None
                 arrival_wait_seconds = None
                 marker_plans = {}
-            for p in at_start:
-                marker_plans.setdefault(waypoints[p].get("id"), {})["at_leg_start"] = True
+            for p, after in pops_after.items():
+                marker_plans.setdefault(waypoints[p].get("id"), {})["pops_after"] = after
 
             lats_arr, lons_arr = leg_item["lats"], leg_item["lons"]
             seg_dist = (
@@ -444,7 +464,8 @@ def build_leg_sequence(
                     # `points`/res_points list, not the route_df row index)
                     # is what waypoints.py actually needs to know when the
                     # traveler has passed a merged-in stop-by along the way.
-                    # Pop-ups at the departure stop come first: the leg's pieces are cut in this order.
+                    # In the order the pauses play (the leg's pieces are cut in it): route order, each off-route
+                    # stop-by right after the stop it pops up at.
                     "mid_markers": sorted(
                         (
                             {
@@ -454,7 +475,7 @@ def build_leg_sequence(
                             }
                             for m in leg_item.get("mid_markers", [])
                         ),
-                        key=lambda m: (not m.get("at_leg_start"), id_to_position.get(m.get("waypoint_id"), 0) if m.get("at_leg_start") else 0),
+                        key=_play_order(leg_item.get("mid_markers", []), marker_plans, id_to_position),
                     ),
                 }
             )

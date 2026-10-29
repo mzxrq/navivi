@@ -60,7 +60,7 @@ def _segment_plan(df_raw, leg_dist_km, landmarks, total_seconds):
         return None
     stops = [
         lm for lm in landmarks
-        if lm.get("connect_to_route") and lm.get("popup_image") and not lm.get("at_leg_start")
+        if lm.get("connect_to_route") and lm.get("popup_image") and lm.get("pops_after") is None
         and lm.get("lat") is not None and lm.get("lon") is not None
     ]
     if not stops or any(lm.get("walk_seconds") is None for lm in stops):
@@ -1219,12 +1219,29 @@ async def _record_leg(
                 # lands closest to that stop-by's coordinates.
                 stopby_triggers: Dict[int, Dict] = {}
                 _stopby_candidates = []
-                start_stopbys = [
+                # Off-route stop-bys shown without walking, in order, right after the stop they pop up at
+                # ("pops_after": "" = the departure stop, else that connected stop-by's waypoint id).
+                followers = [
                     lm for lm in (landmarks or [])
-                    if lm.get("connect_to_route") and lm.get("popup_image") and lm.get("at_leg_start")
+                    if lm.get("connect_to_route") and lm.get("popup_image") and lm.get("pops_after") is not None
                 ]
+
+                async def _play_followers(after: str, tag) -> None:
+                    for k, lm in enumerate(lm for lm in followers if lm.get("pops_after") == after):
+                        wait_s = float(lm.get("wait_seconds") or 0.0)
+                        cuts_before = frame_state["cuts"]
+                        await _play_stopby_photo_pause(
+                            page, _write_frame, _cut_to_new_clip, fps, html_dir, port,
+                            lm, locked_lon, locked_lat, locked_zoom, output_size, f"{tag}_{k}",
+                            pitch=follow_pitch,
+                            small_hold_seconds=wait_s if wait_s > 0 else None,
+                        )
+                        if frame_state["cuts"] > cuts_before:
+                            piece_lead = (frame_state["count"] - frame_state["clip_start"]) / fps
+                            write_audio_offset(proc_ref["real_path"], piece_lead)
+
                 for lm in (landmarks or []):
-                    if not (lm.get("connect_to_route") and lm.get("popup_image")) or lm.get("at_leg_start"):
+                    if not (lm.get("connect_to_route") and lm.get("popup_image")) or lm.get("pops_after") is not None:
                         continue
                     lm_lat, lm_lon = lm.get("lat"), lm.get("lon")
                     if lm_lat is None or lm_lon is None:
@@ -1431,19 +1448,8 @@ async def _record_leg(
                         tracker.show(f"{dest_label}: walking frame {index + 1}/{frame_total} ({pct}%)")
                     row = smooth_df.iloc[index]
 
-                    for k, lm in enumerate(start_stopbys if index == 0 else []):
-                        # Off-route stop-by: shown from the departure stop before the walk starts.
-                        wait_s = float(lm.get("wait_seconds") or 0.0)
-                        cuts_before = frame_state["cuts"]
-                        await _play_stopby_photo_pause(
-                            page, _write_frame, _cut_to_new_clip, fps, html_dir, port,
-                            lm, locked_lon, locked_lat, locked_zoom, output_size, -(k + 1),
-                            pitch=follow_pitch,
-                            small_hold_seconds=wait_s if wait_s > 0 else None,
-                        )
-                        if frame_state["cuts"] > cuts_before:
-                            piece_lead = (frame_state["count"] - frame_state["clip_start"]) / fps
-                            write_audio_offset(proc_ref["real_path"], piece_lead)
+                    if index == 0:
+                        await _play_followers("", "start")
 
                     stopby_lm = stopby_triggers.get(index)
                     if stopby_lm is not None:
@@ -1459,6 +1465,12 @@ async def _record_leg(
                             pitch=follow_pitch,
                             small_hold_seconds=wait_s if wait_s > 0 else None,
                         )
+                        if any(lm.get("pops_after") == stopby_lm.get("waypoint_id") for lm in followers):
+                            if frame_state["cuts"] > cuts_before:
+                                write_audio_offset(
+                                    proc_ref["real_path"], (frame_state["count"] - frame_state["clip_start"]) / fps
+                                )
+                            await _play_followers(stopby_lm.get("waypoint_id"), index)
 
                         # Dynamic hop to the NEXT segment's framing for the new clip!
                         # (the piece's opening - photo beat and hop - is measured

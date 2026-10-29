@@ -668,7 +668,8 @@ class RouteAnimator:
                     # it waits here for the voice (render_step.py's piece plan).
                     "walk_seconds": m.get("walk_seconds"),
                     "wait_seconds": m.get("wait_seconds"),
-                    "at_leg_start": bool(m.get("at_leg_start")),
+                    "pops_after": m.get("pops_after"),
+                    "waypoint_id": m.get("waypoint_id"),
                 }
                 for m in res_data.get("mid_markers", [])
                 if m.get("lat") is not None and m.get("lng", m.get("lon")) is not None
