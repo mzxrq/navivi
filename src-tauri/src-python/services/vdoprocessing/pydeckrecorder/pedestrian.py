@@ -1128,7 +1128,7 @@ def _segment_plan(df_raw, leg_dist_km, landmarks, total_seconds):
         return None
     stops = [
         lm for lm in landmarks
-        if lm.get("connect_to_route") and lm.get("popup_image")
+        if lm.get("connect_to_route") and lm.get("popup_image") and not lm.get("at_leg_start")
         and lm.get("lat") is not None and lm.get("lon") is not None
     ]
     if not stops or any(lm.get("walk_seconds") is None for lm in stops):
@@ -1434,20 +1434,21 @@ def render_residential_leg_pydeck(
     # Destination pin + name pill, shown for the whole leg (stop-by-cut
     # pieces included) so the viewer sees where the route is headed.
     dest_lat, dest_lon = df_raw.iloc[-1]["lat"], df_raw.iloc[-1]["lon"]
-    base_layers.append(
-        pdk.Layer(
-            "IconLayer", id="leg-dest-pin",
-            data=[{
-                "lon": dest_lon, "lat": dest_lat,
-                "icon": {
-                    "url": _leg_pin_url(dest_pin, _DEST_PIN_URL), "width": _TEARDROP_PIN_W,
-                    "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
-                },
-            }],
-            get_icon="icon", get_position="[lon, lat]",
-            get_size=60, size_units="'pixels'", size_scale=1, pickable=False,
+    if dest_pin is not False:  # False = a return stop: name pill only
+        base_layers.append(
+            pdk.Layer(
+                "IconLayer", id="leg-dest-pin",
+                data=[{
+                    "lon": dest_lon, "lat": dest_lat,
+                    "icon": {
+                        "url": _leg_pin_url(dest_pin, _DEST_PIN_URL), "width": _TEARDROP_PIN_W,
+                        "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
+                    },
+                }],
+                get_icon="icon", get_position="[lon, lat]",
+                get_size=60, size_units="'pixels'", size_scale=1, pickable=False,
+            )
         )
-    )
     base_layers.extend(
         _label_pill_layer(
             [{"lon": dest_lon, "lat": dest_lat, "text": dest_label or ""}],
@@ -2501,8 +2502,8 @@ async def _record_leg(
                 hud_card_cache: Dict[Tuple[int, int, bool], str] = {}
                 hud_card_shown: List[Optional[str]] = [None]
 
-                # [NOTE] [Heatmap] With the heatmap's heights, an elevation profile sits above the summary card and
-                # its marker follows the walker.
+                # [NOTE] [Heatmap] With the heatmap's heights, an elevation profile sits bottom-left, level with the
+                # summary card, and its marker follows the walker.
                 elev = None
                 if "ele" in df_raw.columns:
                     scale = output_size[1] / 1080.0
@@ -2517,14 +2518,14 @@ async def _record_leg(
                     )
                     if elev is not None:
                         await page.evaluate(
-                            """([svg, bg, right, scale]) => {
+                            """([svg, bg, left, scale]) => {
                                 const card = document.createElement('div');
                                 card.id = 'hud-elev-card';
                                 card.innerHTML = svg;
                                 Object.assign(card.style, {
-                                    position: 'fixed', right: right + 'px', bottom: '32px', zIndex: 1000,
+                                    position: 'fixed', left: left + 'px', bottom: '32px', zIndex: 1000,
                                     background: bg, borderRadius: '24px', boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
-                                    fontFamily: '"Noto Sans JP", sans-serif', transformOrigin: 'bottom right',
+                                    fontFamily: '"Noto Sans JP", sans-serif', transformOrigin: 'bottom left',
                                     transform: `scale(${scale})`, lineHeight: 0,
                                 });
                                 document.body.appendChild(card);
@@ -2533,22 +2534,21 @@ async def _record_leg(
                         )
 
                 async def _set_elev(share: float) -> None:
-                    """The profile's marker at this share of the leg, the card kept just above the summary card."""
+                    """The profile's marker at this share of the leg, the card's bottom level with the summary card's."""
                     if elev is None:
                         return
                     x, y = elev[1](share)
                     await page.evaluate(
-                        """([x, y, gap]) => {
+                        """([x, y]) => {
                             const marker = document.getElementById('elev-marker');
                             if (marker) marker.setAttribute('transform', `translate(${x},${y})`);
                             const card = document.getElementById('hud-elev-card');
-                            const below = document.getElementById('hud-card-img') || document.getElementById('hud-card');
-                            if (card && below && below.offsetHeight) {
-                                const top = below.getBoundingClientRect().top;
-                                card.style.bottom = (window.innerHeight - top + gap) + 'px';
+                            const beside = document.getElementById('hud-card-img') || document.getElementById('hud-card');
+                            if (card && beside && beside.offsetHeight) {
+                                card.style.bottom = (window.innerHeight - beside.getBoundingClientRect().bottom) + 'px';
                             }
                         }""",
-                        [x, y, tuning.LEG_ELEVATION_CARD_GAP_PX],
+                        [x, y],
                     )
 
                 async def _set_hud_card(rem_m: float, rem_min: int, arrived: bool = False) -> None:
@@ -2750,8 +2750,12 @@ async def _record_leg(
                 # lands closest to that stop-by's coordinates.
                 stopby_triggers: Dict[int, Dict] = {}
                 _stopby_candidates = []
+                start_stopbys = [
+                    lm for lm in (landmarks or [])
+                    if lm.get("connect_to_route") and lm.get("popup_image") and lm.get("at_leg_start")
+                ]
                 for lm in (landmarks or []):
-                    if not (lm.get("connect_to_route") and lm.get("popup_image")):
+                    if not (lm.get("connect_to_route") and lm.get("popup_image")) or lm.get("at_leg_start"):
                         continue
                     lm_lat, lm_lon = lm.get("lat"), lm.get("lon")
                     if lm_lat is None or lm_lon is None:
@@ -2957,6 +2961,20 @@ async def _record_leg(
                         pct = int(100 * (index + 1) / frame_total) if frame_total else 100
                         tracker.show(f"{dest_label}: walking frame {index + 1}/{frame_total} ({pct}%)")
                     row = smooth_df.iloc[index]
+
+                    for k, lm in enumerate(start_stopbys if index == 0 else []):
+                        # Off-route stop-by: shown from the departure stop before the walk starts.
+                        wait_s = float(lm.get("wait_seconds") or 0.0)
+                        cuts_before = frame_state["cuts"]
+                        await _play_stopby_photo_pause(
+                            page, _write_frame, _cut_to_new_clip, fps, html_dir, port,
+                            lm, locked_lon, locked_lat, locked_zoom, output_size, -(k + 1),
+                            pitch=follow_pitch,
+                            small_hold_seconds=wait_s if wait_s > 0 else None,
+                        )
+                        if frame_state["cuts"] > cuts_before:
+                            piece_lead = (frame_state["count"] - frame_state["clip_start"]) / fps
+                            write_audio_offset(proc_ref["real_path"], piece_lead)
 
                     stopby_lm = stopby_triggers.get(index)
                     if stopby_lm is not None:

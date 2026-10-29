@@ -107,6 +107,16 @@ def overview_pin_glyphs(waypoints: list) -> dict:
     return glyphs
 
 
+def _is_return_stop(waypoints: list, pos: int) -> bool:
+    """A stop made by "Add return stop": a copy of an earlier stop at the same spot."""
+    if not 0 < pos < len(waypoints):
+        return False
+    wp = waypoints[pos]
+    return wp.get("lat") is not None and any(
+        w.get("lat") == wp["lat"] and w.get("lng") == wp.get("lng") for w in waypoints[:pos]
+    )
+
+
 def _leg_pin(glyph, settings: dict, arrived: bool, image: Optional[str] = None) -> Optional[dict]:
     """One end of a leg's pin, in the overview's colors: S green, E red, a
     stop-by brown, a numbered stop the marker color (the darker "arrived"
@@ -1246,12 +1256,14 @@ def render_route_video(
                 p for p in range(start_pos + 1, min(end_pos, len(waypoints)))
                 if visits_stopby(waypoints[p]) and waypoints[p].get("popup_image")
             ]
+            # Off-route stop-bys pop up at the departure stop, in waypoint order, before the walk.
+            at_start = {p for p in stop_positions if not waypoints[p].get("connectToRoute")}
+            stop_positions = sorted(at_start) + [p for p in stop_positions if p not in at_start]
             piece_targets = stop_positions + [end_pos]
             piece_plans: dict = {}
             piece_log = []
             previous = start_pos
-            for target in piece_targets:
-                is_first_piece = previous == start_pos
+            for k, target in enumerate(piece_targets):
                 natural = sum(
                     seg_durations[p] for p in range(previous, target) if p < len(seg_durations)
                 ) or 10.0
@@ -1260,17 +1272,21 @@ def render_route_video(
                     leg_walk_plan(
                         cue_store, waypoints[target], target, audio_seconds,
                         natural_seconds=natural, use_cues=use_cues, max_wait_seconds=max_wait,
-                        ignore_start=not is_first_piece,
+                        ignore_start=k > 0,
                     )
                     if target < len(waypoints) else None
                 )
+                if piece_plans[target] is not None and target in at_start:
+                    walk, start, wait = piece_plans[target]
+                    piece_plans[target] = (0.0, start, walk + wait)
                 if piece_plans[target] is not None:
                     walk, _, wait = piece_plans[target]
                     piece_log.append(
                         f"-> {waypoints[target].get('label')}: walk {walk:.1f}s "
                         f"({walk / natural:.2f}x natural pace), waits {wait:.1f}s"
                     )
-                previous = target
+                if target not in at_start:
+                    previous = target
             if end_pos >= len(waypoints) or any(v is None for v in piece_plans.values()):
                 piece_plans = {}
             if piece_plans:
@@ -1290,6 +1306,8 @@ def render_route_video(
                 start_cue_seconds = None
                 arrival_wait_seconds = None
                 marker_plans = {}
+            for p in at_start:
+                marker_plans.setdefault(waypoints[p].get("id"), {})["at_leg_start"] = True
 
             lats_arr, lons_arr = leg_item["lats"], leg_item["lons"]
             seg_dist = (
@@ -1385,7 +1403,7 @@ def render_route_video(
                         settings, arrived=True,
                         image=pin_image_by_id.get(leg_item.get("start_waypoint_id")),
                     ),
-                    "dest_pin": _leg_pin(
+                    "dest_pin": False if _is_return_stop(waypoints, end_pos) else _leg_pin(
                         glyph_by_id.get(leg_item.get("end_waypoint_id"))
                         or ("E" if seq_idx == len(sequence_data) - 1 else None),
                         settings, arrived=False,
@@ -1425,14 +1443,18 @@ def render_route_video(
                     # `points`/res_points list, not the route_df row index)
                     # is what waypoints.py actually needs to know when the
                     # traveler has passed a merged-in stop-by along the way.
-                    "mid_markers": [
-                        {
-                            **m,
-                            "pos_in_chunk": m["row_idx"] - start_idx,
-                            **marker_plans.get(m.get("waypoint_id"), {}),
-                        }
-                        for m in leg_item.get("mid_markers", [])
-                    ],
+                    # Pop-ups at the departure stop come first: the leg's pieces are cut in this order.
+                    "mid_markers": sorted(
+                        (
+                            {
+                                **m,
+                                "pos_in_chunk": m["row_idx"] - start_idx,
+                                **marker_plans.get(m.get("waypoint_id"), {}),
+                            }
+                            for m in leg_item.get("mid_markers", [])
+                        ),
+                        key=lambda m: (not m.get("at_leg_start"), id_to_position.get(m.get("waypoint_id"), 0) if m.get("at_leg_start") else 0),
+                    ),
                 }
             )
 

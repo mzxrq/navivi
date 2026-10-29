@@ -294,6 +294,34 @@ class _CourseOverviewMixin:
             id(ap): None if ap["index"] in cards else self._course_label_sprite(ap.get("label") or "")
             for ap in extras
         }
+        # Each label goes on the first side of its pin clear of the cards, pins and earlier labels.
+        r = int(self.graphics.marker_radius)
+        taken = [
+            (bx, by, bx + cw, by + ch)
+            for ap in laid_out if ap.get("beside_box")
+            for (bx, by), (cw, ch) in [(ap["beside_box"], self.graphics.beside_card_footprint(ap.get("card_scale", 1.0)))]
+        ] + [
+            (ap.get("pin_x", ap["x"]) - r, ap.get("pin_y", ap["y"]) - r,
+             ap.get("pin_x", ap["x"]) + r, ap.get("pin_y", ap["y"]) + r)
+            for ap in on_route + extras
+        ]
+        label_at = {}
+        for ap in extras:
+            sprite = labels[id(ap)]
+            if sprite is None:
+                continue
+            sh, sw = sprite.shape[:2]
+            px, py = int(ap.get("pin_x", ap["x"])), int(ap.get("pin_y", ap["y"]))
+            sides = [(px + r + 6, py - sh // 2), (px - r - 6 - sw, py - sh // 2),
+                     (px - sw // 2, py - r - 6 - sh), (px - sw // 2, py + r + 6)]
+            free = [
+                (x, y) for x, y in sides
+                if 0 <= x and x + sw <= w and 0 <= y and y + sh <= h
+                and not any(x < b[2] and b[0] < x + sw and y < b[3] and b[1] < y + sh for b in taken)
+            ]
+            x, y = (free or sides)[0]
+            label_at[id(ap)] = (x, y)
+            taken.append((x, y, x + sw, y + sh))
         pop = tuning.COURSE_CARD_POP_SECONDS
 
         def plate_state(t: float):
@@ -334,11 +362,6 @@ class _CourseOverviewMixin:
             for ap in extras:
                 if ap["index"] in scales:
                     self._draw_pin(plate, ap, total_points, scale=scales[ap["index"]])
-                    sprite = labels[id(ap)]
-                    if sprite is not None and scales[ap["index"]] >= 0.99:
-                        px, py = int(ap.get("pin_x", ap["x"])), int(ap.get("pin_y", ap["y"]))
-                        self.graphics.blit_sprite(plate, sprite, (0, sprite.shape[0] // 2),
-                                                  px + int(self.graphics.marker_radius) + 6, py)
             for hud in huds:
                 a = alpha.get(hud["index"])
                 if a is not None and hud.get("beside_box"):  # rises a little as it fades in
@@ -346,6 +369,9 @@ class _CourseOverviewMixin:
                     hud = dict(hud, beside_box=(bx, int(by + 14 * (1 - _smoothstep(a)))))
                 plate = self.graphics.render_popup_box(
                     plate, hud, alpha=_smoothstep(a if a is not None else 1.0), skip_line=True)
+            for ap in extras:  # above the cards, should no side be free
+                if id(ap) in label_at and scales.get(ap["index"], 0.0) >= 0.99:
+                    self.graphics.blit_sprite(plate, labels[id(ap)], (0, 0), *label_at[id(ap)])
             return plate
 
         def build_overlay(state) -> Tuple[np.ndarray, np.ndarray]:

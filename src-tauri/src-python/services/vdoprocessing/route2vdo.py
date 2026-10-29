@@ -63,7 +63,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # v9: the 3D leg HUD card sits as low as the 2D one).
 LEG_RENDER_VERSION = 9
 # Bumped when the heatmap legs' elevation profile card changes (only those legs re-render; v1: the card).
-LEG_ELEVATION_CARD_VERSION = 1
+LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
 LEG_CHAIN_FIT_VERSION = 1
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
@@ -668,6 +668,7 @@ class RouteAnimator:
                     # it waits here for the voice (render_step.py's piece plan).
                     "walk_seconds": m.get("walk_seconds"),
                     "wait_seconds": m.get("wait_seconds"),
+                    "at_leg_start": bool(m.get("at_leg_start")),
                 }
                 for m in res_data.get("mid_markers", [])
                 if m.get("lat") is not None and m.get("lng", m.get("lon")) is not None

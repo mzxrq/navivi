@@ -71,10 +71,11 @@ def place_overview_voice(settings: dict, audio_data: dict, use_cues: bool, rende
             except Exception as exc:  # the planned length is close enough
                 logger.warning("Intro: could not probe %s (%s); using the planned length.", intro_path, exc)
             lead = -max(0.0, intro_seconds - voice_start)
-    # {scene} cues only cut the intro; in the overview's cue list they would re-render it for nothing.
+    # {scene}/{open}/{close} only time the intro; in the overview's cue list they would re-render it for nothing.
     if overview_cues:
         overview_cues = {
-            k: max(0.0, float(v) + lead) for k, v in overview_cues.items() if not str(k).startswith("scene")
+            k: max(0.0, float(v) + lead) for k, v in overview_cues.items()
+            if not str(k).startswith("scene") and k not in ("open", "close")
         }
     return {
         "intro_path": intro_path, "intro_seconds": intro_seconds, "intro_cues": intro_cues,
@@ -206,6 +207,21 @@ def intro_text_item(project_config_path: str) -> Optional[dict]:
     return item
 
 
+def cued_heading(item: dict, cue_times: Optional[dict]) -> dict:
+    """The heading shown from the opening's {open} until its {close} (the voice starts
+    INTRO_VOICE_LEAD_SECONDS into the intro); unchanged without them."""
+    lead = tuning.INTRO_VOICE_LEAD_SECONDS
+    times = {k: round(lead + float(v), 3) for k, v in (cue_times or {}).items() if k in ("open", "close")}
+    if not times:
+        return item
+    item = {**item, "animation": "fade"}
+    if "open" in times:
+        item["start"] = max(times["open"], float(item.get("start", 0.0)))
+    if "close" in times and times["close"] > float(item.get("start", 0.0)):
+        item["end"] = min(times["close"], float(item.get("end", times["close"])))
+    return item
+
+
 def intro_text_items(
     project_config_path: str, use_llm: bool = True, duration_sec: Optional[float] = None, cue_times: Optional[dict] = None,
 ) -> List[dict]:
@@ -219,7 +235,7 @@ def intro_text_items(
     style = intro_style(job_config.get_settings() or {})
     if style == "slideshow":
         item = intro_text_item(project_config_path)
-        return [item] if item else []
+        return [cued_heading(item, cue_times)] if item else []
 
     from services.localization.intro_lines import intro_lines
     from services.localization.script_engine import script_generator
@@ -256,5 +272,5 @@ def intro_text_items(
         for which, text in texts.items():
             if text or which != "kicker":
                 item[which] = {"text": text, **({"style": dict(styles[which])} if which in styles else {})}
-        items.append(item)
+        items.append(cued_heading(item, cue_times) if scene.get("title") else item)
     return items

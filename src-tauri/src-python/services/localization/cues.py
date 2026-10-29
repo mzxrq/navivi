@@ -17,6 +17,8 @@ A script may carry inline tags that mark moments the video has to land on:
     {distance} overview only: the closing line's distance summary ("…24km
               の旅でした") ends here - the ending highlight holds at least
               until now, so it isn't cut short with that line still playing.
+    {open}    intro only: the intro's heading (title text) appears here
+    {close}   intro only: the intro's heading fades out here
 
 Tags are never spoken. They are stripped before TTS and subtitles, and the
 position each one had in the spoken text is kept so its time can be worked out
@@ -29,7 +31,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|scene|goPre\d+|go|\d+)\}")
+CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|scene|open|close|goPre\d+|go|\d+)\}")
 
 
 @dataclass(frozen=True)

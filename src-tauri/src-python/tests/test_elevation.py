@@ -11,3 +11,9 @@ def test_profile_card_marker_follows_the_walk():
     assert x0 < xm < x1 and ym < y0  # left to right, the hilltop drawn higher
     assert profile_card(pts, None, (520, 190), "E", {"text": "", "label": "", "fill": ""}) is None
     assert climb([0, 5, 3, 8]) == (10, 2)
+
+
+def test_return_stop_is_a_copy_of_an_earlier_spot():
+    from services.vdoprocessing.videopipeline.render_step import _is_return_stop
+    wps = [{"lat": 1, "lng": 2}, {"lat": 3, "lng": 4}, {"lat": 1, "lng": 2}]
+    assert _is_return_stop(wps, 2) and not _is_return_stop(wps, 1) and not _is_return_stop(wps, 0)
