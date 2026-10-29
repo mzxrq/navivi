@@ -798,12 +798,17 @@ def joined_seconds(scenes: List[Dict[str, Any]]) -> float:
 def styled_scenes(style: str, duration_sec: Optional[float] = None, cuts: Optional[List[float]] = None) -> List[Dict[str, Any]]:
     """INTRO_STYLE_SCENES[style] lasting `duration_sec` (the overview voice's opening, see
     intro_step.plan_intro_seconds). `cuts`: intro seconds where scene 2, 3... take over (the voice's
-    {scene} cues), each crossfade centred on its cut; else every scene stretches by the same factor.
-    Cuts that leave a scene shorter than two crossfades are ignored."""
+    {scene} cues), each crossfade centred on its cut; fewer cuts than scene changes: the scenes after
+    the last cut share the rest of the intro by their usual lengths. Without cuts every scene stretches
+    by the same factor. Cuts that leave a scene shorter than two crossfades are ignored."""
     scenes = tuning.INTRO_STYLE_SCENES[style]
     if not duration_sec:
         return [dict(s) for s in scenes]
     cf = tuning.INTRO_CROSSFADE_SECONDS
+    if cuts and len(cuts) < len(scenes) - 1:
+        tail = [s["seconds"] for s in scenes[len(cuts):]]
+        t0, room = cuts[-1], duration_sec - cuts[-1]
+        cuts = list(cuts) + [t0 + room * sum(tail[:i]) / sum(tail) for i in range(1, len(tail))]
     if cuts and len(cuts) == len(scenes) - 1:
         starts = [0.0] + [c - cf / 2 for c in cuts]
         ends = [s + cf for s in starts[1:]] + [duration_sec]

@@ -152,3 +152,12 @@ def test_close_places_wait_then_walk_instead_of_crawling():
     anchors = hold_before_slow_stretches([(0.0, 0.0), (5.0, 980.0, False), (10.0, 1000.0)], 0.5)
     assert distance_at(anchors, 9.0) == 980.0 and distance_at(anchors, 10.0) == 1000.0
     assert anchors[-2][0] >= 9.5
+
+
+def test_go_then_next_name_at_once_still_stops_at_the_next_place():
+    from services.vdoprocessing.spatial_renderer.course import distance_at
+
+    # "{go}{2}": stop 1's {go} and stop 2's name at the same second (52.8); stop 2's {go} at 56.5
+    anchors = trace_anchors([(49.9, 100.0, True, 52.8), (52.8, 160.0, True, 56.5)], 400.0, 40.0, 60.0, 3)
+    assert distance_at(anchors, 52.8) == 100.0 and distance_at(anchors, 55.0) == 160.0
+    assert distance_at(anchors, 56.5) == 160.0
