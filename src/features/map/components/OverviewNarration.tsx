@@ -6,7 +6,7 @@ import { InfoTip } from "../../../components/ui/SettingsParts";
 import { useUI } from "../../../hooks/useUI";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { callSidecar, callSidecarShared } from "../../../services/sidecar";
-import { estimateSeconds, joinOpening, lengthVerdict, splitOpening, type OverviewLength } from "../../../utils/overviewScript";
+import { cueNameMismatches, estimateSeconds, joinOpening, lengthVerdict, numberedStops, splitOpening, type OverviewLength } from "../../../utils/overviewScript";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 
@@ -23,7 +23,7 @@ const buttonClass =
   "h-7 px-2 inline-flex items-center gap-1.5 rounded-md border border-zinc-200 dark:border-white/10 text-[11px] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors";
 
 export function OverviewNarration() {
-  const { metadata, updateMetadata, saveProject, settings, updateSettings } = useWorkspace();
+  const { metadata, updateMetadata, saveProject, settings, updateSettings, waypoints } = useWorkspace();
   const { showToast, isRendering } = useUI();
   const [isOpen, setIsOpen] = useState(false);
   const [busy, setBusy] = useState<Busy>(null);
@@ -49,6 +49,7 @@ export function OverviewNarration() {
 
   const seconds = useMemo(() => (limits ? estimateSeconds(text, limits.chars_per_second) : 0), [text, limits]);
   const verdict = limits ? lengthVerdict(seconds, limits) : "empty";
+  const wrongCues = useMemo(() => cueNameMismatches(text, numberedStops(waypoints).map((w) => w.name)), [text, waypoints]);
 
   // The voice speed and the aimed length come from the project's files; a hand edit is re-timed here without another call.
   useEffect(() => {
@@ -221,6 +222,22 @@ export function OverviewNarration() {
               {readout}
               {voiceSeconds !== null && limits ? ` · ${t`Voice: ${voiceSeconds} s`}` : ""}
             </p>
+          )}
+
+          {wrongCues.length > 0 && (
+            <div className="rounded-md bg-amber-500/10 px-2.5 py-2 space-y-0.5" role="status">
+              <p className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                <Trans>Some stop numbers don't match the stops, so the map lands on the wrong places:</Trans>
+              </p>
+              {wrongCues.map(({ n, said, expected }) => {
+                const tag = `{${n}}`;
+                return (
+                  <p key={`${n}-${said}`} className="text-[11px] text-amber-700 dark:text-amber-300">
+                    {expected ? t`${tag} is before "${said}", but stop ${n} is "${expected}"` : t`${tag}: there is no stop ${n}`}
+                  </p>
+                );
+              })}
+            </div>
           )}
 
           {!dir && (

@@ -39,3 +39,27 @@ export function nextStopNumber(text: string): number {
   const used = [...text.matchAll(/\{(\d+)\}/g)].map((m) => Number(m[1]));
   return used.length ? Math.max(...used) + 1 : 1;
 }
+
+// Mirrors overview_script.visible_waypoints: the stops an overview {n} counts (n = position + 1).
+export function numberedStops<W extends { name: string; isStopBy?: boolean; connectToRoute?: boolean; pauseAtWaypoint?: boolean; skipAssetGeneration?: boolean }>(waypoints: W[]): W[] {
+  return waypoints.filter(
+    (w, i) =>
+      i !== 0 && i !== waypoints.length - 1 && !w.skipAssetGeneration &&
+      !(w.isStopBy && !(w.connectToRoute && w.pauseAtWaypoint !== false)),
+  );
+}
+
+// Mirrors overview_cues.cue_name_mismatches: each {n} not followed by stop n's name.
+export function cueNameMismatches(text: string, names: string[]): { n: number; said: string; expected: string }[] {
+  const out: { n: number; said: string; expected: string }[] = [];
+  for (const m of text.matchAll(/\{(\d+)\}/g)) {
+    const n = Number(m[1]);
+    const after = text.slice((m.index ?? 0) + m[0].length, (m.index ?? 0) + m[0].length + 40).replace(CUE, "").trimStart();
+    const expected = names[n - 1] ?? "";
+    const core = expected.replace(/[（(].*?[)）]/g, "").trim();
+    if (!core || !(after.startsWith(core) || after.startsWith(expected))) {
+      out.push({ n, said: after.split(/[、。をへに ]/)[0], expected });
+    }
+  }
+  return out;
+}

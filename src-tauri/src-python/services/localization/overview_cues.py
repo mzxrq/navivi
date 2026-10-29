@@ -210,3 +210,17 @@ def _with_marks(sentences: List[str], marks: dict) -> str:
         lead = len(s) - len(s.lstrip())
         out[i] = s[:lead] + "".join(tags) + s[lead:]
     return "".join(out)
+
+
+def cue_name_mismatches(script: Optional[str], labels: Sequence[str]) -> List[tuple]:
+    """[(n, what the script says after {n}, stop n's name)] for each {n} not followed by stop n's name
+    (`labels[n - 1]`, see visible_waypoints): a script written before stops were added, removed or
+    connected puts every later cue on the wrong place."""
+    out = []
+    for m in re.finditer(r"\{(\d+)\}", script or ""):
+        n = int(m.group(1))
+        after = clean_text(script[m.end():m.end() + 40]).lstrip()
+        label = labels[n - 1] if 0 < n <= len(labels) else ""
+        if not label or not any(after.startswith(v) for v in name_variants(label)):
+            out.append((n, re.split(r"[、。を へ に]", after, maxsplit=1)[0], label))
+    return out
