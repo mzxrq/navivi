@@ -6,8 +6,8 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
-import { Copy, FileText, Film, LinkIcon, Loader2, Maximize, Mic, Music, Plus, RotateCcw, Sparkles, Subtitles, Trash2, Type, UnlinkIcon, Video, VolumeX, ZoomIn, ZoomOut } from "../../components/ui/icons";
-import { useStopRegen } from "../../hooks/useStopRegen";
+import { ArrowDown, ArrowUp, Copy, FileText, Film, LinkIcon, Loader2, Maximize, Mic, Music, Plus, RotateCcw, Sparkles, Subtitles, Trash2, Type, UnlinkIcon, Video, VolumeX, ZoomIn, ZoomOut } from "../../components/ui/icons";
+import { moveQueued, removeQueued, useStopRegen } from "../../hooks/useStopRegen";
 import { type RegenKind, narrationOf, onlyNarration, routeClipOf, stopIndexOf } from "../../services/stopRegen";
 import { Tip } from "../../components/ui/Tip";
 import { openContextMenu, separator } from "../../components/ui/menuItems";
@@ -51,7 +51,26 @@ const toolButton =
 export function EditorView() {
   const { timeline, setTimeline, metadata, autoLoadTimeline, waypoints } = useWorkspace();
   const { showToast, isBackgroundBusy, isRendering } = useUI();
-  const { busy: regenBusy, regenerate, regenerateClip, stopInfo } = useStopRegen();
+  const { busy: regenBusy, waiting: regenWaiting, regenerate, regenerateClip, stopInfo } = useStopRegen();
+  const regenLabel = ({ index, kind }: { index: number | "intro" | "overview"; kind: string }) => {
+    const what = { voice: t`Voice`, subtitles: t`Subtitles`, photo: t`Photo clip`, video: t`Video` }[kind] ?? kind;
+    const where = typeof index === "number" ? waypoints[index]?.name ?? "" : index === "intro" ? t`Intro` : t`Overview`;
+    return `${where} · ${what}`;
+  };
+  // The "make again" queue: what runs now, and each waiting job with move / remove.
+  const queueMenu = (e: React.MouseEvent) =>
+    openContextMenu(e, [
+      ...(regenBusy ? [{ type: "label" as const, label: `${t`Now:`} ${regenLabel(regenBusy)}` }] : []),
+      ...(regenWaiting.length ? [separator] : [{ type: "label" as const, label: t`Nothing waiting` }]),
+      ...regenWaiting.map((job, i) => ({
+        label: `${i + 1}. ${regenLabel(job)}`,
+        submenu: [
+          { label: t`Move up`, icon: ArrowUp, disabled: i === 0, onSelect: () => moveQueued(i, -1) },
+          { label: t`Move down`, icon: ArrowDown, disabled: i === regenWaiting.length - 1, onSelect: () => moveQueued(i, 1) },
+          { label: t`Remove from queue`, icon: Trash2, danger: true, onSelect: () => removeQueued(i) },
+        ],
+      })),
+    ]);
   const dir = metadata.directory_path;
 
   const [draft, setDraft] = useState<TimelineData | null>(null);
@@ -313,21 +332,29 @@ export function EditorView() {
       !!clip && {
         label: clip === "intro" ? t`Make the intro again` : t`Make the overview again`,
         icon: RotateCcw,
-        disabled: !!regenBusy || isRendering,
+        disabled: isRendering,
         submenu: [
           { label: t`Narration`, icon: Mic, onSelect: () => void regenerateClip(clip, "voice") },
           { label: t`Video`, icon: Film, onSelect: () => void regenerateClip(clip, "video") },
+          // Voice first: the video follows the voice's length.
+          { label: t`Narration and video`, icon: RotateCcw, onSelect: () => (regenerateClip(clip, "voice"), regenerateClip(clip, "video")) },
         ],
       },
       !!clip && separator,
       !!stop && {
         label: t`Make again for this stop`,
         icon: RotateCcw,
-        disabled: !!regenBusy || isRendering,
+        disabled: isRendering,
         submenu: [
           { label: t`Voice`, icon: Mic, disabled: !stop.hasArrivalVoice && !stop.hasAttractionVoice, onSelect: remake("voice") },
           { label: t`Subtitles`, icon: Subtitles, disabled: !stop.hasArrivalVoice && !stop.hasAttractionVoice, onSelect: remake("subtitles") },
           { label: t`Photo clip`, icon: Film, disabled: !stop.hasPhotos, onSelect: remake("photo") },
+          {
+            label: t`Voice and photo clip`,
+            icon: RotateCcw,
+            disabled: (!stop.hasArrivalVoice && !stop.hasAttractionVoice) || !stop.hasPhotos,
+            onSelect: () => (remake("voice")(), remake("photo")()),
+          },
         ],
       },
       !!stop && separator,
@@ -435,14 +462,21 @@ export function EditorView() {
           <Tip label={t`Zoom in`} align="end" />
         </button>
         {regenBusy && (
-          <span role="status" className="ml-2 flex items-center gap-1.5 h-7 max-w-64 px-2.5 rounded-md bg-navi/10 text-navi text-[12px] font-medium">
+          <button
+            type="button"
+            role="status"
+            onClick={queueMenu}
+            title={t`See and arrange the queue`}
+            className="ml-2 flex items-center gap-1.5 h-7 max-w-64 px-2.5 rounded-md bg-navi/10 text-navi text-[12px] font-medium hover:bg-navi/15"
+          >
             <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
             <span className="truncate">
               {typeof regenBusy.index === "number"
                 ? `${t`Making this stop again...`} ${waypoints[regenBusy.index]?.name ?? ""}`
                 : regenBusy.index === "intro" ? t`Making the intro again...` : t`Making the overview again...`}
+              {regenWaiting.length > 0 && ` ${t`(${regenWaiting.length} waiting)`}`}
             </span>
-          </span>
+          </button>
         )}
         <button
           type="button"
