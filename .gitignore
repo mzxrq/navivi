@@ -41,6 +41,7 @@ coverage.xml
 
 # Logs & Databases
 *.log
+*.log.[0-9]
 logs/
 
 # Build & Package directories

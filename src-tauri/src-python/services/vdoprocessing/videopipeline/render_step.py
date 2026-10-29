@@ -7,7 +7,6 @@ render manifest) and overview_framing.py (overview padding, bands, bounding
 box)."""
 
 import json
-import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -41,15 +40,6 @@ from .render_checkpoint import (
     _RENDER_MANIFEST_NAME, _checkpoint_parts, _render_checkpoint_key, _short_hash, reuse_render_manifest,
 )
 from .render_look import _project_color
-
-# Residential-leg clip filename's embedded 1-based departure-waypoint
-# position (see waypoints.py's chunk_filename: "02_waypoint_{N:02d}_...") —
-# used below (and by timeline_step.py's own mirrored match) to look up that
-# leg's narration by the waypoint's actual RAW position instead of a blind
-# per-clip counter, which stop-by leg-merging can throw out of sync (a
-# merged-away stop-by means consecutive leg clips no longer correspond to
-# consecutive audio_paths entries).
-RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
 
 
 # Fallback real-world speed (km/h) used when a leg's own mode has no

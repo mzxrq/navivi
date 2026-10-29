@@ -39,6 +39,12 @@ def setup_logger(name: str):
         # [HACK] [Core] An installed app can sit in a folder it cannot write to; a failed log file must not stop every mode at import.
         try:
             log_path.parent.mkdir(parents=True, exist_ok=True)
+            # Kept to two files of ~5 MB, moved aside at process start (another process may hold it open later).
+            if log_path.exists() and log_path.stat().st_size > 5_000_000:
+                try:
+                    os.replace(log_path, log_path.with_suffix(".log.1"))
+                except OSError:
+                    pass
             file_handler = logging.FileHandler(log_path, encoding="utf-8")
         except OSError:
             file_handler = None

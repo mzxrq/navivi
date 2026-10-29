@@ -223,6 +223,20 @@ class _CardMixin:
         if alpha <= 0:
             return frame
         h, w = frame.shape[:2]
+        # The notice is the same on every frame: drawn (with its blurred shadow) once, then only blended.
+        key = (w, h, tuple(marker_color), video_text.current_labels()["stopby_notice_title"])
+        cache = self.__dict__.setdefault("_stopby_notice_cache", {})
+        if key not in cache:
+            cache[key] = self._stopby_notice_sprite(w, h, marker_color)
+        (x0, y0), color, cover = cache[key]
+        out = frame.copy()
+        roi = out[y0:y0 + cover.shape[0], x0:x0 + cover.shape[1]].astype(np.float32)
+        blended = color * float(alpha) + roi * (1.0 - cover * float(alpha))
+        out[y0:y0 + cover.shape[0], x0:x0 + cover.shape[1]] = np.clip(blended + 0.5, 0, 255).astype(np.uint8)
+        return out
+
+    def _stopby_notice_sprite(self, w: int, h: int, marker_color: Tuple[int, int, int]):
+        """((x, y), premultiplied BGR, coverage 0..1) of the notice with its marker, cropped to what it covers."""
         s, title_font, body_font, lines, ribbon, body = self._stopby_notice_layout(w, h)
         layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
 
@@ -261,21 +275,21 @@ class _CardMixin:
         d.text((ribbon[0] + int(22 * s), (ribbon[1] + ribbon[3]) // 2 - (tb[1] + tb[3]) // 2),
                notice_title, font=title_font, fill=(255, 255, 255, 255))
 
-        if alpha < 1.0:
-            a = layer.getchannel("A").point(lambda v: int(v * alpha))
-            layer.putalpha(a)
-        base = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA))
-        base.alpha_composite(layer)
-        out = cv2.cvtColor(np.asarray(base), cv2.COLOR_RGBA2BGR)
-        
-        if alpha < 1.0:
-            overlay = out.copy()
-            self.draw_marker(overlay, int(cx), int(cy + icon_d / 2 - 2 * s), number="・", color=marker_color, is_circle=False, scale=s * 0.7)
-            cv2.addWeighted(overlay, alpha, out, 1.0 - alpha, 0, dst=out)
-        else:
-            self.draw_marker(out, int(cx), int(cy + icon_d / 2 - 2 * s), number="・", color=marker_color, is_circle=False, scale=s * 0.7)
-            
-        return out
+        x0, y0, x1, y1 = layer.getbbox()
+        rgba = np.asarray(layer.crop((x0, y0, x1, y1))).astype(np.float32)
+        card_cover = rgba[:, :, 3:4] / 255.0
+        card = rgba[:, :, 2::-1] * card_cover
+        # The marker is opaque drawing on the BGR frame: drawn on black and on white, the difference is its coverage.
+        marks = []
+        for bg in (0, 255):
+            plate = np.full((y1 - y0, x1 - x0, 3), bg, np.uint8)
+            self.draw_marker(plate, int(cx) - x0, int(cy + icon_d / 2 - 2 * s) - y0, number="・", color=marker_color,
+                             is_circle=False, scale=s * 0.7)
+            marks.append(plate.astype(np.float32))
+        mark_cover = np.clip(1.0 - (marks[1] - marks[0]).mean(axis=2, keepdims=True) / 255.0, 0.0, 1.0)
+        color = marks[0] + card * (1.0 - mark_cover)
+        cover = 1.0 - (1.0 - card_cover) * (1.0 - mark_cover)
+        return (x0, y0), color, cover
 
     def create_summary_card(
         self,

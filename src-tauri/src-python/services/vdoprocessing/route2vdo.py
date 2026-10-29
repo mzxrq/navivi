@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -211,11 +212,24 @@ def stash_leg(files: List[Path], variant_dir: Path) -> None:
     tmp.rename(variant_dir)
 
 
+def leg_clips(folder: Path, pattern: str = "*.mp4") -> List[Path]:
+    """A leg's finished pieces in play order (X, X_cont2, ..., X_cont10): leg_pieces.py's "_padded" copies left
+    out, and sorted by piece number (as text, _cont10 came before _cont2 and got the wrong narration)."""
+    def piece(p: Path) -> int:
+        m = re.search(r"_cont(\d+)$", p.stem)
+        return int(m.group(1)) if m else 1
+
+    return sorted(
+        (p for p in folder.glob(pattern) if _output_is_valid(p) and "_padded" not in p.stem),
+        key=lambda p: (piece(p), p.name),
+    )
+
+
 def restore_leg(variant_dir: Path, inputs_name: str, leg_parts: Dict[str, str], current: List[Path], out_dir: Path) -> List[Path]:
     """When the leg's kept variant was rendered from these inputs (a setting switched off and back on), swaps it in:
     the current files become the kept variant. Returns the restored clips; [] when there is nothing to restore."""
     kept = _stored_leg_inputs(variant_dir / inputs_name).get("parts") or {}
-    clips = sorted(p for p in variant_dir.glob("*.mp4") if _output_is_valid(p) and "_padded" not in p.stem)
+    clips = leg_clips(variant_dir)
     if not kept or not clips or leg_changed_parts(leg_parts, kept):
         return []
     swap = variant_dir.with_name(variant_dir.name + ".swap")
@@ -829,11 +843,9 @@ class RouteAnimator:
             # timing (e.g. before the arrival cue moved) forever.
             leg_fingerprint = _leg_fingerprint(leg_latlon, dest_label, leg_kwargs)
             fingerprint_path = self.out_dir / f"{leg_glob_prefix}inputs.json"
-            existing_leg_files = sorted(
-                p for p in self.out_dir.glob(f"{leg_glob_prefix}*.mp4")
-                # leg_pieces.py's "_padded" copies are not pieces of their own
-                if _output_is_valid(p) and "_padded" not in p.stem
-            ) if self.config.get("checkpoint_enabled", False) else []
+            existing_leg_files = (
+                leg_clips(self.out_dir, f"{leg_glob_prefix}*.mp4") if self.config.get("checkpoint_enabled", False) else []
+            )
             leg_parts = _leg_fingerprint_parts(
                 leg_latlon, dest_label, leg_kwargs, route_inputs=res_data.get("route_inputs"),
             )

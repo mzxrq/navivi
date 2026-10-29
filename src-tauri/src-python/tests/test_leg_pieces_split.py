@@ -25,3 +25,16 @@ def test_piece_toward_unnarrated_stop_by_gets_no_voice(tmp_path, monkeypatch):
     # Before: no entry, so the timeline fell back to the departure's (a.wav) narration and replayed it.
     assert splits[first.stem] == (None, None)
     assert splits[second.stem] == ("b.wav", "b.srt")
+
+
+def test_padded_copy_from_an_earlier_run_is_reused(tmp_path, monkeypatch):
+    import os
+    from services.tts.ttsengine import FFmpegManager
+    from services.vdoprocessing.videopipeline import leg_pieces
+
+    src, padded = tmp_path / "L_cont2.mp4", tmp_path / "L_cont2_padded.mp4"
+    src.write_bytes(b"x"); padded.write_bytes(b"x")
+    os.utime(src, (1, 1))
+    monkeypatch.setattr(FFmpegManager, "get_media_duration", staticmethod(lambda p: 12.0 if p.endswith("_padded.mp4") else 10.0))
+    monkeypatch.setattr(leg_pieces.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("re-encoded")))
+    assert leg_pieces._pad_video_tail("ffmpeg", str(src), 1.5) == str(padded)

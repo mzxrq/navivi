@@ -80,7 +80,7 @@ def _burn_hash_sidecar(subtitled_output: str) -> Path:
 # see pedestrian.py's connected-stop-by cut — can both throw a raw index
 # out of sync with subtitle_paths, which stays one entry per WAYPOINT
 # regardless of how many video files a leg ends up producing).
-_RESIDENTIAL_LEG_RE = re.compile(r"02_waypoint_(\d+)_")
+from .leg_pieces import _RESIDENTIAL_LEG_RE  # noqa: E402
 # Attraction clip's embedded 0-based waypoint index (matches
 # attraction_step.py's own filename convention and timeline_step.py's
 # identical _ATTRACTION_RE) — same reasoning as the leg regex above:
