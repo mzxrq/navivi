@@ -124,10 +124,31 @@ def test_passed_places_are_reached_within_the_cue_window_and_settling_stops_exac
     stops = [(29.0, 3.4, False), (33.6, 5.7, False), (36.2, 5.9, False), (41.7, 7.1), (54.4, 13.6)]
     anchors = trace_anchors(stops, 14.2, 25.2, 60.7, 6)
     cues = {round(d, 1): t for t, d, *_ in [(29.0, 3.4), (33.6, 5.7), (36.2, 5.9), (41.7, 7.1), (54.4, 13.6)]}
+    seen = set()
     for t, d, *rest in anchors[1:-1]:
+        if round(d, 1) in seen:  # a wait there before going on (hold_before_slow_stretches)
+            continue
+        seen.add(round(d, 1))
         late = t - cues[round(d, 1)]
         assert -1e-9 <= late <= tuning.COURSE_CUE_WINDOW_SECONDS + 1e-9
-        if not rest:  # a stop it settles on
+        if round(d, 1) in (7.1, 13.6):  # stops it settles on
             assert late == 0
     times = [a[0] for a in anchors]
     assert times == sorted(times)
+
+
+def test_go_stop_is_reached_when_named_then_waits():
+    from services.vdoprocessing.spatial_renderer.course import distance_at, trace_anchors
+
+    anchors = trace_anchors([(2.0, 100.0, True, 6.0)], 200.0, 0.0, 9.0, 2)
+    assert distance_at(anchors, 2.0) == 100.0 and distance_at(anchors, 5.0) == 100.0
+    assert distance_at(anchors, 6.5) > 100.0
+
+
+def test_close_places_wait_then_walk_instead_of_crawling():
+    from services.vdoprocessing.spatial_renderer.course import distance_at, hold_before_slow_stretches
+
+    # 1000 px in 10 s on average, but the last 20 px take 5 s: wait, then go at >= half the average pace
+    anchors = hold_before_slow_stretches([(0.0, 0.0), (5.0, 980.0, False), (10.0, 1000.0)], 0.5)
+    assert distance_at(anchors, 9.0) == 980.0 and distance_at(anchors, 10.0) == 1000.0
+    assert anchors[-2][0] >= 9.5
