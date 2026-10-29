@@ -297,5 +297,8 @@ def intro_text_items(
         for which, text in texts.items():
             if text or which != "kicker":
                 item[which] = {"text": text, **({"style": dict(styles[which])} if which in styles else {})}
-        items.append(cued_heading(item, cue_times) if scene.get("title") else item)
+        # {open}/{close} time the text of the scene they fall in.
+        marks = [tuning.INTRO_VOICE_LEAD_SECONDS + float(v) for k, v in (cue_times or {}).items() if k in ("open", "close")]
+        timed = any(start <= t < start + scene["seconds"] for t in marks)
+        items.append(cued_heading(item, cue_times) if timed else item)
     return items

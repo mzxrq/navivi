@@ -48,7 +48,11 @@ def trace_anchors(
         if cue is None or dist <= anchors[-1][1]:
             continue
         if cue < anchors[-1][0] + _MIN_ANCHOR_GAP_SECONDS:
-            continue
+            until = rest[1] if len(rest) > 1 else None
+            if until is None or until < anchors[-1][0] + 3 * _MIN_ANCHOR_GAP_SECONDS:
+                continue
+            # "{go}{n}": named the moment the walker leaves the stop before; it still goes there and waits.
+            cue = anchors[-1][0] + min(1.0, (until - anchors[-1][0]) / 2)
         anchors.append((float(cue), float(dist)) if not rest or rest[0] else (float(cue), float(dist), False))
         if len(rest) > 1 and rest[1] is not None and rest[1] > cue + _MIN_ANCHOR_GAP_SECONDS:
             anchors.append((float(rest[1]), float(dist)))
@@ -221,6 +225,14 @@ class _CourseOverviewMixin:
             tuning.COURSE_PIVOT_HOLD_SECONDS if cues else 1.5
         )
         numbered = [ap for ap in on_route if ap["index"] != 0 and ap is not stop_popup]
+        # A return stop ("Add return stop": a copy of an earlier stop, same place) is still walked to on its
+        # cue, but draws no pin or card of its own over the original's.
+        returns = {
+            id(ap) for ap in numbered
+            if any(abs(ap["x"] - b["x"]) < 2 and abs(ap["y"] - b["y"]) < 2 for b in on_route[:on_route.index(ap)])
+        }
+        if self._is_loop_route and stop_popup is not None:
+            returns.add(id(stop_popup))  # the start pin already shows a loop's end (half green, half red)
         any_go = any(str(k).startswith("go") for k in cues)
 
         def arrive_cue(ap: Dict) -> Tuple:
@@ -274,7 +286,7 @@ class _CourseOverviewMixin:
         if extras:
             reserved.append(tuple(float(v) for v in self.graphics.stopby_notice_box(w, h)))
         # Stop-bys with a photo get their card too, popping in with their pin at {extras}.
-        card_popups = [ap for ap in on_route + extras if ap["data"].get("popup_image")]
+        card_popups = [ap for ap in on_route + extras if ap["data"].get("popup_image") and id(ap) not in returns]
         if self._is_loop_route and stop_popup is not None:
             card_popups = [ap for ap in card_popups if ap is not stop_popup]
         laid_out = self._layout_recap_cards(card_popups, w, h, reserved_boxes=reserved,
@@ -379,6 +391,8 @@ class _CourseOverviewMixin:
                     plate, hud, alpha=_smoothstep(alpha.get(hud["index"], 1.0)), line_only=True)
             bump = dict(bumps)
             for ap in on_route:
+                if id(ap) in returns:
+                    continue
                 u = bump.get(ap["index"])
                 scale = 1.0 + 0.3 * math.sin(math.pi * u) if u is not None else 1.0
                 self._draw_pin(plate, ap, total_points, scale=scale)
@@ -486,7 +500,8 @@ class _CourseOverviewMixin:
                 cv2.polylines(clean, [whole], False, self.graphics.line_border_color, thick + 2 * border, cv2.LINE_AA)
             cv2.polylines(clean, [whole], False, trace_color, thick, cv2.LINE_AA)
             for ap in on_route + extras:
-                self._draw_pin(clean, ap, total_points)
+                if id(ap) not in returns:
+                    self._draw_pin(clean, ap, total_points)
             start_popup = next((ap for ap in active_popups if ap["index"] == 0), None)
             hard_ended = self._render_ending_highlight(
                 video, w, h, fps, stop_popup, start_popup,

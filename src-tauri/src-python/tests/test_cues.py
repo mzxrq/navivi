@@ -42,3 +42,13 @@ def test_photo_cue_picks_the_scene_footage(tmp_path):
     # scene 2 starts at 5 - crossfade; a cue at 0.5 picks scene 1's footage, one at 6.0 scene 2's
     picks = scene_overrides(scenes, [(0.5, "t.jpg"), (1.0, "a.jpg"), (6.0, "k.jpg")], wps, [str(clip)])
     assert picks == {0: str(clip), 1: "k.jpg"}
+
+
+def test_one_scene_cue_in_a_three_scene_intro_is_used():
+    from services import tuning
+    from services.vdoprocessing.introclip import scene_starts, styled_scenes
+
+    scenes = styled_scenes("cinematic", 30.0, [14.0])
+    starts = scene_starts([s["seconds"] for s in scenes], tuning.INTRO_CROSSFADE_SECONDS)
+    assert len(scenes) == 3 and abs(starts[1] - (14.0 - tuning.INTRO_CROSSFADE_SECONDS / 2)) < 1e-6
+    assert starts[1] < starts[2] < 30.0
