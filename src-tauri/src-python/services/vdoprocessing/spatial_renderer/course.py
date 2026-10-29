@@ -14,6 +14,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from services import tuning
+from services.vdoprocessing.route_inputs import same_place
 from services.mapfetcher.graphicengine.glyphs import drawable
 from services.logger.progress import tracker
 from services.vdoprocessing.vdoexporter import VideoExporter
@@ -93,6 +94,19 @@ def hold_before_slow_stretches(anchors: List[Tuple], share: float = tuning.COURS
             out[-1] = (a[0], a[1])  # it now stops there
             out.append((b[0] - need, a[1]))
         out.append(b)
+    return out
+
+
+def stop_distances(path: np.ndarray, cum: np.ndarray, places: List[Tuple[float, float]], tol: float = 6.0) -> List[float]:
+    """Distance along `path` of each place, in route order: the first point after the previous place's where
+    the path passes it (within `tol` px of its closest pass from there on)."""
+    out, last = [], 0
+    for x, y in places:
+        rest = path[last:]
+        if len(rest):
+            d = np.hypot(rest[:, 0] - x, rest[:, 1] - y)
+            last += int(np.flatnonzero(d <= d.min() + tol)[0])
+        out.append(float(cum[last]))
     return out
 
 
@@ -186,39 +200,33 @@ class _CourseOverviewMixin:
         seg = np.hypot(np.diff(path[:, 0]), np.diff(path[:, 1]))
         cum = np.concatenate([[0.0], np.cumsum(seg)])
         total = float(cum[-1]) or 1.0
-        modes = [
-            self._mode_at_fraction(mode_breakpoints, float(cum_smooth_dist[i]) / (total_smooth_dist or 1.0))
-            if cum_smooth_dist is not None else "walking"
-            for i in range(len(path))
-        ]
 
         def loose(ap: Dict) -> bool:
-            d = ap["data"]
-            return bool(d.get("is_stopby")) and not d.get("connect_to_route")
+            # Every stop-by, connected or not, pops up with the others at {extras}, not on the traced route.
+            return bool(ap["data"].get("is_stopby"))
 
         on_route = [ap for ap in active_popups if not loose(ap)]
         extras = [ap for ap in active_popups if loose(ap)]
         stop_popup = next((ap for ap in active_popups if ap["index"] == total_points - 1), None)
 
-        # Each stop's distance along the drawn path: its share of the raw route,
-        # refined to the nearest path point within a window (never going back).
+        # Each stop's distance along the drawn path: in route order, the first place after the previous stop
+        # where the path passes it (within a few px of its closest pass). Estimating it from its share of the
+        # raw route first put the island loop's stops (and a pier passed twice) at the wrong pass.
+        for ap, dist in zip(on_route, stop_distances(path, cum, [(ap["x"], ap["y"]) for ap in on_route])):
+            ap["course_dist"] = 0.0 if ap["index"] == 0 else dist
+        if stop_popup is not None:
+            stop_popup["course_dist"] = total
+
+        # Travel mode along the drawn path: each stop pinned to its own place on it, the raw route's mode read in
+        # between (by share of the whole route, the island walk showed the boat until the return).
         raw = np.hypot(np.diff([p[0] for p in points]), np.diff([p[1] for p in points]))
         raw_cum = np.concatenate([[0.0], np.cumsum(raw)])
         raw_total = float(raw_cum[-1]) or 1.0
-        margin = max(10, len(path) // 8)
-        last = 0
-        for ap in on_route:
-            if ap["index"] == 0:
-                ap["course_dist"] = 0.0
-                continue
-            est = int(np.searchsorted(cum, raw_cum[ap["index"]] / raw_total * total))
-            lo, hi = max(last, est - margin), min(len(path) - 1, est + margin)
-            window = path[lo:hi + 1]
-            k = lo + int(np.argmin(np.hypot(window[:, 0] - ap["x"], window[:, 1] - ap["y"]))) if len(window) else lo
-            last = k
-            ap["course_dist"] = float(cum[k])
-        if stop_popup is not None:
-            stop_popup["course_dist"] = total
+        knots = sorted({(0.0, 0.0), (total, 1.0)} | {
+            (ap["course_dist"], float(raw_cum[min(ap["index"], len(raw_cum) - 1)]) / raw_total) for ap in on_route
+        })
+        xs, fs = [k[0] for k in knots], np.maximum.accumulate([k[1] for k in knots])
+        modes = [self._mode_at_fraction(mode_breakpoints, float(np.interp(c, xs, fs))) for c in cum]
 
         start_at = float(cues.get("start", 0.0))
         route_at = float(cues["route"]) if "route" in cues else start_at + (
@@ -229,7 +237,7 @@ class _CourseOverviewMixin:
         # cue, but draws no pin or card of its own over the original's.
         returns = {
             id(ap) for ap in numbered
-            if any(abs(ap["x"] - b["x"]) < 2 and abs(ap["y"] - b["y"]) < 2 for b in on_route[:on_route.index(ap)])
+            if any(same_place(ap["data"], b["data"]) for b in on_route[:on_route.index(ap)])
         }
         if self._is_loop_route and stop_popup is not None:
             returns.add(id(stop_popup))  # the start pin already shows a loop's end (half green, half red)

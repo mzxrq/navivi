@@ -161,3 +161,34 @@ def test_go_then_next_name_at_once_still_stops_at_the_next_place():
     anchors = trace_anchors([(49.9, 100.0, True, 52.8), (52.8, 160.0, True, 56.5)], 400.0, 40.0, 60.0, 3)
     assert distance_at(anchors, 52.8) == 100.0 and distance_at(anchors, 55.0) == 160.0
     assert distance_at(anchors, 56.5) == 160.0
+
+
+def test_a_pier_passed_twice_is_matched_to_the_pass_in_route_order():
+    import numpy as np
+    from services.vdoprocessing.spatial_renderer.course import stop_distances
+
+    # pier (0,0) -> loop out to (100,0) and back to the pier -> on to (0,100)
+    path = np.array([[0, 0], [50, 0], [100, 0], [50, 0], [0, 0], [0, 50], [0, 100]], float)
+    cum = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(path, axis=0).T))])
+    pier, far, back, end = (0, 0), (100, 0), (0, 0), (0, 100)
+    assert stop_distances(path, cum, [pier, far, back, end]) == [0.0, 100.0, 200.0, 300.0]
+
+
+def test_a_stop_passed_twice_matches_its_first_pass():
+    import pandas as pd
+    from services.mapfetcher.mapgeometry import RouteGeometryProcessor
+
+    # pier (0,0) -> island point (0.01,0) -> back to the pier, a hair closer -> mainland (0,0.01)
+    df = pd.DataFrame({"latitude": [0.0, 0.005, 0.01, 0.005, 0.0, 0.0], "longitude": [0.00001, 0, 0, 0, 0.0, 0.01]})
+    wps = [{"lat": 0.0, "lng": 0.0}, {"lat": 0.01, "lng": 0.0}, {"lat": 0.0, "lng": 0.0}, {"lat": 0.0, "lng": 0.01}]
+    assert RouteGeometryProcessor.build_waypoint_index(df, wps) == [0, 2, 4, 5]
+
+
+def test_an_off_track_stop_by_does_not_push_later_stops_ahead():
+    import pandas as pd
+    from services.mapfetcher.mapgeometry import RouteGeometryProcessor
+
+    df = pd.DataFrame({"latitude": [0.0, 0.0, 0.0, 0.0, 0.0], "longitude": [0.0, 0.01, 0.02, 0.03, 0.04]})
+    # a stop-by 1 km north of the track's end, listed before the stop at 0.02
+    wps = [{"lat": 0.0, "lng": 0.0}, {"lat": 0.01, "lng": 0.04}, {"lat": 0.0, "lng": 0.02}, {"lat": 0.0, "lng": 0.04}]
+    assert RouteGeometryProcessor.build_waypoint_index(df, wps) == [0, 1, 2, 4]

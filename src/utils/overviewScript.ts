@@ -40,12 +40,13 @@ export function nextStopNumber(text: string): number {
   return used.length ? Math.max(...used) + 1 : 1;
 }
 
-// Mirrors overview_script.visible_waypoints: the stops an overview {n} counts (n = position + 1).
-export function numberedStops<W extends { name: string; isStopBy?: boolean; connectToRoute?: boolean; pauseAtWaypoint?: boolean; skipAssetGeneration?: boolean }>(waypoints: W[]): W[] {
+// Mirrors overview_script.visible_waypoints: the stops an overview {n} counts (n = position + 1). In the course
+// style no stop-by counts, connected or not.
+export function numberedStops<W extends { name: string; isStopBy?: boolean; connectToRoute?: boolean; pauseAtWaypoint?: boolean; skipAssetGeneration?: boolean }>(waypoints: W[], course = false): W[] {
   return waypoints.filter(
     (w, i) =>
       i !== 0 && i !== waypoints.length - 1 && !w.skipAssetGeneration &&
-      !(w.isStopBy && !(w.connectToRoute && w.pauseAtWaypoint !== false)),
+      !(w.isStopBy && (course || !(w.connectToRoute && w.pauseAtWaypoint !== false))),
   );
 }
 

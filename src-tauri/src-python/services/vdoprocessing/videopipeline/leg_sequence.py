@@ -282,6 +282,7 @@ def build_leg_sequence(
             at_start = set(pops_after)
             piece_targets = stop_positions + [end_pos]
             piece_plans: dict = {}
+            silent: set = set()
             piece_log = []
             previous = start_pos
             for k, target in enumerate(piece_targets):
@@ -297,7 +298,12 @@ def build_leg_sequence(
                     )
                     if target < len(waypoints) else None
                 )
-                if piece_plans[target] is not None and target in at_start:
+                if piece_plans[target] is None and target < len(waypoints):
+                    # No voice for this stop (an empty script): it keeps its natural walk (a pop-up at a stop takes
+                    # none) instead of dropping the whole leg's plan, which made every piece one slow speed.
+                    silent.add(target)
+                    piece_plans[target] = (0.0 if target in at_start else natural, None, 0.0)
+                elif piece_plans[target] is not None and target in at_start:
                     walk, start, wait = piece_plans[target]
                     piece_plans[target] = (0.0, start, walk + wait)
                 if piece_plans[target] is not None:
@@ -308,8 +314,8 @@ def build_leg_sequence(
                     )
                 if target not in at_start:
                     previous = target
-            if end_pos >= len(waypoints) or any(v is None for v in piece_plans.values()):
-                piece_plans = {}
+            if end_pos >= len(waypoints) or any(v is None for v in piece_plans.values()) or silent >= set(piece_plans):
+                piece_plans = {}  # nothing in this leg is narrated: it walks at one pace
             if piece_plans:
                 total_time = sum(v[0] for v in piece_plans.values())
                 start_cue_seconds = piece_plans[piece_targets[0]][1]  # the first piece opens the leg

@@ -8,6 +8,7 @@ const sidecar = vi.hoisted(() => ({ callSidecar: vi.fn(), callSidecarShared: vi.
 const workspace = vi.hoisted(() => ({
   metadata: {} as Record<string, unknown>,
   settings: {},
+  waypoints: [] as unknown[],
   updateMetadata: vi.fn(),
   updateSettings: vi.fn(),
   setIsDirty: vi.fn(),

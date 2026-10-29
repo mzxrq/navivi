@@ -50,7 +50,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 
 # Bump when the overview's rendering code changes what it draws, so
 # checkpointed overviews made by older code are re-rendered.
-OVERVIEW_RENDER_VERSION = 6  # v6: course headline docked top left; v5: pins on their cue, cue window, faster last stretch; v4: bottom caption band in the framing, cards clear of top/bottom bands; v3: connected stop-bys stop; ending photo goes fullscreen after the voice
+OVERVIEW_RENDER_VERSION = 9  # v9: course: stop-bys take no number, travel mode pinned to the stops; v8: course: connected stop-bys pop up with the others at {extras}, stops matched in route order; v7: course walker waits at {go} stops when named, minimum pace, no pins for return stops; v6: course headline docked top left; v5: pins on their cue, cue window, faster last stretch; v4: bottom caption band in the framing, cards clear of top/bottom bands; v3: connected stop-bys stop; ending photo goes fullscreen after the voice
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -384,8 +384,9 @@ class _OverviewRenderMixin:
             # higher than its actual visit order (the first real stop
             # showing "2" instead of "1").
             ap_data = ap["data"]
-            is_effectively_stopby = ap_data.get("is_stopby") and not (
-                ap_data.get("connect_to_route") and ap_data.get("pause_at_waypoint", True)
+            is_effectively_stopby = ap_data.get("is_stopby") and (
+                self.config.get("overview_style") == "course"  # every stop-by is shown with the others there
+                or not (ap_data.get("connect_to_route") and ap_data.get("pause_at_waypoint", True))
             )
             if is_effectively_stopby or ap["index"] == 0:
                 # Still gets an "order" key (just not incremented) so it's
@@ -404,8 +405,9 @@ class _OverviewRenderMixin:
         for ap in reversed(active_popups):
             ap["next_numbered_order"] = next_numbered_order
             ap_data = ap["data"]
-            is_effectively_stopby = ap_data.get("is_stopby") and not (
-                ap_data.get("connect_to_route") and ap_data.get("pause_at_waypoint", True)
+            is_effectively_stopby = ap_data.get("is_stopby") and (
+                self.config.get("overview_style") == "course"  # every stop-by is shown with the others there
+                or not (ap_data.get("connect_to_route") and ap_data.get("pause_at_waypoint", True))
             )
             if not is_effectively_stopby and ap["index"] != 0:
                 next_numbered_order = ap["order"]

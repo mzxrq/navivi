@@ -49,7 +49,7 @@ export function OverviewNarration() {
 
   const seconds = useMemo(() => (limits ? estimateSeconds(text, limits.chars_per_second) : 0), [text, limits]);
   const verdict = limits ? lengthVerdict(seconds, limits) : "empty";
-  const wrongCues = useMemo(() => cueNameMismatches(text, numberedStops(waypoints).map((w) => w.name)), [text, waypoints]);
+  const wrongCues = useMemo(() => cueNameMismatches(text, numberedStops(waypoints, course).map((w) => w.name)), [text, waypoints, course]);
 
   // The voice speed and the aimed length come from the project's files; a hand edit is re-timed here without another call.
   useEffect(() => {

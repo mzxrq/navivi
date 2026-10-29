@@ -14,7 +14,11 @@ from scipy.interpolate import make_interp_spline
 import math
 
 # [I/O] Import service dependencies for Integration
+from services import tuning
 from services.logger.logger import setup_logger
+
+# A waypoint farther than this (degrees, ~50 m) from the track is off it (build_waypoint_index).
+_OFF_ROUTE_DEGREES = 0.0005
 
 # [Utility] Log setup for debugging and monitoring
 logger = setup_logger("MapEngine")
@@ -480,8 +484,18 @@ class RouteGeometryProcessor:
             if len(window) == 0:
                 indices.append(num_points - 1)
                 continue
-            dist_sq = (window[:, 0] - lat) ** 2 + (window[:, 1] - lng) ** 2
-            local_idx = int(np.argmin(dist_sq))
+            dist = np.sqrt((window[:, 0] - lat) ** 2 + (window[:, 1] - lng) ** 2)
+            if dist.min() > _OFF_ROUTE_DEGREES:
+                # Off the track (a stop-by seen from afar): it stays with the stop before it. Its own closest
+                # point can lie far ahead and pushed every later stop past its real place.
+                indices.append(search_start)
+                continue
+            # The first pass that comes about as close as the closest: a pier left from and returned to was matched
+            # to its return, squeezing every stop in between onto the pier.
+            near = dist <= dist.min() + tuning.LOOP_ROUTE_MATCH_DEGREES
+            first = int(np.flatnonzero(near)[0])
+            end = first + (int(np.argmin(near[first:])) if not near[first:].all() else len(near) - first)
+            local_idx = first + int(np.argmin(dist[first:end]))  # the closest point of that first pass
             global_idx = search_start + local_idx
             indices.append(global_idx)
             search_start = global_idx
