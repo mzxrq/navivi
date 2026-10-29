@@ -508,6 +508,30 @@ def fitted_layout(duration_sec: float, available: int) -> Tuple[int, float]:
     return n, (duration_sec + (n - 1) * cf) / n
 
 
+def cued_layout(duration_sec: float, cuts: List[Tuple[float, str]]) -> List[Tuple[Optional[str], float]]:
+    """[(photo or None for a free pick, clip seconds)] for {photo:X} cues at `cuts` [(seconds, photo)]: each
+    photo crossfades in starting at its cue. Before a late first cue a free photo shows; cues closer than two
+    crossfades to the previous one (or to the end) are dropped."""
+    cf = tuning.INTRO_CROSSFADE_SECONDS
+    starts: List[Tuple[float, Optional[str]]] = []
+    for t, photo in cuts:
+        t = max(0.0, float(t))
+        if t > duration_sec - 2 * cf:
+            break
+        if starts and t < starts[-1][0] + 2 * cf:
+            continue
+        starts.append((t, photo))
+    if not starts:
+        return []
+    if starts[0][0] < 2 * cf:
+        starts[0] = (0.0, starts[0][1])
+    else:
+        starts.insert(0, (0.0, None))
+    ends = [t for t, _ in starts[1:]] + [duration_sec]
+    return [(photo, (end - t) + (cf if i < len(starts) - 1 else 0.0))
+            for i, ((t, photo), end) in enumerate(zip(starts, ends))]
+
+
 def generate_intro_clip(
     video_dir: str,
     title: str,
@@ -518,6 +542,7 @@ def generate_intro_clip(
     subtitle_style: Optional[Dict[str, Any]] = None,
     burn_text: bool = True,
     duration_sec: Optional[float] = None,
+    photo_cuts: Optional[List[Tuple[float, str]]] = None,
 ) -> Optional[str]:
     """Picks up to INTRO_IMAGE_COUNT random, distinct waypoint popup images
     (a fresh pick every call), renders a slow zoom-in over each, crossfades
@@ -526,16 +551,24 @@ def generate_intro_clip(
     (logged, never raises) if there are no waypoint images or generation
     fails — an intro is a nice-to-have, not something that should hard-fail
     a pipeline run. `duration_sec` fits the intro to that length (the overview
-    voice's opening, see intro_step.plan_intro_seconds)."""
+    voice's opening, see intro_step.plan_intro_seconds). `photo_cuts` [(seconds,
+    photo)] (the opening's {photo:X} cues) choose the photos and when each comes in."""
     count = tuning.INTRO_MAX_IMAGE_COUNT if duration_sec else tuning.INTRO_IMAGE_COUNT
     image_paths = _pick_random_images(waypoints, count)
     if not image_paths:
         logger.warning("No waypoint popup images available — cannot build an intro yet.")
         return None
-    per_clip_sec = tuning.INTRO_PER_IMAGE_SECONDS
-    if duration_sec:
-        n, per_clip_sec = fitted_layout(duration_sec, len(image_paths))
-        image_paths = image_paths[:n]
+    cued = cued_layout(duration_sec, photo_cuts) if duration_sec and photo_cuts else []
+    if cued:
+        spare = [p for p in image_paths if p not in {photo for photo, _ in cued}] or image_paths
+        image_paths = [photo or spare[0] for photo, _ in cued]
+        clip_secs = [sec for _, sec in cued]
+    else:
+        per_clip_sec = tuning.INTRO_PER_IMAGE_SECONDS
+        if duration_sec:
+            n, per_clip_sec = fitted_layout(duration_sec, len(image_paths))
+            image_paths = image_paths[:n]
+        clip_secs = [per_clip_sec] * len(image_paths)
 
     logger.info("Intro: picked %d source image(s): %s", len(image_paths), image_paths)
 
@@ -548,18 +581,18 @@ def generate_intro_clip(
     title_path: Optional[Path] = None
 
     crossfade_sec = tuning.INTRO_CROSSFADE_SECONDS
-    total_sec = (
-        len(image_paths) * per_clip_sec - (len(image_paths) - 1) * crossfade_sec
-    )
+    total_sec = sum(clip_secs) - (len(clip_secs) - 1) * crossfade_sec
 
+    rendered_secs: List[float] = []
     try:
-        for idx, image_path in enumerate(image_paths):
+        for idx, (image_path, clip_sec) in enumerate(zip(image_paths, clip_secs)):
             image = _read_image_safe(image_path)
             if image is None:
                 continue
             raw_path = video_dir_path / f".intro_raw_{run_id}_{idx}.mp4"
-            _render_zoom_in(image, str(raw_path), per_clip_sec)
+            _render_zoom_in(image, str(raw_path), clip_sec)
             per_clip_raw_paths.append(str(raw_path))
+            rendered_secs.append(clip_sec)
 
         if not per_clip_raw_paths:
             logger.error("Intro: none of the picked images could be read.")
@@ -567,11 +600,8 @@ def generate_intro_clip(
 
         # [NOTE] [Animation] A picture failing to read shrinks the slideshow — recompute
         # the total against however many clips actually rendered.
-        total_sec = (
-            len(per_clip_raw_paths) * per_clip_sec
-            - (len(per_clip_raw_paths) - 1) * crossfade_sec
-        )
-        _crossfade_chain(per_clip_raw_paths, [per_clip_sec] * len(per_clip_raw_paths), crossfade_sec, str(combined_path))
+        total_sec = sum(rendered_secs) - (len(rendered_secs) - 1) * crossfade_sec
+        _crossfade_chain(per_clip_raw_paths, rendered_secs, crossfade_sec, str(combined_path))
 
         base = "null"
         if burn_text:
@@ -784,6 +814,28 @@ def styled_scenes(style: str, duration_sec: Optional[float] = None, cuts: Option
     return [{**s, "seconds": max(2 * cf, s["seconds"] * factor)} for s in scenes]
 
 
+def scene_overrides(
+    scenes: List[Dict[str, Any]], photo_cuts: Optional[List[Tuple[float, str]]], waypoints: List[Dict[str, Any]],
+    attraction_videos: List[str],
+) -> Dict[int, str]:
+    """{scene index: source} for {photo:X} cues: the scene a cue falls in plays that stop's attraction clip,
+    else its photo (the first cue in a scene wins)."""
+    starts = scene_starts([s["seconds"] for s in scenes], tuning.INTRO_CROSSFADE_SECONDS)
+    out: Dict[int, str] = {}
+    for t, photo in photo_cuts or []:
+        k = max(i for i, st in enumerate(starts) if st <= max(t, 0.0))
+        if k in out:
+            continue
+        idx = next((i for i, wp in enumerate(waypoints)
+                    if photo in (wp.get("popup_image") if isinstance(wp.get("popup_image"), list)
+                                 else [wp.get("popup_image")])), None)
+        clip = next((c for c in attraction_videos or []
+                     if c and idx is not None and Path(c).stem.startswith(f"04_attraction_{idx:02d}_")
+                     and Path(c).is_file()), None)
+        out[k] = clip or photo
+    return out
+
+
 def generate_styled_intro(
     video_dir: str,
     style: str,
@@ -792,8 +844,10 @@ def generate_styled_intro(
     output_filename: str = tuning.INTRO_OUTPUT_FILENAME,
     duration_sec: Optional[float] = None,
     cuts: Optional[List[float]] = None,
+    photo_cuts: Optional[List[Tuple[float, str]]] = None,
 ) -> Optional[str]:
-    """A text-led intro (tuning.INTRO_STYLE_SCENES[style]): a close-up scene, then a wide one, from the
+    """`photo_cuts` [(seconds, photo)] ({photo:X} cues) choose the footage of the scene each falls in.
+    A text-led intro (tuning.INTRO_STYLE_SCENES[style]): a close-up scene, then a wide one, from the
     attraction clips (else the waypoint photos), crossfaded, faded from/to black, with the logo badge.
     The lines ride on the timeline's text track (intro_step.intro_text_items). None (logged) on failure."""
     scenes = styled_scenes(style, duration_sec, cuts)
@@ -812,6 +866,11 @@ def generate_styled_intro(
                 stills[src] = frame
                 lengths[src] = float("inf")
     picks = pick_scenes(densities, len(scenes))
+    for k, src in scene_overrides(scenes, photo_cuts, waypoints, attraction_videos).items():
+        if src not in lengths:
+            lengths[src] = _source_seconds(src)
+        if picks:
+            picks[k] = src
     if not picks:
         logger.warning("Intro: no attraction clips or waypoint photos to build a %s intro from.", style)
         return None

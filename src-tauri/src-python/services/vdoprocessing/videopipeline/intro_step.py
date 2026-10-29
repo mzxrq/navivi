@@ -75,7 +75,7 @@ def place_overview_voice(settings: dict, audio_data: dict, use_cues: bool, rende
     if overview_cues:
         overview_cues = {
             k: max(0.0, float(v) + lead) for k, v in overview_cues.items()
-            if not str(k).startswith("scene") and k not in ("open", "close")
+            if not str(k).startswith(("scene", "photo")) and k not in ("open", "close")
         }
     return {
         "intro_path": intro_path, "intro_seconds": intro_seconds, "intro_cues": intro_cues,
@@ -96,6 +96,29 @@ def scene_cuts(cue_times: Optional[dict]) -> List[float]:
     while f"scene{n}" in (cue_times or {}):
         cuts.append(tuning.INTRO_VOICE_LEAD_SECONDS + float(cue_times[f"scene{n}"]))
         n += 1
+    return cuts
+
+
+def photo_cuts(cue_times: Optional[dict], waypoints: list) -> List[tuple]:
+    """[(intro seconds, photo path)] for the opening's {photo:X} cues, in order: X is a stop's name (or part of
+    it), its first photo is used. An X matching no stop with a photo is skipped (logged)."""
+    cuts = []
+    for key, seconds in sorted((cue_times or {}).items(), key=lambda kv: kv[1]):
+        if not str(key).startswith("photo") or ":" not in str(key):
+            continue
+        name = str(key).split(":", 1)[1].strip()
+        photo = None
+        for wp in waypoints or []:
+            label = str(wp.get("label") or "") if isinstance(wp, dict) else ""
+            images = wp.get("popup_image") if isinstance(wp, dict) else None
+            images = images if isinstance(images, list) else [images]
+            if name and label and (name in label or label in name) and images[0]:
+                photo = images[0]
+                break
+        if photo:
+            cuts.append((tuning.INTRO_VOICE_LEAD_SECONDS + float(seconds), photo))
+        else:
+            logger.warning("Intro: {photo:%s} names no stop with a photo — skipped.", name)
     return cuts
 
 
@@ -141,11 +164,13 @@ def render_intro_clip(
             folder = project_attraction_video_dir(job_config.get("directory_path", config_path.parent))
             attraction_videos = sorted(str(p) for p in folder.glob("04_attraction_*.mp4"))
         return generate_styled_intro(str(video_dir), style, waypoints, attraction_videos, duration_sec=duration_sec,
-                                     cuts=scene_cuts(cue_times) if duration_sec else None)
+                                     cuts=scene_cuts(cue_times) if duration_sec else None,
+                                     photo_cuts=photo_cuts(cue_times, waypoints) if duration_sec else None)
     # The title and subtitle are a text item on the timeline (intro_text_item), not burned in.
     intro_path = generate_intro_clip(
         video_dir=str(video_dir), title=video_title, subtitle=video_subtitle, waypoints=waypoints,
         burn_text=False, duration_sec=duration_sec,
+        photo_cuts=photo_cuts(cue_times, waypoints) if duration_sec else None,
     )
 
     if intro_path:
