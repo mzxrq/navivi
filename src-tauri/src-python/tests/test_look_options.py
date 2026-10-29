@@ -90,6 +90,6 @@ def test_outro_can_be_switched_off(tmp_path, monkeypatch):
 
 
 def test_animator_config_spreads_look_options():
-    from services.vdoprocessing.videopipeline import render_step
+    from services.vdoprocessing.videopipeline import animator_config
 
-    assert "**look_options(settings)" in Path(render_step.__file__).read_text(encoding="utf-8")
+    assert "**look_options(settings)" in Path(animator_config.__file__).read_text(encoding="utf-8")

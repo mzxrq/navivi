@@ -240,17 +240,17 @@ def test_upscaled_photos_invalidate_the_route_render_caches(tmp_path, gpu):
     from services.vdoprocessing.route2vdo import _leg_fingerprint_parts
     from services.vdoprocessing.route_inputs import photo_inputs_hash
     from services.vdoprocessing.spatial_renderer.overview import _overview_fingerprint_parts
-    from services.vdoprocessing.videopipeline import render_step
+    from services.vdoprocessing.videopipeline import render_checkpoint
 
     cfg, images = _project(tmp_path, small=(640, 480))
     route = {"route": pd.DataFrame({"latitude": [35.0, 35.1], "longitude": [139.0, 139.1]}), "summary": {}}
-    before = render_step._checkpoint_parts(str(cfg), route, [], [])
+    before = render_checkpoint._checkpoint_parts(str(cfg), route, [], [])
     upscaled = next(iter(upscale_step.upscale_waypoint_images(str(cfg))["map"].values()))
-    after = render_step._checkpoint_parts(str(cfg), route, [], [])
+    after = render_checkpoint._checkpoint_parts(str(cfg), route, [], [])
 
     assert before["route.photos"] != after["route.photos"]
     assert before["route.waypoints"] == after["route.waypoints"]
-    assert "route.photos" in render_step.ROUTE_CHECKPOINT_PARTS
+    assert "route.photos" in render_checkpoint.ROUTE_CHECKPOINT_PARTS
 
     leg = lambda img: _leg_fingerprint_parts([[35, 139]], "A", {"dest_popup_image": img, "walk_seconds": 9})
     assert leg(images["small"])["photos"] != leg(upscaled)["photos"]
