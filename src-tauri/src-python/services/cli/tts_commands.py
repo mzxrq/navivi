@@ -139,8 +139,12 @@ def test_overview_tts(
     job_config_path: str,
     output_audio_dir: str = None,
     force: bool = False,
+    retake: str = None,
 ) -> Dict[str, Any]:
-    """Generate only the overview narration audio (00_overview_narration.wav)."""
+    """Generate only the overview narration audio (00_overview_narration.wav). `retake`: "intro" or "overview",
+    optionally with the sentences to redo ("overview:2,5"); see generate_overview_audio."""
+    which, _, picked = (retake or "").partition(":")
+    redo = [int(i) for i in picked.split(",") if i.strip().isdigit()] or None
     add_overview_cues(job_config_path)
     settings, config_path, _waypoints, output_dir, client, processor, p_dict = _prepare(
         job_config_path, output_audio_dir, force
@@ -151,7 +155,7 @@ def test_overview_tts(
         clip = asyncio.run(
             generate_overview_audio(
                 project_config, client, processor, output_dir, force=force,
-                project_dir=config_path.parent, pronunciation_dict=p_dict,
+                project_dir=config_path.parent, pronunciation_dict=p_dict, retake=which or None, redo_pieces=redo,
             )
         )
     finally:

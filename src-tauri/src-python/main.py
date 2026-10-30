@@ -294,7 +294,9 @@ if __name__ == "__main__":
                 result = test_tts_all(job_config_arg, None, force=force_arg)
             elif mode_arg == "overview-tts":
                 # [NOTE] [TTS] Generates only the overview narration audio.
-                result = test_overview_tts(job_config_arg, None, force=force_arg)
+                # --retake=intro|overview[:2,5]: that file (or those of its sentences) gets a new take even when its words are unchanged.
+                retake_arg = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--retake=")), None)
+                result = test_overview_tts(job_config_arg, None, force=force_arg, retake=retake_arg)
             elif mode_arg == "attraction-tts":
                 # [NOTE] [TTS] Generates the attraction-only narration audio for ONE waypoint (index from argv[3], default 0).
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0

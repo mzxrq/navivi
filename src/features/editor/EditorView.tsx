@@ -9,6 +9,7 @@ import { useUI } from "../../hooks/useUI";
 import { Copy, FileText, Film, LinkIcon, Maximize, Mic, Music, Plus, RotateCcw, Sparkles, Subtitles, Trash2, Type, UnlinkIcon, Video, VolumeX, ZoomIn, ZoomOut } from "../../components/ui/icons";
 import { useStopRegen } from "../../hooks/useStopRegen";
 import { RegenQueueCard } from "./RegenQueueCard";
+import { VoicePiecesDialog } from "./VoicePiecesDialog";
 import { type RegenKind, narrationOf, onlyNarration, routeClipOf, stopIndexOf } from "../../services/stopRegen";
 import { Tip } from "../../components/ui/Tip";
 import { openContextMenu, separator } from "../../components/ui/menuItems";
@@ -65,6 +66,7 @@ export function EditorView() {
   const [pps, setPps] = useState(0);
   const [exportOpen, setExportOpen] = useState(false);
   const [musicOpen, setMusicOpen] = useState(false);
+  const [piecesFor, setPiecesFor] = useState<"intro" | "overview" | null>(null);
   const view = draft ?? timeline;
   const { placed, total } = useMemo(() => layout(view), [view]);
 
@@ -322,6 +324,7 @@ export function EditorView() {
         disabled: isRendering,
         submenu: [
           { label: t`Narration`, icon: Mic, onSelect: () => void regenerateClip(clip, "voice") },
+          { label: t`Choose sentences to voice again...`, icon: FileText, disabled: !dir, onSelect: () => setPiecesFor(clip) },
           { label: t`Video`, icon: Film, onSelect: () => void regenerateClip(clip, "video") },
           // Voice first: the video follows the voice's length.
           { label: t`Narration and video`, icon: RotateCcw, onSelect: () => (regenerateClip(clip, "voice"), regenerateClip(clip, "video")) },
@@ -497,6 +500,9 @@ export function EditorView() {
       </div>
 
       {musicOpen && <MusicPicker onPick={useLibraryTrack} onChooseFile={addMusicFile} onClose={() => setMusicOpen(false)} />}
+      {piecesFor && dir && (
+        <VoicePiecesDialog dir={dir} clip={piecesFor} onRedo={(pieces) => regenerateClip(piecesFor, "voice", pieces)} onClose={() => setPiecesFor(null)} />
+      )}
       {exportOpen && <ExportDialog timeline={timeline} projectDir={dir} projectName={metadata.project_name} onClose={() => setExportOpen(false)} />}
     </div>
   );

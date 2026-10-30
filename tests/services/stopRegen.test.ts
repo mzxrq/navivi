@@ -126,7 +126,7 @@ describe("intro and overview clips", () => {
     expect(regenTargetOf({ video: "assets/video/route/01_overview.mp4", audio: "assets/audio/00_overview_narration.wav" })).toBe("overview");
     expect(routeClipModes("intro", "video")).toEqual(["intro"]);
     expect(routeClipModes("overview", "video")).toEqual(["overview --force"]);
-    expect(routeClipModes("intro", "voice")).toEqual(["overview-tts", "subtitle-all"]);
+    expect(routeClipModes("intro", "voice")).toEqual(["overview-tts --retake=intro", "subtitle-all"]);
   });
 
   it("re-reads only their own files", async () => {
