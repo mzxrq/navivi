@@ -546,6 +546,29 @@ def _heading_height(lines: List[Tuple[str, Any, int]], k: float) -> int:
     return sum(size for _, _, size in lines) + gap * max(0, len(lines) - 1)
 
 
+def route_cards(legs: List[Dict[str, Any]]) -> List[Tuple[str, Optional[int]]]:
+    """The route page's cards as (badge, leg index): S for the start (None), then each leg's destination 1, 2 ...
+    with the last E. A leg back to a place already reached (a return stop) gets none, so a trip that ends where
+    it began shows S only."""
+    from services.vdoprocessing.route_inputs import same_place
+
+    def at(p) -> Dict[str, Any]:
+        return {"lat": p[0], "lng": p[1]} if p else {}
+
+    if not legs:
+        return []
+    seen, kept = [at(legs[0].get("from_at"))], []
+    for n, leg in enumerate(legs):
+        here = at(leg.get("to_at"))
+        if not any(same_place(here, s) for s in seen):
+            seen.append(here)
+            kept.append(n)
+    cards: List[Tuple[str, Optional[int]]] = [("S", None)] + [(str(k + 1), n) for k, n in enumerate(kept)]
+    if kept and kept[-1] == len(legs) - 1:
+        cards[-1] = ("E", kept[-1])
+    return cards
+
+
 def _build_route_page(
     project_name: str, waypoints: List[Dict[str, Any]], size: Tuple[int, int],
     brief: Dict[str, Any], heading: Optional[Dict[str, Any]] = None,
@@ -583,10 +606,11 @@ def _build_route_page(
     cols = tuning.OUTRO_ROUTE_COLS
     sb_title_h = px(12) + px(tuning.OUTRO_STOPBY_TITLE_FONT_SIZE) + px(12)
 
+    cards = route_cards(legs)
     # Leg cards OUTRO_ROUTE_COLS to a row; after the last one, a title and
     # every stop-by in route order (the start pin's first) as shorter cards.
     rows: List[Tuple[str, List[Any]]] = [
-        ("legs", list(range(n, min(n + cols, len(legs))))) for n in range(0, len(legs), cols)
+        ("legs", list(range(n, min(n + cols, len(cards))))) for n in range(0, len(cards), cols)
     ]
     stopbys = _stopbys(brief, "start_batch", "start_batch_at")
     for leg in legs:
@@ -668,10 +692,15 @@ def _build_route_page(
                 slots.append((item, cx0, top))
 
     for i, cx0, top in slots:
-        leg = legs[i]
-        modes, mode_label, dist, dur = stats[i]
+        badge, leg_index = cards[i]
+        start_card = leg_index is None
+        # The S card: the start's photo and name, no leg stats.
+        leg = (
+            {"to": legs[0]["from"], "to_at": legs[0].get("from_at"), "from": ""} if start_card else legs[leg_index]
+        )
+        modes, mode_label, dist, dur = stats[0 if start_card else leg_index]
         stats_right = cx0 + card_w - px(18)
-        divider_x = stats_right - stats_w - px(16)
+        divider_x = cx0 + card_w - px(18) if start_card else stats_right - stats_w - px(16)
         color = _mode_rgb(engine, modes[0])
         thumb_x, thumb_y = cx0 + pad, top + pad
 
@@ -694,7 +723,7 @@ def _build_route_page(
             engine._draw_mode_icon(
                 draw, modes[0], thumb_x + thumb_w / 2, thumb_y + thumb_h / 2, thumb_h // 2, color,
             )
-        _draw_photo_badge(page, thumb_x + px(8), thumb_y + px(8), i + 1, badge_font, px)
+        _draw_photo_badge(page, thumb_x + px(8), thumb_y + px(8), badge, badge_font, px)
 
         # Left: the destination name over where the leg started, centred on the card.
         text_x = thumb_x + thumb_w + px(16)
@@ -710,12 +739,16 @@ def _build_route_page(
             (text_x, name_y), _truncate_to_width(draw, leg["to"], font, text_w),
             font=font, fill=tuning.OUTRO_TITLE_COLOR,
         )
+        labels = video_text.current_labels()
         origin = _truncate_to_width(
-            draw, video_text.current_labels()["outro_route_from"].format(name=leg["from"]), from_font, text_w,
+            draw, labels["overview_start"] if start_card else labels["outro_route_from"].format(name=leg["from"]),
+            from_font, text_w,
         )
         draw.text(
             (text_x, name_y + size + px(10)), origin, font=from_font, fill=tuning.OUTRO_SUBTITLE_COLOR,
         )
+        if start_card:
+            continue
 
         # Right: mode, distance and time, right-aligned behind a thin divider.
         draw.line(
@@ -835,7 +868,7 @@ def _draw_summary(
     longest = max(legs, key=lambda leg: leg["km"])
     longest_mode = _leg_modes(longest)[0]
     accent = tuple(reversed(tuning.DEFAULT_MARKER_COLOR))
-    stops = len({leg["to"] for leg in legs if not leg.get("is_return")})
+    stops = len(route_cards(legs)) - 1  # the numbered cards: no return stops, a round trip's end is its start
     tiles = [
         (lambda d, cx, cy, s: engine._draw_total_icon(d, cx, cy, s, tuning.OUTRO_TITLE_COLOR),
          labels["distance"], _fmt_km(brief["total_km"]), video_text.plural(labels, "legs", len(legs), count=len(legs))),

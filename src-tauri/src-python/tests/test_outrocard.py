@@ -206,9 +206,10 @@ class TestRouteInfo:
     def test_page_grows_by_one_row_per_two_legs(self, tmp_path):
         wps = self._waypoints(tmp_path)
         legs = BRIEF["legs"]
+        # The S card leads, so 5 legs fill 3 rows and the 6th starts a 4th.
         six, seven, eight = (
             outrocard._build_scroll_page("T", wps, SIZE, {**BRIEF, "legs": (legs * 4)[:n]})
-            for n in (6, 7, 8)
+            for n in (5, 6, 7)
         )
         t = outrocard.tuning
         assert seven.height - six.height == t.OUTRO_ROUTE_ROW_HEIGHT + t.OUTRO_ROUTE_ROW_GAP
@@ -218,11 +219,14 @@ class TestRouteInfo:
         img_path = tmp_path / "red.jpg"
         Image.new("RGB", (200, 150), (250, 0, 0)).save(img_path)
         wps = [{"label": "B", "lat": 1.0, "lng": 2.0, "popup_image": str(img_path)}]
-        brief = {**BRIEF, "legs": [{**BRIEF["legs"][0], "to_at": [1.0, 2.0]}]}
+        brief = {**BRIEF, "legs": [{**BRIEF["legs"][0], "from_at": [5.0, 6.0], "to_at": [1.0, 2.0]}]}
         page = outrocard._build_scroll_page("T", wps, SIZE, brief)
-        # Cards start under the title and the summary.
-        top = 34 + outrocard.tuning.OUTRO_TITLE_FONT_SIZE + 30 + outrocard._summary_height(brief, lambda v: v) + 32
-        left = outrocard.tuning.OUTRO_SCROLL_SIDE_PADDING
+        # Cards start under the title and the summary; the leg's card is the second, after the S card.
+        t = outrocard.tuning
+        top = 34 + t.OUTRO_TITLE_FONT_SIZE + 30 + outrocard._summary_height(brief, lambda v: v) + 32
+        box_w = SIZE[0] - 2 * t.OUTRO_SCROLL_SIDE_PADDING
+        card_w = (box_w - t.OUTRO_ROUTE_COL_GAP * (t.OUTRO_ROUTE_COLS - 1)) // t.OUTRO_ROUTE_COLS
+        left = t.OUTRO_SCROLL_SIDE_PADDING + card_w + t.OUTRO_ROUTE_COL_GAP
         thumb = page.crop((left + 60, top + 60, left + 80, top + 80))
         r, g, b = thumb.getpixel((10, 10))
         assert r > 200 and g < 60
@@ -378,7 +382,7 @@ class TestUnpinnedOutro:
         import numpy as np
 
         wps = TestRouteInfo()._waypoints(tmp_path)
-        brief = {**BRIEF, "legs": BRIEF["legs"] * 4}
+        brief = {**BRIEF, "legs": (BRIEF["legs"] * 4)[:7]}  # 8 cards with the S card
         page = outrocard._build_scroll_page("T", wps, SIZE, brief, {"title": "T", "burn_text": burn})
         assert page.info["pinned"] is burn
         out = tmp_path / f"o{burn}.mp4"
