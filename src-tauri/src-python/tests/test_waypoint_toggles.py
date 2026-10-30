@@ -33,3 +33,13 @@ def test_skip_changes_the_route_but_pause_only_the_overview():
     assert overview_flags_hash(paused_off) != overview_flags_hash(wps)
     # unset means paused (the editor's default)
     assert overview_flags_hash([dict(w, pauseAtWaypoint=True) for w in wps]) == overview_flags_hash(wps)
+
+
+def test_a_leg_with_a_deleted_piece_is_rendered_again():
+    from pathlib import Path
+
+    from services.vdoprocessing.route2vdo import pieces_complete
+
+    leg = [Path("02_waypoint_16_X.mp4")] + [Path(f"02_waypoint_16_X_cont{n}.mp4") for n in range(2, 6)]
+    assert pieces_complete(leg) and pieces_complete(leg[:1])
+    assert not pieces_complete(leg[1:]) and not pieces_complete(leg[:2] + leg[3:])

@@ -178,6 +178,19 @@ def _describe_changed_parts(old: dict, new: dict, limit: int = 25) -> str:
     return ", ".join(labels[:limit]) + more if labels else "nothing per-part (hash format differs)"
 
 
+def _legs_complete(paths) -> bool:
+    """Every leg in the list has all its pieces (one deleted to remake it drops out of the next list too)."""
+    import re
+
+    from services.vdoprocessing.route2vdo import pieces_complete
+
+    legs: dict = {}
+    for p in paths:
+        if m := re.match(r"(02_waypoint_\d+_)", Path(p).name):
+            legs.setdefault(m.group(1), []).append(p)
+    return all(pieces_complete(files) for files in legs.values())
+
+
 def reuse_render_manifest(manifest_path, checkpoint_key, checkpoint_parts, project_config_path):
     """(the manifest's paths when the route is unchanged and every output exists, else None; whether the
     overview must be rendered again because the route changed)."""
@@ -211,7 +224,7 @@ def reuse_render_manifest(manifest_path, checkpoint_key, checkpoint_parts, proje
         route_changed = [k for k in keys if old_parts.get(k) != checkpoint_parts.get(k)]
     else:
         route_changed = [] if cached_key == checkpoint_key else ["(no per-input record)"]
-    outputs_ok = bool(cached_paths) and all(output_is_valid(p) for p in cached_paths)
+    outputs_ok = bool(cached_paths) and all(output_is_valid(p) for p in cached_paths) and _legs_complete(cached_paths)
     if outputs_ok and not route_changed:
         ignored = (
             _describe_changed_parts(cached_parts, checkpoint_parts)
