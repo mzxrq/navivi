@@ -72,7 +72,7 @@ LEG_FAR_STOPBY_VERSION = 1
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
-_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text", "kw.leg_elevations")
+_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text", "kw.leg_elevations", "return_stop")
 # The stops' names on the leg's banner and its narration timing (fix.md #9). Compared only when the leg's
 # record has them, so a leg rendered before these were checked is not re-rendered for it.
 _LEG_RECORDED_PARTS = ("kw.route_chain", "kw.target_duration_seconds", "kw.start_cue_seconds", "kw.arrival_wait_seconds")
@@ -166,6 +166,12 @@ def _leg_fingerprint_parts(
         parts["kw.route_chain"] = h([leg_kwargs["route_chain"], LEG_CHAIN_FIT_VERSION])
     if any(lm.get("pops_after") is not None for lm in leg_kwargs.get("landmarks") or []):
         parts["kw.landmarks"] = h([leg_kwargs["landmarks"], LEG_FAR_STOPBY_VERSION])
+    if leg_kwargs.get("dest_image_display") == "pip" or leg_kwargs.get("opening_photo") is False:
+        # A leg to or from a return stop (pin of the first visit, photo card, no fullscreen): re-rendered once for it.
+        parts["return_stop"] = h(
+            [leg_kwargs.get(k) for k in ("start_pin", "dest_pin", "dest_image_display", "opening_photo", "opening_view")]
+            + [bool(leg_kwargs.get("end_view_path"))]
+        )
     if "leg_elevations" in leg_kwargs:
         # Heatmap legs also draw the elevation profile card: re-render only them when it changes.
         parts["kw.leg_elevations"] = h([leg_kwargs["leg_elevations"], LEG_ELEVATION_CARD_VERSION])
@@ -620,6 +626,7 @@ class RouteAnimator:
         # -- pedestrian.py's own tracker calls inside render_residential_leg_
         # pydeck further subdivide THIS leg's own share of that line.
         tracker.begin_substeps(len(res_sequence))
+        prev_end_view = None
         for i, res_data in enumerate(res_sequence):
             # Each leg launches its own Chromium; don't start one with no RAM left.
             tuning.ensure_free_ram(f"residential leg {i + 1}", self.config.get("min_free_ram_gb"))
@@ -766,7 +773,8 @@ class RouteAnimator:
             ) or dest_popup.get("popup_image_last") or dest_popup.get("popup_image")
             dest_freeze_seconds = dest_popup.get("freeze_seconds")
             dest_narration_seconds = dest_popup.get("audio_duration")
-            dest_image_display = "fullscreen"  # residential legs are always fullscreen
+            # A return stop only pops its photo up as a card: its place had its fullscreen visit already.
+            dest_image_display = "pip" if res_data.get("dest_is_return") else "fullscreen"
             if not dest_popup_image:
                 # A trailing synthetic end_point leg's own destination has
                 # no popup of its own (see render_step.py's
@@ -847,6 +855,19 @@ class RouteAnimator:
                 leg_kwargs["leg_elevations"] = res_data["elevations"]
             if self.config.get("overview_style") == "course":  # likewise: the walker slows down before each stop
                 leg_kwargs["arrival_slow_seconds"] = tuning.COURSE_ARRIVAL_SLOW_SECONDS
+            # A return stop's photo never opens a leg fullscreen (only set then, so other legs stay as rendered).
+            if res_data.get("start_is_return") or (res_data.get("dest_is_return") and not start_popup_image):
+                leg_kwargs["opening_photo"] = False
+            # Legs joined at a return stop: this leg's last frame is the next one's first.
+            next_leg = res_sequence[i + 1] if i + 1 < len(res_sequence) else {}
+            if res_data.get("dest_is_return") and next_leg.get("start_is_return"):
+                leg_kwargs["end_view_path"] = str(self.out_dir / f"{leg_glob_prefix}endview.json")
+            if res_data.get("start_is_return") and prev_end_view:
+                try:
+                    leg_kwargs["opening_view"] = json.loads(Path(prev_end_view).read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    pass
+            prev_end_view = leg_kwargs.get("end_view_path")
             # Everything this leg's clip is made from. Existing files are
             # only reused when it matches what they were rendered from: a
             # bare existence check kept legs rendered with an old walk

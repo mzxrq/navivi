@@ -21,7 +21,7 @@ from .helpers import (
     logger,
 )
 from .narration_step import MAX_EARLY_ARRIVAL_SECONDS, leg_walk_plan
-from .render_look import _is_return_stop, _leg_pin, _project_rgb, overview_pin_glyphs
+from .render_look import _is_return_stop, _leg_pin, _returns_to, _project_rgb, overview_pin_glyphs
 
 # Bounds on how many points a synthetic straight-line ferry crossing is
 # sampled into when there's no cached routed polyline for that leg (see the
@@ -206,6 +206,11 @@ def build_leg_sequence(
         pin_image_by_id = {
             wp.get("id"): marker_for(wp, settings, marker_base_dir)
             for wp in res_waypoints if wp.get("id")
+        }
+        # A return stop shows the pin of the stop it comes back to.
+        pin_id = {
+            wp.get("id"): (_returns_to(waypoints, pos) or wp).get("id")
+            for pos, wp in enumerate(waypoints) if wp.get("id")
         }
 
         for seq_idx, leg_item in enumerate(sequence_data):
@@ -458,16 +463,18 @@ def build_leg_sequence(
                     # done, then the fullscreen photo transition.
                     "arrival_wait_seconds": arrival_wait_seconds,
                     "start_pin": _leg_pin(
-                        glyph_by_id.get(leg_item.get("start_waypoint_id"))
+                        glyph_by_id.get(pin_id.get(leg_item.get("start_waypoint_id"), leg_item.get("start_waypoint_id")))
                         or ("S" if seq_idx == 0 else None),
                         settings, arrived=True,
-                        image=pin_image_by_id.get(leg_item.get("start_waypoint_id")),
+                        image=pin_image_by_id.get(pin_id.get(leg_item.get("start_waypoint_id"), leg_item.get("start_waypoint_id"))),
                     ),
-                    "dest_pin": False if _is_return_stop(waypoints, end_pos) else _leg_pin(
-                        glyph_by_id.get(leg_item.get("end_waypoint_id"))
+                    "start_is_return": _is_return_stop(waypoints, start_pos),
+                    "dest_is_return": _is_return_stop(waypoints, end_pos),
+                    "dest_pin": _leg_pin(
+                        glyph_by_id.get(pin_id.get(leg_item.get("end_waypoint_id"), leg_item.get("end_waypoint_id")))
                         or ("E" if seq_idx == len(sequence_data) - 1 else None),
-                        settings, arrived=False,
-                        image=pin_image_by_id.get(leg_item.get("end_waypoint_id")),
+                        settings, arrived=_is_return_stop(waypoints, end_pos),
+                        image=pin_image_by_id.get(pin_id.get(leg_item.get("end_waypoint_id"), leg_item.get("end_waypoint_id"))),
                     ),
                     "real_duration_seconds": (
                         (

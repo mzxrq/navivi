@@ -15,5 +15,6 @@ def test_profile_card_marker_follows_the_walk():
 
 def test_return_stop_is_a_copy_of_an_earlier_spot():
     from services.vdoprocessing.videopipeline.render_look import _is_return_stop
-    wps = [{"lat": 1, "lng": 2}, {"lat": 3, "lng": 4}, {"lat": 1, "lng": 2}]
+    wps = [{"lat": 1, "lng": 2}, {"lat": 3, "lng": 4}, {"lat": 1, "lng": 2}, {"lat": 5, "lng": 6}, {"lat": 3, "lng": 4}]
     assert _is_return_stop(wps, 2) and not _is_return_stop(wps, 1) and not _is_return_stop(wps, 0)
+    assert not _is_return_stop(wps, 4)  # the last stop ends the trip like any finish

@@ -187,6 +187,13 @@ def render_attraction_videos(
             tracker.note(f"Skipped attraction video {idx + 1}/{len(waypoints)}: {place_label} ({reason})")
             continue
 
+        from .render_look import _is_return_stop
+
+        if _is_return_stop(waypoints, idx):
+            logger.info("Step 3: [%d/%d] Skipping '%s' — return stop (photo pops up in its leg).",
+                        idx + 1, len(waypoints), place_label)
+            continue
+
         # Check upfront, before ever showing "Generating..." or touching
         # ComfyUI/the local fallback — a waypoint with no popup image has
         # nothing to generate a clip from, so skip it outright.

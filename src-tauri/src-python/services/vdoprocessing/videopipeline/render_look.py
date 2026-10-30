@@ -70,13 +70,18 @@ def overview_pin_glyphs(waypoints: list) -> dict:
     return glyphs
 
 
-def _is_return_stop(waypoints: list, pos: int) -> bool:
-    """A stop made by "Add return stop": a copy of an earlier stop at the same spot."""
-    if not 0 < pos < len(waypoints):
-        return False
+def _returns_to(waypoints: list, pos: int) -> Optional[dict]:
+    """The earlier stop a return stop ("Add return stop": a copy at the same spot) comes back to, else None."""
+    # A stop-by beside an earlier stop is its own place; the trip's last stop ends the video like any finish.
+    if not 0 < pos < len(waypoints) - 1 or waypoints[pos].get("isStopBy"):
+        return None
     from services.vdoprocessing.route_inputs import same_place
 
-    return any(same_place(waypoints[pos], w) for w in waypoints[:pos])
+    return next((w for w in waypoints[:pos] if not w.get("isStopBy") and same_place(waypoints[pos], w)), None)
+
+
+def _is_return_stop(waypoints: list, pos: int) -> bool:
+    return _returns_to(waypoints, pos) is not None
 
 
 def _leg_pin(glyph, settings: dict, arrived: bool, image: Optional[str] = None) -> Optional[dict]:
