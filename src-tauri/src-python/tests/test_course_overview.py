@@ -192,3 +192,17 @@ def test_an_off_track_stop_by_does_not_push_later_stops_ahead():
     # a stop-by 1 km north of the track's end, listed before the stop at 0.02
     wps = [{"lat": 0.0, "lng": 0.0}, {"lat": 0.01, "lng": 0.04}, {"lat": 0.0, "lng": 0.02}, {"lat": 0.0, "lng": 0.04}]
     assert RouteGeometryProcessor.build_waypoint_index(df, wps) == [0, 1, 2, 4]
+
+
+def test_a_stop_by_near_the_leg_line_is_walked_to_and_a_far_one_is_not():
+    from services.vdoprocessing.videopipeline.leg_sequence import closest_leg_index, stopbys_near_the_route
+
+    lats, lons = [35.0] * 5, [135.0, 135.001, 135.002, 135.003, 135.004]  # ~90 m apart, east-west
+    wps = [
+        {"lat": 35.0, "lng": 135.0},
+        {"lat": 35.0003, "lng": 135.003, "isStopBy": True},  # ~33 m off the line, near point 3
+        {"lat": 35.01, "lng": 135.001, "isStopBy": True},  # ~1.1 km off
+        {"lat": 35.0, "lng": 135.002, "isStopBy": True, "connectToRoute": True},  # already walked to
+    ]
+    assert stopbys_near_the_route(wps, [1, 2, 3], lats, lons) == {1: 3}
+    assert closest_leg_index(wps[2], lats, lons) == 1

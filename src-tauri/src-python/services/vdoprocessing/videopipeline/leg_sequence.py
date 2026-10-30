@@ -29,10 +29,40 @@ from .render_look import _is_return_stop, _leg_pin, _project_rgb, overview_pin_g
 _MIN_FERRY_SAMPLE_POINTS = 2
 _MAX_FERRY_SAMPLE_POINTS = 120
 
+def stopbys_near_the_route(waypoints: list, positions: list, lats, lons) -> dict:
+    """{position: index of the closest leg point} for each not-connected stop-by within STOPBY_WALK_NEAR_METERS of
+    the leg's line: the walk goes there first and its photo pops up on the way, instead of at the stop before it.
+    shortcut: distance to the line's points, not its segments; fine while routed points are dense (tens of metres)."""
+    near = {}
+    for p in positions:
+        if waypoints[p].get("connectToRoute"):
+            continue
+        metres = _metres_to_leg(waypoints[p], lats, lons)
+        if metres is not None and metres.min() <= tuning.STOPBY_WALK_NEAR_METERS:
+            near[p] = int(metres.argmin())
+    return near
+
+
+def _metres_to_leg(wp: dict, lats, lons):
+    lat, lng = wp.get("lat"), wp.get("lng", wp.get("lon"))
+    if lat is None or lng is None or len(lats) == 0:
+        return None
+    lats, lons = np.asarray(lats, float), np.asarray(lons, float)
+    return GPSMath.haversine_vectorized(np.full_like(lats, float(lat)), np.full_like(lons, float(lng)), lats, lons) * 1000
+
+
+def closest_leg_index(wp: dict, lats, lons) -> int:
+    """Where along the leg a stop-by sits (its closest leg point); 0 without coordinates."""
+    metres = _metres_to_leg(wp, lats, lons)
+    return 0 if metres is None else int(metres.argmin())
+
+
 def _play_order(markers: list, marker_plans: dict, id_to_position: dict):
-    """Sort key for a leg's markers: route order, an off-route stop-by ("pops_after") right after the stop-by it
-    pops up at ("" = the departure stop, first), several in waypoint order."""
-    route_index = {m.get("waypoint_id"): i for i, m in enumerate(markers)}
+    """Sort key for a leg's markers: route order (`pos_in_chunk`), an off-route stop-by ("pops_after") right after
+    the stop-by it pops up at ("" = the departure stop, first), several in waypoint order."""
+    route_index = {
+        m.get("waypoint_id"): i for i, m in enumerate(sorted(markers, key=lambda m: m.get("pos_in_chunk", 0)))
+    }
 
     def key(m):
         after = marker_plans.get(m.get("waypoint_id"), {}).get("pops_after")
@@ -271,11 +301,14 @@ def build_leg_sequence(
                 if visits_stopby(waypoints[p]) and waypoints[p].get("popup_image")
             ]
             # An off-route stop-by pops up at the stop before it in waypoint order, without walking: the departure
-            # stop ("") or the connected stop-by before it, right after that one's photo.
+            # stop ("") or the connected stop-by before it, right after that one's photo. One close to the leg's
+            # line is walked to like a connected one.
+            near = stopbys_near_the_route(waypoints, stop_positions, leg_item["lats"], leg_item["lons"])
+            stop_positions.sort(key=lambda p: near.get(p, closest_leg_index(waypoints[p], leg_item["lats"], leg_item["lons"])))
             pops_after: dict = {}
             anchor = ""
             for p in stop_positions:
-                if waypoints[p].get("connectToRoute"):
+                if waypoints[p].get("connectToRoute") or p in near:
                     anchor = waypoints[p].get("id") or ""
                 else:
                     pops_after[p] = anchor
@@ -473,15 +506,15 @@ def build_leg_sequence(
                     # In the order the pauses play (the leg's pieces are cut in it): route order, each off-route
                     # stop-by right after the stop it pops up at.
                     "mid_markers": sorted(
-                        (
+                        markers := [
                             {
                                 **m,
-                                "pos_in_chunk": m["row_idx"] - start_idx,
+                                "pos_in_chunk": near.get(id_to_position.get(m.get("waypoint_id")), m["row_idx"] - start_idx),
                                 **marker_plans.get(m.get("waypoint_id"), {}),
                             }
                             for m in leg_item.get("mid_markers", [])
-                        ),
-                        key=_play_order(leg_item.get("mid_markers", []), marker_plans, id_to_position),
+                        ],
+                        key=_play_order(markers, marker_plans, id_to_position),
                     ),
                 }
             )
