@@ -121,17 +121,18 @@ export function useStopRegen() {
   };
 
   // The intro or overview clip: its voice (the overview narration, both files) or its video.
-  const regenerateClip = (clip: RouteClip, kind: "voice" | "video") => {
+  // `pieces`: only those sentences of its voice (VoicePiecesDialog).
+  const regenerateClip = (clip: RouteClip, kind: "voice" | "video", pieces?: number[]) => {
     const dir = metadata.directory_path;
     if (!dir || isRendering) return;
-    queue(clip, kind, () => runClip(dir, clip, kind));
+    queue(clip, kind, () => runClip(dir, clip, kind, pieces));
   };
 
-  const runClip = async (dir: string, clip: RouteClip, kind: "voice" | "video") => {
+  const runClip = async (dir: string, clip: RouteClip, kind: "voice" | "video", pieces?: number[]) => {
     showToast(kind === "voice" ? t`Making the overview narration again.` : t`Making this clip again. This can take a few minutes.`, "info");
     try {
       await saveProject();
-      const { skipped } = await runRegen(`${dir}/job_config.json`, routeClipModes(clip, kind));
+      const { skipped } = await runRegen(`${dir}/job_config.json`, routeClipModes(clip, kind, pieces));
       const next = await refreshRouteClip(liveTimeline.current, clip, kind, {
         probe: async (rel, mediaKind) => probeDuration(convertFileSrc(await toAbsoluteProjectPath(rel, dir)), mediaKind, 0),
         readText: async (rel) => readTextFile(await toAbsoluteProjectPath(rel, dir)),

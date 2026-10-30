@@ -9,6 +9,7 @@ Extracted from tts.py to improve modularity.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import random
 import re
 import httpx
@@ -689,6 +690,11 @@ class IrodoriTTSClient:
 
     # [NOTE] [TTS] A forced regeneration ("Redo voice") must not get the same stored take back, so it skips the read; it still writes the new one.
     bypass_cache: bool = False
+    # Where the file being spoken keeps its sentences (voice_pieces.py), the voice they must match, and the
+    # sentences to speak anew (picked in the editor); set by audio_step for the overview narration.
+    pieces_dir: Optional[Path] = None
+    pieces_voice: Optional[dict] = None
+    redo_texts: frozenset = frozenset()
 
     def _cached_line(self, key: str) -> Optional[bytes]:
         return None if self.bypass_cache else phrase_cache.get(key)
@@ -741,6 +747,18 @@ class IrodoriTTSClient:
         A misread name left in kanji is spelled out for the retakes."""
         from services.tts import name_check
 
+        if not tuning.TTS_NAME_CHECK or not name_check.expected_names(text):
+            return audio
+        # The take kept for this exact text + first take last time: a cached line is not checked and retaken on every run.
+        settled_key = phrase_cache.cache_key({"names_checked": text, "take": hashlib.sha256(audio).hexdigest()}, None)
+        settled = self._cached_line(settled_key)
+        if settled is not None:
+            return settled
+        best = await self._best_heard_take(text, audio, name_check)
+        phrase_cache.put(settled_key, best)
+        return best
+
+    async def _best_heard_take(self, text: str, audio: bytes, name_check: Any) -> bytes:
         missing = await asyncio.to_thread(name_check.misheard_names, audio, text)
         best = (len(missing), audio)
         bypass = self.bypass_cache
@@ -772,24 +790,29 @@ class IrodoriTTSClient:
         filename = output_filename or f"{uuid.uuid4()}.wav"
         file_path = self.output_dir / filename
 
-        # A long text in one request overloads the GPU (see tuning.TTS_DEVICE):
-        # speak it in short chunks, one request at a time, and join them.
-        # Packed (split_text_for_tts groups whole sentences up to
-        # TTS_MAX_CHUNK_CHARS per request) rather than one request per
-        # sentence - CPU inference (tuning's
-        # current TTS_DEVICE default) makes many small sequential requests
-        # far slower than a few packed ones. The gap inserted below still
-        # lands at every CHUNK boundary (so a multi-sentence chunk plays
-        # with no pause between ITS OWN sentences, only after the chunk as
-        # a whole) - less granular than a pause after every single
-        # sentence, but still nowhere near as rushed/robotic as one
-        # continuous zero-gap synthesis of the whole text.
+        # A long text in one request overloads the GPU (see tuning.TTS_DEVICE): speak it in short chunks
+        # (split_text_for_tts), one request at a time, and join them with a short random gap.
         chunks = split_text_for_tts(text, *chunk_limits(text))
         if len(chunks) > 1:
             logger.info("TTS text of %d characters split into %d chunk(s).", len(text), len(chunks))
+        from services.tts import voice_pieces
+
+        kept = voice_pieces.load(self.pieces_dir, self.pieces_voice) if self.pieces_dir and not self.bypass_cache else {}
         takes: List[bytes] = []
+        pieces = []
         for chunk in chunks or [text]:
-            takes += await self._speak_chunk(chunk)
+            chunk_takes = None if chunk in self.redo_texts else kept.get(chunk)
+            if chunk_takes is None:
+                bypass = self.bypass_cache
+                self.bypass_cache = bypass or chunk in self.redo_texts
+                try:
+                    chunk_takes = await self._speak_chunk(chunk)
+                finally:
+                    self.bypass_cache = bypass
+            pieces.append((chunk, chunk_takes))
+            takes += chunk_takes
+        if self.pieces_dir:
+            voice_pieces.save(self.pieces_dir, self.pieces_voice, pieces)
         if len(takes) == 1:
             write_atomic(file_path, takes[0])
             self._remove_stray_bursts(file_path)
@@ -1096,7 +1119,7 @@ def chunk_limits(text: str) -> Tuple[int, int]:
 
 def split_text_for_tts(text: str, max_chars: int, min_chars: int = 0) -> List[str]:
     """Splits `text` into pieces of at most `max_chars` characters for separate
-    TTS requests: whole sentences are grouped together up to the limit, a
+    TTS requests: whole sentences, grouped until a chunk has `min_chars`; a
     sentence that is too long is cut at its commas, and only as a last resort
     in the middle of a clause. The pieces joined give back exactly `text`.
 
@@ -1110,6 +1133,8 @@ def split_text_for_tts(text: str, max_chars: int, min_chars: int = 0) -> List[st
     if len(text) <= max_chars:
         return [text] if text else []
 
+    # A chunk closes at the first sentence end once it has min_chars, not packed up to max_chars: editing one
+    # sentence then changes only its own chunk, and the others are served from the phrase cache.
     chunks, cur = [], ""
     for sentence in (s for s in _SENTENCE_END.split(text) if s):
         for piece in _cut_to_chars(sentence, max_chars):
@@ -1117,6 +1142,9 @@ def split_text_for_tts(text: str, max_chars: int, min_chars: int = 0) -> List[st
                 chunks.append(cur)
                 cur = ""
             cur += piece
+        if len(cur) >= min_chars:
+            chunks.append(cur)
+            cur = ""
     if cur:
         chunks.append(cur)
     if min_chars and len(chunks) >= 2 and len(chunks[-1]) < min_chars:

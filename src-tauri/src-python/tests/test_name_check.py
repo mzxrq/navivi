@@ -82,3 +82,12 @@ def test_a_misread_katakana_name_is_retaken_in_hiragana_and_still_checked():
     text = name_check.spell_out("サルサカ峠が見えてきます。", ["サルサカ峠"])
     assert text == "さるさか峠が見えてきます。"
     assert ("さるさか峠", "さるさかとうげ") in name_check.expected_names(text)
+
+
+def test_a_settled_take_is_not_checked_or_retaken_again(client, monkeypatch):
+    monkeypatch.setattr(name_check, "transcribe", lambda audio: "猿坂峠へ。" if audio == OTHER else "さらさか峠へ。")
+    assert asyncio.run(client._with_names_heard("サルサカ峠へ。", GOOD)) == OTHER  # retaken
+    retakes = len(client.calls)
+    monkeypatch.setattr(name_check, "transcribe", lambda audio: pytest.fail("checked again"))
+    assert asyncio.run(client._with_names_heard("サルサカ峠へ。", GOOD)) == OTHER
+    assert len(client.calls) == retakes

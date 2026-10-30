@@ -10,7 +10,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from services import tuning
 from services.localization.cue_alignment import measured_cue_times
@@ -433,17 +433,26 @@ async def generate_overview_audio(
     force: bool = False,
     project_dir=None,
     pronunciation_dict: list = [],
+    retake: Optional[str] = None,
+    redo_pieces: Optional[List[int]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Generates (or reuses) the TTS audio for job_config.json's top-level
     "overview_narration" script (OverviewPanel.tsx). When the voice starts on
     the intro, its opening is a separate file (overview_pieces), returned under
-    "intro". Returns None when the field is empty/missing."""
+    "intro". Returns None when the field is empty/missing. `retake` ("intro" or
+    "overview"): that file gets a new take even when its words are unchanged;
+    only its sentences at `redo_pieces` (voice_pieces.listing order) when given."""
     opening, rest = overview_pieces(project_config, project_dir)
     args = (project_config, client, processor, output_dir, force, pronunciation_dict)
-    result = await _voice_piece(rest, OVERVIEW_NARRATION_FILENAME, *args)
+
+    def voice(tagged, filename, which):
+        redo = (redo_pieces if retake == which else None)
+        return _voice_piece(tagged, filename, *args, retake=retake == which, redo_pieces=redo, project_dir=project_dir)
+
+    result = await voice(rest, OVERVIEW_NARRATION_FILENAME, "overview")
     if result is None:
         return None
-    result["intro"] = await _voice_piece(opening, INTRO_NARRATION_FILENAME, *args) if opening else None
+    result["intro"] = await voice(opening, INTRO_NARRATION_FILENAME, "intro") if opening else None
     # The overview is sized first (60-120s) and its script to it: say when
     # the real voice misses that by more than the 3s the video can absorb.
     from services.localization.overview_script import (
@@ -459,11 +468,22 @@ async def generate_overview_audio(
     return result
 
 
+def pieces_dir(project_dir, audio_filename: str) -> Path:
+    """Where an overview narration file keeps its sentences (voice_pieces.py)."""
+    from services.projectfiles import meta_dir
+
+    return meta_dir(project_dir) / "voice_pieces" / Path(audio_filename).stem
+
+
 async def _voice_piece(
     tagged: Optional[str], audio_filename: str, project_config: dict, client: Any, processor: Any,
-    output_dir: Path, force: bool, pronunciation_dict: list,
+    output_dir: Path, force: bool, pronunciation_dict: list, retake: bool = False,
+    redo_pieces: Optional[List[int]] = None, project_dir=None,
 ) -> Optional[Dict[str, Any]]:
-    """One overview narration file: reused while its spoken text and voice are unchanged."""
+    """One overview narration file: reused while its spoken text and voice are unchanged. When the text changed,
+    only the edited sentences are voiced again: its sentences are kept in the project (voice_pieces.py,
+    .navivi/voice_pieces/<file>). `retake`: an unchanged file is voiced anew past every cache, so it differs from
+    the last take; with `redo_pieces`, only those sentences are."""
     script = clean_text(tagged).strip()
     if not script:
         return None
@@ -476,15 +496,30 @@ async def _voice_piece(
     except OSError:
         same_text = False
     same_text = same_text or _keep_old_voice(existing_path, tts_script)
-    if not force and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
+    retake = retake and same_text
+    if not force and not retake and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
         logger.info("Step 2: %s already exists — skipping TTS.", audio_filename)
         audio_path = str(existing_path)
     else:
         logger.info(
             "Step 2: Generating %s (%s).", audio_filename,
-            _remake_reason(existing_path, same_text, client, force),
+            "a new take" if retake else _remake_reason(existing_path, same_text, client, force),
         )
-        audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
+        from services.tts import voice_pieces
+
+        folder = pieces_dir(project_dir, audio_filename) if project_dir is not None else None
+        saved = tuple(getattr(client, k, d) for k, d in (
+            ("bypass_cache", False), ("pieces_dir", None), ("pieces_voice", None), ("redo_texts", frozenset()),
+        ))
+        client.pieces_dir, client.pieces_voice = folder, _client_fingerprint(client)
+        if retake and redo_pieces and folder is not None:
+            client.redo_texts = frozenset(voice_pieces.texts(folder, redo_pieces))
+        else:
+            client.bypass_cache = saved[0] or retake
+        try:
+            audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
+        finally:
+            client.bypass_cache, client.pieces_dir, client.pieces_voice, client.redo_texts = saved
         try:
             _spoken_text_path(audio_path).write_text(tts_script, encoding="utf-8")
         except OSError:

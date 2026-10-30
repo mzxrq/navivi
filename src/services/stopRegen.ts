@@ -72,9 +72,11 @@ export function routeClipOf(seg: Pick<Segment, "video">): RouteClip | null {
 export const regenTargetOf = (seg: Pick<Segment, "video" | "audio">) => stopIndexOf(seg) ?? routeClipOf(seg);
 
 // The overview narration is one script for both clips (the opening plays on the intro), so "voice" redoes both files.
-// No --force on the voice: only a file whose words changed is voiced again, so the other clip stays as it is.
-export function routeClipModes(clip: RouteClip, kind: "voice" | "video"): string[] {
-  if (kind === "voice") return ["overview-tts", "subtitle-all"];
+// No --force on the voice: only the edited sentences are voiced again, so the other clip stays as it is.
+// --retake: the clicked clip's words are unchanged, so it gets a new take instead of the same one back;
+// `pieces`: only those of its sentences (VoicePiecesDialog).
+export function routeClipModes(clip: RouteClip, kind: "voice" | "video", pieces?: number[]): string[] {
+  if (kind === "voice") return [`overview-tts --retake=${clip}${pieces?.length ? `:${pieces.join(",")}` : ""}`, "subtitle-all"];
   return [clip === "intro" ? "intro" : "overview --force"];
 }
 
