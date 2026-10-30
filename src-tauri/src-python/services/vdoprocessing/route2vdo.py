@@ -229,6 +229,12 @@ def leg_clips(folder: Path, pattern: str = "*.mp4") -> List[Path]:
     )
 
 
+def pieces_complete(files: List[Path]) -> bool:
+    """A leg's pieces with none missing: X, X_cont2, ... X_contN (a piece deleted to remake it leaves a gap)."""
+    nums = sorted(int(m.group(1)) if (m := re.search(r"_cont(\d+)$", Path(f).stem)) else 1 for f in files)
+    return nums == list(range(1, len(nums) + 1))
+
+
 def restore_leg(variant_dir: Path, inputs_name: str, leg_parts: Dict[str, str], current: List[Path], out_dir: Path) -> List[Path]:
     """When the leg's kept variant was rendered from these inputs (a setting switched off and back on), swaps it in:
     the current files become the kept variant. Returns the restored clips; [] when there is nothing to restore."""
@@ -850,6 +856,9 @@ class RouteAnimator:
             existing_leg_files = (
                 leg_clips(self.out_dir, f"{leg_glob_prefix}*.mp4") if self.config.get("checkpoint_enabled", False) else []
             )
+            if existing_leg_files and not pieces_complete(existing_leg_files):
+                logger.info("Residential leg %d is missing a piece — rendering it again.", leg_file_num)
+                existing_leg_files = []
             leg_parts = _leg_fingerprint_parts(
                 leg_latlon, dest_label, leg_kwargs, route_inputs=res_data.get("route_inputs"),
             )
