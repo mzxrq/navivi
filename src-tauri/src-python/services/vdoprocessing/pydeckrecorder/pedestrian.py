@@ -19,6 +19,7 @@ import math
 import os
 import shutil
 import tempfile
+from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -26,6 +27,7 @@ import pydeck as pdk
 
 from services import tuning, video_text
 from services.logger.progress import tracker
+from services.projectfiles import write_json_atomic
 from services.vdoprocessing.cliptiming import write_audio_offset
 
 from .common import MAPBOX_API_KEY, logger
@@ -117,6 +119,9 @@ def render_residential_leg_pydeck(
     bottom_reserve_px: float = 0.0,
     arrival_slow_seconds: float = 0.0,
     leg_elevations: Optional[List[float]] = None,
+    opening_photo: bool = True,
+    opening_view: Optional[Dict] = None,
+    end_view_path: Optional[str] = None,
 ) -> List[str]:
     """Renders one leg as a straight-down, locked-camera video with a live
     turn-by-turn HUD (destination banner + time/distance card) -- the
@@ -453,7 +458,8 @@ def render_residential_leg_pydeck(
             arrival_photo_hold_seconds, arrival_wait_seconds, dest_image_display,
             dest_pin_url=_leg_pin_url(dest_pin, _DEST_PIN_URL),
             hud_card_png=hud_card_png, theme=theme, bottom_reserve_px=bottom_reserve_px,
-            segment_colors=segment_colors,
+            segment_colors=segment_colors, opening_photo=opening_photo,
+            opening_view=opening_view, end_view_path=end_view_path,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -476,6 +482,9 @@ async def _record_leg(
     theme: Optional[str] = None,
     bottom_reserve_px: float = 0.0,
     segment_colors: Optional[List[List[int]]] = None,
+    opening_photo: bool = True,
+    opening_view: Optional[Dict] = None,
+    end_view_path: Optional[str] = None,
 ):
     from playwright.async_api import async_playwright
 
@@ -668,9 +677,22 @@ async def _record_leg(
             if pip_end:
                 # image_display "pip": the photo stays a small card - it never
                 # grows. It holds (at least a beat, longer if the walker is
-                # waiting for the voice) and the clip ends on it.
+                # waiting for the voice), then fades: the clip ends on the plain
+                # map, the frame the next leg opens on (`opening_view`).
                 for _ in range(max(1, int(max(0.5, small_hold_s) * fps))):
                     await _write_frame(hold_small_png)
+                fade_frames = max(1, int(0.4 * fps))
+                for i in range(fade_frames):
+                    await page.evaluate(
+                        """(alpha) => {
+                            const img = document.getElementById('leg-dest-preview');
+                            if (img) img.style.opacity = alpha;
+                            const line = document.getElementById('leg-dest-leader-line');
+                            if (line) line.setAttribute('opacity', alpha);
+                        }""",
+                        1.0 - (i + 1) / fade_frames,
+                    )
+                    await _write_frame(await page.screenshot(**_FRAME_SHOT))
                 return True
             for _ in range(int(small_hold_s * fps) if quick else max(1, int(small_hold_s * fps))):
                 await _write_frame(hold_small_png)
@@ -1113,12 +1135,16 @@ async def _record_leg(
                     # tile it already has (a flat, wrongly-scaled block)
                     # for part of the transition. Held for a few frames so
                     # it also reads as a brief top-down establishing shot.
+                    # A leg out of a return stop opens on the previous leg's last frame instead.
+                    from_view = opening_view or {
+                        "lon": first_row["lon"], "lat": first_row["lat"], "zoom": topdown_zoom, "pitch": 0.0,
+                    }
                     warm_js = f"""
                     if (window.deckgl) {{
                         window.deckgl.setProps({{
                             viewState: {{
-                                longitude: {first_row["lon"]}, latitude: {first_row["lat"]},
-                                zoom: {topdown_zoom}, pitch: 0, bearing: 0,
+                                longitude: {from_view["lon"]}, latitude: {from_view["lat"]},
+                                zoom: {from_view["zoom"]}, pitch: {from_view["pitch"]}, bearing: 0,
                                 transitionDuration: 0
                             }}
                         }});
@@ -1149,11 +1175,11 @@ async def _record_leg(
                     # The leg opens on its DEPARTURE photo (fullscreen, shrinking
                     # onto the start pin); the destination photo only when the
                     # departure has none.
-                    if not dest_popup_image and not start_popup_image:
+                    # opening_photo False (a leg to or from a return stop): no fullscreen photo, the map opens it.
+                    if not opening_photo or (not dest_popup_image and not start_popup_image):
                         for _ in range(max(1, int(0.3 * fps))):
                             await _write_frame(warm_png)
-
-                    if start_popup_image:
+                    elif start_popup_image:
                         await _play_leg_photo_card(
                             start_popup_image, start_popup_freeze_seconds, "start"
                         )
@@ -1164,11 +1190,11 @@ async def _record_leg(
 
                     for i in range(intro_frames):
                         t = _ease_in_out_cubic((i + 1) / intro_frames)
-                        zoom = topdown_zoom + (locked_zoom - topdown_zoom) * t
-                        pitch = follow_pitch * t
+                        zoom = from_view["zoom"] + (locked_zoom - from_view["zoom"]) * t
+                        pitch = from_view["pitch"] + (follow_pitch - from_view["pitch"]) * t
                         bearing = 0.0
-                        lon = first_row["lon"] + (locked_lon - first_row["lon"]) * t
-                        lat = first_row["lat"] + (locked_lat - first_row["lat"]) * t
+                        lon = from_view["lon"] + (locked_lon - from_view["lon"]) * t
+                        lat = from_view["lat"] + (locked_lat - from_view["lat"]) * t
                         js = f"""
                         if (window.deckgl) {{
                             const currentLayers = window.deckgl.props.layers || [];
@@ -1670,13 +1696,18 @@ async def _record_leg(
                                 None if arrival_wait_seconds is None
                                 else max(0.0, arrival_wait_seconds - tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS)
                             ),
-                            pip_end=False,  # image_display is ignored: arrivals always go fullscreen
+                            pip_end=dest_image_display == "pip",
                             hold_seconds=(
                                 arrival_photo_hold_seconds
                                 if arrival_photo_hold_seconds is not None
                                 else tuning.RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS
                             ),
                         )
+                    if end_view_path:
+                        # The camera this clip ends on: the next leg opens on it, so the cut can't be seen.
+                        write_json_atomic(Path(end_view_path), {
+                            "lon": locked_lon, "lat": locked_lat, "zoom": locked_zoom, "pitch": follow_pitch,
+                        })
                     else:
                         hold_frames = max(0, int(
                             (arrival_wait_seconds if arrival_wait_seconds is not None

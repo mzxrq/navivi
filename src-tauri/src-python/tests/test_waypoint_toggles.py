@@ -35,6 +35,15 @@ def test_skip_changes_the_route_but_pause_only_the_overview():
     assert overview_flags_hash([dict(w, pauseAtWaypoint=True) for w in wps]) == overview_flags_hash(wps)
 
 
+def test_a_return_stop_gets_no_attraction_clip():
+    from services.vdoprocessing.videopipeline.timeline_step import _unvisited_stopbys
+
+    a = {"lat": 34.0, "lng": 135.0}
+    wps = [{"lat": 33.0, "lng": 135.0}, a, dict(a, isStopBy=True, connectToRoute=True), dict(a, label="A (Return)"), dict(a, label="A again, the finish")]
+    assert _unvisited_stopbys(wps) == {3}  # the stop-by beside A keeps its clip
+
+
+
 def test_a_leg_with_a_deleted_piece_is_rendered_again():
     from pathlib import Path
 
