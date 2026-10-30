@@ -18,6 +18,7 @@ logger = setup_logger(__name__)
 
 _WINDOW_SECONDS = 0.01
 _SPEECH_RMS = 0.03          # a window above this counts as sound
+_SILENCE_RMS = 0.008        # the pauses around a stray burst are this quiet; a whispered キ or the ヒ hiss is louder (0.015+)
 _MAX_BURST_SECONDS = 0.09   # longer than this is a real sound
 _MIN_SILENCE_SECONDS = 0.25  # silence needed on both sides; real syllables beside っ or a devoiced vowel had 0.15-0.20 on one side
 _PAD_SECONDS = 0.015        # also cleared around the burst, covers its tails
@@ -31,7 +32,9 @@ def find_stray_bursts(samples: np.ndarray, sample_rate: int) -> List[Tuple[int, 
     frames = samples[: len(samples) // window * window].reshape(-1, window)
     if not len(frames):
         return []
-    sound = np.sqrt((frames ** 2).mean(axis=1)) > _SPEECH_RMS
+    rms = np.sqrt((frames ** 2).mean(axis=1))
+    sound = rms > _SPEECH_RMS
+    quiet = rms < _SILENCE_RMS
 
     runs: List[Tuple[int, int]] = []
     i = 0
@@ -48,10 +51,12 @@ def find_stray_bursts(samples: np.ndarray, sample_rate: int) -> List[Tuple[int, 
     max_windows = _MAX_BURST_SECONDS / _WINDOW_SECONDS
     min_gap = _MIN_SILENCE_SECONDS / _WINDOW_SECONDS
     found: List[Tuple[int, int]] = []
-    for k, (a, b) in enumerate(runs):
-        before = a - runs[k - 1][1] if k > 0 else float("inf")
-        after = runs[k + 1][0] - b if k + 1 < len(runs) else float("inf")
-        if b - a <= max_windows and before >= min_gap and after >= min_gap and len(runs) > 1:
+    gap = int(min_gap)
+    for a, b in runs:
+        # Truly silent on both sides: 「セ」 before a devoiced キ (セキヒョウ) is a short vowel too, but the
+        # consonants after it are quieter than speech, not silent.
+        # (one 10 ms window each side is the burst's own fade)
+        if b - a <= max_windows and quiet[max(0, a - gap):max(0, a - 1)].all() and quiet[b + 1:b + gap].all() and len(runs) > 1:
             found.append((a * window, b * window))
     return found
 

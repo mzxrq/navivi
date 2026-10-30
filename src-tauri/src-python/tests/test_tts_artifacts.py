@@ -77,3 +77,10 @@ def test_a_syllable_beside_a_geminate_gap_is_kept(tmp_path):
     path = tmp_path / "e.wav"
     _write(path, signal)
     assert remove_stray_bursts(str(path)) == []
+
+
+def test_a_short_syllable_before_quiet_consonants_is_speech_not_a_burst():
+    # 「セキヒョウ」: a 70 ms 「セ」 after a comma pause, then the devoiced キ and the ヒ hiss (quiet, not silent), then speech
+    hiss = np.random.default_rng(0).normal(0, 0.02, int(SR * 0.3))
+    signal = np.concatenate([_tone(1.0), _silence(0.4), _tone(0.07), hiss, _tone(0.5)])
+    assert find_stray_bursts(signal, SR) == []
