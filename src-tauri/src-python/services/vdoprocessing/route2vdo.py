@@ -67,6 +67,8 @@ LEG_RENDER_VERSION = 9
 LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
 LEG_CHAIN_FIT_VERSION = 1
+# Bumped when the camera move to a far stop-by changes (only legs with one re-render; v1: fly out and back).
+LEG_FAR_STOPBY_VERSION = 1
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
@@ -162,6 +164,8 @@ def _leg_fingerprint_parts(
     if leg_kwargs.get("route_chain"):
         # Legs with a stop chain on top re-render once when its fitting changes (v1: shrinks to clear the pill).
         parts["kw.route_chain"] = h([leg_kwargs["route_chain"], LEG_CHAIN_FIT_VERSION])
+    if any(lm.get("pops_after") is not None for lm in leg_kwargs.get("landmarks") or []):
+        parts["kw.landmarks"] = h([leg_kwargs["landmarks"], LEG_FAR_STOPBY_VERSION])
     if "leg_elevations" in leg_kwargs:
         # Heatmap legs also draw the elevation profile card: re-render only them when it changes.
         parts["kw.leg_elevations"] = h([leg_kwargs["leg_elevations"], LEG_ELEVATION_CARD_VERSION])

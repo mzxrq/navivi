@@ -375,6 +375,9 @@ POPUP_MIN_DISPLAY_SECONDS = 2.0
 # Each unconnected stop-by's card in the batch at the previous stop, per card. Below the 2 s floor on purpose:
 # they are passed, not visited, and a long batch freeze pushes later cued stops late.
 STOPBY_BATCH_SECONDS = 0.5
+# A stop-by this close to a leg's line is walked to and pops up there; a farther one pops at the stop before it.
+STOPBY_WALK_NEAR_METERS = 60.0
+STOPBY_CAMERA_MOVE_SECONDS = 1.2  # a leg's camera flying out to a far stop-by, and back to the route after
 # Stop-bys in one group that get a held card (the narration names at most 3); the rest get only their pin.
 STOPBY_BATCH_MAX_HELD = 4
 # An overview card stays fully shown (fades excluded) at least this long, even when the walker has moved on.

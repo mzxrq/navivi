@@ -1226,19 +1226,54 @@ async def _record_leg(
                     if lm.get("connect_to_route") and lm.get("popup_image") and lm.get("pops_after") is not None
                 ]
 
+                async def _ease_view(frm, to, seconds: float) -> None:
+                    """Flies the camera from view `frm` to `to` ((lon, lat, zoom)), pulling out a little on the way."""
+                    n = max(1, int(seconds * fps))
+                    dip = min(1.0, abs(to[2] - frm[2]) + 0.5)
+                    for i in range(n):
+                        t = _ease_in_out_cubic((i + 1) / n)
+                        lon, lat, zoom = (a + (b - a) * t for a, b in zip(frm, to))
+                        zoom -= dip * math.sin(math.pi * t)
+                        await page.evaluate(
+                            f"window.deckgl && window.deckgl.setProps({{viewState: {{longitude: {lon}, latitude: {lat}, "
+                            f"zoom: {zoom}, pitch: {follow_pitch}, bearing: 0, transitionDuration: 0}}}})"
+                        )
+                        await page.wait_for_timeout(30)
+                        await _write_frame(await page.screenshot(**_FRAME_SHOT))
+
+                def _off_screen(lm) -> bool:
+                    x, y = _project_lonlat_to_px(lm["lon"], lm["lat"], locked_lon, locked_lat, locked_zoom, output_size, pitch=follow_pitch)
+                    w, h = output_size
+                    return not (0.08 * w <= x <= 0.92 * w and _LEG_TOP_MARGIN_PX <= y <= h - _leg_bottom_margin_px(bottom_reserve_px))
+
                 async def _play_followers(after: str, tag) -> None:
-                    for k, lm in enumerate(lm for lm in followers if lm.get("pops_after") == after):
+                    group = [lm for lm in followers if lm.get("pops_after") == after]
+                    view = (locked_lon, locked_lat, locked_zoom)
+                    # A stop-by off the locked frame: fly over to show it and its stop, then back to the route.
+                    if any(lm.get("lat") is not None and _off_screen(lm) for lm in group):
+                        anchor = next((a for a in followers + list(landmarks or []) if after and a.get("waypoint_id") == after), None)
+                        here = (anchor["lon"], anchor["lat"]) if anchor else (smooth_df["lon"].iloc[0], smooth_df["lat"].iloc[0])
+                        pts = [here] + [(lm["lon"], lm["lat"]) for lm in group if lm.get("lat") is not None]
+                        view = _fit_view_for_path(
+                            [p[0] for p in pts], [p[1] for p in pts], output_size, padding_frac=0.2, pitch=follow_pitch,
+                            bottom_margin_px=_leg_bottom_margin_px(bottom_reserve_px), top_margin_px=_LEG_TOP_MARGIN_PX,
+                        )
+                        view = (view[0], view[1], min(view[2], locked_zoom + 1.0))
+                        await _ease_view((locked_lon, locked_lat, locked_zoom), view, tuning.STOPBY_CAMERA_MOVE_SECONDS)
+                    for k, lm in enumerate(group):
                         wait_s = float(lm.get("wait_seconds") or 0.0)
                         cuts_before = frame_state["cuts"]
                         await _play_stopby_photo_pause(
                             page, _write_frame, _cut_to_new_clip, fps, html_dir, port,
-                            lm, locked_lon, locked_lat, locked_zoom, output_size, f"{tag}_{k}",
+                            lm, *view, output_size, f"{tag}_{k}",
                             pitch=follow_pitch,
                             small_hold_seconds=wait_s if wait_s > 0 else None,
                         )
                         if frame_state["cuts"] > cuts_before:
                             piece_lead = (frame_state["count"] - frame_state["clip_start"]) / fps
                             write_audio_offset(proc_ref["real_path"], piece_lead)
+                    if view != (locked_lon, locked_lat, locked_zoom):
+                        await _ease_view(view, (locked_lon, locked_lat, locked_zoom), tuning.STOPBY_CAMERA_MOVE_SECONDS)
 
                 for lm in (landmarks or []):
                     if not (lm.get("connect_to_route") and lm.get("popup_image")) or lm.get("pops_after") is not None:
