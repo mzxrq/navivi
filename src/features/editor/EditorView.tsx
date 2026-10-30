@@ -6,8 +6,9 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { useUI } from "../../hooks/useUI";
-import { ArrowDown, ArrowUp, Copy, FileText, Film, LinkIcon, Loader2, Maximize, Mic, Music, Plus, RotateCcw, Sparkles, Subtitles, Trash2, Type, UnlinkIcon, Video, VolumeX, ZoomIn, ZoomOut } from "../../components/ui/icons";
-import { moveQueued, removeQueued, useStopRegen } from "../../hooks/useStopRegen";
+import { Copy, FileText, Film, LinkIcon, Maximize, Mic, Music, Plus, RotateCcw, Sparkles, Subtitles, Trash2, Type, UnlinkIcon, Video, VolumeX, ZoomIn, ZoomOut } from "../../components/ui/icons";
+import { useStopRegen } from "../../hooks/useStopRegen";
+import { RegenQueueCard } from "./RegenQueueCard";
 import { type RegenKind, narrationOf, onlyNarration, routeClipOf, stopIndexOf } from "../../services/stopRegen";
 import { Tip } from "../../components/ui/Tip";
 import { openContextMenu, separator } from "../../components/ui/menuItems";
@@ -57,20 +58,6 @@ export function EditorView() {
     const where = typeof index === "number" ? waypoints[index]?.name ?? "" : index === "intro" ? t`Intro` : t`Overview`;
     return `${where} · ${what}`;
   };
-  // The "make again" queue: what runs now, and each waiting job with move / remove.
-  const queueMenu = (e: React.MouseEvent) =>
-    openContextMenu(e, [
-      ...(regenBusy ? [{ type: "label" as const, label: `${t`Now:`} ${regenLabel(regenBusy)}` }] : []),
-      ...(regenWaiting.length ? [separator] : [{ type: "label" as const, label: t`Nothing waiting` }]),
-      ...regenWaiting.map((job, i) => ({
-        label: `${i + 1}. ${regenLabel(job)}`,
-        submenu: [
-          { label: t`Move up`, icon: ArrowUp, disabled: i === 0, onSelect: () => moveQueued(i, -1) },
-          { label: t`Move down`, icon: ArrowDown, disabled: i === regenWaiting.length - 1, onSelect: () => moveQueued(i, 1) },
-          { label: t`Remove from queue`, icon: Trash2, danger: true, onSelect: () => removeQueued(i) },
-        ],
-      })),
-    ]);
   const dir = metadata.directory_path;
 
   const [draft, setDraft] = useState<TimelineData | null>(null);
@@ -461,23 +448,7 @@ export function EditorView() {
           <ZoomIn className="w-4 h-4" />
           <Tip label={t`Zoom in`} align="end" />
         </button>
-        {regenBusy && (
-          <button
-            type="button"
-            role="status"
-            onClick={queueMenu}
-            title={t`See and arrange the queue`}
-            className="ml-2 flex items-center gap-1.5 h-7 max-w-64 px-2.5 rounded-md bg-navi/10 text-navi text-[12px] font-medium hover:bg-navi/15"
-          >
-            <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
-            <span className="truncate">
-              {typeof regenBusy.index === "number"
-                ? `${t`Making this stop again...`} ${waypoints[regenBusy.index]?.name ?? ""}`
-                : regenBusy.index === "intro" ? t`Making the intro again...` : t`Making the overview again...`}
-              {regenWaiting.length > 0 && ` ${t`(${regenWaiting.length} waiting)`}`}
-            </span>
-          </button>
-        )}
+        {regenBusy && <RegenQueueCard busy={regenBusy} waiting={regenWaiting} label={regenLabel} />}
         <button
           type="button"
           disabled={empty || isBackgroundBusy}
