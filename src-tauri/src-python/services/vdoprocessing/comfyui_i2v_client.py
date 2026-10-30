@@ -551,6 +551,7 @@ class ComfyUII2VClient:
         Path(__file__).resolve().parents[1] / "tts" / "idle_watchdog.py"
     )
     _ACTIVITY_FILE: Final[Path] = _SERVER_DIR / ".last_active_i2v"
+    _SERVER_GONE_SECONDS: Final[float] = 60.0
     _POLL_INTERVAL_SECONDS: Final[float] = 2.0
     # Written with the spawning process's PID right after Popen — see
     # IrodoriTTSClient's identical mechanism in services/tts/ttsengine.py.
@@ -900,12 +901,21 @@ class ComfyUII2VClient:
         reporter = _ServerLogReporter(label)
         reporter.show("queued")
         deadline = time.monotonic() + timeout
+        down_since = None
         while time.monotonic() < deadline:
             reporter.report(log_tail.poll())
             try:
                 response = client.get(f"{self.base_url}/history/{prompt_id}", timeout=30.0)
                 response.raise_for_status()
+                down_since = None
+                # A job longer than COMFYUI_IDLE_TIMEOUT_SECONDS is not idle: the watchdog killed the server mid-job.
+                self._touch_activity()
             except httpx.TransportError as exc:
+                # Refused for a minute: the server is gone, waiting out the timeout cannot bring the job back.
+                if isinstance(exc, httpx.ConnectError):
+                    down_since = down_since or time.monotonic()
+                    if time.monotonic() - down_since > self._SERVER_GONE_SECONDS:
+                        raise RuntimeError(f"ComfyUI stopped while making prompt {prompt_id}.") from exc
                 # A generation can take several minutes of real GPU work
                 # (hundreds of 2s polls on the same pooled keep-alive
                 # connection) — observed in the wild as a `ReadError:
