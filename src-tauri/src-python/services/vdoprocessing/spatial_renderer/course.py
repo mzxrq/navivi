@@ -252,7 +252,7 @@ class _CourseOverviewMixin:
             if not any_go:
                 return (name, ap["course_dist"])
             go = cues.get(f"go{ap.get('order')}")
-            if go is None:
+            if go is None or ap["data"].get("pause_at_waypoint") is False:  # "Pause at Location" off: passed
                 return (name, ap["course_dist"], False)
             if name is not None and float(name) < float(go):
                 return (float(name), ap["course_dist"], True, float(go))
