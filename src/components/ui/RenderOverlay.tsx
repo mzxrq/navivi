@@ -112,7 +112,9 @@ export function RenderOverlay() {
   const [backgroundLabel, setBackgroundLabel] = useState("");
   // The finish handler lives in an effect closure, so it reads what the editor looks like now through this.
   const redoneVoices = useRef<ReviewRow[]>([]);
-  const live = useRef({ timeline, settings, canUndoTimeline, background: isBackgroundRender, collapsed: isRenderCollapsed });
+  // A full generation shrunk to the corner while the timeline editor shows the last built version.
+  const previewRun = useRef(false);
+  const live =useRef({ timeline, settings, canUndoTimeline, background: isBackgroundRender, collapsed: isRenderCollapsed });
   live.current = { timeline, settings, canUndoTimeline, background: isBackgroundRender, collapsed: isRenderCollapsed };
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
@@ -166,6 +168,7 @@ export function RenderOverlay() {
       setIsRedoing(false);
       setIsBackgroundRender(false);
       setBackgroundLabel("");
+      previewRun.current = false;
     }
   }, [isRendering, setIsRenderCollapsed, setIsBackgroundRender]);
 
@@ -221,7 +224,11 @@ export function RenderOverlay() {
             setProgress(100);
             pushSystemLog(t`renderFinishSuccessMessage`);
 
-            if (live.current.background) {
+            if (previewRun.current) {
+              previewRun.current = false;
+              setIsBackgroundRender(false);
+              setIsRenderCollapsed(false);
+            } else if (live.current.background) {
               await finishBackgroundRun();
               return;
             }
@@ -577,6 +584,14 @@ export function RenderOverlay() {
     setRenderAttempt((prev) => prev + 1);
   };
 
+  const watchPreview = async () => {
+    if (metadata.directory_path) await autoLoadTimeline(metadata.directory_path);
+    previewRun.current = true;
+    setIsBackgroundRender(true);
+    setIsRenderCollapsed(true);
+    setEditorMode("timeline");
+  };
+
   const finishBackgroundRun = async () => {
     const dir = metadata.directory_path;
     const now = live.current;
@@ -799,14 +814,20 @@ export function RenderOverlay() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100">
-                {failed ? t`The redo failed` : ready ? t`Redo finished` : status === "cancelling" ? t`Cancelling...` : t`Redoing in the background`}
+                {failed
+                  ? previewRun.current ? t`Generation failed` : t`The redo failed`
+                  : ready
+                    ? t`Redo finished`
+                    : status === "cancelling"
+                      ? t`Cancelling...`
+                      : previewRun.current ? t`Generating in the background` : t`Redoing in the background`}
               </p>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate" title={failed ? (lastPipelineError(pipelineLog) ?? "") : undefined}>
                 {failed
                   ? (lastPipelineError(pipelineLog) ?? t`An unknown error occurred during rendering.`)
                   : ready
                     ? t`${backgroundLabel} ready to check`
-                    : `${backgroundLabel} · ${stageText()}`}
+                    : previewRun.current ? stageText() : `${backgroundLabel} · ${stageText()}`}
               </p>
             </div>
             {running && (
@@ -826,8 +847,10 @@ export function RenderOverlay() {
             {ready
               ? t`Review them, or carry on in the timeline editor.`
               : failed
-                ? t`The files that were removed will be made again the next time you generate.`
-                : t`Keep working in the timeline editor. Export is available when it finishes.`}
+                ? previewRun.current ? t`Open Details to see what went wrong.` : t`The files that were removed will be made again the next time you generate.`
+                : previewRun.current
+                  ? t`You're watching the last version. The new one opens for review when it finishes.`
+                  : t`Keep working in the timeline editor. Export is available when it finishes.`}
           </p>
 
           <div className="flex items-center gap-1.5 -mb-0.5">
@@ -979,12 +1002,12 @@ export function RenderOverlay() {
                   <span className="truncate">{hardwareSpec.details}</span>
                 </p>
               </div>
-              {isBackgroundRender && status === "processing" && step === "generating" && (
+              {status === "processing" && step === "generating" && (
                 <button
-                  onClick={() => setIsRenderCollapsed(true)}
+                  onClick={() => (isBackgroundRender ? setIsRenderCollapsed(true) : watchPreview())}
                   className="flex items-center gap-2 px-4 py-2 short:py-1.5 shrink-0 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5 text-sm font-medium rounded-lg transition-all text-nowrap"
                 >
-                  <Minimize2 className="w-4 h-4" /> <Trans>Keep working</Trans>
+                  <Minimize2 className="w-4 h-4" /> {isBackgroundRender ? <Trans>Keep working</Trans> : <Trans>Watch preview</Trans>}
                 </button>
               )}
               {status === "processing" && step === "generating" && (
