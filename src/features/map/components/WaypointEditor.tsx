@@ -802,11 +802,7 @@ ${t`Open the photo's page on Wikimedia Commons`}`}
                   description={t`Adds a brief pause in the generated video at this waypoint before continuing the journey`}
                 >
                   <Switch
-                    checked={
-                      wp.pauseAtWaypoint !== undefined
-                        ? wp.pauseAtWaypoint
-                        : waypoints[wpIndex + 1]?.isStopBy === true
-                    }
+                    checked={wp.pauseAtWaypoint !== false /* the video's default: on */}
                     onChange={(v) => updateWaypoint(wp.id, { pauseAtWaypoint: v })}
                     label={t`Pause at Location`}
                   />
