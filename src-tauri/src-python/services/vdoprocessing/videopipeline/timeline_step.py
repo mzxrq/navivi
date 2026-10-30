@@ -461,6 +461,14 @@ def build_timeline(
                 and Path(source).name != tuning.INTRO_OUTPUT_FILENAME
             ):
                 tracks[k]["fade_into_next_seconds"] = attraction_fade_seconds
+            # Two legs joined at a return stop share their camera there (pedestrian.py `end_view_path`):
+            # the dissolve only swaps the route lines and cards over the same map.
+            leg = _RESIDENTIAL_LEG_RE.search(Path(source).name)
+            if (
+                kind == "route" and ordered[k + 1][0] == "route" and leg
+                and (Path(source).parent / f"{leg.group(0)}endview.json").exists()
+            ):
+                tracks[k]["fade_into_next_seconds"] = attraction_fade_seconds
     # The goodbye dissolves into the outro card instead of cutting to it.
     if len(ordered) > 1 and Path(ordered[-1][2]).name == tuning.OUTRO_OUTPUT_FILENAME:
         tracks[-2]["fade_into_next_seconds"] = tuning.ENDING_FADE_SECONDS
