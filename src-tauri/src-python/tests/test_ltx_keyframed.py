@@ -107,6 +107,14 @@ class TestRects:
         monkeypatch.setattr(tuning, "ATTRACTION_SECOND_SHOT", None)
         assert ltx_keyframed.shot_list("panright") == ["panright"]
 
+    def test_walk_in_keeps_going_in_so_walk_back_keeps_backing_away(self, monkeypatch):
+        # Walk Back is Walk In played backwards: its second shot (closer in) reversed backs away too.
+        for mode in ("auto", "random", "closepanleft"):
+            monkeypatch.setattr(tuning, "ATTRACTION_SECOND_SHOT", mode)
+            assert ltx_keyframed.second_shot("walkin", "photo-a") == "closein"
+        monkeypatch.setattr(tuning, "ATTRACTION_SECOND_SHOT", None)
+        assert ltx_keyframed.second_shot("walkin", "photo-a") is None
+
     def test_random_second_shot_is_repeatable_varied_and_never_the_same_way(self, monkeypatch):
         monkeypatch.setattr(tuning, "ATTRACTION_SECOND_SHOT", "random")
         monkeypatch.setattr(tuning, "ATTRACTION_SECOND_SHOT_MOVES", (
@@ -505,3 +513,10 @@ def test_the_second_half_is_graded_to_meet_the_first_without_a_jump(tmp_path):
     assert len(frames) == 48 - LTXV_JOIN_FADE_FRAMES
     means = [float(f.mean()) for f in frames]
     assert max(abs(x - y) for x, y in zip(means, means[1:])) < 4  # no brightness step at the join
+
+
+def test_with_the_photo_tail_only_walk_in_keeps_a_second_shot(monkeypatch):
+    monkeypatch.setattr(tuning, "ATTRACTION_SLOW_MOVE_STYLE", "photo")
+    monkeypatch.setattr(tuning, "ATTRACTION_SECOND_SHOT", "auto")
+    assert ltx_keyframed.shot_list("panright", "s") == ["panright"]
+    assert ltx_keyframed.shot_list("walkin", "s") == ["walkin", "closein"]

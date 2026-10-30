@@ -555,8 +555,8 @@ ATTRACTION_NARRATION_TAIL_SECONDS = 1.0
 ATTRACTION_SLOW_MOVE_ZOOM_PER_SEC = 0.012
 # How time left after the animation is filled (only when the chain is capped short of the narration):
 # "zoomout" eases back out to the full picture; "drift" a slow random push-in; "photo" dissolves to the
-# photo and holds; "reverse" (the user's pick, 2026-10-21) plays the animation back and forth.
-ATTRACTION_SLOW_MOVE_STYLE = "reverse"
+# photo and holds (the user's pick, 2026-10-30: no clip played backwards); "reverse" plays the animation back and forth.
+ATTRACTION_SLOW_MOVE_STYLE = "photo"
 ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT = 0.12
 # The dissolve into that photo; 0 = a hard cut.
 ATTRACTION_TAIL_PHOTO_FADE_SECONDS = 0.5

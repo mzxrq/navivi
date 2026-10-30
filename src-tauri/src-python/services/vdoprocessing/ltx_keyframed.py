@@ -340,7 +340,7 @@ _SAME_WAY = {
     "panright": "closepanright", "panleft": "closepanleft", "panup": "closepanup",
     "pandown": "closepandown", "zoomin": "closein", "zoomout": "closeout", "walkback": "closeout",
     "walkfwd": "closein", "walkfwdleft": "closein", "walkfwdright": "closein", "walkshort": "closein",
-    "walkai": "closein",
+    "walkai": "closein", "walkin": "closein",
 }
 
 
@@ -352,6 +352,9 @@ def second_shot(preset: str, seed: str = "", photo_path: Optional[str] = None) -
     import random
 
     second = tuning.ATTRACTION_SECOND_SHOT
+    # Walk In keeps going the same way (closer in); Walk Back is Walk In played backwards, so it keeps backing away.
+    if second and preset == "walkin" and _SAME_WAY["walkin"] in tuning.LTXV_PROMPTS:
+        return _SAME_WAY["walkin"]
     if second in ("random", "auto"):
         # A walk-in first shot is followed by a close shot, not another walk.
         free_first = preset in tuning.LTXV_FREE_MOVES
@@ -416,8 +419,9 @@ def sharp_enough_preset(preset: str, photo_path: str) -> str:
 def shot_list(preset: str, seed: str = "", photo_path: Optional[str] = None) -> List[str]:
     """The chosen move, then the second shot - unless the photo is too small
     for a close crop to stay sharp. With the "photo" tail the still photo
-    takes the second shot's place (and with the "reverse" tail the clip played backwards does)."""
-    if tuning.ATTRACTION_SLOW_MOVE_STYLE in ("photo", "reverse") or tuning.LTXV_CONTINUE:
+    takes the second shot's place (and with the "reverse" tail the clip played backwards does), except after
+    Walk In, which keeps going in (second_shot)."""
+    if tuning.LTXV_CONTINUE or (tuning.ATTRACTION_SLOW_MOVE_STYLE in ("photo", "reverse") and preset != "walkin"):
         return [preset]
     if tuning.ATTRACTION_SECOND_SHOT and photo_path:
         try:
