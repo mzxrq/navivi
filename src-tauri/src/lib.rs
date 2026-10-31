@@ -330,6 +330,7 @@ fn start_render(
 
     let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
     let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
+    let my_pid = child.id();
 
     // Track this child the same way run_python_blueprint's is tracked, so
     // an app exit (or a future cancel-render command) can find and kill it.
@@ -376,7 +377,8 @@ fn start_render(
 
         {
             let mut lock = lock_slot(&child_state.render_process);
-            if let Some(child) = lock.as_mut() {
+            // A cancel or a newer render replaced this one: that render's own watcher reports it.
+            if let Some(child) = lock.as_mut().filter(|c| c.id() == my_pid) {
                 match child.try_wait() {
                     Ok(Some(status)) => {
                         lock.take();
@@ -588,8 +590,7 @@ fn asset_target(source: &Path, dir: &Path) -> (PathBuf, bool) {
     let stem = Path::new(name).file_stem().unwrap_or_default().to_string_lossy().to_string();
     let ext = Path::new(name).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
     let same_file = |candidate: &Path| {
-        fs::canonicalize(candidate).ok() == fs::canonicalize(source).ok()
-            || matches!((fs::read(candidate), fs::read(source)), (Ok(a), Ok(b)) if a == b)
+        fs::canonicalize(candidate).ok() == fs::canonicalize(source).ok() || same_bytes(candidate, source).unwrap_or(false)
     };
     for n in 1.. {
         let candidate = if n == 1 { dir.join(name) } else { dir.join(format!("{stem} ({n}){ext}")) };
@@ -601,6 +602,27 @@ fn asset_target(source: &Path, dir: &Path) -> (PathBuf, bool) {
         }
     }
     unreachable!()
+}
+
+/// Compared in chunks, sizes first: two multi-GB clips must not be read into memory whole.
+fn same_bytes(a: &Path, b: &Path) -> std::io::Result<bool> {
+    if fs::metadata(a)?.len() != fs::metadata(b)?.len() {
+        return Ok(false);
+    }
+    let (mut a, mut b) = (BufReader::new(fs::File::open(a)?), BufReader::new(fs::File::open(b)?));
+    loop {
+        let chunk = a.fill_buf()?;
+        if chunk.is_empty() {
+            return Ok(b.fill_buf()?.is_empty());
+        }
+        let other = b.fill_buf()?;
+        let n = chunk.len().min(other.len());
+        if n == 0 || chunk[..n] != other[..n] {
+            return Ok(false);
+        }
+        a.consume(n);
+        b.consume(n);
+    }
 }
 
 #[tauri::command(async)]
@@ -844,6 +866,30 @@ fn unzip_into(source_file: &str, dest_dir: &str) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod asset_tests {
+    use super::*;
+
+    #[test]
+    fn a_same_named_file_is_reused_only_when_its_bytes_match() {
+        let root = std::env::temp_dir().join(format!("navivi_asset_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let (dir, card_a, card_b) = (root.join("assets"), root.join("a"), root.join("b"));
+        for d in [&dir, &card_a, &card_b] {
+            fs::create_dir_all(d).unwrap();
+        }
+        fs::write(dir.join("GX01.MP4"), b"old clip, no stop uses it now").unwrap();
+        fs::write(card_a.join("GX01.MP4"), b"old clip, no stop uses it now").unwrap();
+        fs::write(card_b.join("GX01.MP4"), b"new clip, same length as old!").unwrap();
+
+        assert_eq!(asset_target(&card_a.join("GX01.MP4"), &dir), (dir.join("GX01.MP4"), true));
+        // Same name and size, other bytes: never mistaken for the old clip.
+        assert_eq!(asset_target(&card_b.join("GX01.MP4"), &dir), (dir.join("GX01 (2).MP4"), false));
+        assert_eq!(asset_target(&dir.join("GX01.MP4"), &dir), (dir.join("GX01.MP4"), true));
+        let _ = fs::remove_dir_all(&root);
+    }
 }
 
 #[cfg(all(test, target_os = "windows"))]

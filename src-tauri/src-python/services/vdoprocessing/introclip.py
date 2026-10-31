@@ -385,10 +385,9 @@ def title_events(
     Used by the intro and by text items on the editor's text track."""
     duration_sec = max(0.0, end_sec - start_sec)
     an = _ALIGN_AN.get(align, 5)
-    # Braces open override tags and backslashes start escapes — strip them
-    # from arbitrary project-name text rather than escaping.
-    clean = lambda t: (t or "").replace("{", "").replace("}", "").replace("\\", "")  # noqa: E731
-    safe_title, safe_subtitle, safe_kicker = clean(title), clean(subtitle), clean(kicker)
+    from services.vdoprocessing.vdoexporter import _ass_text
+
+    safe_title, safe_subtitle, safe_kicker = (_ass_text(t or "") for t in (title, subtitle, kicker))
 
     kicker_y, title_y, sub_y = stacked_line_ys(
         cy, kicker_style.font_size, title_style.font_size, subtitle_style.font_size,
