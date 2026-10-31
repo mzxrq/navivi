@@ -1,5 +1,5 @@
 import { documentDir, join, basename, dirname } from "@tauri-apps/api/path";
-import { writeTextFile, writeFile, mkdir, exists, copyFile, readTextFile, readDir, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
+import { writeTextFile, writeFile, mkdir, exists, rename, readTextFile, readDir, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { appConfig, fileSystem, GLOBAL_DICTIONARY_KEY, resolveVideoStyle } from "../config/constants";
@@ -9,7 +9,7 @@ import { routeCacheKey } from "../utils/routeCacheKey";
 import { stripApiKeys } from "../utils/apiKeys";
 import { mapboxTileLoader, segmentElevations } from "../utils/terrainElevation";
 import { pathProfile } from "../utils/legEstimate";
-import { planFileNames } from "../utils/fileNames";
+import { importAssets } from "../utils/fileNames";
 import { renameCredits } from "../utils/photoCredits";
 import { carryOverLooks, emptyTimeline, type ExportOptions, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
 import { i18n } from "@lingui/core";
@@ -220,8 +220,8 @@ export const saveProjectData = async (
   const gpxStr = gpxLines.join('\n');
   await writeTextFile(gpxPath, gpxStr);
 
-  const imageNames = await planFileNames(imageAssetsDir, waypoints.flatMap((wp) => [...(wp.images ?? []), ...(wp.customMarker ? [wp.customMarker] : [])]));
-  const videoNames = await planFileNames(userVideoDir, waypoints.flatMap((wp) => wp.videos ?? []));
+  const imageNames = await importAssets(imageAssetsDir, waypoints.flatMap((wp) => [...(wp.images ?? []), ...(wp.customMarker ? [wp.customMarker] : [])]));
+  const videoNames = await importAssets(userVideoDir, waypoints.flatMap((wp) => wp.videos ?? []));
 
   const processedWaypoints = await Promise.all(
     waypoints.map(async (wp) => {
@@ -231,32 +231,18 @@ export const saveProjectData = async (
 
       if (wp.images && wp.images.length > 0) {
         for (const imgPath of wp.images) {
-          const fileName = imageNames.get(imgPath) ?? (await basename(imgPath));
-          const absoluteDest = await join(imageAssetsDir, fileName);
-          if (imgPath !== absoluteDest) {
-            await copyFile(imgPath, absoluteDest);
-          }
+          const fileName = imageNames.get(imgPath)!;
           relativeImagePaths.push("assets/image/" + fileName);
           renamed.set(imgPath, "assets/image/" + fileName);
         }
       }
       const relativeVideoPaths: string[] = [];
       for (const videoPath of wp.videos ?? []) {
-        const fileName = videoNames.get(videoPath) ?? (await basename(videoPath));
-        const absoluteDest = await join(userVideoDir, fileName);
-        if (videoPath !== absoluteDest && !(await exists(absoluteDest))) {
-          await copyFile(videoPath, absoluteDest);
-        }
-        relativeVideoPaths.push("assets/video/user/" + fileName);
+        relativeVideoPaths.push("assets/video/user/" + videoNames.get(videoPath)!);
       }
       let finalCustomMarker = "";
       if (wp.customMarker) {
-        const markerName = imageNames.get(wp.customMarker) ?? (await basename(wp.customMarker));
-        const markerDest = await join(imageAssetsDir, markerName);
-        if (wp.customMarker !== markerDest) {
-          await copyFile(wp.customMarker, markerDest);
-        }
-        finalCustomMarker = "assets/image/" + markerName;
+        finalCustomMarker = "assets/image/" + imageNames.get(wp.customMarker)!;
       }
 
       return {
@@ -375,8 +361,9 @@ export const saveProjectData = async (
     waypoints: processedWaypoints,
   };
 
-  const payload = JSON.stringify(jobConfig, null, 2);
-  await writeTextFile(jsonPath, payload);
+  // Written aside and renamed over: a crash mid-write must not leave the project's one file half written.
+  await writeTextFile(`${jsonPath}.tmp`, JSON.stringify(jobConfig, null, 2));
+  await rename(`${jsonPath}.tmp`, jsonPath);
 
   const manifest = buildAssetManifest(projId, processedWaypoints as any, settings);
   const metaDir = await join(projectDir, fileSystem.metaFolder);

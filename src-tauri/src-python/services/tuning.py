@@ -1415,11 +1415,3 @@ QWEN3_COST = {"request": 5.0, "char": 0.85, "startup": 40.0}
 # [NOTE] [Legs] A Mapillary street photo pops up as a small card at each turn of a walking leg (settings.street_photos_at_turns).
 # Needs the app-wide Mapillary token; turns without coverage just show no card.
 STREET_PHOTOS_AT_TURNS = False
-
-# [NOTE] [Attraction] Hand-held finish (vdoprocessing/handheld.py) on every generated attraction clip: a slow seeded
-# drift and roll, plus the PARALLAX_WALK_* footsteps on walking moves. After generation, never in the prompt
-# ("hand-held" made LTX draw hands). Part of the tail signature, so a change refits kept clips on the CPU.
-HANDHELD = False  # 2026-10-22: the user preferred the steady camera
-HANDHELD_DRIFT = 0.004  # share of the frame
-HANDHELD_ROLL_DEG = 0.3
-HANDHELD_WALK_MOVES: Tuple[str, ...] = ("walkin", "walkback", "walkfwd", "walkfwdleft", "walkfwdright", "walkshort", "walkai")

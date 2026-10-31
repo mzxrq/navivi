@@ -11,7 +11,7 @@
 - react-map-gl (v8.1.2)
 - mapbox-gl (v3.29.0)
 - @turf/* (bezier-spline, buffer, helpers, length, simplify)
-- *NOTE: @mapbox/mapbox-gl-draw is listed in package.json but we have EXPLICITLY REMOVED it from the project in favor of native DOM markers for anchors.*
+- *NOTE: @mapbox/mapbox-gl-draw was removed in favor of native DOM markers for anchors.*
 
 ## UI & Components
 - react-rnd (v10.5.3) - Used for draggable/resizable windows (like WaypointEditor and Layers)

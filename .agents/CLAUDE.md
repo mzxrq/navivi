@@ -95,7 +95,6 @@ E2E: `tests/e2e/*.spec.ts` (Playwright) mocks `window.__TAURI_INTERNALS__`; ther
 - Env: `.env` → `VITE_ORS_API_KEY` (OpenRouteService routing), `VITE_MAPBOX_TOKEN`.
 - Window is frameless (`decorations: false`); the custom `TitleBar` handles drag/min/max/close.
 - react-rnd windows (WaypointEditor, layers panel): **don't** put `animate-in` / transform classes on them — it fights rnd positioning.
-- `@mapbox/mapbox-gl-draw` is still in package.json but intentionally unused (native DOM markers for anchors).
 
 ## Frontend ⇄ Python contract
 
@@ -147,7 +146,7 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
   Per-project overrides come from `job_config.json` `settings.*`; tuning.py holds fallback defaults only.
 - Elevation heatmap in the video: `settings.show_route_heatmap` + `<ele>` in `raw_track.gpx` (`height` in the csv) → `pydeckrecorder/elevation.py`; see CODEMAP. Heatmap legs also show an elevation profile card bottom-left, level with the summary card (`elevation.profile_card`; bump `route2vdo.LEG_ELEVATION_CARD_VERSION` to re-render only those legs). Each leg keeps its previous render in `assets/video/route/.variants/`: switching a setting back restores it instead of rendering again.
 - Street photos at turns: `settings.street_photos_at_turns` + the app-wide Mapillary key (`NAVIVI_MAPILLARY_TOKEN`) → `mapfetcher/street_photos.py` adds a pip landmark per `leg_turns()` turn on walking legs (route2vdo.py); photos cached in `.navivi/streetview/` with `index.json` per turn (unchanged route = no requests; ≤2 req/s, limit 10, a 4xx stops that leg's requests), credit stamped on each. No Google Street View backup: removed 2026-10-22 (its terms forbid storing the images and promo videos need approval). Only turns ≥ TURN_DEG (50°), 50 m+ from either stop, one per zigzag, are looked up.
-- Attraction hand-held finish (off since 2026-10-22, `HANDHELD = False`): `vdoprocessing/handheld.py` shakes a temp copy inside `img2vdo._fit_and_finalize` (only when `handheld_pan` is passed: generated clips, never user footage or a refit of a finished clip); settings are in `_tail_signature`, so changing `HANDHELD*` refits kept raws on the CPU. Editor move "Walk Back" = `walkback`, walk-in's depth keyframes reversed.
+- Attraction hand-held shake was removed 2026-10-31 (the user preferred the steady camera; it lives in git history). `img2vdo._fit_and_finalize(generated_pan=…)` marks a generated clip (denoise only, never user footage). Editor move "Walk Back" = `walkback`, walk-in's depth keyframes reversed.
 - Rendering: `pydeckrecorder/` (3D, deck.gl in headless Chromium via Playwright → frames → ffmpeg) and
   `spatial_renderer/` (legacy 2D overview/waypoint maps, mixin-composed `SpatialRenderer`). `mapfetcher/` = tiles, geometry, pacing, graphic overlays.
 - AI/local servers (auto-started on demand, idle-watchdog stopped): Irodori TTS (`bin/Irodori-TTS-Server`, port 8088), Qwen3-TTS balanced voice (`bin/Qwen3-TTS`, port 8090, own venv) and Kokoro fast voice (`bin/Kokoro-TTS`, port 8089, own venv); the engine switch is in Settings > Voice,
@@ -173,7 +172,6 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
   Mojibake like `running Python worker  Eand` in `lib.rs` comments is leftover damage.
 - Files contain Japanese text and em dashes; keep UTF-8 without introducing BOMs.
 - `.gitignore` excludes `*.md` (so a new Markdown file isn't committed unless it is in `docs/`, `.agents/` or is the README, or is force-added), most of `.agents/`, `.github`, `data/`, and media under `src-python`.
-- Empty tracked `fix_*.py` files sit at the repo root — leftovers; leave them unless asked.
 - The dev server ignores `src-tauri/**` for HMR; Python changes take effect on the next spawn, Rust changes need a rebuild.
   `src-tauri/.taurignore` ignores all of `src-python/**` (plus data/logs), so edits or downloads there never restart `tauri dev`
   mid-render. If a Rust change is needed, restart the app yourself.

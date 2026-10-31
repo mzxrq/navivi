@@ -18,6 +18,7 @@
     "fs:allow-write",
     "fs:allow-write-file",
     "fs:allow-remove",
+    "fs:allow-rename",
     "fs:allow-mkdir",
     "fs:allow-copy-file",
     "fs:allow-write-text-file",

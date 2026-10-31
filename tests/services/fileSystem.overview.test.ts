@@ -13,7 +13,7 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
   writeFile: vi.fn(),
   mkdir: vi.fn(),
   exists: () => Promise.resolve(true),
-  copyFile: vi.fn(),
+  rename: (from: string, to: string) => Promise.resolve(void ((mocks.written[to] = mocks.written[from]), delete mocks.written[from])),
   readTextFile: vi.fn(),
   readDir: vi.fn(),
   open: vi.fn(),

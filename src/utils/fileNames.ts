@@ -1,43 +1,24 @@
-import { basename, join } from "@tauri-apps/api/path";
+import { invoke } from "@tauri-apps/api/core";
+import { basename } from "@tauri-apps/api/path";
+import { exists } from "@tauri-apps/plugin-fs";
 
-const normalizePath = (p: string) => p.replace(/\\/g, "/").toLowerCase();
+// Outside file -> its copy in the project, for this session: a stop keeps the outside path after a save, and
+// comparing a multi-GB clip with its copy again on every autosave would be slow.
+const imported = new Map<string, string>();
 
-// FNV-1a of the source path: a short, stable tag that tells two same-named files apart.
-const pathTag = (p: string) => {
-  let h = 2166136261;
-  for (const ch of normalizePath(p)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
-  return (h >>> 0).toString(36).slice(0, 6);
-};
-
-// The file name each source gets inside `destDir`. Files already there keep their name; a new file keeps its own name
-// unless another source shares it, then each one gets a tag from its source path, so the names do not depend on order.
-export async function planFileNames(destDir: string, sources: string[]): Promise<Map<string, string>> {
-  const plan = new Map<string, string>();
-  const unique = [...new Set(sources)];
-  const taken = new Set<string>();
-  const outside: { src: string; name: string }[] = [];
-  for (const src of unique) {
-    const name = await basename(src);
-    if (normalizePath(await join(destDir, name)) === normalizePath(src)) {
-      plan.set(src, name);
-      taken.add(name.toLowerCase());
-    } else {
-      outside.push({ src, name });
+// The file name each source has inside `destDir`, copying it in when needed. copy_asset_file reuses a file there with
+// the same bytes and otherwise picks "name (2).ext", so a different file of the same name is never overwritten or
+// mistaken for this one. One at a time: two same-named files copied at once would both take the free name.
+export async function importAssets(destDir: string, sources: string[]): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  for (const src of new Set(sources)) {
+    const key = `${destDir}|${src}`;
+    let target = imported.get(key);
+    if (!target || !(await exists(target))) {
+      target = await invoke<string>("copy_asset_file", { sourcePath: src, targetDir: destDir });
+      imported.set(key, target);
     }
+    names.set(src, await basename(target));
   }
-  const sharing = new Map<string, number>();
-  for (const { name } of outside) sharing.set(name.toLowerCase(), (sharing.get(name.toLowerCase()) ?? 0) + 1);
-  for (const { src, name } of outside) {
-    let chosen = name;
-    if (taken.has(name.toLowerCase()) || (sharing.get(name.toLowerCase()) ?? 0) > 1) {
-      const dot = name.lastIndexOf(".");
-      const stem = dot > 0 ? name.slice(0, dot) : name;
-      const ext = dot > 0 ? name.slice(dot) : "";
-      chosen = `${stem}-${pathTag(src)}${ext}`;
-      for (let n = 2; taken.has(chosen.toLowerCase()); n++) chosen = `${stem}-${pathTag(src)}-${n}${ext}`;
-    }
-    plan.set(src, chosen);
-    taken.add(chosen.toLowerCase());
-  }
-  return plan;
+  return names;
 }

@@ -8,7 +8,6 @@ import { MapCompass } from "./MapCompass";
 import { openContextMenu, separator } from "../../../components/ui/menuItems";
 import { useStopMenus } from "../hooks/useStopMenus";
 import { Check, Pencil, Plus, SplinePointer, Trash2 } from "../../../components/ui/icons";
-import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 import { mapStyles } from "../../../config/constants";
 import { RouteStyling } from "./MapLayers/RouteStyling";
 import { useWorkspace } from "../../../hooks/useWorkspace";

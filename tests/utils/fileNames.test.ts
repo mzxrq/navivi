@@ -1,52 +1,40 @@
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@tauri-apps/api/path", () => ({
-  basename: async (p: string) => path.win32.basename(p),
-  join: async (...parts: string[]) => path.win32.join(...parts),
-}));
+const mocks = vi.hoisted(() => ({ invoke: vi.fn(), exists: vi.fn() }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
+vi.mock("@tauri-apps/plugin-fs", () => ({ exists: mocks.exists }));
+vi.mock("@tauri-apps/api/path", () => ({ basename: async (p: string) => path.win32.basename(p) }));
 
-import { planFileNames } from "../../src/utils/fileNames";
+import { importAssets } from "../../src/utils/fileNames";
 
-const dir = "C:/p/assets/image";
-
-describe("planFileNames", () => {
-  it("keeps the name of a file nobody else shares", async () => {
-    const plan = await planFileNames(dir, ["D:/photos/solo.jpg"]);
-    expect(plan.get("D:/photos/solo.jpg")).toBe("solo.jpg");
+describe("importAssets", () => {
+  beforeEach(() => {
+    mocks.invoke.mockReset();
+    mocks.exists.mockReset().mockResolvedValue(true);
   });
 
-  it("gives two different files with the same name different names", async () => {
-    const plan = await planFileNames(dir, ["D:/a/IMG_0001.jpg", "D:/b/IMG_0001.jpg"]);
-    const [a, b] = [plan.get("D:/a/IMG_0001.jpg"), plan.get("D:/b/IMG_0001.jpg")];
-    expect(a).not.toBe(b);
-    expect(a).toMatch(/^IMG_0001-\w+\.jpg$/);
-    expect(b).toMatch(/^IMG_0001-\w+\.jpg$/);
+  it("copies one file at a time and uses the name copy_asset_file chose", async () => {
+    let running = 0;
+    mocks.invoke.mockImplementation(async (_cmd: string, { sourcePath }: { sourcePath: string }) => {
+      expect(++running).toBe(1);
+      await new Promise((r) => setTimeout(r, 1));
+      running--;
+      return sourcePath.startsWith("D:/a") ? "C:/p/v/GX01.MP4" : "C:/p/v/GX01 (2).MP4";
+    });
+    const names = await importAssets("C:/p/v", ["D:/a/GX01.MP4", "E:/b/GX01.MP4", "D:/a/GX01.MP4"]);
+    expect(mocks.invoke).toHaveBeenCalledTimes(2);
+    expect(names.get("D:/a/GX01.MP4")).toBe("GX01.MP4");
+    expect(names.get("E:/b/GX01.MP4")).toBe("GX01 (2).MP4");
   });
 
-  it("does not depend on the order of the stops", async () => {
-    const forward = await planFileNames(dir, ["D:/a/IMG.jpg", "D:/b/IMG.jpg"]);
-    const backward = await planFileNames(dir, ["D:/b/IMG.jpg", "D:/a/IMG.jpg"]);
-    expect(backward.get("D:/a/IMG.jpg")).toBe(forward.get("D:/a/IMG.jpg"));
-    expect(backward.get("D:/b/IMG.jpg")).toBe(forward.get("D:/b/IMG.jpg"));
-  });
-
-  it("keeps the name of a file already in the folder and moves a newcomer out of its way", async () => {
-    const plan = await planFileNames(dir, ["D:/x/IMG.jpg", "C:/p/assets/image/IMG.jpg"]);
-    expect(plan.get("C:/p/assets/image/IMG.jpg")).toBe("IMG.jpg");
-    expect(plan.get("D:/x/IMG.jpg")).not.toBe("IMG.jpg");
-  });
-
-  it("treats the same path twice, or with another slash style or case, as one file", async () => {
-    const plan = await planFileNames(dir, ["D:/a/same.jpg", "D:/a/same.jpg", "C:/P/Assets/Image/Own.JPG"]);
-    expect(plan.size).toBe(2);
-    expect(plan.get("D:/a/same.jpg")).toBe("same.jpg");
-    expect(plan.get("C:/P/Assets/Image/Own.JPG")).toBe("Own.JPG");
-  });
-
-  it("never hands out one name twice", async () => {
-    const sources = ["D:/a/x.png", "D:/b/x.png", "D:/c/x.png", "C:/p/assets/image/x.png"];
-    const names = [...(await planFileNames(dir, sources)).values()].map((n) => n.toLowerCase());
-    expect(new Set(names).size).toBe(sources.length);
+  it("does not compare a file again on the next save, unless its copy is gone", async () => {
+    mocks.invoke.mockResolvedValue("C:/q/v/clip.mp4");
+    await importAssets("C:/q/v", ["D:/clip.mp4"]);
+    await importAssets("C:/q/v", ["D:/clip.mp4"]);
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    mocks.exists.mockResolvedValue(false);
+    await importAssets("C:/q/v", ["D:/clip.mp4"]);
+    expect(mocks.invoke).toHaveBeenCalledTimes(2);
   });
 });
