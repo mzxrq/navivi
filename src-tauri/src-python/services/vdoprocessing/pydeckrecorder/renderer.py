@@ -34,7 +34,6 @@ async def render_leg_animation(
     waypoint_markers=None,
     image_display="pip",
     intro_popup: Optional[Dict[str, Any]] = None,
-    debug_dump_dir: Optional[str] = None,
     coin_image_url: Optional[str] = None,
     coin_target: Optional[Dict[str, float]] = None,
     mapbox_key: Optional[str] = None,
@@ -128,8 +127,10 @@ async def render_leg_animation(
 
                 body = await response.body()
 
-                with open(cache_file, "wb") as f:
+                # Whole or not at all: the cache is trusted by existence, so a cut-off tile would be served for good.
+                with open(cache_file + ".part", "wb") as f:
                     f.write(body)
+                os.replace(cache_file + ".part", cache_file)
 
                 await route.fulfill(response=response, body=body)
             else:
@@ -461,7 +462,6 @@ async def render_leg_animation(
                     freeze_frames=freeze_frames,
                     popup_url=popup_url,
                     image_display=image_display,
-                    debug_dump_dir=debug_dump_dir,
                 )
             else:
                 frozen_png = await page.screenshot()

@@ -456,7 +456,6 @@ def render_residential_leg_pydeck(
             dest_popup_image, dest_popup_freeze_seconds, landmarks,
             start_popup_image, start_popup_freeze_seconds, start_cue_seconds,
             arrival_photo_hold_seconds, arrival_wait_seconds, dest_image_display,
-            dest_pin_url=_leg_pin_url(dest_pin, _DEST_PIN_URL),
             hud_card_png=hud_card_png, theme=theme, bottom_reserve_px=bottom_reserve_px,
             segment_colors=segment_colors, opening_photo=opening_photo,
             opening_view=opening_view, end_view_path=end_view_path,
@@ -477,7 +476,6 @@ async def _record_leg(
     dest_popup_image=None, dest_popup_freeze_seconds=None, landmarks=None,
     start_popup_image=None, start_popup_freeze_seconds=None, start_cue_seconds=None,
     arrival_photo_hold_seconds=None, arrival_wait_seconds=None, dest_image_display="cover",
-    dest_pin_url=_DEST_PIN_URL,
     hud_card_png: Optional[Callable[[float, float, bool, float], bytes]] = None,
     theme: Optional[str] = None,
     bottom_reserve_px: float = 0.0,
@@ -1120,7 +1118,7 @@ async def _record_leg(
                     rem_m0 = rem_km0 * 1000.0
                     rem_min0 = _remaining_minutes(rem_m0, rem_km0, travel_speed_kmh)
                     banner_text0, dist_text0 = _hud_text(
-                        dest_label, rem_m0, rem_min0, arrive_threshold_m, mode=mode_hud["mode"], labels=hud_labels
+                        dest_label, rem_m0, arrive_threshold_m, mode=mode_hud["mode"], labels=hud_labels
                     )
                     walker_json0 = json.dumps([{"lon": first_row["lon"], "lat": first_row["lat"]}])
 
@@ -1423,7 +1421,7 @@ async def _record_leg(
                     rem_m = rem_km * 1000.0
                     rem_min = _remaining_minutes(rem_m, rem_km, travel_speed_kmh)
                     banner_text, dist_text = _hud_text(
-                        dest_label, rem_m, rem_min, arrive_threshold_m, mode=mode_hud["mode"], labels=hud_labels
+                        dest_label, rem_m, arrive_threshold_m, mode=mode_hud["mode"], labels=hud_labels
                     )
                     js = f"""
                     if (window.deckgl) {{
@@ -1536,7 +1534,7 @@ async def _record_leg(
                         # Dynamic hop to the NEXT segment's framing for the new clip!
                         # (the piece's opening - photo beat and hop - is measured
                         # below, once the hop is done, as this piece's voice delay)
-                        future_indices = [k for k in stopby_triggers.keys() if k > index]
+                        future_indices = [k for k in stopby_triggers if k > index]
                         if future_indices:
                             next_index = min(future_indices)
                             next_lm = stopby_triggers[next_index]
@@ -1765,6 +1763,9 @@ async def _record_leg(
                             await _write_frame(final_topdown_png)
             finally:
                 await browser.close()
+    except BaseException:
+        await sink.abort()
+        raise
     finally:
         server.shutdown()
         server.server_close()

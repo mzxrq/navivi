@@ -235,7 +235,7 @@ def _remaining_minutes(remaining_m: float, remaining_km: float, travel_speed_kmh
 
 
 def _hud_text(
-    dest_label: str, remaining_m: float, remaining_min: int, arrive_threshold_m: float, mode: str = "walking",
+    dest_label: str, remaining_m: float, arrive_threshold_m: float, mode: str = "walking",
     labels: Optional[Dict] = None,
 ) -> Tuple[str, str]:
     """Returns (banner_text, distance_text) for one frame's remaining

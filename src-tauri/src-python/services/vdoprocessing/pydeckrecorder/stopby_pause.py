@@ -60,7 +60,7 @@ async def _play_stopby_photo_pause(
     where this left off."""
     photo_path = stopby.get("popup_image")
     if not photo_path or not os.path.exists(photo_path):
-        return
+        return frame_index  # the pip caller resumes its walk from here
 
     has_attraction = bool(stopby.get("attraction_video"))
 

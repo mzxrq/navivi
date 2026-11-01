@@ -29,7 +29,8 @@ def _resolve_leg(
     the key couldn't be parsed or no close-enough waypoint was found.
     """
     try:
-        start_str, end_str, _ = route_key.split("|")
+        # "from|to|mode|drawn line[|via points]" (src/utils/routeCacheKey.ts): unpacking exactly three failed on every key.
+        start_str, end_str = route_key.split("|")[:2]
         start_lat, start_lng = (float(v) for v in start_str.split(","))
         end_lat, end_lng = (float(v) for v in end_str.split(","))
     except (ValueError, AttributeError):

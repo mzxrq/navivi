@@ -184,9 +184,8 @@ def record_headless_video(
 
             print(f"    Rendering route to: '{place_name}' ({leg_idx + 1}/{num_legs})")
 
-            fallback_mode = (
-                route_key.split("|")[-1].strip().lower() if "|" in route_key else "walking"
-            )
+            key_parts = route_key.split("|")
+            fallback_mode = key_parts[2].strip().lower() if len(key_parts) > 2 else "walking"  # the mode field, not the last
             leg_mode = resolved_mode or _MODE_ALIASES.get(fallback_mode, fallback_mode)
 
             profile = _VEHICLE_PROFILES.get(leg_mode, _VEHICLE_PROFILES["driving"])
@@ -494,11 +493,6 @@ def record_headless_video(
                     waypoint_markers=waypoint_markers,
                     image_display=image_display,
                     intro_popup=intro_popup_spec,
-                    debug_dump_dir=(
-                        os.path.join(html_dir, "debug_intro_frames")
-                        if leg_idx == 0
-                        else None
-                    ),
                     coin_image_url=coin_image_url,
                     coin_target=coin_target,
                     mapbox_key=mapbox_key,
@@ -518,11 +512,3 @@ def record_headless_video(
     finally:
         server.shutdown()
         server.server_close()
-
-
-# [TODO] [Core] Hardcoded machine-specific path used only for manual local
-# debugging of this module in isolation -- not part of the app's actual
-# call path (the Tauri sidecar calls record_headless_video directly).
-if __name__ == "__main__":
-    config_path = r"C:\Users\user1\Documents\Navivi\Projects\proj_2026_very_cool_tomogashima_islands\job_config.json"
-    record_headless_video(config_path, speed_kmh=120, fps=30)

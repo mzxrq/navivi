@@ -57,30 +57,9 @@ def _landmark_layers(
     return layers
 
 
-def _pin_layers(waypoints: List[Dict]) -> List[pdk.Layer]:
-    """waypoints: [{"lat", "lon", "order", ("label"), ("is_stopby")}, ...].
-    A stop-by waypoint (isStopBy in job_config.json -- a place the route
-    passes near but doesn't really "stop" at) is drawn via _landmark_layers
-    instead of getting a numbered pin -- mirrors spatial_renderer's own
-    stop-by/numbering split (see overview.py's active_popups "order"
-    handling: a stop-by is excluded from the visible 1..N count)."""
-    numbered = [wp for wp in waypoints if not wp.get("is_stopby")]
-    stopbys = [wp for wp in waypoints if wp.get("is_stopby")]
-
-    layers = [
-        pdk.Layer(
-            "IconLayer", id="wp-pins", data=_overview_pin_icons(numbered),
-            get_icon="icon", get_position="[lon, lat]",
-            get_size=_OVERVIEW_PIN_SIZE_PX, size_units="'pixels'", size_scale=1, pickable=False,
-        ),
-    ]
-    layers.extend(_landmark_layers(stopbys))
-    return layers
-
-
 # A teardrop map-pin (tip pointing straight down at its anchor point),
-# colored to match the overview's own numbered waypoint pins (see
-# _pin_layers' "wp-dots" above: fill [230, 80, 20], white ring) rather than
+# colored to match the overview's own numbered waypoint pins (fill
+# [230, 80, 20], white ring) rather than
 # its own separate palette -- same flat orange fill, white outline, plus a
 # soft drop shadow for the raised, "sitting on the map" look a flat
 # scatterplot dot doesn't have. The inner circle is cut out via

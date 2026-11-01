@@ -7,8 +7,6 @@ from pathlib import Path
 
 from services import tuning
 
-from .common import logger
-
 
 class FrameSink:
     """`proc_ref` is the current clip ({"proc", "temp_path", "real_path"}), `produced_paths` every clip so far,
@@ -63,8 +61,9 @@ class FrameSink:
         """Closes the CURRENT clip's ffmpeg process and, only once it's
         confirmed a clean exit, atomically renames its temp file onto its
         real target path -- the one moment that real path is ever touched.
-        A crash/nonzero exit instead deletes the temp file and leaves
-        whatever was already at the real path (if anything) untouched."""
+        A crash/nonzero exit instead deletes the temp file, leaves whatever
+        was already at the real path untouched and raises: the caller must not
+        record that older file as this render's result."""
         from services.vdoprocessing.vdoexporter import _replace_with_retry
 
         proc_ref = self.proc_ref
@@ -73,11 +72,18 @@ class FrameSink:
         if proc_ref["proc"].returncode == 0:
             _replace_with_retry(proc_ref["temp_path"], proc_ref["real_path"])
         else:
-            logger.error(
-                f"[ERROR] FFmpeg exited {proc_ref['proc'].returncode} while "
-                f"producing '{proc_ref['real_path']}' -- leaving it untouched."
-            )
             Path(proc_ref["temp_path"]).unlink(missing_ok=True)
+            raise RuntimeError(
+                f"FFmpeg exited {proc_ref['proc'].returncode} while producing '{proc_ref['real_path']}'."
+            )
+
+    async def abort(self) -> None:
+        """Stops the current clip's ffmpeg and deletes its temp file (the render failed)."""
+        proc = self.proc_ref["proc"]
+        if proc.returncode is None:
+            proc.kill()
+            await proc.wait()
+        Path(self.proc_ref["temp_path"]).unlink(missing_ok=True)
 
     async def cut(self) -> None:
         """Finalizes the current file and opens a fresh one for `write` -- see

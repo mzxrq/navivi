@@ -19,7 +19,7 @@ from .httpserver import start_local_server
 from .recorder import _route_linestring_feature
 from .routedata import patch_pydeck_html
 from .leg_camera import _bbox_view, _nearest_index, _point_at_fraction
-from .pin_icons import _OVERVIEW_PIN_SIZE_PX, _overview_pin_icons, _pin_layers
+from .pin_icons import _OVERVIEW_PIN_SIZE_PX, _overview_pin_icons
 
 _CAPTION_CSS = """
 #section-caption {
@@ -30,115 +30,6 @@ _CAPTION_CSS = """
     white-space: nowrap; z-index: 1000;
 }
 """
-
-
-async def _capture_static(
-    html_path: str, html_dir: str, output_size: Tuple[int, int], output_path: str,
-    caption_text: Optional[str] = None,
-) -> None:
-    """`caption_text`, when given, overlays a wide centered title pill (the
-    reference video's section-title caption, e.g. "友ヶ島・加太をめぐる道" --
-    distinct from render_residential_leg_pydeck's per-leg destination
-    banner, which names a specific stop rather than the trip/section as a
-    whole) before the screenshot is taken."""
-    from playwright.async_api import async_playwright
-
-    server, port = start_local_server(html_dir)
-    try:
-        rel_path = os.path.relpath(html_path, html_dir).replace("\\", "/")
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            try:
-                context = await browser.new_context(viewport={"width": output_size[0], "height": output_size[1]})
-                page = await context.new_page()
-                await page.goto(f"http://127.0.0.1:{port}/{rel_path}")
-                try:
-                    await page.wait_for_load_state("load", timeout=5000)
-                except Exception:
-                    pass
-                await page.wait_for_timeout(2500)
-                if caption_text:
-                    await page.evaluate(
-                        """([css, text]) => {
-                            const style = document.createElement('style');
-                            style.textContent = css;
-                            document.head.appendChild(style);
-                            const caption = document.createElement('div');
-                            caption.id = 'section-caption';
-                            caption.textContent = text;
-                            document.body.appendChild(caption);
-                        }""",
-                        [_CAPTION_CSS, caption_text],
-                    )
-                await page.screenshot(path=output_path)
-            finally:
-                await browser.close()
-    finally:
-        server.shutdown()
-        server.server_close()
-
-
-# ---------------------------------------------------------------------------
-# OVERVIEW: whole-route static map, GeoJsonLayer route + numbered pins
-# ---------------------------------------------------------------------------
-
-def render_overview_pydeck(
-    route_latlon: List[Tuple[float, float]],
-    waypoints: List[Dict],
-    output_path: str,
-    output_size: Tuple[int, int] = (1920, 1080),
-    mapbox_key: Optional[str] = None,
-    map_style: str = "mapbox://styles/mapbox/streets-v12",
-    line_color: List[int] = None,
-    title_text: Optional[str] = None,
-) -> str:
-    """Renders a single static overview image: the full route as a real
-    GeoJSON LineString (via GeoJsonLayer) plus numbered waypoint pins, over
-    a live Mapbox basemap — the GeoJsonLayer analogue of spatial_renderer's
-    OpenCV-composited overview.render_overview, but for the whole route at
-    once rather than an animated line-draw.
-
-    `route_latlon`: [(lat, lon), ...] the full route polyline.
-    `waypoints`: [{"lat", "lon", "order", ...}, ...] pins to number/draw.
-    `title_text`: optional section-title caption (e.g. the trip's own
-    name) overlaid as a wide centered pill, matching the reference video's
-    title card -- distinct from a per-leg destination banner.
-    Returns `output_path`.
-    """
-    if not route_latlon:
-        raise ValueError("route_latlon must not be empty")
-
-    lats = [p[0] for p in route_latlon] + [wp["lat"] for wp in waypoints]
-    lons = [p[1] for p in route_latlon] + [wp["lon"] for wp in waypoints]
-    center_lon, center_lat, zoom = _bbox_view(lats, lons, output_size)
-
-    route_lonlat = [[lon, lat] for lat, lon in route_latlon]
-    layers = [
-        pdk.Layer(
-            "GeoJsonLayer", id="overview-route",
-            data=_route_linestring_feature(route_lonlat, line_color=line_color or [255, 255, 255, 230]),
-            stroked=True, filled=False, get_line_color="properties.line_color",
-            line_width_scale=1, line_width_min_pixels=4,
-        ),
-    ] + _pin_layers(waypoints)
-
-    view_state = pdk.ViewState(longitude=center_lon, latitude=center_lat, zoom=zoom, pitch=0, bearing=0)
-    deck = pdk.Deck(
-        layers=layers, initial_view_state=view_state,
-        map_provider="mapbox", map_style=map_style,
-        api_keys={"mapbox": mapbox_key or MAPBOX_API_KEY},
-        views=[pdk.View(type="MapView", controller=False)],
-    )
-
-    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="navivi_pydeck_overview_") as html_dir:
-        html_path = os.path.join(html_dir, "overview.html")
-        deck.to_html(html_path)
-        patch_pydeck_html(html_path)
-        asyncio.run(_capture_static(html_path, html_dir, output_size, output_path, caption_text=title_text))
-
-    logger.info(f"Overview rendered: {output_path}")
-    return output_path
 
 
 def render_overview_video_pydeck(
@@ -353,9 +244,13 @@ async def _record_overview(
                     await proc.stdin.drain()
             finally:
                 await browser.close()
+    except BaseException:
+        proc.kill()  # else ffmpeg waits on stdin forever
+        raise
     finally:
         server.shutdown()
         server.server_close()
 
     proc.stdin.close()
-    await proc.wait()
+    if await proc.wait() != 0:
+        raise RuntimeError(f"Overview encode failed (ffmpeg exit {proc.returncode}).")

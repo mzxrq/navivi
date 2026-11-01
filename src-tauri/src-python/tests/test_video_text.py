@@ -120,19 +120,19 @@ class TestStripPrefixes:
 class TestHudText:
     def test_japanese_banners_unchanged(self):
         ja = video_text.labels_for("ja")
-        assert _hud_text("X", 5, 1, 30, labels=ja)[0] == "まもなく X"
-        assert _hud_text("X", 500, 5, 30, labels=ja)[0] == "X へ"
-        assert _hud_text("X", 500, 5, 30, mode="ferry", labels=ja)[0] == "X へ 乗船中"
+        assert _hud_text("X", 5, 30, labels=ja)[0] == "まもなく X"
+        assert _hud_text("X", 500, 30, labels=ja)[0] == "X へ"
+        assert _hud_text("X", 500, 30, mode="ferry", labels=ja)[0] == "X へ 乗船中"
 
     def test_english_banners(self):
         en = video_text.labels_for("en")
-        assert _hud_text("Castle", 5, 1, 30, labels=en)[0] == "Arriving soon: Castle"
-        assert _hud_text("Castle", 500, 5, 30, labels=en)[0] == "Heading to Castle"
-        assert _hud_text("Port", 500, 5, 30, mode="ferry", labels=en)[0] == "Heading to Port by ferry"
+        assert _hud_text("Castle", 5, 30, labels=en)[0] == "Arriving soon: Castle"
+        assert _hud_text("Castle", 500, 30, labels=en)[0] == "Heading to Castle"
+        assert _hud_text("Port", 500, 30, mode="ferry", labels=en)[0] == "Heading to Port by ferry"
 
     def test_follows_the_job_config_by_default(self, tmp_path):
         _config(tmp_path, map_language="en")
-        assert _hud_text("Castle", 5, 1, 30)[0] == "Arriving soon: Castle"
+        assert _hud_text("Castle", 5, 30)[0] == "Arriving soon: Castle"
 
 
 def _card_engine(tmp_path, language):

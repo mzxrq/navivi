@@ -25,7 +25,7 @@ def test_fly_leg_point_modes_hud_label_and_speed():
     hud = _MODE_HUD.get(modes[2])
     assert hud["time_label"] == "飛行時間"
     assert tuning.REPORTED_MODE_SPEED_KMH[modes[2]] == 500.0
-    banner, _ = _hud_text("Tokyo", 5000, 1, 30, mode=modes[2])
+    banner, _ = _hud_text("Tokyo", 5000, 30, mode=modes[2])
     assert banner.endswith("搭乗中")
 
 
@@ -36,3 +36,10 @@ def test_fly_leg_is_a_2d_fallback_leg():
 def test_resolve_leg_maps_curve_to_airplane():
     mode, _, _ = _resolve_leg("35.0,139.0|36.0,140.0|curve", _wps("curve"))
     assert mode == "airplane"
+
+
+def test_resolve_leg_reads_the_keys_the_app_writes():
+    # src/utils/routeCacheKey.ts: "from|to|mode|drawn line" (+ "|via points"); three-field unpacking failed on every one.
+    for key in ("35.00000,139.00000|36.00000,140.00000|curve|", "35.00000,139.00000|36.00000,140.00000|draw|[[35.5,139.5]]|[[35.2,139.2]]"):
+        mode, place, from_wp = _resolve_leg(key, _wps("curve"))
+        assert mode == "airplane" and from_wp is not None and place is None  # the second stop has no label
