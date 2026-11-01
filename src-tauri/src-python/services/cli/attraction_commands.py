@@ -56,7 +56,7 @@ def _resolve_attraction_audio(
 
 def test_attraction_video(
     job_config_path: str,
-    output_video_dir: str = None,
+    output_video_dir: str | None = None,
     waypoint_index: int = 0,
     force: bool = False,
 ) -> Dict[str, Any]:
@@ -148,7 +148,7 @@ def _generate_attraction_video(
 
 def test_attraction_videos(
     job_config_path: str,
-    output_video_dir: str = None,
+    output_video_dir: str | None = None,
     force: bool = False,
 ) -> Dict[str, Any]:
     """Generate attraction videos for every waypoint with a popup image."""
@@ -190,7 +190,7 @@ def test_attraction_videos(
 
 def test_attraction_finalize(
     job_config_path: str,
-    output_video_dir: str = None,
+    output_video_dir: str | None = None,
     waypoint_index: int = 0,
 ) -> Dict[str, Any]:
     """Retries the combine for a waypoint whose photo clips were made but

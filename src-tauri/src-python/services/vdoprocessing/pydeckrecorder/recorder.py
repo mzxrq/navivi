@@ -83,9 +83,9 @@ def _route_gradient_feature(coords_lonlat: list, segment_colors: list) -> dict:
 def record_headless_video(
     config_path: str,
     output_video_path: str = "final_reliable_map_animation.mp4",
-    audio_durations: list = None,
-    fps: int = None,
-    speed_kmh: float = None,
+    audio_durations: list | None = None,
+    fps: int | None = None,
+    speed_kmh: float | None = None,
 ):
     audio_durations = audio_durations or []
 

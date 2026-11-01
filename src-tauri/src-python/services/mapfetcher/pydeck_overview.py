@@ -152,7 +152,7 @@ def fetch_overview_image_pydeck(
     bounding_box: Dict[str, float],
     output_filename: str,
     output_size: Tuple[int, int] = (1920, 1080),
-    mapbox_key: str = None,
+    mapbox_key: str | None = None,
     map_style: str = "mapbox://styles/mapbox/streets-v12",
 ) -> Tuple[str, Tuple[float, float, float, float], Tuple[int, int]]:
     """Pydeck/deck.gl equivalent of TileDownloader.fetch_overview_image —
@@ -314,11 +314,11 @@ def capture_pydeck_zoom_sequence(
     target_lon: float,
     num_frames: int,
     zoom_boost: float = 1.6,
-    mapbox_key: str = None,
+    mapbox_key: str | None = None,
     map_style: str = "mapbox://styles/mapbox/streets-v12",
     route_latlon=None,
-    next_lat: float = None,
-    next_lon: float = None,
+    next_lat: float | None = None,
+    next_lon: float | None = None,
     must_fit_latlon=None,
 ) -> List[Tuple[np.ndarray, Tuple[float, float, float, float]]]:
     """A GENUINE dynamic zoom — `num_frames` real deck.gl re-renders as

@@ -453,7 +453,7 @@ class _CardMixin:
             # evenly.
             probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
             col_content_w = 0.0
-            for label, mode, dist, dur in columns:
+            for label, _mode, dist, dur in columns:
                 distance_str = f"{dist * 1000:.0f} m" if dist < 1 else f"{dist:.1f} km"
                 dur_str = self._format_duration_ja(dur) if dur > 0 else None
                 widths = [
@@ -800,7 +800,7 @@ class _CardMixin:
         )
 
         divider_color = self.ui["divider"]
-        for i, (label_text, mode, dist_s, dur_s, color, text_w) in enumerate(rows):
+        for i, (label_text, mode, dist_s, dur_s, color, _text_w) in enumerate(rows):
             col_x0 = col_w * i + col_pad_x
             if i > 0:
                 x_div = col_w * i

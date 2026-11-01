@@ -125,7 +125,7 @@ def test_passed_places_are_reached_within_the_cue_window_and_settling_stops_exac
     anchors = trace_anchors(stops, 14.2, 25.2, 60.7, 6)
     cues = {round(d, 1): t for t, d, *_ in [(29.0, 3.4), (33.6, 5.7), (36.2, 5.9), (41.7, 7.1), (54.4, 13.6)]}
     seen = set()
-    for t, d, *rest in anchors[1:-1]:
+    for t, d, *_ in anchors[1:-1]:
         if round(d, 1) in seen:  # a wait there before going on (hold_before_slow_stretches)
             continue
         seen.add(round(d, 1))

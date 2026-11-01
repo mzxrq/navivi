@@ -35,7 +35,7 @@ from .helpers import _apply_pipeline_settings, _load_tts_waypoints
 logger = setup_logger("TTSCommands")
 
 
-def _prepare(job_config_path: str, output_audio_dir: str = None, force: bool = False):
+def _prepare(job_config_path: str, output_audio_dir: str | None = None, force: bool = False):
     """Pipeline setup shared by every TTS mode: switches, default cues, the
     cued waypoints and the TTS client/processor pair. `force` also makes the
     client skip the shared phrase cache, so a redo is a new take."""
@@ -77,7 +77,7 @@ def _label(waypoint, index: int) -> str:
 
 def test_tts(
     job_config_path: str,
-    output_audio_dir: str = None,
+    output_audio_dir: str | None = None,
     waypoint_index: int = 0,
     force: bool = False,
 ) -> Dict[str, Any]:
@@ -110,7 +110,7 @@ def test_tts(
 
 def test_tts_all(
     job_config_path: str,
-    output_audio_dir: str = None,
+    output_audio_dir: str | None = None,
     force: bool = False,
 ) -> Dict[str, Any]:
     """The pipeline's whole Step 2: overview narration, every leg narration
@@ -137,9 +137,9 @@ def test_tts_all(
 
 def test_overview_tts(
     job_config_path: str,
-    output_audio_dir: str = None,
+    output_audio_dir: str | None = None,
     force: bool = False,
-    retake: str = None,
+    retake: str | None = None,
 ) -> Dict[str, Any]:
     """Generate only the overview narration audio (00_overview_narration.wav). `retake`: "intro" or "overview",
     optionally with the sentences to redo ("overview:2,5"); see generate_overview_audio."""
@@ -179,7 +179,7 @@ def _attraction_tts_skip_reason(waypoint) -> str:
 
 def test_attraction_tts(
     job_config_path: str,
-    output_audio_dir: str = None,
+    output_audio_dir: str | None = None,
     waypoint_index: int = 0,
     force: bool = False,
 ) -> Dict[str, Any]:
@@ -211,7 +211,7 @@ def test_attraction_tts(
 
 def test_attraction_tts_all(
     job_config_path: str,
-    output_audio_dir: str = None,
+    output_audio_dir: str | None = None,
     force: bool = False,
 ) -> Dict[str, Any]:
     """Generate the attraction-only narration audio for every waypoint that

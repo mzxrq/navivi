@@ -175,7 +175,7 @@ class _PinMixin:
             # each sweep — applied here rather than inside the pair loop
             # so one pair's push can't be undone mid-sweep by a clamp
             # that a later pair would have relieved anyway.
-            for k, wp in enumerate(active_popups):
+            for wp in active_popups:
                 ox, oy = wp["pin_x"] - wp["x"], wp["pin_y"] - wp["y"]
                 shift = math.hypot(ox, oy)
                 if shift > max_shift:

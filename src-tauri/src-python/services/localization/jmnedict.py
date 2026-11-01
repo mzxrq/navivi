@@ -55,7 +55,7 @@ def build_index(source: Path, target: Path) -> int:
     return len(index)
 
 
-def ensure_index(download: Callable[[str, Path], None] = None) -> Optional[Path]:
+def ensure_index(download: Callable[[str, Path], None] | None = None) -> Optional[Path]:
     """The index, downloading and building it the first time. None when that isn't possible (offline)."""
     target = _index_path()
     if target.exists():

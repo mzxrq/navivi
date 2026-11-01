@@ -890,8 +890,8 @@ class ComfyUII2VClient:
         self,
         client: httpx.Client,
         prompt_id: str,
-        output_node: str = None,
-        timeout: float = None,
+        output_node: str | None = None,
+        timeout: float | None = None,
         log_tail: Optional[_ServerLogTail] = None,
         label: str = "Wan",
     ) -> Dict[str, Any]:
@@ -966,7 +966,7 @@ class ComfyUII2VClient:
         image_path: str,
         output_node: str,
         output_path: str,
-        timeout: float = None,
+        timeout: float | None = None,
     ) -> str:
         """Uploads image_path, runs build_graph(uploaded_name) and saves the
         first image output_node produced to output_path. Raises on failure."""

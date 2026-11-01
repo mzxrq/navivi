@@ -63,7 +63,7 @@ def _existing_narration(config_path: str) -> dict:
 
 
 def test_overview_video(
-    job_config_path: str, output_video_dir: str = None, force: bool = False
+    job_config_path: str, output_video_dir: str | None = None, force: bool = False
 ) -> Dict[str, Any]:
     """Runs GPS parsing + route video rendering only, to sanity-check the
     overview map animation without paying for TTS/attraction/subtitle
@@ -135,7 +135,7 @@ def test_overview_map(job_config_path: str, output_path: Optional[str] = None) -
 
 def test_residential_video(
     job_config_path: str,
-    output_video_dir: str = None,
+    output_video_dir: str | None = None,
     fps: Optional[int] = None,
     speed_kmh: Optional[float] = None,
     force: bool = False,

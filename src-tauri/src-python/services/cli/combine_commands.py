@@ -83,7 +83,7 @@ def _order_like_timeline(
 
 def test_video_concat(
     job_config_path: str,
-    output_video_dir: str = None,
+    output_video_dir: str | None = None,
     clip_paths: Optional[list[str]] = None,
 ) -> Dict[str, Any]:
     """Concatenate selected project videos, allowing a single clip as a no-op copy."""
@@ -133,7 +133,7 @@ def test_mux_audio(
     job_config_path: str,
     video_path: str,
     audio_path: str,
-    output_video_dir: str = None,
+    output_video_dir: str | None = None,
     output_filename: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Muxes an existing audio file onto an existing video file, standalone —
@@ -187,7 +187,7 @@ def test_mux_audio(
 
 def test_transition_editor(
     job_config_path: str,
-    output_video_dir: str = None,
+    output_video_dir: str | None = None,
     force: bool = False,
 ) -> Dict[str, Any]:
     """Run the overview/storyboard renderer, including configured transitions."""
@@ -201,7 +201,7 @@ def test_transition_editor(
 
 def test_all(
     job_config_path: str,
-    output_dir: str = None,
+    output_dir: str | None = None,
     force: bool = False,
 ) -> Dict[str, Any]:
     """Runs every isolated stage in run_full_pipeline's order and with its

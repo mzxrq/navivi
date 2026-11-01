@@ -29,7 +29,7 @@ def _subtitle_audio_path(config_path: Path, waypoint_index: int, label: Any) -> 
 
 def test_subtitle(
     job_config_path: str,
-    output_subtitle_dir: str = None,
+    output_subtitle_dir: str | None = None,
     waypoint_index: int = 0,
     force: bool = False,
 ) -> Dict[str, Any]:
@@ -55,7 +55,7 @@ def test_subtitle(
 
 def test_subtitles(
     job_config_path: str,
-    output_subtitle_dir: str = None,
+    output_subtitle_dir: str | None = None,
     force: bool = False,
 ) -> Dict[str, Any]:
     """The pipeline's Step 2b: leg, overview and attraction subtitles from

@@ -10,7 +10,7 @@ import asyncio
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from services import tuning
 from services.localization.cue_alignment import measured_cue_times
@@ -373,7 +373,7 @@ async def generate_attraction_audio_for_waypoint(
     output_dir: Path,
     force: bool = False,
     project_dir=None,
-    pronunciation_dict: list = [],
+    pronunciation_dict: Sequence[dict] = (),
 ) -> Optional[Dict[str, Any]]:
     """Generates (or reuses) one waypoint's attraction-only TTS audio, in
     its own "04_attraction_" filename namespace (see
@@ -432,7 +432,7 @@ async def generate_overview_audio(
     output_dir: Path,
     force: bool = False,
     project_dir=None,
-    pronunciation_dict: list = [],
+    pronunciation_dict: Sequence[dict] = (),
     retake: Optional[str] = None,
     redo_pieces: Optional[List[int]] = None,
 ) -> Optional[Dict[str, Any]]:
@@ -585,7 +585,7 @@ async def generate_waypoint_audio(
     processor: Any,
     output_dir: Path,
     force: bool = False,
-    pronunciation_dict: list = [],
+    pronunciation_dict: Sequence[dict] = (),
 ) -> Dict[str, Any]:
     """Generates (or, if already present and not `force`, reuses) one
     waypoint's TTS audio and its pause/duration analysis. Raises ValueError

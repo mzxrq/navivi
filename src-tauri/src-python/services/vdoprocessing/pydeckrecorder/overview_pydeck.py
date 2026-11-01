@@ -150,8 +150,8 @@ def render_overview_video_pydeck(
     output_size: Tuple[int, int] = (1920, 1080),
     mapbox_key: Optional[str] = None,
     map_style: str = "mapbox://styles/mapbox/streets-v12",
-    line_color: List[int] = None,
-    progress_color: List[int] = None,
+    line_color: List[int] | None = None,
+    progress_color: List[int] | None = None,
     title_text: Optional[str] = None,
     hold_seconds: float = 3.0,
 ) -> str:

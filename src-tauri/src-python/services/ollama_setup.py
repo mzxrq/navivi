@@ -28,7 +28,7 @@ def _start_server() -> None:
         subprocess.Popen([str(exe)], creationflags=getattr(subprocess, "DETACHED_PROCESS", 0), env=server_environ())
 
 
-def install_ollama(_payload: Dict[str, Any] = None) -> Dict[str, Any]:
+def install_ollama(_payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
     if os.name != "nt":
         return {"success": False, "error": "Install Ollama from https://ollama.com/download."}
     install_progress.begin(2)
