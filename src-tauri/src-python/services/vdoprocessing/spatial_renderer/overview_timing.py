@@ -49,11 +49,6 @@ def intro_frame_count(
 MIN_SECONDS_AFTER_LAST_CUE = 4.0
 
 
-# The walk runs at least this long after the last cued stop: what is left of
-# the route (stops nobody talks about, the way back) still has to be travelled.
-MIN_SECONDS_AFTER_LAST_CUE = 4.0
-
-
 def animation_frames(cues: Dict[str, float], start_frames: int, fps: int, min_frames: int = 10) -> int:
     """How many frames the walk needs at least so the cued stops fit: it ends
     at the {end} cue, or a little after the last {n} cue. `start_frames` is the

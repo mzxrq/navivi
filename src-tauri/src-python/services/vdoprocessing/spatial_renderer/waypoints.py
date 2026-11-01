@@ -410,8 +410,8 @@ class _WaypointRenderMixin:
             ]
 
             for popup in active_res_popups:
-                lbl = str(popup.get("label", ""))
-                for jw in job_waypoints:
+                lbl = str(popup.get("label") or "")
+                for jw in job_waypoints if lbl else ():  # "" is in every label
                     jw_lbl = str(jw.get("label", ""))
                     if jw_lbl and (jw_lbl in lbl or lbl in jw_lbl):
                         if (

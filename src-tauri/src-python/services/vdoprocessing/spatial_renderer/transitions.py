@@ -772,15 +772,14 @@ class _TransitionMixin:
 
             # Hard cut straight to the highlight — no transition
             # connecting the two shots — then a slow Ken Burns zoom-in
-            # while it's held, toward the same point (featured_popup's
-            # own x/y, untouched by highlight_popup's copy above, which
-            # overwrites its OWN x/y with px/py in the new highlight
-            # image's space) rather than a static freeze. Only reached
-            # when the dynamic pydeck path wasn't used/failed — see the
-            # branch above.
+            # while it's held, toward the stop at px/py in the highlight
+            # image's own pixels (featured_popup's x/y are overview-map
+            # pixels, a different image) rather than a static freeze.
+            # Only reached when the dynamic pydeck path wasn't used/failed
+            # — see the branch above.
             zoomed_end = self._ken_burns_hold(
                 video, highlight_frame, fps, self._ENDING_HIGHLIGHT_WAIT_SECONDS,
-                featured_popup["x"], featured_popup["y"],
+                px, py,
                 zoom_from=1.0, zoom_to=1.18,
             )
             self.last_frame = zoomed_end
@@ -795,7 +794,7 @@ class _TransitionMixin:
             # self.last_frame to the last one.
             self.last_frame = self._ken_burns_hold(
                 video, highlight_frame, fps, highlight_hold_sec,
-                featured_popup["x"], featured_popup["y"],
+                px, py,
                 zoom_from=1.18, zoom_to=1.35,
             )
 

@@ -1432,7 +1432,7 @@ class _PopupMixin:
 
     @classmethod
     def _make_baked_popup(
-        cls, popup: Dict, display_seconds: float, fps: int, queue_depth: int = 0,
+        cls, popup: Dict, display_seconds: float, fps: int,
         min_hold_seconds: float = 0.0, min_display_seconds: Optional[float] = None,
     ) -> Dict:
         """A baked_popups entry: `popup` is the waypoint dict itself (later
@@ -1440,33 +1440,7 @@ class _PopupMixin:
         _composite_baked_popups. `total_frames` is fixed at creation and,
         together with `fade_frames`, defines the fade envelope (see
         _popup_fade_alpha); `frames_left` counts down as it's actually
-        shown; `waited_frames`/`max_wait_frames` bound how long a
-        flow-through card can sit queued for a concurrency slot (see
-        _composite_baked_popups) before giving up rather than finally
-        appearing long after the traveler has moved on. The wait budget
-        itself is at least tuning.POPUP_MIN_WAIT_SECONDS, not just
-        `total_frames` — a tightly-clustered waypoint's own display
-        duration can be floored quite short (see leg_display_seconds),
-        which used to also cap how long it was willing to wait for a
-        concurrency slot, sometimes shorter than the wait itself: a real
-        cluster of 4+ nearby waypoints could make a later one wait longer
-        than its own short display time for one of only
-        MAX_CONCURRENT_FLOW_POPUPS slots, and it would give up having
-        never been shown at all.
-
-        `queue_depth` — how many OTHER already-triggered popups are still
-        waiting behind this one for their own turn at the trigger cooldown
-        (see the pending_popups queue in _animate_overview_frames) — further
-        stretches the wait budget for a genuinely deep backlog. A fixed
-        POPUP_MIN_WAIT_SECONDS was sized for one or two popups queued at
-        once; for a real cluster of 5+ waypoints spaced close enough to all
-        queue up within a couple of seconds of each other, the ones near the
-        back of that queue still needed to wait roughly
-        queue_depth * OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS just for their
-        turn to even be dequeued, on top of then waiting for a free display
-        slot — a wait budget sized without accounting for that backlog let
-        several of them time out and vanish, having genuinely been reached
-        by the traveler but never shown at all."""
+        shown."""
         # Floored at POPUP_MIN_DISPLAY_SECONDS: this is the single point
         # every popup's display duration passes through on its way to
         # frames, so enforcing the minimum here covers every caller.
@@ -1486,18 +1460,11 @@ class _PopupMixin:
             display_seconds = max(display_seconds, min_hold_seconds + 2 * cls._POPUP_FADE_SECONDS)
         total_frames = max(1, int(display_seconds * fps))
         fade_frames = max(1, min(int(cls._POPUP_FADE_SECONDS * fps), total_frames // 4))
-        backlog_wait_seconds = queue_depth * tuning.OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS
-        max_wait_frames = max(
-            total_frames,
-            int((tuning.POPUP_MIN_WAIT_SECONDS + backlog_wait_seconds) * fps),
-        )
         return {
             "popup": popup,
             "frames_left": total_frames,
             "total_frames": total_frames,
             "fade_frames": fade_frames,
-            "waited_frames": 0,
-            "max_wait_frames": max_wait_frames,
         }
 
     @staticmethod
@@ -1723,20 +1690,11 @@ class _PopupMixin:
             # and get cut short once it does get a slot.
             if drawn:
                 bp["frames_left"] -= 1
-            else:
-                bp["waited_frames"] += 1
 
             # Every waypoint the traveler actually reached must eventually
-            # be shown — a popup no longer gives up and silently vanishes
-            # just for having waited past max_wait_frames for a
-            # concurrency slot (see _make_baked_popup's own docstring for
-            # why that budget existed and why it still wasn't enough for
-            # a deep-enough backlog). It only leaves the survivors list
-            # once it has actually been displayed for its own full
-            # duration (frames_left only decrements while drawn, so a
-            # still-waiting popup can't run out this way either).
-            # max_wait_frames/waited_frames are kept on the dict purely
-            # as diagnostic bookkeeping now, not an eviction trigger.
+            # be shown: a popup only leaves the survivors list once it has
+            # been displayed for its own full duration (frames_left only
+            # decrements while drawn, so a still-waiting popup can't run out).
             if bp["frames_left"] > 0:
                 survivors.append(bp)
 

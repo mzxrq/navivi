@@ -1020,7 +1020,6 @@ class _OverviewAnimationMixin:
 
                     new_bp = self._make_baked_popup(
                         triggered_popup, display_seconds, fps,
-                        queue_depth=len(pending_popups),
                         min_hold_seconds=tuning.OVERVIEW_POPUP_MIN_HOLD_SECONDS,
                     )
                     baked_popups.append(new_bp)

@@ -368,8 +368,6 @@ RECAP_LINE_COLOR_PALETTE: List[Tuple[int, int, int]] = [
 # A shown card's position is locked this long, so a newcomer can't push it to a new spot mid-display
 # (other cards still avoid it).
 POPUP_POSITION_LOCK_SECONDS = 2.0
-# Longest a popup may wait for a free display slot before it is dropped (or its own duration, if longer).
-POPUP_MIN_WAIT_SECONDS = 6.0
 # Shortest time any popup card stays on screen, fades included (_make_baked_popup), so it can be read.
 POPUP_MIN_DISPLAY_SECONDS = 2.0
 # Each unconnected stop-by's card in the batch at the previous stop, per card. Below the 2 s floor on purpose:
@@ -1105,7 +1103,6 @@ INTRO_KICKER_BOLD = False
 INTRO_KICKER_COLOR: Tuple[int, int, int] = (205, 210, 220)
 INTRO_KICKER_LETTER_SPACING = 4
 # Appended to the intro subtitle as "<subtitle> · 18 か所" (settings.intro_place_count turns it off).
-INTRO_PLACE_COUNT_FORMAT = LABELS_JA["place_count"]  # Japanese; other languages: video_text catalogs
 INTRO_PLACE_COUNT_SEPARATOR = " · "
 DEFAULT_INTRO_PLACE_COUNT = True
 INTRO_OUTPUT_FILENAME = "00_intro.mp4"
@@ -1227,7 +1224,6 @@ OUTRO_SCROLL_EDGE_FADE_PX = 56
 # With route info the scroll is a timeline: title and trip summary, then one card per leg (photo, name,
 # start, mode/distance/time chips from route_brief). settings.outro_route_info: false = the grid.
 DEFAULT_OUTRO_ROUTE_INFO = True
-OUTRO_ROUTE_FROM_TEMPLATE = LABELS_JA["outro_route_from"]
 OUTRO_ROUTE_ROW_HEIGHT = 128
 OUTRO_ROUTE_ROW_GAP = 16
 OUTRO_ROUTE_NAME_FONT_SIZE = 24
@@ -1248,7 +1244,6 @@ OUTRO_LEG_FONT_SIZE = 16
 OUTRO_SUMMARY_VALUE_FONT_SIZE = 30
 OUTRO_PANEL_COLOR: Tuple[int, int, int] = (31, 42, 64)
 OUTRO_CHIP_COLOR: Tuple[int, int, int] = (45, 58, 86)
-OUTRO_ARROW_COLOR: Tuple[int, int, int] = (110, 120, 140)
 OUTRO_SUMMARY_HOLD_SECONDS = 4.0
 # The end card: every image in assets/image/logo side by side, each on its own white plate (PLATE_COLOR None =
 # no plates), scaled down to MAX_WIDTH of the frame if needed.
@@ -1262,7 +1257,6 @@ OUTRO_LOGO_TITLE_FONT_SIZE = 26  # the "Powered by" line above the plates
 OUTRO_LOGO_TITLE_GAP = 22
 OUTRO_LOGO_PLATE_PADDING = 28
 OUTRO_LOGO_PLATE_COLOR: Optional[Tuple[int, int, int]] = (255, 255, 255)
-OUTRO_SUMMARY_LABELS: Dict[str, str] = LABELS_JA["outro_summary"]
 # The number on each leg card's photo: a white pill with a dark number.
 OUTRO_PHOTO_BADGE_HEIGHT = 26
 OUTRO_PHOTO_BADGE_FILL: Tuple[int, int, int, int] = (255, 255, 255, 240)
