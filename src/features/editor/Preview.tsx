@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { t } from "@lingui/core/macro";
 import { Pause, Play, SkipBack } from "../../components/ui/icons";
-import { Caption } from "../../components/ui/Caption";
 import { Tip } from "../../components/ui/Tip";
 import { DEFAULT_EXTRA_VOLUME, fadeIns, isUnlinked, layout, placedCues, placedTexts, PlacedText, segmentAt, trimmedLength, TimelineData } from "./model";
 import { hexToRgb } from "../../utils/color";

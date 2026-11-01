@@ -46,7 +46,7 @@ export function WaypointItem({
   onEdit,
   onDelete,
 }: WaypointItemProps) {
-  const { activeWaypointId, setActiveWaypointId, updateWaypoint, waypoints } =
+  const { activeWaypointId, setActiveWaypointId, waypoints } =
     useWorkspace();
   const { isRendering } = useUI();
   const itemRef = useRef<HTMLDivElement>(null);

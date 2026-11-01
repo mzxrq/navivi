@@ -1,29 +1,12 @@
 import { t } from "@lingui/core/macro";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useWorkspace } from "../../hooks/useWorkspace";
 import {
   Check,
   ChevronRight,
   ClipboardPaste,
   Copy,
-  CopyPlus,
-  Edit3,
-  Eye,
-  EyeOff,
-  Film,
-  Folder,
-  FolderOpen,
-  LinkIcon,
-  Lock,
-  Plus,
   Scissors,
-  Settings2,
-  Trash2,
-  UnlinkIcon,
-  Unlock,
-  Volume2,
-  VolumeX,
 } from "../ui/icons";
 import { MenuEntry, MenuItem, separator, tidy } from "./menuItems";
 

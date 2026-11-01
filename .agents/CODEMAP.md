@@ -336,11 +336,10 @@ Rebuilt as a clip sequence, matching what the Python exporter can do (concat of 
 - Narration language: `settings.narration_language` auto/ja/en (Settings > Voice). `utils/narrationLanguage.ts` `resolveNarrationLanguage` = the setting, else the language of the texts at hand (stop names + scripts in the editor, the document in Auto-Director, sources in the assistant), else the UI locale. It reaches the prompt as `RouteContext.language`; `"en"` switches `buildWaypointPrompt` to `buildEnglishWaypointPrompt` (same facts and rules, written in English, no Japanese examples; the English arriving line uses the document's directions). `sentencesOf`/`ARRIVAL` know English sentences ("Mt." does not end one). Not covered: the Python overview script and route-direction lines, which stay Japanese.
 - Map style no longer follows the app theme. The editor opens on the style the user last picked in the Layers panel (localStorage `map-style`,
   per device), else Outdoors. The old `mapTheme` (sync/dark/light) setting is gone; nothing in the UI could change it.
-- Subtitle colors (Settings > Video): Text/Outline color use `ColorSwatches` (same picker as route line color). The saved value stays an ASS
-  string (`&HAABBGGRR`, what Python hands to libass); `utils/assColor.ts` converts (`assToRgb`, `rgbToAss` which keeps the existing alpha byte,
-  `assToCss`) and falls back to white/black for a value it cannot read. `ui/SubtitleSample.tsx` previews font, size, bold, colors on a
-  light-to-dark frame; libass sizes against a 288-line frame (measured with the bundled ffmpeg: size 30 on 1080p = capitals ~74 px), so the
-  sample uses `cqh` units: font size/288, outline 2/288, margin 10/288 of the frame height.
+- Subtitle colors are ASS strings (`&HAABBGGRR`, what Python hands to libass); `utils/assColor.ts` reads them for the
+  preview (`assToRgb`, `assToCss`, falling back to white/black for a value it cannot read). `ui/Caption.tsx` draws the caption; libass
+  sizes against a 288-line frame (size 30 on 1080p = capitals ~74 px), so it uses `cqh` units: font size/288, outline 2/288, margin
+  10/288 of the frame height.
 
 ## Burned-in captions (2026-10-02)
 - Until now the Settings subtitle font/size/colors reached no output: `_build_subtitle_style` was never called and both burn paths ran FFmpeg's

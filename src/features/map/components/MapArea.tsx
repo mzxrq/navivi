@@ -14,7 +14,6 @@ import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useMapRouting } from "../hooks/useMapRouting";
 import { useFileActions } from "../../../hooks/useFileActions";
 import { takePendingImport } from "../../../utils/pendingImport";
-import { useUI } from "../../../hooks/useUI";
 import { WaypointEditor } from "./WaypointEditor";
 import { LayerManager } from "./MapLayers/LayerManager";
 import { RouteLayer } from "./MapLayers/RouteLayer";
@@ -34,7 +33,6 @@ import { DrawHandles } from "./DrawHandles";
 
 export function MapArea() {
   const { i18n } = useLingui();
-  const { showToast } = useUI();
   const {
     waypoints,
     setWaypoints,
@@ -79,7 +77,6 @@ export function MapArea() {
   const rightClickStartRef = useRef<{ x: number; y: number } | null>(null);
   const isContextLostRef = useRef(false);
 
-  const [eleHoverPoint, setEleHoverPoint] = useState<number[] | null>(null);
 
   const initialViewState = useRef({
     longitude: settings.start_coords?.[1] || 135.5023,
@@ -686,13 +683,6 @@ export function MapArea() {
       new CustomEvent("select-anchor", { detail: { index: null } }),
     );
   }, [isDrawMode, activeWaypointId]);
-
-  useEffect(() => {
-    const handleHover = ((e: CustomEvent) =>
-      setEleHoverPoint(e.detail)) as EventListener;
-    window.addEventListener("elevation-hover", handleHover);
-    return () => window.removeEventListener("elevation-hover", handleHover);
-  }, []);
 
   const activeAnchorIndexRef = useRef<number | null>(null);
   useEffect(() => {

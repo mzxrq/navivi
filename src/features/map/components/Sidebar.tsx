@@ -34,7 +34,6 @@ export function Sidebar() {
     saveProject,
     activeWaypointId,
     setActiveWaypointId,
-    setIsDirty,
     metadata,
   } = useWorkspace();
 

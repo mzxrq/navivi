@@ -50,12 +50,7 @@ import {
   Volume2,
   X,
 } from "./icons";
-import { assOpacity, assToRgb, rgbToAss, withOpacity } from "../../utils/assColor";
-import { CAPTION } from "../../utils/subtitleLook";
-import { ColorSwatches, type RGB } from "./ColorSwatches";
-import { ComboBox } from "./ComboBox";
 import { Slider } from "./Slider";
-import { SubtitleSample } from "./SubtitleSample";
 import { StepButtons } from "./StepButtons";
 import { Switch } from "./Switch";
 import { VoiceTab } from "./VoiceSettings";
@@ -80,34 +75,7 @@ type SettingsTab =
   | "about"
   | "tts_dictionary";
 
-const WHITE: RGB = [255, 255, 255];
-const BLACK: RGB = [0, 0, 0];
 
-const SUBTITLE_SIZES = ["12", "14", "16", "18", "20", "22", "24", "28", "32"];
-// Common fonts; the saved one is always listed, so a project made with another font keeps it.
-const SUBTITLE_FONTS = [
-  "Yu Gothic UI",
-  "Yu Gothic",
-  "Meiryo",
-  "Meiryo UI",
-  "MS Gothic",
-  "MS PGothic",
-  "BIZ UDPGothic",
-  "Noto Sans JP",
-  "Noto Serif JP",
-  "Segoe UI",
-  "Calibri",
-  "Arial",
-  "Verdana",
-  "Tahoma",
-  "Times New Roman",
-  "Georgia",
-  "Consolas",
-];
-const subtitleFonts = (current: string) =>
-  SUBTITLE_FONTS.some((f) => f.toLowerCase() === current.toLowerCase())
-    ? SUBTITLE_FONTS
-    : [current, ...SUBTITLE_FONTS];
 
 export function AppSettings() {
   const { settings, updateSettings, setIsDirty } = useWorkspace();
