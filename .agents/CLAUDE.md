@@ -33,7 +33,7 @@ npm run build:installer    # older NSIS installer in src-tauri/target/release/bu
 
 # Python (run from src-tauri/src-python, with the SYSTEM python — see gotchas)
 cd src-tauri/src-python
-python -m pytest -q                     # ~2 min, 614 tests
+python -m pytest -q                     # ~1,290 tests; ~55 need ffmpeg/ffprobe on PATH
 python -m pytest tests/test_subtitle.py -q
 python main.py <job_config.json> <mode> [waypoint_index] [--force] [--no-llm]
 python main.py full_pipeline <job_config.json> [output_dir] [--force]
