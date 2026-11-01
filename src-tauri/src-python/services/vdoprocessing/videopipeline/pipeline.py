@@ -451,7 +451,7 @@ def render_from_timeline(
             print(f"EXPORT_PROGRESS {int(pct)}", file=sys.stderr, flush=True)
 
     final_path = VideoExporter.concat_from_timeline(
-        timeline_data=timeline_data, output_path=output_video_path, save_json_path=None,
+        timeline_data=timeline_data, output_path=output_video_path,
         on_progress=progress,
     )
 

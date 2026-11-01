@@ -25,6 +25,9 @@ from .intro_outro_commands import test_intro_video, test_outro_video
 # split leg as the one leg it actually is, not several.
 _CONT_SUFFIX_RE = re.compile(r"_cont\d+$")
 
+# assets/audio/music and assets/video/user hold the user's own imports (as in src/services/assetCleanup.ts): never wiped.
+_USER_FOLDERS = {"music", "user"}
+
 
 def _order_like_timeline(
     project_dir: Path,
@@ -237,14 +240,20 @@ def test_all(
     settings = _apply_pipeline_settings(config_path)
     rich_media = not skip_rich_media(settings)
     attractions_on = attraction_videos_enabled(settings)
-    total_stages = 8
+    # Clearing/checking, overview, residential, intro/outro, concat, plus two stages each for rich media and attractions.
+    total_stages = 5 + (2 if rich_media else 1) + (2 if attractions_on else 1)
 
     if force:
-        # [HACK] [IO] Per-waypoint cleanup only deletes files matching current labels/order, so a renamed or removed waypoint would leave stale files behind — brute-force wipe the whole dir instead.
+        # [HACK] [IO] Per-waypoint cleanup only deletes files matching current labels/order, so a renamed or removed waypoint would leave stale files behind — brute-force wipe the generated outputs instead.
         _tracker.stage("Clearing stale outputs...", total=total_stages)
         for stale_dir in (audio_dir, video_dir, subtitle_dir):
-            if stale_dir.exists():
-                shutil.rmtree(stale_dir)
+            for child in list(stale_dir.iterdir()) if stale_dir.exists() else []:
+                if child.name in _USER_FOLDERS:
+                    continue
+                if child.is_dir():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
             stale_dir.mkdir(parents=True, exist_ok=True)
     else:
         _tracker.stage("Checking existing outputs...", total=total_stages)

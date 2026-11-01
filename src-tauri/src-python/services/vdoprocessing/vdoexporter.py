@@ -30,7 +30,6 @@ raise immediately with the stderr tail attached.
 """
 
 from dataclasses import replace
-import json
 import os
 import shutil
 import subprocess
@@ -913,7 +912,7 @@ class VideoExporter:
 
     @staticmethod
     def concat_from_timeline(
-        timeline_data: dict, output_path: str, save_json_path: Optional[str] = None,
+        timeline_data: dict, output_path: str,
         on_progress: Optional[Callable[[float], None]] = None,
     ) -> str:
         """NLE Engine: Stitches atomic clips using strict absolute paths and pre-flight file checks.
@@ -926,11 +925,6 @@ class VideoExporter:
         concatenating, rather than baking audio into clips earlier in the
         pipeline where it could no longer be edited separately.
         """
-        # 1. Save the timeline.json file to the disk
-        if save_json_path:
-            with open(save_json_path, "w", encoding="utf-8") as f:
-                json.dump(timeline_data, f, indent=2, ensure_ascii=False)
-
         tracks = timeline_data.get("video_tracks", [])
         if not tracks:
             raise ValueError("Timeline data has no 'video_tracks' to stitch.")
@@ -953,13 +947,15 @@ class VideoExporter:
             raise RuntimeError("FFmpeg binary not found.")
 
         # A cancelled export (process tree killed) never reaches its cleanup; old leftovers go here.
-        for old in Path(tempfile.gettempdir()).glob("navivi_concat_*"):
+        for old in [*Path(tempfile.gettempdir()).glob("navivi_concat_*"), *output_dir.glob(".navivi_concat_*")]:
             try:
                 if time.time() - old.stat().st_mtime > 6 * 3600:
                     shutil.rmtree(old, ignore_errors=True)
             except OSError:
                 pass
-        tmp_dir = Path(tempfile.mkdtemp(prefix="navivi_concat_"))
+        # Beside the output, not in the system temp folder: the music/subtitle passes are renamed onto the
+        # output, and Windows refuses a rename from C:'s temp folder to a project on another drive.
+        tmp_dir = Path(tempfile.mkdtemp(prefix=".navivi_concat_", dir=output_dir))
         # Built beside the export and swapped in at the very end: a failed or cancelled export keeps the last
         # good video (the temp folder can be on another drive, where os.replace can't move it).
         partial = Path(output_path).with_name(f".{Path(output_path).stem}.partial{Path(output_path).suffix}")

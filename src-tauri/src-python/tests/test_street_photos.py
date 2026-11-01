@@ -38,10 +38,12 @@ def api(monkeypatch):
     class Api:
         images, status, calls = [], 200, []
 
-    def get(url, timeout=None, params=None):
+    def get(url, timeout=None, params=None, headers=None):
         Api.calls.append(url)
         if url == street_photos.API:
             assert params["limit"] <= 10 and "bbox" in params
+            # never in the URL, which error messages (and so app.log) carry
+            assert "token" not in json.dumps(params) and headers == {"Authorization": "OAuth token"}
             return _Resp({"data": Api.images}, status=Api.status)
         return _Resp(content=_jpeg())
 

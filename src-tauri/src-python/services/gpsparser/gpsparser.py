@@ -263,7 +263,8 @@ class GPSParser:
                 route_df["stop_block"] = is_moving.cumsum()
                 route_df["stop_duration_sec"] = route_df.groupby("stop_block")["timestamp"].transform(lambda x: (x.max() - x.min()).total_seconds()).fillna(0)
 
-                route_df = route_df[is_moving].copy()
+                # Renumbered: later steps mix row labels with positions (mapfetcher's arrival row), and a gap broke that.
+                route_df = route_df[is_moving].reset_index(drop=True)
                 route_df["store_name"] = None
                 route_df["img_url"] = None
                 route_df["is_landmarked"] = False

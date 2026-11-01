@@ -8,6 +8,7 @@ that keep within `radius_m` of their centre for at least `min_stay_sec`.
 """
 
 import io
+import math
 import subprocess
 import tempfile
 from pathlib import Path
@@ -16,15 +17,17 @@ from typing import Any, Dict, List
 import numpy as np
 import pandas as pd
 
-from services.gpsparser.gpscalculator import GPSMath
 from services.gpsparser.gpsparser import GPSParser
 
 DEFAULT_RADIUS_M = 50.0
 DEFAULT_MIN_STAY_SEC = 300.0
 
 
-def _distances_m(lat: np.ndarray, lon: np.ndarray, c_lat: float, c_lon: float) -> np.ndarray:
-    return GPSMath.haversine_vectorized(lat, lon, np.full_like(lat, c_lat), np.full_like(lon, c_lon)) * 1000.0
+def _distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """GPSMath.haversine_vectorized for one pair, without numpy's per-call cost (it ran once per point per stay start)."""
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2
+    return 2 * 6371.0 * math.asin(math.sqrt(a)) * 1000.0
 
 
 def detect_stays(
@@ -45,7 +48,7 @@ def detect_stays(
         sum_lat, sum_lon, j = lat[i], lon[i], i + 1
         while j < n:
             c_lat, c_lon = sum_lat / (j - i), sum_lon / (j - i)
-            if _distances_m(lat[j:j + 1], lon[j:j + 1], c_lat, c_lon)[0] > radius_m:
+            if _distance_m(lat[j], lon[j], c_lat, c_lon) > radius_m:
                 break
             sum_lat += lat[j]
             sum_lon += lon[j]
@@ -63,7 +66,7 @@ def detect_stays(
                     start_sec=float(start_sec[s]), end_sec=float(end_sec[s:e + 1].max()))
         prev = merged[-1] if merged else None
         if (prev and stay["start_sec"] - prev["end_sec"] < min_stay_sec
-                and _distances_m(np.array([stay["lat"]]), np.array([stay["lon"]]), prev["lat"], prev["lon"])[0] <= radius_m):
+                and _distance_m(stay["lat"], stay["lon"], prev["lat"], prev["lon"]) <= radius_m):
             s = prev["start_index"]
             prev.update(end_index=e, end_sec=stay["end_sec"],
                         lat=float(np.median(lat[s:e + 1])), lon=float(np.median(lon[s:e + 1])))

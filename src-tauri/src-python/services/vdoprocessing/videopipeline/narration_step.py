@@ -165,6 +165,14 @@ def _overview_source_ids(project: dict) -> str:
     return f"{ids}|course|{hashlib.md5(intro.encode('utf-8')).hexdigest()[:8]}"
 
 
+def _store_overview_narration(config_path: Path, script: str, source_ids: str) -> None:
+    """Sets the auto overview script in job_config.json, read again just before: the model can take a minute,
+    and writing back the copy read before it overwrote whatever the app saved meanwhile."""
+    project = json.loads(config_path.read_text(encoding="utf-8"))
+    project.update(overview_narration=script, overview_narration_is_auto=True, overview_narration_source_ids=source_ids)
+    write_json_atomic(config_path, project)
+
+
 def ensure_overview_narration(project_config_path: str) -> bool:
     """Auto-generates job_config.json's top-level "overview_narration" from
     the route itself (services/localization/overview_script.build_tour_script
@@ -215,10 +223,7 @@ def ensure_overview_narration(project_config_path: str) -> bool:
     except (OSError, json.JSONDecodeError):
         saved = {}
     if saved.get("source_ids") == current_ids and (saved.get("script") or "").strip():
-        project["overview_narration"] = saved["script"]
-        project["overview_narration_is_auto"] = True
-        project["overview_narration_source_ids"] = current_ids
-        write_json_atomic(config_path, project)
+        _store_overview_narration(config_path, saved["script"], current_ids)
         logger.info("Step 2: reused the saved overview_narration (waypoints unchanged).")
         return False
 
@@ -239,10 +244,7 @@ def ensure_overview_narration(project_config_path: str) -> bool:
     if not script:
         return False
 
-    project["overview_narration"] = script
-    project["overview_narration_is_auto"] = True
-    project["overview_narration_source_ids"] = current_ids
-    write_json_atomic(config_path, project)
+    _store_overview_narration(config_path, script, current_ids)
     try:
         write_json_atomic(saved_path, {"source_ids": current_ids, "script": script})
     except OSError as e:

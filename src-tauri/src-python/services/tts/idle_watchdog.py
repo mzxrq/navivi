@@ -17,24 +17,18 @@ import os
 import subprocess
 import sys
 import time
+from typing import Optional
+
+import psutil
 
 
-# [NOTE] [Util] No cross-platform "is pid alive" API; Windows checks tasklist output, POSIX probes with signal 0
-def _process_alive(pid: int) -> bool:
-    if os.name == "nt":
-        result = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {pid}"],
-            capture_output=True,
-            text=True,
-        )
-        return str(pid) in result.stdout
+# [NOTE] [Util] A PID plus its start time names one process: the pipeline stops the server between stages without
+# stopping this watchdog, and Windows soon hands the PID to another program (an ffmpeg or Chromium of the next stage).
+def _started_at(pid: int) -> Optional[float]:
     try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True  # exists, just owned by someone else
-    return True
+        return psutil.Process(pid).create_time()
+    except psutil.Error:
+        return None
 
 
 # [HACK] [Util] Force-kills the process tree; taskkill /T/F is the Windows equivalent of a hard SIGTERM to a whole process group
@@ -58,14 +52,17 @@ def main() -> None:
     # not to matter as background overhead — never faster than 5s, never
     # slower than 30s regardless of how long idle_timeout itself is.
     poll_interval = min(30.0, max(5.0, idle_timeout / 10))
+    started = _started_at(pid)
+    if started is None:
+        return
 
     # [NOTE] [Core] Runs forever as its own detached process until either the watched
     # server dies on its own or this loop kills it for being idle too long.
     while True:
         time.sleep(poll_interval)
 
-        if not _process_alive(pid):
-            return  # server already gone (crashed, or killed some other way)
+        if _started_at(pid) != started:
+            return  # server already gone (crashed, or stopped by the pipeline), even if its PID is in use again
 
         try:
             last_active = os.path.getmtime(activity_file)

@@ -291,6 +291,12 @@ def merge_pronunciation(shared: Optional[list], project: Optional[list]) -> list
     return list(merged.values())
 
 
+def project_dictionary(settings: dict) -> list:
+    """The pronunciation words a project's narration uses: the app-wide ones plus its own (as the single-stop
+    retakes use them; with the project's alone, a full render re-voiced their audio without the app-wide words)."""
+    return merge_pronunciation(settings.get("global_pronunciation_dictionary"), settings.get("pronunciation_dictionary"))
+
+
 def _all_hiragana(text: str) -> bool:
     return all("ぁ" <= c <= "ゖ" or c == "ー" for c in text)
 
@@ -673,7 +679,7 @@ def existing_audio_data(project_config_path: str) -> dict:
         data["attraction_audio_durations"].append(attraction["duration_seconds"] if attraction else 0.0)
         data["attraction_audio_paths"].append(str(attraction_path) if attraction else None)
 
-    p_dict = project_config.get("settings", {}).get("pronunciation_dictionary", [])
+    p_dict = project_dictionary(project_config.get("settings", {}))
     align = project_config.get("settings", {}).get("align_cues_to_voice", True)
 
     def piece(tagged: Optional[str], path: Path) -> Optional[dict]:
@@ -766,7 +772,7 @@ def generate_audio(
         with open(config_path, "r", encoding="utf-8") as f:
             project_config = json.load(f)
             
-        p_dict = project_config.get("settings", {}).get("pronunciation_dictionary", [])
+        p_dict = project_dictionary(project_config.get("settings", {}))
 
         waypoints = project_config.get("waypoints", [])
         apply_cued_scripts(waypoints, config_path.parent)

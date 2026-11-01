@@ -21,7 +21,7 @@ from services.vdoprocessing.videopipeline.audio_step import (
     generate_waypoint_audio,
     is_passed_only,
     passed_only_reason,
-    merge_pronunciation,
+    project_dictionary,
     stop_tts_server,
 )
 from services.vdoprocessing.videopipeline.helpers import project_audio_dir
@@ -55,7 +55,7 @@ def _prepare(job_config_path: str, output_audio_dir: str | None = None, force: b
         settings, config_path, waypoints, output_dir,
         client,
         AudioProcessor(output_dir=output_dir),
-        merge_pronunciation(settings.get("global_pronunciation_dictionary"), settings.get("pronunciation_dictionary")),
+        project_dictionary(settings),
     )
 
 

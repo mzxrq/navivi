@@ -160,8 +160,8 @@ def turn_photos(points: List[List[float]], cache_dir: Path, token: str) -> List[
 def _mapillary(get, token, lat, lon, bearing, cache_dir: Path) -> Optional[str]:
     dlat = SEARCH_M / 110540.0
     dlon = SEARCH_M / (111320.0 * math.cos(math.radians(lat)))
-    resp = get(API, params={
-        "access_token": token,
+    # The token goes in a header: in the URL it was written to app.log with every refused request's error.
+    resp = get(API, headers={"Authorization": f"OAuth {token}"}, params={
         "bbox": f"{lon - dlon},{lat - dlat},{lon + dlon},{lat + dlat}",
         "fields": "id,thumb_1024_url,compass_angle,geometry,creator",
         "limit": SEARCH_LIMIT,

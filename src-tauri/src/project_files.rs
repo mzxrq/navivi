@@ -36,7 +36,8 @@ pub fn archive_includes(rel: &str, include_rendered: bool) -> bool {
     if !rel.contains('/') && rel.ends_with(".nvv") {
         return false; // an old copy of job_config.json, or another archive
     }
-    if rel.starts_with(".navivi/gpsdata") || rel.ends_with(".tmp") || rel.ends_with(".partial") {
+    // .navivi_concat_*: a killed export's work folder (vdoexporter.py keeps it beside the export).
+    if rel.starts_with(".navivi/gpsdata") || rel.ends_with(".tmp") || rel.ends_with(".partial") || rel.contains("/.navivi_concat_") {
         return false;
     }
     if rel.starts_with("assets/video/user") {
@@ -328,6 +329,8 @@ mod tests {
         assert!(!archive_includes(".navivi/gpsdata/gpsdata.csv", true));
         assert!(archive_includes(".navivi/routecache.json", false));
         assert!(archive_includes("assets/video/route/01.mp4", true));
+        assert!(!archive_includes("export/.navivi_concat_ab12/clip_000.mp4", true));
+        assert!(archive_includes("export/Trip.mp4", true));
     }
 
     #[test]
