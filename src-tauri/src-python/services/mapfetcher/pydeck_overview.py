@@ -32,30 +32,14 @@ from services.logger.logger import setup_logger
 
 logger = setup_logger("PydeckOverview")
 
-from services.mapfetcher.mapgeometry import choose_route_focus_view
+from services.mapfetcher.mapgeometry import (
+    _EARTH_CIRCUMFERENCE_M, _TILE_SIZE_PX, EARTH_RADIUS_METERS as _R, _inverse_mercator_y, _mercator_x, _mercator_y,
+    choose_route_focus_view, extent_for_view as _extent_for_view, meters_per_pixel,
+)
 from services.vdoprocessing.pydeckrecorder.common import MAPBOX_API_KEY
 from services.vdoprocessing.pydeckrecorder.httpserver import start_local_server
 from services.vdoprocessing.pydeckrecorder.popupsequence import _wait_for_paint
 from services.vdoprocessing.pydeckrecorder.routedata import patch_pydeck_html
-
-_R = 6378137.0
-_EARTH_CIRCUMFERENCE_M = 2 * math.pi * _R
-# deck.gl (like mapbox-gl-js) tiles the world in 512px squares — this and
-# _EARTH_CIRCUMFERENCE_M are what convert between a zoom level and real
-# Web Mercator meters-per-pixel.
-_TILE_SIZE_PX = 512
-
-
-def _mercator_x(lon: float) -> float:
-    return lon * (_R * math.pi / 180.0)
-
-
-def _mercator_y(lat: float) -> float:
-    return math.log(math.tan((90.0 + lat) * math.pi / 360.0)) * _R
-
-
-def _inverse_mercator_y(my: float) -> float:
-    return (2.0 * math.atan(math.exp(my / _R)) - math.pi / 2.0) * 180.0 / math.pi
 
 
 def _fit_bbox_to_aspect(
@@ -109,8 +93,7 @@ def compute_pydeck_view(
     # rendered center exactly aligned with `extent`'s own midpoint.
     center_lat = _inverse_mercator_y((min_y + max_y) / 2.0)
 
-    meters_per_pixel = (max_x - min_x) / out_w
-    zoom = math.log2(_EARTH_CIRCUMFERENCE_M / (_TILE_SIZE_PX * meters_per_pixel))
+    zoom = math.log2(_EARTH_CIRCUMFERENCE_M / (_TILE_SIZE_PX * (max_x - min_x) / out_w))
 
     return center_lon, center_lat, zoom, extent
 
@@ -187,24 +170,6 @@ def fetch_overview_image_pydeck(
     return output_filename, extent, output_size
 
 
-def _extent_for_view(
-    center_lon: float, center_lat: float, zoom: float, output_size: Tuple[int, int]
-) -> Tuple[float, float, float, float]:
-    """The inverse of compute_pydeck_view's zoom derivation — given a
-    view state directly (rather than a bbox to fit), returns the matching
-    (min_x, max_x, min_y, max_y) Web Mercator meters extent
-    RouteGeometryProcessor.project_latlon_to_pixel expects."""
-    out_w, out_h = output_size
-    meters_per_pixel = _EARTH_CIRCUMFERENCE_M / (_TILE_SIZE_PX * (2.0 ** zoom))
-    center_mx, center_my = _mercator_x(center_lon), _mercator_y(center_lat)
-    half_w_m = (out_w / 2.0) * meters_per_pixel
-    half_h_m = (out_h / 2.0) * meters_per_pixel
-    return (
-        center_mx - half_w_m, center_mx + half_w_m,
-        center_my - half_h_m, center_my + half_h_m,
-    )
-
-
 def _center_for_fixed_screen_point(
     target_lon: float, target_lat: float,
     target_px: float, target_py: float,
@@ -218,10 +183,10 @@ def _center_for_fixed_screen_point(
     RouteGeometryProcessor.project_latlon_to_pixel uses (valid because the
     camera is locked top-down/pitch=0 — see this module's docstring)."""
     out_w, out_h = output_size
-    meters_per_pixel = _EARTH_CIRCUMFERENCE_M / (_TILE_SIZE_PX * (2.0 ** zoom))
+    mpp = meters_per_pixel(zoom)
     tx, ty = _mercator_x(target_lon), _mercator_y(target_lat)
-    center_mx = tx - (target_px - out_w / 2.0) * meters_per_pixel
-    center_my = ty + (target_py - out_h / 2.0) * meters_per_pixel
+    center_mx = tx - (target_px - out_w / 2.0) * mpp
+    center_my = ty + (target_py - out_h / 2.0) * mpp
     return center_mx / (_R * math.pi / 180.0), _inverse_mercator_y(center_my)
 
 

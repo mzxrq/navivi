@@ -315,14 +315,6 @@ class TileDownloader:
             raise RuntimeError("Failed to download overview map tiles.")
 
         final_path = self._force_png_path(output_filename)
-        # Web Mercator (EPSG:3857) meters, matching `extent`'s own
-        # convention (RouteGeometryProcessor.project_latlon_to_pixel uses
-        # this identical formula) — the crop's anchor point.
-        _r = 6378137.0
-        target_center = (
-            (w + e) / 2.0 * (_r * math.pi / 180.0),
-            math.log(math.tan(math.pi / 4 + math.radians((s + n) / 2.0) / 2)) * _r,
-        )
         # Tiles come in whole-tile chunks, so the mosaic is routinely much
         # wider/taller than the padded bbox that was asked for - and by a
         # different amount per side, depending on where tile edges fall. A
@@ -332,20 +324,24 @@ class TileDownloader:
         # stayed in the frame (padding looked like it "extended the left only,
         # way too much"). Cropping to the requested window first makes the
         # padding mean what it says, on every side, at any value.
-        _to_x = lambda lon: lon * (_r * math.pi / 180.0)
-        _to_y = lambda lat: math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)) * _r
-        img, extent = self._crop_to_window(
-            img, extent, (_to_x(w), _to_x(e), _to_y(s), _to_y(n))
-        )
-        cropped_img, new_extent = self._crop_to_aspect_ratio(
-            img, extent, target_ratio, target_center=target_center
-        )
+        cropped_img, new_extent = self._crop_to_box(img, extent, (w, s, e, n), target_ratio)
 
         Image.fromarray(cropped_img).resize(
             output_size, Image.Resampling.LANCZOS
         ).convert("RGB").save(final_path)
 
         return final_path, new_extent, output_size
+
+    def _crop_to_box(self, img: np.ndarray, extent: Tuple, box: Tuple, target_ratio: float) -> Tuple[np.ndarray, Tuple]:
+        """The mosaic cut to the lon/lat `box` (w, s, e, n) it was fetched for, then to `target_ratio` around the box's
+        centre: the mosaic overhangs the box by up to a tile, and by a different amount on each side."""
+        w, s, e, n = box
+        # Web Mercator (EPSG:3857) metres, `extent`'s own units (RouteGeometryProcessor.project_latlon_to_pixel's formula).
+        r = 6378137.0
+        to_x = lambda lon: lon * (r * math.pi / 180.0)
+        to_y = lambda lat: math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)) * r
+        img, extent = self._crop_to_window(img, extent, (to_x(w), to_x(e), to_y(s), to_y(n)))
+        return self._crop_to_aspect_ratio(img, extent, target_ratio, target_center=(to_x((w + e) / 2.0), to_y((s + n) / 2.0)))
 
     @staticmethod
     def _crop_to_window(
@@ -612,7 +608,8 @@ class TileDownloader:
             raise RuntimeError("Failed to download map tiles for chunk.")
 
         final_path = self._force_png_path(output_filename)
-        cropped_img, new_extent = self._crop_to_aspect_ratio(img, extent, target_ratio)
+        # Centred on the box asked for, as the overview is: centred on the mosaic, a pin near an edge was cut off.
+        cropped_img, new_extent = self._crop_to_box(img, extent, (w, s, e, n), target_ratio)
 
         Image.fromarray(cropped_img).resize(
             output_size, Image.Resampling.LANCZOS

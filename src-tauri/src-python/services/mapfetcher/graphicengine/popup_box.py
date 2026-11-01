@@ -12,7 +12,6 @@ from services.localization.localization import is_japanese
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services import tuning
 
-from .base import _GraphicsEngineBase
 from .glyphs import drawable
 
 
@@ -184,32 +183,6 @@ class _PopupBoxMixin:
         blend_alpha = max(0.0, alpha)
         return cv2.addWeighted(frame, blend_alpha, base_frame, 1 - blend_alpha, 0)
 
-    def pick_hud_corner(
-        self,
-        w: int,
-        h: int,
-        avoid_points: List[Tuple[float, float]],
-        card_w: int = 420,
-        card_h: int = 320,
-        margin: int = 40,
-        preference: Tuple[str, ...] = _GraphicsEngineBase.HUD_CORNERS,
-    ) -> str:
-        """Picks a HUD corner for a popup card whose (generously estimated)
-        footprint doesn't overlap any of `avoid_points` (e.g. the route path
-        and waypoint pins) — falling back to the first preferred corner if
-        every corner collides."""
-        rects = {
-            "bottom_left": (margin, h - card_h - margin, margin + card_w, h - margin),
-            "bottom_right": (w - card_w - margin, h - card_h - margin, w - margin, h - margin),
-            "top_left": (margin, margin, margin + card_w, margin + card_h),
-            "top_right": (w - card_w - margin, margin, w - margin, margin + card_h),
-        }
-        for corner in preference:
-            x0, y0, x1, y1 = rects[corner]
-            if not any(x0 <= px <= x1 and y0 <= py <= y1 for px, py in avoid_points):
-                return corner
-        return preference[0]
-
     def render_popup_box(
         self,
         target_frame: np.ndarray,
@@ -240,7 +213,7 @@ class _PopupBoxMixin:
 
         # [NOTE] [Animation] Missing/unreadable popup_image silently skips the entire card draw, returning the frame unchanged rather than raising or drawing a placeholder.
         if image_path and (line_only or os.path.exists(image_path)):
-            pop_img = None if line_only else self.read_image_safe(image_path)
+            pop_img = None if line_only else self.read_image_safe(image_path, copy=False)  # only resized below
             if line_only or pop_img is not None:
                 hud_corner = popup_info.get("hud_corner")
                 is_beside = hud_corner not in self.HUD_CORNERS
@@ -382,7 +355,12 @@ class _PopupBoxMixin:
                     and bool(popup_info.get("show_label", True))
                 )
 
-                pil_canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+                # Composited on the card's own patch (the shadow's reach below), not the whole frame: a full-frame
+                # canvas and two full-frame conversions per card per frame made each card cost ~28 ms.
+                rx0, ry0 = max(0, box_x - 50), max(0, box_y - 48)
+                rx1, ry1 = min(w, box_x + total_w + 51), min(h, box_y + total_h + 59)
+                box_x, box_y = box_x - rx0, box_y - ry0
+                pil_canvas = Image.new("RGBA", (rx1 - rx0, ry1 - ry0), (0, 0, 0, 0))
                 draw = ImageDraw.Draw(pil_canvas)
 
                 # Border color is stored BGR (like every other color in
@@ -449,7 +427,7 @@ class _PopupBoxMixin:
                     fill=self.ui["card_bg"][:3] + (250,),
                 )
 
-                base_pil = Image.fromarray(cv2.cvtColor(working_frame, cv2.COLOR_BGR2RGBA))
+                base_pil = Image.fromarray(cv2.cvtColor(working_frame[ry0:ry1, rx0:rx1], cv2.COLOR_BGR2RGBA))
                 base_pil.paste(pil_canvas, (0, 0), pil_canvas)
 
                 pil_img = Image.fromarray(cv2.cvtColor(pop_img, cv2.COLOR_BGR2RGB))
@@ -547,7 +525,7 @@ class _PopupBoxMixin:
                             )
                             line_y += label_font.size + line_gap
 
-                working_frame = cv2.cvtColor(np.array(base_pil), cv2.COLOR_RGBA2BGR)
+                working_frame[ry0:ry1, rx0:rx1] = cv2.cvtColor(np.array(base_pil), cv2.COLOR_RGBA2BGR)
 
         if alpha < 1.0:
             working_frame = self._fade_to_base(working_frame, alpha, target_frame)

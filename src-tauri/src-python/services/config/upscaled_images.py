@@ -26,6 +26,19 @@ def upscale_enabled(settings: Dict[str, Any]) -> bool:
     return bool(settings.get("upscale_popup_images", tuning.DEFAULT_UPSCALE_POPUP_IMAGES))
 
 
+def needs_upscale(path: str) -> bool:
+    from PIL import Image
+
+    if Path(path).suffix.lower() == ".svg":
+        return False
+    try:
+        with Image.open(path) as im:
+            w, h = im.size[::-1] if im.getexif().get(0x0112) in (5, 6, 7, 8) else im.size  # quarter-turn tag; no pixel decode
+    except (OSError, ValueError):
+        return False
+    return w < tuning.IMAGE_UPSCALE_MIN_W or h < tuning.IMAGE_UPSCALE_MIN_H
+
+
 def _norm(path: str, anchor: Path) -> str:
     p = Path(path).expanduser()
     if not p.is_absolute():

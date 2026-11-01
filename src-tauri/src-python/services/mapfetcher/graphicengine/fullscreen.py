@@ -2,6 +2,7 @@
 freeze -> scale -> optional B-roll -> hold -> fade sequence."""
 
 import math
+from collections import deque
 import os
 from typing import Dict, List, Tuple
 
@@ -130,8 +131,13 @@ class _FullscreenMixin:
             return
 
         cap = cv2.VideoCapture(video_path)
-        frames = []
         target_h, target_w = exit_frame.shape[:2]
+        # Streamed, not read whole first: a minute of 1080p is ~11 GB of frames. Only the fade-out's frames wait.
+        # [NOTE] [Animation] Cross-fades the B-roll's own first/last frames into the enter/exit frame it's sandwiched between, so the cut to/from the video isn't a hard jump. Capped at a third of the clip so a very short clip doesn't fade across its entire runtime.
+        n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)  # 0 or negative when the file doesn't say (browser .webm)
+        fade_frames = min(int(0.5 * fps), n // 3) if n > 0 else int(0.5 * fps)
+        tail: deque = deque()
+        count = 0
 
         while True:
             ret, frame = cap.read()
@@ -149,24 +155,22 @@ class _FullscreenMixin:
             cropped = resized[
                 y_offset : y_offset + target_h, x_offset : x_offset + target_w
             ]
-            frames.append(cropped)
+            if count < fade_frames:
+                alpha = count / fade_frames
+                video_out.write(cv2.addWeighted(cropped, alpha, enter_frame, 1 - alpha, 0))
+            else:
+                tail.append(cropped)
+                if len(tail) > fade_frames:
+                    video_out.write(tail.popleft())
+            count += 1
 
         cap.release()
 
-        if not frames:
-            return
-
-        # [NOTE] [Animation] Cross-fades the B-roll's own first/last third of frames into the enter/exit frame it's sandwiched between, so the cut to/from the video isn't a hard jump. Capped at len(frames)//3 so a very short clip doesn't fade across its entire runtime.
-        fade_frames = min(int(0.5 * fps), len(frames) // 3)
-        for i, f in enumerate(frames):
-            if i < fade_frames:
-                alpha = i / fade_frames
-                blended = cv2.addWeighted(f, alpha, enter_frame, 1 - alpha, 0)
-                video_out.write(blended)
-            elif i > len(frames) - fade_frames:
-                alpha = (len(frames) - i) / fade_frames
-                blended = cv2.addWeighted(f, alpha, exit_frame, 1 - alpha, 0)
-                video_out.write(blended)
+        for k, f in enumerate(tail):
+            i = count - len(tail) + k
+            if i > count - fade_frames:
+                alpha = (count - i) / fade_frames
+                video_out.write(cv2.addWeighted(f, alpha, exit_frame, 1 - alpha, 0))
             else:
                 video_out.write(f)
 

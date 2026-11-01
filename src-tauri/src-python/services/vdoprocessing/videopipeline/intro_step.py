@@ -112,9 +112,9 @@ def photo_cuts(cue_times: Optional[dict], waypoints: list) -> List[tuple]:
             for wp in waypoints or []:
                 label = str(wp.get("label") or "") if isinstance(wp, dict) else ""
                 images = wp.get("popup_image") if isinstance(wp, dict) else None
-                images = images if isinstance(images, list) else [images]
-                if name and label and (label == name if exact else name in label) and images[0]:
-                    photo = images[0]
+                first = (images[0] if images else None) if isinstance(images, list) else images  # the app saves [] for no photo
+                if name and label and (label == name if exact else name in label) and first:
+                    photo = first
                     break
             if photo:
                 break

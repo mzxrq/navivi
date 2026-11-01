@@ -39,3 +39,19 @@ class TestCropToWindow:
     def test_a_degenerate_window_leaves_the_mosaic_alone(self):
         out, ext = TileDownloader._crop_to_window(IMG, EXT, (1000.0, 1000.0, 500.0, 500.0))
         assert out.shape == IMG.shape and ext == EXT
+
+
+def test_a_leg_map_is_centred_on_its_box_not_on_the_uneven_mosaic():
+    import math
+
+    downloader = object.__new__(TileDownloader)  # no tile cache needed
+    w, s, e, n = 0.0, 0.0, 0.1, 0.05625  # about 11.1 x 6.3 km at the equator: 16:9
+    r = 6378137.0
+    x = lambda lon: lon * r * math.pi / 180.0  # noqa: E731
+    y = lambda lat: math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)) * r  # noqa: E731
+    # The tiles overhang 5 km west but 9 km east, 3 km south but 3 km north (10 m/px).
+    ext = (x(w) - 5000.0, x(e) + 9000.0, y(s) - 3000.0, y(n) + 3000.0)
+    img = np.zeros((int((ext[3] - ext[2]) / 10), int((ext[1] - ext[0]) / 10), 3), dtype=np.uint8)
+    _, out = downloader._crop_to_box(img, ext, (w, s, e, n), 16 / 9)
+    assert (out[0] + out[1]) / 2 == pytest.approx((x(w) + x(e)) / 2, abs=20.0)
+    assert out[0] >= x(w) - 20.0 and out[1] <= x(e) + 20.0

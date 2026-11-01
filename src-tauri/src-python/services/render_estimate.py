@@ -39,10 +39,7 @@ _FIXED_UNITS = ("gps", "intro")
 
 def _small_photos(config: dict) -> int:
     """Waypoint photos the upscale stage would process."""
-    from PIL import Image
-
-    from services import tuning
-    from services.config.upscaled_images import IMAGE_KEYS, upscale_enabled
+    from services.config.upscaled_images import IMAGE_KEYS, needs_upscale, upscale_enabled
 
     if not upscale_enabled(config.get("settings", {}) or {}):
         return 0
@@ -52,16 +49,10 @@ def _small_photos(config: dict) -> int:
         for key in IMAGE_KEYS:
             value = wp.get(key) if isinstance(wp, dict) else None
             for p in value if isinstance(value, list) else [value]:
-                if not isinstance(p, str) or not p or p in seen or p.lower().endswith(".svg"):
+                if not isinstance(p, str) or not p or p in seen:
                     continue
                 seen.add(p)
-                path = Path(p) if Path(p).is_absolute() else anchor / p
-                try:
-                    with Image.open(path) as im:
-                        w, h = im.size
-                except (OSError, ValueError):
-                    continue
-                count += w < tuning.IMAGE_UPSCALE_MIN_W or h < tuning.IMAGE_UPSCALE_MIN_H
+                count += needs_upscale(str(Path(p) if Path(p).is_absolute() else anchor / p))
     return count
 
 

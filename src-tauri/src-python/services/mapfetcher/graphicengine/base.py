@@ -30,6 +30,7 @@ Fixes applied below:
 from __future__ import annotations
 
 import os
+from collections import OrderedDict
 from typing import Any, Dict, Final, List, Optional, Tuple
 
 import cv2
@@ -177,14 +178,20 @@ class _GraphicsEngineBase:
         # (see below) so a caller that draws directly onto its own result
         # — background map frames, unlike popup thumbnails, commonly do —
         # can't corrupt the cached array for the next read.
-        self._image_cache: Dict[str, np.ndarray] = {}
+        # Only the last few: one engine draws the whole route, and keeping every stop's full-size photo
+        # held hundreds of MB to the end of the render; a frame only reuses its background and current card.
+        self._image_cache: "OrderedDict[str, np.ndarray]" = OrderedDict()
 
-    def read_image_safe(self, path: str) -> Optional[np.ndarray]:
+    _IMAGE_CACHE_SIZE: Final[int] = 16  # above what one frame draws: a background, 4 flowing cards, a stop-by batch
+
+    def read_image_safe(self, path: str, copy: bool = True) -> Optional[np.ndarray]:
+        """`copy=False`: the cached array itself, for a caller that only reads it (a full-size photo is ~10 ms to copy)."""
         if not path or not os.path.exists(path):
             return None
         cached = self._image_cache.get(path)
         if cached is not None:
-            return cached.copy()
+            self._image_cache.move_to_end(path)
+            return cached.copy() if copy else cached
         try:
             with open(path, "rb") as f:
                 chunk = f.read()
@@ -195,7 +202,9 @@ class _GraphicsEngineBase:
             return None
         if img is not None:
             self._image_cache[path] = img
-            return img.copy()
+            if len(self._image_cache) > self._IMAGE_CACHE_SIZE:
+                self._image_cache.popitem(last=False)
+            return img.copy() if copy else img
         return None
 
     # Per-travel-mode line colors (BGR). Modes without an entry fall back to

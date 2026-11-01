@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 from PIL.ImageFont import FreeTypeFont, load_default, truetype
 
 from services.mapfetcher.graphicengine.base import _GraphicsEngineBase
@@ -77,7 +77,7 @@ def _rounded_thumbnail(
     # [NOTE] [Animation] Center-crop to the target aspect first, then resize, so
     # thumbnails fill their cell without letterboxing or distortion.
     try:
-        src = Image.open(image_path).convert("RGB")
+        src = ImageOps.exif_transpose(Image.open(image_path)).convert("RGB")  # phone photos are stored sideways + a tag
     except Exception as exc:
         logger.warning("Outro: could not read popup image '%s': %s", image_path, exc)
         return None

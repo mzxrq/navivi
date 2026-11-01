@@ -290,3 +290,11 @@ def test_every_catalog_model_is_pinned():
         assert "/resolve/" in spec["url"] and "/main/" not in spec["url"], name
         assert len(spec["sha256"]) == 64 and spec["scale"] in (1, 2, 4), name
     assert tuning.IMAGE_UPSCALE_MODEL in tuning.IMAGE_UPSCALE_MODELS
+
+
+def test_a_sideways_stored_portrait_is_measured_upright(tmp_path):
+    photo = Image.new("RGB", (1920, 1440))  # stored landscape; tag 6 shows it 1440 wide, under the 1920 minimum
+    exif = photo.getexif()
+    exif[0x0112] = 6
+    photo.save(tmp_path / "p.jpg", exif=exif)
+    assert upscale_step.needs_upscale(str(tmp_path / "p.jpg"))

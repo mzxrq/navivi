@@ -20,7 +20,7 @@ from typing import Dict, List, Optional
 from PIL import Image, ImageFilter, ImageOps
 
 from services import tuning
-from services.config.upscaled_images import IMAGE_KEYS, map_path, upscale_dir, upscale_enabled
+from services.config.upscaled_images import IMAGE_KEYS, map_path, needs_upscale, upscale_dir, upscale_enabled
 from services.logger.progress import tracker
 from services.projectfiles import replace_into, save_image_atomic, write_json_atomic
 
@@ -39,17 +39,6 @@ def free_vram_mb() -> Optional[int]:
         return int(out.stdout.strip().splitlines()[0])
     except (OSError, subprocess.SubprocessError, ValueError, IndexError):
         return None
-
-
-def needs_upscale(path: str) -> bool:
-    if Path(path).suffix.lower() == ".svg":
-        return False
-    try:
-        with Image.open(path) as im:
-            w, h = ImageOps.exif_transpose(im).size
-    except (OSError, ValueError):
-        return False
-    return w < tuning.IMAGE_UPSCALE_MIN_W or h < tuning.IMAGE_UPSCALE_MIN_H
 
 
 def cover_size(w: int, h: int) -> tuple:

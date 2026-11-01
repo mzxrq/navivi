@@ -427,3 +427,13 @@ def test_unburned_title_area_stays_empty_and_the_logo_comes_once_cards_are_under
     full_frame = _scroll_frames(tmp_path, 0)
     assert all(f[:55].max() < 120 for f in under_box)  # no card ever shows where the text box sits
     assert len(under_box) < len(full_frame)  # the scroll stops once the cards are under the box
+
+
+def test_thumbnail_turns_a_phone_photo_upright(tmp_path):
+    photo = Image.new("RGB", (200, 100), (255, 0, 0))
+    photo.paste((0, 0, 255), (100, 0, 200, 100))  # left red, right blue; tag 6 shows it turned a quarter clockwise
+    exif = photo.getexif()
+    exif[0x0112] = 6
+    photo.save(tmp_path / "p.jpg", exif=exif)
+    thumb = outrocard._rounded_thumbnail(str(tmp_path / "p.jpg"), (50, 100)).convert("RGB")
+    assert thumb.getpixel((25, 20))[0] > 200 and thumb.getpixel((25, 80))[2] > 200

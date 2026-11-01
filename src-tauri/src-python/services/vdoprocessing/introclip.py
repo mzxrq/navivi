@@ -244,7 +244,6 @@ def _format_ass_timestamp(seconds: float) -> str:
     return f"{hours}:{minutes:02d}:{secs:02d}.{cs:02d}"
 
 
-TEXT_POSITIONS = ("top", "middle", "bottom")
 TEXT_DEFAULT_MARGIN_PX = 100
 
 
@@ -385,9 +384,10 @@ def title_events(
     Used by the intro and by text items on the editor's text track."""
     duration_sec = max(0.0, end_sec - start_sec)
     an = _ALIGN_AN.get(align, 5)
-    from services.vdoprocessing.vdoexporter import _ass_text
-
-    safe_title, safe_subtitle, safe_kicker = (_ass_text(t or "") for t in (title, subtitle, kicker))
+    # Braces open override tags and backslashes start escapes — strip them
+    # from arbitrary project-name text rather than escaping.
+    clean = lambda t: (t or "").replace("{", "").replace("}", "").replace("\\", "")
+    safe_title, safe_subtitle, safe_kicker = clean(title), clean(subtitle), clean(kicker)
 
     kicker_y, title_y, sub_y = stacked_line_ys(
         cy, kicker_style.font_size, title_style.font_size, subtitle_style.font_size,
@@ -612,7 +612,7 @@ def generate_intro_clip(
                 .with_installed_font(DEFAULT_SUBTITLE_STYLE.font_family),
             )
             # [HACK] [Subtitle] Absolute, forward-slashed, colon-escaped path — libass's
-            # subtitles filter needs this exact escaping, same as combine_video_and_audio.
+            # subtitles filter needs this exact escaping.
             escaped_title_path = str(title_path.resolve()).replace("\\", "/").replace(":", r"\:")
             base = f"subtitles=filename='{escaped_title_path}':force_style='{_TITLE_STYLE.to_force_style()}'"
 
