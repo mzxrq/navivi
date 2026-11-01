@@ -16,10 +16,6 @@ def set_visit_all_stopbys(on: bool) -> None:
     _VISIT_ALL = bool(on)
 
 
-def visit_all_stopbys() -> bool:
-    return _VISIT_ALL
-
-
 def visits_stopby(waypoint: dict) -> bool:
     """A stop-by the walk stops at (see the module docstring); False for any
     other waypoint and for one skipped in video export."""

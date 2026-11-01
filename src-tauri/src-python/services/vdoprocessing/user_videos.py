@@ -21,7 +21,6 @@ from services.vdoprocessing.videopipeline.helpers import output_is_valid
 
 logger = setup_logger(__name__)
 
-VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".mkv", ".webm"}
 SIDECAR_SUFFIX = ".orig.wav"
 
 

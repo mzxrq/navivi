@@ -3,7 +3,6 @@
 import pytest
 
 from services.localization.subtitle import (
-    MasterSubtitleAssembler,
     SpeakingTimelineMapper,
     SRTDocument,
     SubtitleBuilder,
@@ -224,23 +223,6 @@ class TestSRTDocument:
         assert result == str(out_path)
         assert out_path.exists()
         assert "hi" in out_path.read_text(encoding="utf-8")
-
-
-class TestMasterSubtitleAssembler:
-    def test_assemble_shifts_each_segment_by_its_offset(self):
-        seg1 = [SubtitleCue(0.0, 1.0, "a")]
-        seg2 = [SubtitleCue(0.0, 1.0, "b")]
-        master = MasterSubtitleAssembler.assemble([seg1, seg2], [0.0, 10.0])
-        assert master[0].start == 0.0
-        assert master[1].start == 10.0
-        assert master[1].end == 11.0
-
-    def test_assemble_mismatched_lengths_raises(self):
-        with pytest.raises(ValueError):
-            MasterSubtitleAssembler.assemble([[]], [0.0, 1.0])
-
-    def test_assemble_empty_input_returns_empty(self):
-        assert MasterSubtitleAssembler.assemble([], []) == []
 
 
 def test_bracket_tags_are_left_out_of_subtitles():

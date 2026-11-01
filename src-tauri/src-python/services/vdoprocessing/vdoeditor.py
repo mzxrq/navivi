@@ -202,11 +202,6 @@ class VideoEditor:
         return self.concatenate_media(input_paths, output_filename, media_type="video")
 
     # [Core/Util] Muxes an audio track into a video segment, preserving sample rates and channels to avoid pitch-shifting or desync issues.
-    def concatenate_audios(self, input_paths: List[str], output_filename: str) -> str:
-        """Joins multiple audio files (e.g., .mp3, .wav) together."""
-        return self.concatenate_media(input_paths, output_filename, media_type="audio")
-
-    # [Core/Util] Muxes an audio track into a video segment, preserving sample rates and channels to avoid pitch-shifting or desync issues.
     def mux_audio_to_video(
         self, video_path: str, audio_path: str, output_filename: str
     ) -> str:
@@ -410,54 +405,6 @@ class VideoEditor:
         logger.info(
             "Held last frame of '%s' for %.3fs to reach %.3fs: %s",
             vid_p, pad_seconds, target_duration, output_path,
-        )
-        return str(output_path)
-
-    # [Core/Util] Stitches an image sequence into an MP4 video using libx264.
-    def stitch_images_to_video(
-        self,
-        images_dir: str,
-        output_filename: str,
-        fps: int = 30,
-        image_pattern: str = "frame_%04d.png",
-    ) -> str:
-        """
-        Stitches a sequence of identically formatted images into a video file.
-        Expects images named sequentially (e.g., frame_0000.png, frame_0001.png).
-        """
-        img_dir_path = Path(images_dir)
-        if not img_dir_path.exists():
-            raise FileNotFoundError(f"Images directory not found: {img_dir_path}")
-
-        # Route output to the centralized assets/video directory
-        output_path = self._resolve_output_path(output_filename, "video")
-        if output_path.exists():
-            output_path.unlink()
-
-        # Build the FFmpeg input string (e.g., "images/frame_%04d.png")
-        input_pattern = str(img_dir_path / image_pattern)
-        ffmpeg_cmd = self.engine.resolve_binary()
-
-        cmd = [
-            ffmpeg_cmd,
-            "-y", *tuning.ffmpeg_log_args(),
-            "-framerate",
-            str(fps),
-            "-i",
-            input_pattern,
-            "-c:v",
-            "libx264",  # Standard H.264 encoding
-            *tuning.ffmpeg_thread_args(),
-            "-pix_fmt",
-            "yuv420p",  # Ensures playback compatibility across standard video players
-            str(output_path),
-        ]
-
-        self.engine.run_command(cmd)
-        logger.info(
-            "Successfully stitched images from '%s' into video: %s",
-            images_dir,
-            output_path,
         )
         return str(output_path)
 

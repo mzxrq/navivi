@@ -368,26 +368,6 @@ class SRTDocument:
         return output_path
 
 
-# [Subtitle] MasterSubtitleAssembler: merges per-segment cue lists into one timeline-shifted master list
-class MasterSubtitleAssembler:
-    """Merges per-segment cue lists into one timeline-shifted master list."""
-
-    # [Core/Subtitle] Assembles multiple segments of SubtitleCue lists into a single master list, applying offsets to each segment
-    @staticmethod
-    def assemble(
-        segment_cues: List[List[SubtitleCue]], segment_offsets: List[float]
-    ) -> List[SubtitleCue]:
-        """O(total_cues) — each segment's cues shifted exactly once."""
-        if len(segment_cues) != len(segment_offsets):
-            raise ValueError(
-                "segment_cues and segment_offsets must be the same length."
-            )
-        master: List[SubtitleCue] = []
-        for cues, offset in zip(segment_cues, segment_offsets):
-            master.extend(cue.shifted(offset) for cue in cues)
-        return master
-
-
 def caption_layout(settings: Optional[dict] = None) -> Dict[str, int]:
     """SubtitleBuilder.build's line options from the project's settings: line length from
     caption_style.max_chars_per_line, and settings.subtitle_long_lines "split" | "wrap"."""

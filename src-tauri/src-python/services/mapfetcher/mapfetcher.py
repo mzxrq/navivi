@@ -573,21 +573,9 @@ class MapFetcher:
         return RouteGeometry.build_waypoint_index(*args, **kwargs)
 
     @staticmethod
-    def douglas_peucker(*args, **kwargs):
-        return RouteGeometry.douglas_peucker(*args, **kwargs)
-
-    @staticmethod
     def get_smooth_path(*args, **kwargs):
         return RouteGeometry.get_smooth_path(*args, **kwargs)
 
     @staticmethod
     def compute_segment_durations(*args, **kwargs):
         return RoutePacing.compute_segment_durations(*args, **kwargs)
-
-    @staticmethod
-    def compute_chunk_durations(*args, **kwargs):
-        return RoutePacing.compute_chunk_durations(*args, **kwargs)
-
-    @staticmethod
-    def generate_residential_sequence(*args, **kwargs):
-        return MapFetcher().process_residential_sequence(*args, **kwargs)

@@ -22,7 +22,6 @@ logger = setup_logger("PinImage")
 
 SPRITE_MAX_PX = 256
 MAX_FILE_BYTES = 25 * 1024 * 1024
-RASTER_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 # The pydeck pins are 384x512 images (pedestrian.py's teardrop); an image pin is
 # composited onto the same canvas so the layer's size and anchor code stay as they are.
 DECK_CANVAS = (384, 512)

@@ -1,9 +1,5 @@
 import re
-from typing import Any
 from services.localization.romaji import RomajiConverter
-from services.logger.logger import setup_logger
-
-logger = setup_logger("Localization Service")
 
 
 def is_japanese(text: str) -> bool:
@@ -27,30 +23,3 @@ def format_waypoint_label(raw_label: str, target_lang: str = "en") -> str:
         return RomajiConverter.to_romaji(raw_label)
     return raw_label
 
-
-def build_display_text(original_jp: str, target_lang: Any) -> str:
-    if not isinstance(target_lang, str) or not target_lang.strip():
-        target_lang = "en"
-    normalized_target = target_lang.strip().lower()
-
-    if normalized_target in ("romaji", "roman", "ja-romaji", "hepburn"):
-        return RomajiConverter.to_romaji(original_jp)
-
-    # [TODO] [Translation] services/translator.py doesn't exist yet — only the "romaji" target is
-    # actually supported; any other target_lang raises until a real translator module is added.
-    try:
-        from services.translator import ScriptTranslator
-    except ModuleNotFoundError:
-        raise NotImplementedError(
-            "services/translator.py does not exist yet; non-Romaji translation "
-            "targets aren't supported. Use target_lang='romaji' instead."
-        )
-
-    translated = ScriptTranslator.translate(original_jp, target_lang=target_lang)
-
-    if ScriptTranslator.last_call_failed:
-        logger.error(
-            f"Translation to '{target_lang}' FAILED — falling back to Romaji for: {original_jp[:30]!r}..."
-        )
-        return RomajiConverter.to_romaji(original_jp)
-    return translated

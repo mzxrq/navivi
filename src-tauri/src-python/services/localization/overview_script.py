@@ -31,24 +31,7 @@ logger = setup_logger("OverviewScript")
 # measurement on purpose - a passage that runs short is covered by the
 # route/hold, one that runs long pushes the next cue late.
 DEFAULT_CHARS_PER_SECOND = 5.0
-# A passage needs at least this many seconds of route to be worth speaking
-# (about 33 characters): arrivals that follow so quickly that the passage
-# would be shorter are folded into it — those places are described together
-# and only the first gets a tag pinned.
-MIN_PASSAGE_SECONDS = 6.0
-# A passage starts a little before the route arrives, so the name is heard
-# as the card comes up rather than after it.
-LEAD_SECONDS = 0.5
 _MIN_PASSAGE_CHARS = 14
-# The last numbered stop's passage never runs longer than this: what follows
-# it on the route (the trip back) gets its own passage instead of one place
-# being talked about for the whole return leg.
-MAX_LAST_STOP_SECONDS = 8.0
-# Spoken between {start} and the first {n}: the route sets off and the first
-# stop is a few seconds away. Without it {start} and {1} would sit on the same
-# instant and waypoint 1 could not be reached when its line is spoken.
-SET_OFF_TEXT = "さあ、町へ出発しましょう。"
-MIN_SET_OFF_SECONDS = 2.5
 
 # Whether the overview describes each stop. On (tuning.DEFAULT_OVERVIEW_DESCRIBE_STOPS):
 # every numbered stop gets its own short description pulled from its
@@ -151,150 +134,12 @@ def _arrival_fallback(label: str, n: int, already_named: bool = False, said: str
     return (fresh or order)[0].format(label=label)
 
 
-def _template(labels: List[str], kind: str = "") -> str:
-    """Last-resort passage built from place names only: always short, always
-    correct, never cut mid-word."""
-    labels = [l for l in labels if l]
-    if kind == "return":
-        return "旅の締めくくりに、出発地へと戻っていきます。"
-    if not labels:
-        return "次の場所へと進みます。"
-    if len(labels) == 1:
-        return f"{labels[0]}に到着します。"
-    if len(labels) > 3:
-        return f"{labels[0]}から{labels[-1]}まで、順に巡っていきます。"
-    return "、".join(labels) + "を巡ります。"
-
-
 def _looks_ok(text: str, limit: int, min_chars: int = _MIN_PASSAGE_CHARS, over: float = 1.5) -> bool:
     if not text or len(text) < min(min_chars, limit) or len(text) > limit * over:
         return False
     if re.search(r"[A-Za-z]{4,}|[#*_`{}<>\[\]]", text):  # markdown, tags, English chatter
         return False
     return bool(re.search(r"[぀-ヿ一-鿿]", text))
-
-
-def plan_passages(
-    project: dict, arrivals: Dict[int, float], route_end: float, intro_end: float,
-    chars_per_second: float = DEFAULT_CHARS_PER_SECOND,
-) -> List[dict]:
-    """Splits the route timeline into passages. Each is
-    {"numbers": [n, ...], "labels": [...], "facts": str, "chars": budget,
-     "start": seconds}. The passage for a group starts at its first arrival
-    (minus LEAD_SECONDS) and lasts until the next group's start (or the
-    route's end)."""
-    places = visible_waypoints(project)
-    numbered = [(i + 1, places[i]) for i in range(len(places)) if (i + 1) in arrivals]
-    groups: List[List[Tuple[int, dict]]] = []
-    for n, w in numbered:
-        if groups:
-            group_start = arrivals[groups[-1][0][0]] - LEAD_SECONDS
-            if (arrivals[n] - LEAD_SECONDS) - group_start < MIN_PASSAGE_SECONDS:
-                groups[-1].append((n, w))
-                continue
-        groups.append([(n, w)])
-    passages = []
-    return_start = None
-    for gi, group in enumerate(groups):
-        start = max(intro_end, arrivals[group[0][0]] - LEAD_SECONDS)
-        if gi + 1 < len(groups):
-            end = arrivals[groups[gi + 1][0][0]] - LEAD_SECONDS
-        else:
-            end = min(route_end, start + MAX_LAST_STOP_SECONDS)
-            return_start = end
-        passages.append({
-            "numbers": [n for n, _ in group],
-            "labels": [w.get("label") or w.get("name") or "" for _, w in group],
-            "facts": " ".join(_facts(w) for _, w in group),
-            "facts_each": [_facts(w) for _, w in group],
-            "start": start,
-            "chars": max(_MIN_PASSAGE_CHARS, int((end - start) * chars_per_second)),
-        })
-    # The trip back: whatever the route still has to do after the last
-    # numbered stop (stop-bys, the ferry, the walk to the finish). Told from
-    # the final destination's own narration; no cue number (nothing to pin).
-    waypoints = project.get("waypoints", [])
-    if return_start is not None and route_end - return_start >= 4.0 and waypoints:
-        final = waypoints[-1]
-        passages.append({
-            "numbers": [],
-            "labels": [final.get("label") or final.get("name") or "出発地"],
-            "facts": _facts(final),
-            "start": return_start,
-            "chars": max(_MIN_PASSAGE_CHARS, int((route_end - return_start) * chars_per_second)),
-            "kind": "return",
-        })
-    return passages
-
-
-def _prompt(passage: dict, previous: str) -> str:
-    places = "、".join(passage["labels"])
-    scene = (
-        "巡り終えて、出発地へ戻っていく旅の締めくくりの場面のナレーションを書きます。"
-        if passage.get("kind") == "return"
-        else "地図上でルートが次の場所に到着する場面のナレーションを書きます。"
-    )
-    return (
-        f"あなたは旅番組のナレーターです。{scene}\n"
-        f"■ 場所: {places}\n■ 参考情報: {passage['facts'][:600]}\n"
-        + (f"■ 直前のナレーション: {previous}\n" if previous else "")
-        + f"■ 条件: 日本語の話し言葉。{passage['chars']}文字以内。参考情報にない事実は書かない。"
-          "場所の名前を必ず含める。記号・括弧・番号・英語は使わず、本文のみを出力。"
-        + SPOKEN_STYLE_JA
-    )
-
-
-def build_script(
-    project: dict,
-    arrivals: Dict[int, float],
-    route_end: float,
-    intro_end: float,
-    generate: Generate,
-    intro_text: Optional[str] = None,
-    closing_text: str = "今日の旅は、ここまでです。",
-    chars_per_second: float = DEFAULT_CHARS_PER_SECOND,
-) -> Tuple[str, List[dict]]:
-    """Returns (script with cue tags, per-passage report). `generate(prompt,
-    max_chars)` returns model text or None; anything it returns that fails
-    validation is replaced by the place's own first sentence."""
-    intro = (intro_text if intro_text is not None else project.get("overview_narration", ""))
-    intro = re.sub(r"\{[^}]*\}", "", intro or "").strip()
-    passages = plan_passages(project, arrivals, route_end, intro_end, chars_per_second)
-
-    parts = [intro]
-    report = []
-    previous = ""
-    # Time between the route setting off (intro_end) and the first numbered
-    # arrival: long enough -> speak a short set-off line there, after {start}.
-    first_arrival = min((n_t for n_t in arrivals.values()), default=None)
-    set_off = bool(
-        first_arrival is not None and passages
-        and first_arrival - intro_end >= MIN_SET_OFF_SECONDS
-    )
-    for i, p in enumerate(passages):
-        text = None
-        try:
-            text = generate(_prompt(p, previous), p["chars"])
-        except Exception as exc:  # the model must never break timing
-            logger.warning("Passage %s: generator failed (%s).", p["numbers"], exc)
-        raw = text
-        text = _fit_sentences(re.sub(r"[ \t\u3000]+", "", (text or "")).strip(), p["chars"])
-        text = re.sub(r"\s+", "", text)
-        used = "model"
-        if not _looks_ok(text, p["chars"]):
-            text = _template(p["labels"], p.get("kind", ""))
-            used = "template"
-        tags = "".join("{%d}" % n for n in p["numbers"][:1])  # only the first of a group is pinned
-        # {start} sits right before the first passage: the route starts moving here.
-        if i == 0:
-            head = "{start}" + (SET_OFF_TEXT if set_off else "")
-        else:
-            head = ""
-        parts.append(head + tags + text)
-        report.append({**p, "text": text, "used": used, "spoken_chars": len(text), "raw": raw})
-        previous = text
-    parts.append(closing_text)
-    return "".join(parts), report
 
 
 # --- Tour-guide script: stop, describe, then tell the way ----------------------
@@ -305,8 +150,6 @@ def build_script(
 # brief (localization/route_brief.py). The model only words the facts; every
 # piece is checked and falls back to plain text built from the facts.
 
-INTRO_CHARS = 90
-DESCRIBE_CHARS = 80
 TRANSITION_CHARS = 50
 
 # The overview's length comes first; the script is sized to it. Default: 20s
@@ -323,8 +166,6 @@ TARGET_SECONDS_PER_STOP = 7.0
 INTRO_SECONDS = 6.0
 WAY_MIN_SECONDS = 3.5
 WAY_MAX_SECONDS = 8.0
-WAY_SHARE = 0.35
-DESCRIBE_MIN_SECONDS = 3.5
 DESCRIBE_MAX_SECONDS = 15.0
 # Passing a stop takes the walker at least this long (the renderer never walks
 # a leg faster, tuning.OVERVIEW_MIN_LEG_SECONDS), so a way line past several

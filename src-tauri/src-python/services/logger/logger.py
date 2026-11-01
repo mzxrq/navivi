@@ -11,8 +11,6 @@ import logging
 import os
 from pathlib import Path
 
-# [I/O] Log file path
-LOG_FILE =  "app.log"
 
 
 

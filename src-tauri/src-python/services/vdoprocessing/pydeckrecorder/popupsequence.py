@@ -93,7 +93,6 @@ async def _run_popup_freeze_sequence(
     freeze_frames: int,
     popup_url: Optional[str],
     image_display: str,
-    debug_dump_dir: Optional[str] = None,
 ) -> None:
     if freeze_frames <= 0:
         return

@@ -1,19 +1,17 @@
 """Route/project data loading and pydeck HTML generation helpers."""
 
-import os
 from pathlib import Path
 
 import json
 import math
 import numpy as np
 import pandas as pd
-import pydeck as pdk
 from scipy.interpolate import interp1d
 
 from services.config.upscaled_images import apply_upscaled_images
 from services.mapfetcher.maplanguage import current_map_language, style_localizer_script
 
-from .common import MAPBOX_API_KEY, logger, resolve_mapbox_token
+from .common import logger
 
 
 def load_route_from_config(config_path: str):
@@ -36,45 +34,6 @@ def load_route_from_config(config_path: str):
             logger.warning(f"Failed to read .routecache.json: {e}")
 
     return data
-
-
-def build_pydeck_map(
-    project_data: dict, output_html_path: str = "frames/temp_map.html"
-):
-    os.makedirs(os.path.dirname(output_html_path), exist_ok=True)
-
-    mapbox_key = resolve_mapbox_token(project_data.get("settings", {})) or MAPBOX_API_KEY
-
-    raw_coords = []
-    for route_key, coords in project_data.get("routing_cache", {}).items():
-        for coord in coords:
-            raw_coords.append({"lat": coord[0], "lon": coord[1]})
-
-    if not raw_coords:
-        # [NOTE] [Map] Falls back to Tokyo so pydeck always has a valid
-        # centroid to build a ViewState from, even when routing_cache is
-        # empty (e.g. an early preview call before any leg has been routed).
-        raw_coords = [{"lat": 35.6762, "lon": 139.6503}]
-
-    df_raw = pd.DataFrame(raw_coords)
-    view_state = pdk.ViewState(
-        longitude=df_raw["lon"].iloc[0],
-        latitude=df_raw["lat"].iloc[0],
-        zoom=15,
-        pitch=45,
-        bearing=0,
-    )
-
-    r = pdk.Deck(
-        layers=[],
-        initial_view_state=view_state,
-        map_provider="mapbox",
-        map_style="mapbox://styles/mapbox/streets-v12",
-        api_keys={"mapbox": mapbox_key},
-        views=[pdk.View(type="MapView", controller=True)],
-    )
-    r.to_html(output_html_path)
-    return output_html_path
 
 
 def arrival_time_fraction(frac: float, seconds: float, slow_seconds: float, end_speed: float = 0.4) -> float:

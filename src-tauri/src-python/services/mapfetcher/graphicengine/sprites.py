@@ -35,12 +35,6 @@ class _SpriteMixin:
         bbox = measure_draw.textbbox((0, 0), label, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         pad_x, pad_y = 10, 6
-
-        sprite_w = int(
-            self.marker_radius + _LABEL_CHIP_GAP + tw + pad_x * 2
-            + self.marker_radius + _LABEL_CHIP_GAP
-        )
-        sprite_h = int(max(2 * (self.marker_radius + 3), th + pad_y * 2) + 8)
         chip_w = tw + pad_x * 2
         chip_h = th + pad_y * 2
         pin_gap = int(self.marker_radius + _LABEL_CHIP_GAP)
@@ -103,14 +97,6 @@ class _SpriteMixin:
         frame[y0:y1, x0:x1] = (
             region[:, :, :3] * alpha + frame[y0:y1, x0:x1] * (1 - alpha)
         ).astype(np.uint8)
-
-    def load_walking_sprites(self, sprite_paths: list[str]):
-        self.walk_sprites = []
-        for path in sprite_paths:
-            img = self.read_image_safe(path)
-            if img is not None:
-                img = cv2.resize(img, (60, 60))
-                self.walk_sprites.append(img)
 
     def draw_walking_human(
         self, frame: np.ndarray, cx: int, cy: int, frame_count: int, angle: float

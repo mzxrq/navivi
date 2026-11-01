@@ -9,7 +9,6 @@ Extracted from mapfetcher.py to improve modularity.
 from typing import Any, Final, Optional, Tuple, List, Dict
 import numpy as np
 import pandas as pd
-from scipy.spatial import cKDTree  # type: ignore
 from scipy.interpolate import make_interp_spline
 import math
 
@@ -23,9 +22,6 @@ _OFF_ROUTE_DEGREES = 0.0005
 # [Utility] Log setup for debugging and monitoring
 logger = setup_logger("MapEngine")
 
-# [Final] Constants for map tile downloading and geometry processing
-TARGET_ASPECT_RATIO: Final[float] = 16 / 9
-MIN_MAP_WIDTH_PX: Final[int] = 800
 # Standard Web Mercator (EPSG:3857) spherical Earth radius in meters, used by
 # both project_latlon_to_pixel and its inverse, pixel_to_latlon.
 EARTH_RADIUS_METERS: Final[float] = 6378137.0
@@ -435,19 +431,6 @@ class RouteGeometryProcessor:
             "min_lon": min_lon - lon_padding,
             "max_lon": max_lon + lon_padding,
         }
-
-    # [Map] Project a list of lat/lon points to pixel coordinates based on map extent and image size
-    @staticmethod
-    def project_to_pixels(
-       route_df: pd.DataFrame, waypoints: List[Dict]
-    ) -> List[int]:
-        """Project lat/lon points to pixel coordinates based on map extent and image size."""
-
-        if route_df.empty or not waypoints:
-            return []
-        tree = cKDTree(route_df[["latitude", "longitude"]].to_numpy())
-        _, indices = tree.query([[wp["lat"], wp["lng"]] for wp in waypoints])
-        return np.atleast_1d(indices).tolist()
 
     # [Map] Find the nearest route_df row index for each waypoint (nearest-neighbor match)
     @staticmethod
