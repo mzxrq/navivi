@@ -35,7 +35,7 @@ pub fn list(conn: &Connection, prefix: Option<&str>) -> DbResult<serde_json::Map
     let mut out = serde_json::Map::new();
     for row in rows {
         let (k, v) = row?;
-        if prefix.map_or(true, |p| k.starts_with(p)) {
+        if prefix.is_none_or(|p| k.starts_with(p)) {
             out.insert(k, serde_json::from_str(&v)?);
         }
     }

@@ -354,6 +354,8 @@ fn start_render(
     let app_stdout = app.clone();
     let stdout_reader = thread::spawn(move || {
         let reader = BufReader::new(stdout);
+        // Skips a bad line and keeps reading: stopping would fill the pipe and stall Python.
+        #[allow(clippy::manual_flatten)]
         for line in reader.lines() {
             if let Ok(line) = line {
                 let _ = app_stdout.emit("render-log", line);
@@ -364,6 +366,8 @@ fn start_render(
     let app_stderr = app.clone();
     let stderr_reader = thread::spawn(move || {
         let reader = BufReader::new(stderr);
+        // Skips a bad line and keeps reading: stopping would fill the pipe and stall Python.
+        #[allow(clippy::manual_flatten)]
         for line in reader.lines() {
             if let Ok(line) = line {
                 let _ = app_stderr.emit("render-error", line);
@@ -627,6 +631,7 @@ fn same_bytes(a: &Path, b: &Path) -> std::io::Result<bool> {
 
 #[tauri::command(async)]
 fn open_in_explorer(path: String) -> Result<(), String> {
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     let p = std::path::Path::new(&path);
     #[cfg(target_os = "windows")]
     {
