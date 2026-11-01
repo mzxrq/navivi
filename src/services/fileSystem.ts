@@ -363,7 +363,16 @@ export const saveProjectData = async (
 
   // Written aside and renamed over: a crash mid-write must not leave the project's one file half written.
   await writeTextFile(`${jsonPath}.tmp`, JSON.stringify(jobConfig, null, 2));
-  await rename(`${jsonPath}.tmp`, jsonPath);
+  // Windows refuses the rename while an antivirus scan or OneDrive sync holds either file for a moment.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await rename(`${jsonPath}.tmp`, jsonPath);
+      break;
+    } catch (err) {
+      if (attempt === 5) throw err;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
 
   const manifest = buildAssetManifest(projId, processedWaypoints as any, settings);
   const metaDir = await join(projectDir, fileSystem.metaFolder);

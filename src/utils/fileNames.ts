@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import { basename } from "@tauri-apps/api/path";
+import { basename, dirname } from "@tauri-apps/api/path";
 import { exists } from "@tauri-apps/plugin-fs";
+
+const samePath = (a: string, b: string) => {
+  const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  return norm(a) === norm(b);
+};
 
 // Outside file -> its copy in the project, for this session: a stop keeps the outside path after a save, and
 // comparing a multi-GB clip with its copy again on every autosave would be slow.
@@ -12,6 +17,11 @@ const imported = new Map<string, string>();
 export async function importAssets(destDir: string, sources: string[]): Promise<Map<string, string>> {
   const names = new Map<string, string>();
   for (const src of new Set(sources)) {
+    // Already in the project: kept by name, so a file the user deleted there doesn't fail the whole save.
+    if (samePath(await dirname(src), destDir)) {
+      names.set(src, await basename(src));
+      continue;
+    }
     const key = `${destDir}|${src}`;
     let target = imported.get(key);
     if (!target || !(await exists(target))) {

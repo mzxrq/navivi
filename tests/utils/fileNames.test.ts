@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ invoke: vi.fn(), exists: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
 vi.mock("@tauri-apps/plugin-fs", () => ({ exists: mocks.exists }));
-vi.mock("@tauri-apps/api/path", () => ({ basename: async (p: string) => path.win32.basename(p) }));
+vi.mock("@tauri-apps/api/path", () => ({
+  basename: async (p: string) => path.win32.basename(p),
+  dirname: async (p: string) => path.win32.dirname(p),
+}));
 
 import { importAssets } from "../../src/utils/fileNames";
 
@@ -26,6 +29,13 @@ describe("importAssets", () => {
     expect(mocks.invoke).toHaveBeenCalledTimes(2);
     expect(names.get("D:/a/GX01.MP4")).toBe("GX01.MP4");
     expect(names.get("E:/b/GX01.MP4")).toBe("GX01 (2).MP4");
+  });
+
+  it("keeps a file already in the folder without copying, even if it is gone", async () => {
+    mocks.invoke.mockRejectedValue(new Error("Failed to copy file"));
+    const names = await importAssets("C:/p/assets/image", ["C:\\P\\assets\\image\\IMG_1.jpg"]);
+    expect(names.get("C:\\P\\assets\\image\\IMG_1.jpg")).toBe("IMG_1.jpg");
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
   it("does not compare a file again on the next save, unless its copy is gone", async () => {
