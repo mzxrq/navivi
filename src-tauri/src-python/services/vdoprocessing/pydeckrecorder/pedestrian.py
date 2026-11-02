@@ -1701,11 +1701,6 @@ async def _record_leg(
                                 else tuning.RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS
                             ),
                         )
-                    if end_view_path:
-                        # The camera this clip ends on: the next leg opens on it, so the cut can't be seen.
-                        write_json_atomic(Path(end_view_path), {
-                            "lon": locked_lon, "lat": locked_lat, "zoom": locked_zoom, "pitch": follow_pitch,
-                        })
                     else:
                         hold_frames = max(0, int(
                             (arrival_wait_seconds if arrival_wait_seconds is not None
@@ -1713,6 +1708,11 @@ async def _record_leg(
                         ))
                         for _ in range(hold_frames):
                             await _write_frame(last_png_bytes)
+                    if end_view_path:
+                        # The camera this clip ends on: the next leg opens on it, so the cut can't be seen.
+                        write_json_atomic(Path(end_view_path), {
+                            "lon": locked_lon, "lat": locked_lat, "zoom": locked_zoom, "pitch": follow_pitch,
+                        })
 
                     # Outro: the reverse of the intro above -- eases the
                     # locked whole-leg framing back OUT to the same top-down

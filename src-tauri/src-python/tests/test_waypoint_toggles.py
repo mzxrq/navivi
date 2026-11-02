@@ -52,3 +52,14 @@ def test_a_leg_with_a_deleted_piece_is_rendered_again():
     leg = [Path("02_waypoint_16_X.mp4")] + [Path(f"02_waypoint_16_X_cont{n}.mp4") for n in range(2, 6)]
     assert pieces_complete(leg) and pieces_complete(leg[:1])
     assert not pieces_complete(leg[1:]) and not pieces_complete(leg[:2] + leg[3:])
+
+
+def test_the_arrived_map_hold_only_plays_when_there_is_no_arrival_photo():
+    # A block put between `if dest_popup_image:` and its `else:` once moved the hold after the fullscreen photo.
+    import inspect
+
+    from services.vdoprocessing.pydeckrecorder import pedestrian
+
+    src = inspect.getsource(pedestrian)
+    between = src[src.index("cut_on_arrival = await _play_leg_photo_card("):src.index("hold_frames = max(0, int(")]
+    assert between.rstrip().endswith("else:") and "\n                    if " not in between

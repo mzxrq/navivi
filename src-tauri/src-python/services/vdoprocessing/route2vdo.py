@@ -62,7 +62,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # v7: leg card numbers are the overview card's own per-leg numbers;
 # v8: stop-bys are framed too, and the summary card sits lower;
 # v9: the 3D leg HUD card sits as low as the 2D one).
-LEG_RENDER_VERSION = 9
+LEG_RENDER_VERSION = 10  # v10: no arrived-map hold after the fullscreen arrival photo (2026-10-30 regression)
 # Bumped when the heatmap legs' elevation profile card changes (only those legs re-render; v1: the card).
 LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
