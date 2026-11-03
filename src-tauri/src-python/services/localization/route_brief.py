@@ -131,10 +131,16 @@ def _short_fact(waypoint: dict) -> str:
     return candidate if re.search(r"[でなの]$", candidate) else ""
 
 
+def is_inaccessible(waypoint: dict) -> bool:
+    """A place on the course that can't be visited any more (the editor's "Closed" type): never walked to, told
+    after the stop-bys with its own narration as the reason ({closed})."""
+    return bool(waypoint.get("inaccessible"))
+
+
 def on_route(waypoint: dict) -> bool:
     """A waypoint the walker actually goes to (an unconnected stop-by is only
     seen from the route)."""
-    return not (waypoint.get("isStopBy") and not waypoint.get("connectToRoute"))
+    return not is_inaccessible(waypoint) and not (waypoint.get("isStopBy") and not waypoint.get("connectToRoute"))
 
 
 def heading(from_lat: float, from_lng: float, to_lat: float, to_lng: float) -> str:
@@ -262,6 +268,8 @@ def stopby_holds(project: dict) -> Tuple[Dict[int, float], float]:
     for w in waypoints:
         if w.get("skipAssetGeneration") and w is not waypoints[0] and w is not waypoints[-1]:
             continue  # passed with a pip card, never part of a batch (popups.py)
+        if is_inaccessible(w):
+            continue  # told on its own after the stop-bys ({closed}), not in a batch
         is_effectively_stopby = w.get("isStopBy") and not (w.get("connectToRoute") and w.get("pauseAtWaypoint") is not False)
         if not is_effectively_stopby:
             host, first_of_run = w, True

@@ -504,7 +504,7 @@ def plan_budget(project: dict, brief: dict) -> dict:
         ways = [_way_seconds({**t, "via_hold": 0.0}) for t in trips]
         describe = {n: 0.0 for n in stops}
         pivot = len(ROUTE_PIVOT_TEXT) / cps
-        ending = max(closing, len(totals_text(brief) + goal_text(brief) + stopby_text(project)) / cps)
+        ending = max(closing, len(totals_text(brief) + goal_text(brief) + stopby_text(project) + closed_text(project)) / cps)
         rest = target - pivot - sum(ways) - sum(describe.values()) - ending
         opening = min(OPENING_MAX_SECONDS, max(OPENING_MIN_SECONDS, rest))
         estimated = opening + pivot + sum(ways) + sum(describe.values()) + ending
@@ -780,7 +780,7 @@ def stopby_text(project: dict) -> str:
 
     waypoints = [w for w in project.get("waypoints", []) if isinstance(w, dict) and "lat" in w]
     route = [w for w in waypoints if on_route(w)]
-    extras = [w for w in waypoints if not on_route(w) and not w.get("skipAssetGeneration")]
+    extras = [w for w in waypoints if not on_route(w) and not w.get("skipAssetGeneration") and not w.get("inaccessible")]
     if not extras or not route:
         return ""
     by_near: Dict[str, List[str]] = {}  # stop-bys near the same stop are named together
@@ -801,6 +801,21 @@ def stopby_text(project: dict) -> str:
         "黒色で示した地点は、ルート沿いにある追加の見どころです。"
         f"{listed}です。時間に余裕があれば、あわせて訪ねてみてください。" + "".join(notes)
     )
+
+
+def closed_text(project: dict) -> str:
+    """The places that can't be visited any more (red × pins), each with the reason from its own narration:
+    "赤色で示した地点は、現在訪れることができません。Aは、…"; told after the stop-bys at {closed}."""
+    from services.localization.route_brief import clean_label, is_inaccessible
+
+    lines = []
+    for w in project.get("waypoints", []):
+        if not isinstance(w, dict) or not is_inaccessible(w):
+            continue
+        text = re.sub(r"\{[^}]*\}", "", w.get("attractionNarration") or w.get("narration") or "").strip()
+        reason = "".join([s for s in _SENTENCE_END.split(text) if s.strip()][:2]).strip()
+        lines.append(f"{clean_label(w)}は、{reason}" if reason else f"{clean_label(w)}です。")
+    return "赤色で示した地点は、現在訪れることができません。" + "".join(lines) if lines else ""
 
 
 def course_taglines(project: dict, brief: dict, limit: int = 6) -> List[str]:
@@ -966,10 +981,11 @@ def build_course_script(
         if n is not None:
             parts.append("{go}")
 
-    totals, goal, extras = totals_text(brief), goal_text(brief), stopby_text(project)
-    # {extras}: the stop-bys appear on the map (they are only shown at the end).
-    closing = f"{totals}{{distance}}{goal}" + (f"{{extras}}{extras}" if extras else "")
-    if len(totals + goal + extras) < chars(budget["closing"]):
+    totals, goal, extras, closed = totals_text(brief), goal_text(brief), stopby_text(project), closed_text(project)
+    # {extras}: the stop-bys appear on the map (they are only shown at the end); {closed}: then the closed places.
+    closing = (f"{totals}{{distance}}{goal}" + (f"{{extras}}{extras}" if extras else "")
+               + (f"{{closed}}{closed}" if closed else ""))
+    if len(totals + goal + extras + closed) < chars(budget["closing"]):
         closing += closing_text
     report.append({"kind": "closing", "text": closing, "used": "template", "raw": None,
                    "budget_chars": chars(budget["closing"])})
@@ -1174,6 +1190,9 @@ def build_tour_script(
         f"{brief['start']}を出発し、{place_count}か所を巡る、およそ{km}キロの旅でした。{{distance}}{closing_text}",
     ]
     closing = next((e for e in endings if len(e) >= closing_chars), endings[-1])
+    closed = closed_text(project)
+    if closed:  # the closed places come before the sign-off, after everything else
+        closing = closing[: -len(closing_text)] + "{closed}" + closed + closing_text
     report.append({"kind": "closing", "text": closing, "used": "template", "raw": None,
                    "budget_chars": closing_chars})
     parts.append("{end}" + closing)

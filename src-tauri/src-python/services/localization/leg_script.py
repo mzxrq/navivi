@@ -347,7 +347,8 @@ def _arrivals(project: dict, waypoints: List[dict], route: List[dict], cache: di
         hi = order[id(b)] if k < len(route) - 1 else len(waypoints)
         points = _leg_points(a, b, cache)
         set_mode = _leg_mode(a, b, cache)
-        loose = [w for w in waypoints[lo:hi] if not on_route(w) and not w.get("skipAssetGeneration")]
+        loose = [w for w in waypoints[lo:hi]
+                 if not on_route(w) and not w.get("skipAssetGeneration") and not w.get("inaccessible")]
         cuts = sorted(((_cut_at(points, w["lat"], w["lng"]), w) for w in loose), key=lambda c: c[0][0])
         origin, start = clean_label(a), (0.0, points[0])
         for at, w in cuts:

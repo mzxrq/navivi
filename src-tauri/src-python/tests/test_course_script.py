@@ -167,3 +167,46 @@ def test_a_hand_written_route_sentence_is_cued_at_each_name():
     tagged = auto_tag_overview(text, ["砲台跡", "タカノス山", "南垂水広場", "第四砲台跡"])
     assert "島では、{1}砲台跡や{2}タカノス山をめぐり、{3}南垂水広場から{4}第四砲台跡へ。{go}" in tagged
     assert clean_text(tagged) == text
+
+
+def _with_a_closed_place():
+    project, cache = _island_course()
+    closed = _wp("観念窟", 35.004, 139.062, isStopBy=True, connectToRoute=False, inaccessible=True,
+                 attractionNarration="{start}落石の危険があるため、現在は立ち入り禁止です。")
+    project["waypoints"].insert(-3, closed)
+    return project, cache
+
+
+def test_a_closed_place_is_told_after_the_stop_bys_with_its_reason():
+    project, cache = _with_a_closed_place()
+    assert "観念窟" not in stopby_text(project)
+    script, _ = build_tour_script(project, cache)
+    assert script.index("{extras}") < script.index("{closed}赤色で示した地点は、現在訪れることができません。")
+    assert "観念窟は、落石の危険があるため、現在は立ち入り禁止です。" in clean_text(script)
+    project["settings"]["overview_style"] = "walk"
+    walk, _ = build_tour_script(project, cache)
+    assert walk.index("{end}") < walk.index("{closed}") and walk.endswith("今日の旅は、ここまでです。")
+
+
+def test_a_closed_place_is_never_walked_to_or_batched():
+    from services.localization.route_brief import on_route, stopby_holds
+    from services.vdoprocessing.stopby_visits import set_visit_all_stopbys, visits_stopby
+
+    project, _ = _with_a_closed_place()
+    closed = next(w for w in project["waypoints"] if w.get("inaccessible"))
+    assert not on_route({**closed, "connectToRoute": True})
+    set_visit_all_stopbys(True)
+    try:
+        assert not visits_stopby({**closed, "popup_image": "x.jpg"})
+    finally:
+        set_visit_all_stopbys(False)
+    stopby_holds(project)
+    assert all("観念窟" not in names for names in stopby_holds.names.values())
+
+
+def test_a_hand_written_closed_sentence_gets_its_tag():
+    text = ("これが全体のルートです。島では、砲台跡やタカノス山をめぐります。"
+            "黒色で示した地点は、ルート沿いにある追加の見どころです。赤色で示した地点は、現在訪れることができません。")
+    tagged = auto_tag_overview(text, ["砲台跡", "タカノス山"])
+    assert tagged.index("{extras}") < tagged.index("{closed}赤色で示した")
+    assert clean_text(tagged) == text

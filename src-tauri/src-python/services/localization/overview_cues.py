@@ -14,6 +14,7 @@ never changing a word of the script:
           before it plays over the intro, and its names are not stops), and
           {route} before the next sentence (the route is traced from there)
     {extras} before "黒色で示した地点は…" (the stop-bys appear; not stops either)
+    {closed} before "赤色で示した地点は…" (the closed places appear, after the stop-bys)
 
 Tags the user wrote win: a script with any {n} keeps its own, and one with any
 {go} keeps its own.
@@ -39,6 +40,7 @@ TRANSITION_ENDINGS = re.compile(r"(へ|に)(向かい|進み|歩き|移動し|�
 
 _ROUTE_PIVOT = re.compile(r"全体のルート|ルート全体|ルートの全体")
 _EXTRAS = re.compile(r"黒色で示した|黒色のマーカー|茶色で示した|茶色のマーカー|追加の見どころ")  # 茶色: scripts written when the pins were brown
+_CLOSED = re.compile(r"赤色で示した|赤色のマーカー|訪れることができません|立ち入(り|れ)ません")
 
 # Dropped from a name to also find its short form (加太駅 -> 加太).
 _NAME_SUFFIXES = ("駅", "神社", "寺", "城", "公園", "港", "橋", "展望台", "資料館", "博物館")
@@ -111,9 +113,12 @@ def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[
         marks.setdefault(pivot, []).append("{start}")
         if pivot + 1 < len(sentences) and "route" not in tags:
             marks.setdefault(pivot + 1, []).append("{route}")
+    closed = None if "closed" in tags else next((i for i, s in enumerate(sentences) if _CLOSED.search(s)), None)
     if extras is not None:
         marks.setdefault(extras, []).append("{extras}")
-    limit = extras if extras is not None else len(sentences)
+    if closed is not None:
+        marks.setdefault(closed, []).append("{closed}")
+    limit = min(i for i in (extras, closed, len(sentences)) if i is not None)
     if has_numbers and has_go:
         return _with_marks(sentences, marks)
     if pivot is not None and not has_numbers:

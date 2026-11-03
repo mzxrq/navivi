@@ -33,13 +33,14 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|scene|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}")
+CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}")
 
 
 @dataclass(frozen=True)
 class Cue:
     # "start" | "arrive" | "end" | "1", "2", ... | "go1", "go2", ...; the "course"
-    # overview also has "route" (the trace starts) and "extras" (the stop-bys appear); each {scene}
+    # overview also has "route" (the trace starts) and "extras" (the stop-bys appear); both styles have
+    # "closed" (the places that can't be visited appear, after the stop-bys); each {scene}
     # in the opening becomes "scene2", "scene3", ...: the text-led intro cuts to its next scene there
     tag: str
     char_index: int  # offset into the CLEAN text: the cue sits right before this char

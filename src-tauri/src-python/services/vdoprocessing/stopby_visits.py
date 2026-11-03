@@ -19,6 +19,7 @@ def set_visit_all_stopbys(on: bool) -> None:
 def visits_stopby(waypoint: dict) -> bool:
     """A stop-by the walk stops at (see the module docstring); False for any
     other waypoint and for one skipped in video export."""
-    if not isinstance(waypoint, dict) or not waypoint.get("isStopBy") or waypoint.get("skipAssetGeneration"):
+    if (not isinstance(waypoint, dict) or not waypoint.get("isStopBy") or waypoint.get("skipAssetGeneration")
+            or waypoint.get("inaccessible")):
         return False
     return bool(waypoint.get("connectToRoute")) or (_VISIT_ALL and bool(waypoint.get("popup_image")))
