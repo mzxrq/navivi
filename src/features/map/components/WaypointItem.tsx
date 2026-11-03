@@ -110,7 +110,7 @@ export function WaypointItem({
 
   const isStart = index === 0;
   const isEnd = index === waypoints.length - 1 && waypoints.length > 1;
-  const displayLabel = stopLabel(waypoints, index);
+  const displayLabel = wp.inaccessible ? "×" : stopLabel(waypoints, index);
 
   const imageCount = wp.images?.length ?? 0;
   const script = wp.arrivingNarration || wp.attractionNarration || "";
@@ -173,8 +173,10 @@ export function WaypointItem({
           ) : (
             <span
               className={`relative z-10 flex items-center justify-center rounded-full font-semibold tabular-nums transition-colors ${
-                wp.isStopBy
-                  ? "w-4 h-4 text-[8px] border border-dashed border-zinc-400 dark:border-zinc-600 bg-white dark:bg-zinc-950 text-zinc-500"
+                wp.inaccessible
+                  ? "w-4 h-4 text-[10px] bg-red-600 text-white"
+                  : wp.isStopBy
+                  ?"w-4 h-4 text-[8px] border border-dashed border-zinc-400 dark:border-zinc-600 bg-white dark:bg-zinc-950 text-zinc-500"
                   : isActive
                     ? "w-5 h-5 text-[10px] bg-navi text-white ring-3 ring-navi/20"
                     : isEndpoint
@@ -200,8 +202,12 @@ export function WaypointItem({
               {wp.name}
             </span>
             {wp.isStopBy && (
-              <span className="text-[10px] px-1 rounded bg-zinc-100 dark:bg-white/5 text-zinc-500 shrink-0">
-                <Trans>Stop-by</Trans>
+              <span
+                className={`text-[10px] px-1 rounded shrink-0 ${
+                  wp.inaccessible ? "bg-red-500/10 text-red-600" : "bg-zinc-100 dark:bg-white/5 text-zinc-500"
+                }`}
+              >
+                {wp.inaccessible ? <Trans>Closed</Trans> : <Trans>Stop-by</Trans>}
               </span>
             )}
           </div>

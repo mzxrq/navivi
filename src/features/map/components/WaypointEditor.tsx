@@ -142,11 +142,13 @@ export function WaypointEditor({
   const isEndpoint = isStart || isDest;
   const isStopBy = !!wp.isStopBy && !isEndpoint;
   const isLinked = !!wp.connectToRoute;
-  const label = stopLabel(waypoints, wpIndex);
+  const isClosed = !!wp.inaccessible && !isEndpoint;
+  const stopType = isClosed ? "closed" : isStopBy ? "stopby" : "stop";
+  const label = isClosed ? "×" : stopLabel(waypoints, wpIndex);
 
   const hasArrivalVoice = !!wp.arrivingNarration?.trim();
   // The "Whole route first" type visits every stop-by: each is narrated, linked or not.
-  const visited = !isStopBy || isLinked || settings.overview_style === "course";
+  const visited = !isClosed && (!isStopBy || isLinked || settings.overview_style === "course");
   const hasAttractionVoice = !!wp.attractionNarration?.trim() && visited;
   const routeDirections = settings.overview_style === "course" && !!metadata.directory_path;
   const canRegen = !!metadata.directory_path && !wp.skipAssetGeneration && !wp.isStub;
@@ -374,7 +376,17 @@ export function WaypointEditor({
     invoke("cancel_python_blueprint").catch(console.error);
   };
 
-  const scriptSections = [
+  const scriptSections = isClosed
+    ? [
+        {
+          type: "attraction" as const,
+          title: t`Why it's closed`,
+          description: t`Read in the overview after the stop-bys, as the reason this place can't be visited.`,
+          value: wp.attractionNarration || "",
+          onChange: (v: string) => updateWaypoint(wp.id, { attractionNarration: v }),
+        },
+      ]
+    : [
     {
       type: "arriving" as const,
       title: t`Arriving Script`,
@@ -395,8 +407,10 @@ export function WaypointEditor({
         ]),
   ];
 
-  const badgeClass = isStopBy
-    ? "w-5 h-5 text-[9px] border border-dashed border-zinc-400 dark:border-zinc-600 text-zinc-500"
+  const badgeClass = isClosed
+    ? "w-5 h-5 text-[11px] bg-red-500 text-white"
+    : isStopBy
+    ?"w-5 h-5 text-[9px] border border-dashed border-zinc-400 dark:border-zinc-600 text-zinc-500"
     : isEndpoint
       ? "w-6 h-6 text-[11px] bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
       : "w-6 h-6 text-[11px] bg-navi text-white";
@@ -457,16 +471,22 @@ export function WaypointEditor({
               ) : (
                 <div className="flex items-center rounded-md bg-zinc-100 dark:bg-white/5 p-0.5 shrink-0">
                   {[
-                    { stopBy: false, label: t`Stop` },
-                    { stopBy: true, label: t`Stop-by` },
+                    { type: "stop", label: t`Stop`, change: { isStopBy: false, inaccessible: undefined } },
+                    { type: "stopby", label: t`Stop-by`, change: { isStopBy: true, inaccessible: undefined } },
+                    {
+                      type: "closed",
+                      label: t`Closed`,
+                      change: { isStopBy: true, connectToRoute: false, inaccessible: true },
+                    },
                   ].map((option) => (
                     <button
-                      key={option.label}
+                      key={option.type}
                       type="button"
-                      onClick={() => updateWaypoint(wp.id, { isStopBy: option.stopBy })}
-                      aria-pressed={isStopBy === option.stopBy}
+                      title={option.type === "closed" ? t`A place that can't be visited any more` : undefined}
+                      onClick={() => updateWaypoint(wp.id, option.change)}
+                      aria-pressed={stopType === option.type}
                       className={`h-6 px-2 rounded text-[11px] font-medium transition-colors ${
-                        isStopBy === option.stopBy
+                        stopType === option.type
                           ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm"
                           : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
                       }`}
@@ -477,7 +497,7 @@ export function WaypointEditor({
                 </div>
               )}
 
-              {isStopBy && (
+              {isStopBy && !isClosed && (
                 <label className="flex items-center gap-1.5 pl-2 text-[11px] text-zinc-600 dark:text-zinc-400 shrink-0">
                   <Switch
                     checked={isLinked}

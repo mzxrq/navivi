@@ -85,12 +85,12 @@ export function useStopMenus() {
   const modeOptions = useModeOptions();
   const { startDrawing, startAdjusting, setLegMode } = useLegActions();
 
-  const setStopType = (wpId: string, type: "start" | "end" | "stopby" | "normal") => {
+  const setStopType = (wpId: string, type: "start" | "end" | "stopby" | "closed" | "normal") => {
     setWaypoints((prev) => {
       const next = [...prev];
       const index = next.findIndex((w) => w.id === wpId);
       if (index === -1) return prev;
-      const wp = next[index];
+      const wp = { ...next[index], inaccessible: undefined };
       if (type === "start") {
         next.splice(index, 1);
         next.unshift({ ...wp, isStopBy: false, connectToRoute: undefined });
@@ -99,6 +99,8 @@ export function useStopMenus() {
         next.push({ ...wp, isStopBy: false, connectToRoute: undefined });
       } else if (type === "stopby") {
         next[index] = { ...wp, isStopBy: true, connectToRoute: false };
+      } else if (type === "closed") {
+        next[index] = { ...wp, isStopBy: true, connectToRoute: false, inaccessible: true };
       } else {
         next[index] = { ...wp, isStopBy: false, connectToRoute: undefined };
       }
@@ -202,7 +204,15 @@ export function useStopMenus() {
     if (!wp) return [];
     const isLast = index === waypoints.length - 1;
     const currentType =
-      index === 0 ? "start" : isLast && waypoints.length > 1 ? "end" : wp.isStopBy ? "stopby" : "normal";
+      index === 0
+        ? "start"
+        : isLast && waypoints.length > 1
+          ? "end"
+          : wp.inaccessible
+            ? "closed"
+            : wp.isStopBy
+              ? "stopby"
+              : "normal";
 
     return [
       { type: "label", label: wp.name || t`Waypoint` },
@@ -221,10 +231,11 @@ export function useStopMenus() {
           { label: t`Start`, checked: currentType === "start", onSelect: () => setStopType(wp.id, "start") },
           { label: t`Stop`, checked: currentType === "normal", onSelect: () => setStopType(wp.id, "normal") },
           { label: t`Stop-by`, checked: currentType === "stopby", onSelect: () => setStopType(wp.id, "stopby") },
+          { label: t`Closed`, checked: currentType === "closed", onSelect: () => setStopType(wp.id, "closed") },
           { label: t`Destination`, checked: currentType === "end", onSelect: () => setStopType(wp.id, "end") },
         ],
       },
-      wp.isStopBy && {
+      wp.isStopBy && !wp.inaccessible && {
         label: t`On route`,
         icon: LinkIcon,
         checked: !!wp.connectToRoute,

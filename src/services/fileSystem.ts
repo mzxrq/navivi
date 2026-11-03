@@ -283,6 +283,7 @@ export const saveProjectData = async (
 
         isStopBy: wp.isStopBy || false,
         connectToRoute: wp.connectToRoute || false,
+        inaccessible: wp.inaccessible || undefined,
         skipAssetGeneration: wp.skipAssetGeneration ?? undefined,
         pauseAtWaypoint: wp.pauseAtWaypoint ?? undefined,
       };

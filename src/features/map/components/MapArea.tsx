@@ -990,7 +990,9 @@ export function MapArea() {
                     >
                       {wp.name || t`Waypoint`}
                     </div>
-                    {wp.customMarker || settings.routeMarker ? (
+                    {wp.inaccessible ? (
+                      <NaviPin className="w-8 h-8" label="×" pinType="stopby" color="#dc2626" />
+                    ) : wp.customMarker || settings.routeMarker ? (
                       <img
                         src={
                           (wp.customMarker || settings.routeMarker)?.startsWith(
