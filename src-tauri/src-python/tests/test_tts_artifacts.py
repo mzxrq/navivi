@@ -84,3 +84,12 @@ def test_a_short_syllable_before_quiet_consonants_is_speech_not_a_burst():
     hiss = np.random.default_rng(0).normal(0, 0.02, int(SR * 0.3))
     signal = np.concatenate([_tone(1.0), _silence(0.4), _tone(0.07), hiss, _tone(0.5)])
     assert find_stray_bursts(signal, SR) == []
+
+
+def test_a_hiss_that_fades_in_over_two_windows_is_still_a_burst():
+    # 16_katsuragi_no_michi_jp, 12.1 s: 0.009, 0.021, then 0.034 for 10 ms, fading out again, between pauses.
+    rng = np.random.default_rng(0)
+    hiss = np.concatenate([rng.normal(0, lvl, int(SR * 0.01)) for lvl in (0.009, 0.021, 0.034, 0.029, 0.017)])
+    signal = np.concatenate([_tone(0.8), _silence(0.35), hiss, _silence(0.6), _tone(0.8)])
+    found = find_stray_bursts(signal, SR)
+    assert len(found) == 1 and abs(found[0][0] / SR - 1.15) < 0.011

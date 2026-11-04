@@ -210,3 +210,10 @@ def test_a_hand_written_closed_sentence_gets_its_tag():
     tagged = auto_tag_overview(text, ["砲台跡", "タカノス山"])
     assert tagged.index("{extras}") < tagged.index("{closed}赤色で示した")
     assert clean_text(tagged) == text
+
+
+def test_the_course_introduction_keeps_its_photo_and_scene_cues():
+    project, cache = _island_course()
+    project["settings"]["overview_intro"] = "{open}友ヶ島です。{scene}{photo:砲台跡}砲台跡が残ります。{close}{photo:タカノス山}{1}最初の一歩です。"
+    script, _ = build_tour_script(project, cache)
+    assert script.startswith("{open}友ヶ島です。{scene}{photo:砲台跡}砲台跡が残ります。{close}{photo:タカノス山}最初の一歩です。{start}")

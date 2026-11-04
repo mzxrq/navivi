@@ -821,23 +821,34 @@ def styled_scenes(style: str, duration_sec: Optional[float] = None, cuts: Option
 def scene_overrides(
     scenes: List[Dict[str, Any]], photo_cuts: Optional[List[Tuple[float, str]]], waypoints: List[Dict[str, Any]],
     attraction_videos: List[str],
-) -> Dict[int, str]:
-    """{scene index: source} for {photo:X} cues: the scene a cue falls in plays that stop's attraction clip,
-    else its photo (the first cue in a scene wins)."""
+) -> Dict[int, List[Tuple[float, str]]]:
+    """{scene index: [(seconds into the scene, source)]} for {photo:X} cues: the scene a cue falls in plays that
+    stop's attraction clip, else its photo, from the cue on; two or more cues in one scene play one after another."""
     starts = scene_starts([s["seconds"] for s in scenes], tuning.INTRO_CROSSFADE_SECONDS)
-    out: Dict[int, str] = {}
+    out: Dict[int, List[Tuple[float, str]]] = {}
     for t, photo in photo_cuts or []:
         k = max(i for i, st in enumerate(starts) if st <= max(t, 0.0))
-        if k in out:
-            continue
         idx = next((i for i, wp in enumerate(waypoints)
                     if photo in (wp.get("popup_image") if isinstance(wp.get("popup_image"), list)
                                  else [wp.get("popup_image")])), None)
         clip = next((c for c in attraction_videos or []
                      if c and idx is not None and Path(c).stem.startswith(f"04_attraction_{idx:02d}_")
                      and Path(c).is_file()), None)
-        out[k] = clip or photo
+        if (clip or photo) not in [src for _, src in out.get(k, [])]:
+            out.setdefault(k, []).append((max(t, 0.0) - starts[k], clip or photo))
     return out
+
+
+def cued_shots(seconds: float, cued: List[Tuple[float, str]], cf: float) -> List[Tuple[str, float]]:
+    """[(source, shot seconds)] for a scene of `seconds` with cues [(seconds into the scene, source)]: the first
+    plays from the scene's start, each later one crossfades in at its cue. A cue closer than two crossfades to
+    the previous one or to the scene's end is dropped. The shots, crossfaded, last exactly `seconds`."""
+    kept = [(0.0, cued[0][1])]
+    for at, src in cued[1:]:
+        if kept[-1][0] + 2 * cf <= at <= seconds - 2 * cf:
+            kept.append((at, src))
+    ends = [at for at, _ in kept[1:]] + [seconds]
+    return [(src, end - at + (cf if i < len(kept) - 1 else 0.0)) for i, ((at, src), end) in enumerate(zip(kept, ends))]
 
 
 def generate_styled_intro(
@@ -870,11 +881,13 @@ def generate_styled_intro(
                 stills[src] = frame
                 lengths[src] = float("inf")
     picks = pick_scenes(densities, len(scenes))
-    for k, src in scene_overrides(scenes, photo_cuts, waypoints, attraction_videos).items():
-        if src not in lengths:
-            lengths[src] = _source_seconds(src)
+    cued = scene_overrides(scenes, photo_cuts, waypoints, attraction_videos)
+    for k, scene_cues in cued.items():
+        for _, src in scene_cues:
+            if src not in lengths:
+                lengths[src] = _source_seconds(src)
         if picks:
-            picks[k] = src
+            picks[k] = scene_cues[0][1]
     if not picks:
         logger.warning("Intro: no attraction clips or waypoint photos to build a %s intro from.", style)
         return None
@@ -886,16 +899,20 @@ def generate_styled_intro(
     combined_path = video_dir_path / f".intro_combined_{run_id}.mp4"
     raws: List[str] = []
     cf = tuning.INTRO_CROSSFADE_SECONDS
-    pool = [p for p in sorted(densities, key=lambda p: densities[p], reverse=True) if p not in picks]
+    taken = set(picks) | {src for scene_cues in cued.values() for _, src in scene_cues}
+    pool = [p for p in sorted(densities, key=lambda p: densities[p], reverse=True) if p not in taken]
     try:
         for idx, (scene, src) in enumerate(zip(scenes, picks)):
             raw = str(video_dir_path / f".intro_raw_{run_id}_{idx}.mp4")
-            shots = plan_shots(scene["seconds"], src, pool, lengths, cf, idx)
+            if len(cued.get(idx, [])) > 1:  # several {photo:X} cues in this scene: each from its cue
+                shots, secs = map(list, zip(*cued_shots(scene["seconds"], cued[idx], cf)))
+            else:
+                shots = plan_shots(scene["seconds"], src, pool, lengths, cf, idx)
+                secs = [(scene["seconds"] + (len(shots) - 1) * cf) / len(shots)] * len(shots)
             if len(shots) > 1:
                 logger.info("Intro: scene %d (%.1fs) runs on %d shots: %s", idx + 1, scene["seconds"], len(shots), shots)
-            shot_sec = (scene["seconds"] + (len(shots) - 1) * cf) / len(shots)
             parts = []
-            for j, shot in enumerate(shots):
+            for j, (shot, shot_sec) in enumerate(zip(shots, secs)):
                 part = raw if len(shots) == 1 else str(video_dir_path / f".intro_raw_{run_id}_{idx}_{j}.mp4")
                 raws.append(part)
                 parts.append(part)
@@ -907,7 +924,7 @@ def generate_styled_intro(
                         return None
                     _render_zoom_in(image, part, shot_sec, scene["zoom"], scene["pan"], scene["dim"], scene["sat"])
             if len(parts) > 1:
-                _crossfade_chain(parts, [shot_sec] * len(parts), cf, raw)
+                _crossfade_chain(parts, secs, cf, raw)
                 raws.append(raw)
         scene_raws = [str(video_dir_path / f".intro_raw_{run_id}_{i}.mp4") for i in range(len(scenes))]
         _crossfade_chain(scene_raws, [s["seconds"] for s in scenes], cf, str(combined_path))

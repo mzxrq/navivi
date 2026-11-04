@@ -21,7 +21,8 @@ _SPEECH_RMS = 0.03          # a window above this counts as sound
 _SILENCE_RMS = 0.008        # the pauses around a stray burst are this quiet; a whispered キ or the ヒ hiss is louder (0.015+)
 _MAX_BURST_SECONDS = 0.09   # longer than this is a real sound
 _MIN_SILENCE_SECONDS = 0.25  # silence needed on both sides; real syllables beside っ or a devoiced vowel had 0.15-0.20 on one side
-_PAD_SECONDS = 0.015        # also cleared around the burst, covers its tails
+_FADE_WINDOWS = 3            # a burst's fade in/out, not counted against its silence (the 16_katsuragi hiss had 2)
+_PAD_SECONDS = 0.015       # also cleared around the burst, covers its tails
 _FADE_SECONDS = 0.004
 
 
@@ -55,9 +56,14 @@ def find_stray_bursts(samples: np.ndarray, sample_rate: int) -> List[Tuple[int, 
     for a, b in runs:
         # Truly silent on both sides: 「セ」 before a devoiced キ (セキヒョウ) is a short vowel too, but the
         # consonants after it are quieter than speech, not silent.
-        # (one 10 ms window each side is the burst's own fade)
-        if b - a <= max_windows and quiet[max(0, a - gap):max(0, a - 1)].all() and quiet[b + 1:b + gap].all() and len(runs) > 1:
-            found.append((a * window, b * window))
+        # Up to _FADE_WINDOWS each side are the burst's own fade (a "sh" hiss fades in over 20 ms).
+        lo, hi = a, b
+        while lo > 0 and a - lo < _FADE_WINDOWS and not quiet[lo - 1]:
+            lo -= 1
+        while hi < len(quiet) and hi - b < _FADE_WINDOWS and not quiet[hi]:
+            hi += 1
+        if b - a <= max_windows and quiet[max(0, lo - gap):lo].all() and quiet[hi:hi + gap].all() and len(runs) > 1:
+            found.append((lo * window, hi * window))
     return found
 
 

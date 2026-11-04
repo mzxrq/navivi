@@ -919,7 +919,8 @@ def build_course_script(
     own = ((project.get("settings") or {}).get("overview_intro") or "").strip() if intro_text is None else intro_text
     opening_chars = chars(budget["intro"])
     if own:
-        opening = re.sub(r"\{(?!scene\})[^}]*\}", "", own).strip()  # {scene} cuts the intro's scenes
+        # The intro's own cues stay ({scene} cuts, {photo:X} picks footage, {open}/{close} time the heading).
+        opening = re.sub(r"\{(?!(?:scene|open|close|photo:[^{}]+)\})[^}]*\}", "", own).strip()
         report.append({"kind": "intro", "text": opening, "used": "user", "raw": None, "budget_chars": opening_chars})
     else:
         area = spoken_area(settings.get("intro_location"))

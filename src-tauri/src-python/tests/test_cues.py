@@ -1,3 +1,4 @@
+from services import tuning
 
 
 def test_open_close_cues_time_the_intro_heading():
@@ -40,8 +41,22 @@ def test_photo_cue_picks_the_scene_footage(tmp_path):
     wps = [{"popup_image": "a.jpg"}, {"popup_image": ["t.jpg"]}, {"popup_image": "k.jpg"}]
     scenes = [{"seconds": 5.0}, {"seconds": 5.0}, {"seconds": 5.0}]
     # scene 2 starts at 5 - crossfade; a cue at 0.5 picks scene 1's footage, one at 6.0 scene 2's
-    picks = scene_overrides(scenes, [(0.5, "t.jpg"), (1.0, "a.jpg"), (6.0, "k.jpg")], wps, [str(clip)])
-    assert picks == {0: str(clip), 1: "k.jpg"}
+    cued = scene_overrides(scenes, [(0.5, "t.jpg"), (3.0, "a.jpg"), (6.0, "k.jpg")], wps, [str(clip)])
+    cf = tuning.INTRO_CROSSFADE_SECONDS
+    assert cued == {0: [(0.5, str(clip)), (3.0, "a.jpg")], 1: [(6.0 - (5.0 - cf), "k.jpg")]}
+
+
+def test_two_photo_cues_in_one_scene_play_one_after_the_other():
+    from services.vdoprocessing.introclip import cued_shots, scene_starts
+
+    cf = tuning.INTRO_CROSSFADE_SECONDS
+    shots = cued_shots(8.0, [(0.5, "a"), (4.0, "b")], cf)
+    assert [s for s, _ in shots] == ["a", "b"]
+    # b starts crossfading in exactly at its cue, and the two still fill the scene
+    assert scene_starts([d for _, d in shots], cf) == [0.0, 4.0]
+    assert abs(sum(d for _, d in shots) - cf - 8.0) < 1e-6
+    # a cue too close to the previous one, or to the scene's end, is dropped
+    assert [s for s, _ in cued_shots(8.0, [(0.0, "a"), (0.2, "b"), (7.9, "c")], cf)] == ["a"]
 
 
 def test_one_scene_cue_in_a_three_scene_intro_is_used():
