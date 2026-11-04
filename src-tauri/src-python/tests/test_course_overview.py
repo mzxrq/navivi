@@ -206,3 +206,13 @@ def test_a_stop_by_near_the_leg_line_is_walked_to_and_a_far_one_is_not():
     ]
     assert stopbys_near_the_route(wps, [1, 2, 3], lats, lons) == {1: 3}
     assert closest_leg_index(wps[2], lats, lons) == 1
+
+
+def test_the_headline_names_the_stretch_being_traced():
+    from services.vdoprocessing.spatial_renderer.course import leg_banner
+
+    stops = [(0.0, "寺田橋バス停"), (120.0, "葛木水分神社"), (300.0, "郵便名柄館"), (900.0, "玉手駅")]
+    assert leg_banner(stops, 0.0) == "寺田橋バス停 → 葛木水分神社"
+    assert leg_banner(stops, 200.0) == "葛木水分神社 → 郵便名柄館"
+    assert leg_banner(stops, 300.0) == "郵便名柄館 → 玉手駅"  # arrived: the next stretch
+    assert leg_banner(stops, 900.0) == ""  # trace done: the usual headlines again

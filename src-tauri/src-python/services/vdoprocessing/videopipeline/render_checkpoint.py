@@ -106,6 +106,11 @@ def _checkpoint_parts(
     parts["route.photos"] = photo_inputs_hash(
         [[wp.get(k) for k in IMAGE_KEYS] for wp in shown.get("waypoints") or [] if isinstance(wp, dict)]
     )
+    # A new overview look (its render version) re-renders the overview; a manifest from before this has none,
+    # so each project re-renders its overview once.
+    from services.vdoprocessing.spatial_renderer.overview import OVERVIEW_RENDER_VERSION
+
+    parts["route.overview_version"] = str(OVERVIEW_RENDER_VERSION)
     # Map labels and on-screen text follow this; a project saved before it was written has none.
     language = config_data.get("map_language")
     if language:
@@ -164,7 +169,7 @@ def _checkpoint_parts(
 # route.map_language: the label/on-screen text language (absent for a config that never had one).
 ROUTE_CHECKPOINT_PARTS = (
     "route.waypoints", "route.overview_flags", "route.photos", "route.markers", "route.map_style",
-    "route.overview_voice", "route.map_language", "route.labels",
+    "route.overview_voice", "route.map_language", "route.labels", "route.overview_version",
 )
 
 

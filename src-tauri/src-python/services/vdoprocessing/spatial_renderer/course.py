@@ -162,6 +162,16 @@ def distance_at(anchors: List[Tuple], t: float) -> float:
     return anchors[-1][1]
 
 
+def leg_banner(stops: List[Tuple[float, str]], dist: float) -> str:
+    """"A → B" for the stretch the trace is drawing at `dist`: the last stop reached and the next one.
+    `stops` is (distance along the route, name) per stop in route order, the start first."""
+    reached = [s for s in stops if s[0] <= dist + 1e-6]
+    ahead = [s for s in stops if s[0] > dist + 1e-6]
+    if not reached or not ahead:
+        return ""
+    return f"{reached[-1][1]} → {ahead[0][1]}"
+
+
 def tagline_at(taglines: List[str], t: float) -> Tuple[str, float]:
     """(tagline, opacity) at `t`: each held COURSE_TAGLINE_SECONDS, fading through."""
     if not taglines:
@@ -283,9 +293,16 @@ class _CourseOverviewMixin:
                 mode_duration=summary.get("mode_duration"),
             )
         taglines = [str(x) for x in (self.config.get("overview_taglines") or []) if str(x).strip()]
-        # the headline, docked top left: as wide as the widest tagline
+        # While the route is traced the headline names the stretch being drawn ("A → B"), in sync with it.
+        leg_stops: List[Tuple[float, str]] = []
+        for ap in on_route:
+            name = str(ap.get("label") or "").strip()
+            if name and (not leg_stops or ap["course_dist"] > leg_stops[-1][0]):
+                leg_stops.append((float(ap["course_dist"]), name))
+        banners = [leg_banner(leg_stops, d) for d, _ in leg_stops]
+        # the headline, docked top left: as wide as the widest tagline or stretch
         headline_font = max(22, int(h * 0.033))
-        headline_w = max((self.graphics.top_banner_width(x, headline_font) for x in taglines), default=0)
+        headline_w = max((self.graphics.top_banner_width(x, headline_font) for x in taglines + banners if x), default=0)
         reserved = [(0.0, 0.0, min(float(w), h * 0.03 * 2 + headline_w), h * 0.14)]
         if summary_card is not None:
             ch, cw = summary_card.shape[:2]
@@ -482,7 +499,8 @@ class _CourseOverviewMixin:
                 else:
                     self.graphics.draw_transport_icon(frame, cx, cy, i, smoothed_angle, mode)
 
-            text, alpha = tagline_at(taglines, t)
+            stretch = leg_banner(leg_stops, dist) if route_at <= t < trace_end else ""
+            text, alpha = (stretch, 1.0) if stretch else tagline_at(taglines, t)
             if text and alpha > 0:
                 frame = self.graphics.render_top_banner(
                     frame, text, alpha=alpha, top_margin=int(h * 0.03), font_px=max(22, int(h * 0.033)),
