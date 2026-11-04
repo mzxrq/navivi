@@ -409,6 +409,8 @@ def render_residential_leg_pydeck(
     # of zooming out to fit the entire multi-segment route at once.
     fit_end = len(df_raw)
     for lm in (landmarks or []):
+        if lm.get("pops_after") is not None:
+            continue  # popped up at a stop, not walked to: the frame still shows the walk ahead
         if lm.get("connect_to_route") and lm.get("popup_image") and lm.get("lat") is not None and lm.get("lon") is not None:
             sq_dist = (df_raw["lat"] - lm["lat"]) ** 2 + (df_raw["lon"] - lm["lon"]) ** 2
             closest_idx = int(sq_dist.idxmin())

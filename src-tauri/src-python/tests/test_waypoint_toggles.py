@@ -73,6 +73,15 @@ def test_turning_a_stop_by_into_a_closed_place_changes_the_route_inputs():
     assert route_inputs_hash([stopby]) == route_inputs_hash([{**stopby, "inaccessible": False}])  # old projects keep theirs
 
 
+def test_a_stop_by_now_walked_to_renders_its_leg_again():
+    from services.vdoprocessing.route2vdo import _leg_fingerprint_parts, leg_changed_parts
+
+    lm = {"lat": 34.0, "lon": 135.0, "label": "神社"}
+    old = _leg_fingerprint_parts([(34.0, 135.0)], "B", {"landmarks": [{**lm, "pops_after": ""}]}, route_inputs="r")
+    new = _leg_fingerprint_parts([(34.0, 135.0)], "B", {"landmarks": [{**lm, "walk_seconds": 5.0}]}, route_inputs="r")
+    assert "pops_after" in leg_changed_parts(new, old)
+
+
 def test_an_end_point_on_the_last_stop_gets_no_extra_leg():
     from services.vdoprocessing.videopipeline.leg_sequence import _same_spot
 

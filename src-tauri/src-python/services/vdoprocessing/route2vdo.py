@@ -67,12 +67,13 @@ LEG_RENDER_VERSION = 10  # v10: no arrived-map hold after the fullscreen arrival
 LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
 LEG_CHAIN_FIT_VERSION = 1
-# Bumped when the camera move to a far stop-by changes (only legs with one re-render; v1: fly out and back).
-LEG_FAR_STOPBY_VERSION = 1
+# Bumped when the camera move to a far stop-by changes (only legs with one re-render; v1: fly out and back,
+# v2: the leg's frame no longer stops at it).
+LEG_FAR_STOPBY_VERSION = 2
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
-_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text", "kw.leg_elevations", "return_stop")
+_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text", "kw.leg_elevations", "return_stop", "pops_after")
 # The stops' names on the leg's banner and its narration timing (fix.md #9). Compared only when the leg's
 # record has them, so a leg rendered before these were checked is not re-rendered for it.
 _LEG_RECORDED_PARTS = ("kw.route_chain", "kw.target_duration_seconds", "kw.start_cue_seconds", "kw.arrival_wait_seconds")
@@ -166,6 +167,8 @@ def _leg_fingerprint_parts(
         parts["kw.route_chain"] = h([leg_kwargs["route_chain"], LEG_CHAIN_FIT_VERSION])
     if any(lm.get("pops_after") is not None for lm in leg_kwargs.get("landmarks") or []):
         parts["kw.landmarks"] = h([leg_kwargs["landmarks"], LEG_FAR_STOPBY_VERSION])
+        # Which stop-bys pop up without walking: a leg re-renders when one of them is walked to instead.
+        parts["pops_after"] = h([[lm.get("pops_after") for lm in leg_kwargs["landmarks"]], LEG_FAR_STOPBY_VERSION])
     if leg_kwargs.get("dest_image_display") == "pip" or leg_kwargs.get("opening_photo") is False:
         # A leg to or from a return stop (pin of the first visit, photo card, no fullscreen): re-rendered once for it.
         parts["return_stop"] = h(

@@ -36,14 +36,15 @@ def _same_spot(point: dict, waypoint) -> bool:
 
 def stopbys_near_the_route(waypoints: list, positions: list, lats, lons) -> dict:
     """{position: index of the closest leg point} for each not-connected stop-by within STOPBY_WALK_NEAR_METERS of
-    the leg's line: the walk goes there first and its photo pops up on the way, instead of at the stop before it.
+    the leg's line, or farther but closest to a point past the leg's start: the walk goes there first and its photo
+    pops up on the way. Only a far one closest to the start pops at the stop before it (the walk would be empty).
     shortcut: distance to the line's points, not its segments; fine while routed points are dense (tens of metres)."""
     near = {}
     for p in positions:
         if waypoints[p].get("connectToRoute"):
             continue
         metres = _metres_to_leg(waypoints[p], lats, lons)
-        if metres is not None and metres.min() <= tuning.STOPBY_WALK_NEAR_METERS:
+        if metres is not None and (metres.min() <= tuning.STOPBY_WALK_NEAR_METERS or metres.argmin() > 0):
             near[p] = int(metres.argmin())
     return near
 
