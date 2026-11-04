@@ -140,6 +140,9 @@ START_PIN_COLOR: Tuple[int, int, int] = (3, 136, 19)  # #038813 green
 END_PIN_COLOR: Tuple[int, int, int] = (81, 15, 217)  # #d90f51 red/pink
 DRAWN_PIN_COLOR: Tuple[int, int, int] = (12, 121, 255)  # #ff790c orange — drawn-route waypoints
 STOPBY_PIN_COLOR: Tuple[int, int, int] = (28, 38, 51)  # #33261c dark brown — stop-by waypoints
+CLOSED_PIN_COLOR: Tuple[int, int, int] = (38, 38, 220)  # #dc2626 red, with a "×" — closed places (editor: Closed)
+# Walk-style overview: the summary hold lasts at least this long past {closed}, so the red pins are seen.
+CLOSED_HOLD_SECONDS = 3.0
 # Start and end this close (degrees, ~30 m) make a loop route: the E pin is drawn half green, half red.
 LOOP_ROUTE_MATCH_DEGREES = 0.0003
 # Base route line: modes without their own color, and the ending highlight. Grey reads as "route" on land and water.

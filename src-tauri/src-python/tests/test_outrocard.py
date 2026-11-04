@@ -437,3 +437,14 @@ def test_thumbnail_turns_a_phone_photo_upright(tmp_path):
     photo.save(tmp_path / "p.jpg", exif=exif)
     thumb = outrocard._rounded_thumbnail(str(tmp_path / "p.jpg"), (50, 100)).convert("RGB")
     assert thumb.getpixel((25, 20))[0] > 200 and thumb.getpixel((25, 80))[2] > 200
+
+
+def test_closed_places_get_their_own_section_after_the_stop_bys(tmp_path):
+    wps = TestRouteInfo()._waypoints(tmp_path)
+    legs = (BRIEF["legs"] * 4)[:6]
+    plain = outrocard._build_scroll_page("T", wps, SIZE, {**BRIEF, "legs": legs})
+    with_closed = outrocard._build_scroll_page(
+        "T", wps, SIZE, {**BRIEF, "legs": legs, "closed": ["観念窟"], "closed_at": [[1.0, 2.0]], "closed_facts": [""]})
+    t = outrocard.tuning
+    title_h = 12 + t.OUTRO_STOPBY_TITLE_FONT_SIZE + 12
+    assert with_closed.height - plain.height == title_h + t.OUTRO_ROUTE_ROW_HEIGHT + t.OUTRO_ROUTE_ROW_GAP

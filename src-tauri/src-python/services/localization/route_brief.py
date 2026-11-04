@@ -323,7 +323,8 @@ def build_brief(project: dict, routing_cache: Optional[dict] = None) -> dict:
         **{str(k).lower(): float(v) for k, v in (project.get("settings", {}).get("mode_speeds_kmh") or {}).items()},
     }
     route = [w for w in waypoints if on_route(w)]
-    seen_only = [w for w in waypoints if not on_route(w)]
+    closed = [w for w in waypoints if is_inaccessible(w)]  # told at {closed}, never as passed
+    seen_only = [w for w in waypoints if not on_route(w) and not is_inaccessible(w)]
     holds, start_hold = stopby_holds(project)
 
     legs = []
@@ -387,6 +388,10 @@ def build_brief(project: dict, routing_cache: Optional[dict] = None) -> dict:
         # the stop-bys shown at the start pin, which no leg arrives at
         "start_batch": list(stopby_holds.names.get(id(route[0]), [])) if route else [],
         "start_batch_at": list(stopby_holds.places.get(id(route[0]), [])) if route else [],
+        # the closed places (the editor's "Closed"), for the outro's own section after the stop-bys
+        "closed": [clean_label(w) for w in closed],
+        "closed_at": [[w.get("lat"), w.get("lng")] for w in closed],
+        "closed_facts": [_short_fact(w) for w in closed],
         "legs": legs,
         "total_km": round(sum(l["km"] for l in legs), 2),
         "total_minutes": sum(l["minutes"] for l in legs),

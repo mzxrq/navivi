@@ -13,6 +13,14 @@ from services import tuning
 from services.mapfetcher.graphicengine.pinimage import deck_icon
 
 
+_CLOSED_DOT_URL = "data:image/svg+xml;charset=utf-8," + urllib.parse.quote(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
+    f'<circle cx="32" cy="32" r="28" fill="{"#%02x%02x%02x" % tuple(reversed(tuning.CLOSED_PIN_COLOR))}" '
+    'stroke="#ffffff" stroke-width="5"/>'
+    '<path d="M21 21 L43 43 M43 21 L21 43" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/></svg>'
+)
+
+
 def _landmark_layers(
     landmarks: List[Dict], id_prefix: str = "stopby", white_dot: bool = False
 ) -> List[pdk.Layer]:
@@ -24,7 +32,11 @@ def _landmark_layers(
     (overview) and a leg's merged-in mid_markers (residential)."""
     if not landmarks:
         return []
-    dots = [{"lon": lm["lon"], "lat": lm["lat"]} for lm in landmarks]
+    dots = [{"lon": lm["lon"], "lat": lm["lat"]} for lm in landmarks if not lm.get("inaccessible")]
+    closed = [
+        {"lon": lm["lon"], "lat": lm["lat"], "icon": {"url": _CLOSED_DOT_URL, "width": 64, "height": 64, "anchorY": 32}}
+        for lm in landmarks if lm.get("inaccessible")
+    ]
     # white_dot: residential's white-with-dark-ring marker (was the callout's dot).
     dot_layer = pdk.Layer(
         "ScatterplotLayer", id=f"{id_prefix}-dots", data=dots,
@@ -40,6 +52,11 @@ def _landmark_layers(
             stroked=True, get_line_color=[255, 255, 255, 220], line_width_min_pixels=1,
         ),
     ]
+    if closed:  # a closed place (the editor's "Closed"): a red dot with a white ×
+        layers.append(pdk.Layer(
+            "IconLayer", id=f"{id_prefix}-closed", data=closed, get_icon="icon", get_position="[lon, lat]",
+            get_size=22, size_units="'pixels'", pickable=False,
+        ))
     # Same stadium pill every other place label uses (see
     # _label_pill_svg_url) rather than a TextLayer's own square background,
     # so a landmark's name reads as the same kind of thing as a waypoint's.

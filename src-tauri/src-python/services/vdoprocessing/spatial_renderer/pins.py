@@ -232,6 +232,8 @@ class _PinMixin:
         colored to match a waypoint's own pin without duplicating its
         S/E/stop-by precedence rules. Returns (label, color, split_color)
         — split_color is None for every pin except a loop route's "E"."""
+        if wp["data"].get("inaccessible"):
+            return "×", tuning.CLOSED_PIN_COLOR, None
         if wp["data"].get("is_stopby"):
             return "・", self._STOPBY_PIN_COLOR, None
         if wp["index"] == 0:

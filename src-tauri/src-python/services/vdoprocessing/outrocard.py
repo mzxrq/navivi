@@ -618,11 +618,16 @@ def _build_route_page(
     if stopbys:
         rows.append(("title", []))
         rows.extend(("stopbys", stopbys[n:n + cols]) for n in range(0, len(stopbys), cols))
+    # Then the closed places (the editor's "Closed"), their own section with a × badge.
+    closed = _stopbys(brief, "closed", "closed_at")
+    if closed:
+        rows.append(("closed_title", []))
+        rows.extend(("closed", closed[n:n + cols]) for n in range(0, len(closed), cols))
 
     row_tops, y = [], legs_top
     for kind, _ in rows:
         row_tops.append(y)
-        y += sb_title_h if kind == "title" else row_h + row_gap
+        y += sb_title_h if kind in ("title", "closed_title") else row_h + row_gap
     page_h = max(height, y - row_gap + px(70))
 
     page = Image.new("RGB", (width, page_h), tuning.OUTRO_BG_COLOR)
@@ -678,9 +683,10 @@ def _build_route_page(
     slots = []
     number = 0  # stop-bys are numbered +1, +2 ... after the leg cards
     for (kind, items), top in zip(rows, row_tops):
-        if kind == "title":
+        if kind in ("title", "closed_title"):
             draw.text(
-                (x0, top + px(12)), video_text.current_labels()["outro_stopby_title"],
+                (x0, top + px(12)),
+                video_text.current_labels()["outro_stopby_title" if kind == "title" else "outro_closed_title"],
                 font=title_font, fill=tuning.OUTRO_LABEL_COLOR,
             )
         for col, item in enumerate(items):
@@ -688,6 +694,8 @@ def _build_route_page(
             if kind == "stopbys":
                 number += 1
                 _draw_stopby_card(page, waypoints, item, cx0, top, card_w, px, f"+{number}", badge_font)
+            elif kind == "closed":
+                _draw_stopby_card(page, waypoints, item, cx0, top, card_w, px, "×", badge_font)
             else:
                 slots.append((item, cx0, top))
 

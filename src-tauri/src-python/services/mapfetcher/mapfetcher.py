@@ -198,6 +198,7 @@ class MapFetcher:
                     # The walk pauses here (stopby_visits: connected, or any
                     # stop-by with a photo in the "course" overview type).
                     "connect_to_route": visits_stopby(waypoints[p]),
+                    "inaccessible": bool(waypoints[p].get("inaccessible")),  # a closed place: a red × dot
                     # This waypoint's own stable job_config id -- lets
                     # route2vdo.py resolve its RAW position in job_config's
                     # own "waypoints" array (the same 0-based index the
@@ -510,6 +511,7 @@ class MapFetcher:
                     "lat": m.get("lat"),
                     "lng": m.get("lng"),
                     "connect_to_route": bool(m.get("connect_to_route", False)),
+                    "inaccessible": bool(m.get("inaccessible")),
                     "waypoint_id": m.get("waypoint_id"),
                     "popup_image": m.get("popup_image"),
                     "freeze_seconds": (

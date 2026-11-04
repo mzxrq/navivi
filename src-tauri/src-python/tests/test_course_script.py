@@ -217,3 +217,19 @@ def test_the_course_introduction_keeps_its_photo_and_scene_cues():
     project["settings"]["overview_intro"] = "{open}友ヶ島です。{scene}{photo:砲台跡}砲台跡が残ります。{close}{photo:タカノス山}{1}最初の一歩です。"
     script, _ = build_tour_script(project, cache)
     assert script.startswith("{open}友ヶ島です。{scene}{photo:砲台跡}砲台跡が残ります。{close}{photo:タカノス山}最初の一歩です。{start}")
+
+
+def test_the_brief_lists_closed_places_for_the_outro():
+    project, cache = _with_a_closed_place()
+    brief = build_brief(project, cache)
+    assert brief["closed"] == ["観念窟"] and brief["closed_facts"] and len(brief["closed_at"]) == 1
+    assert all("観念窟" not in leg.get("passes", []) for leg in brief["legs"])
+
+
+def test_a_closed_place_gets_a_red_cross_pin():
+    from services import tuning
+    from services.vdoprocessing.spatial_renderer.pins import _PinMixin
+
+    pins = _PinMixin.__new__(_PinMixin)
+    wp = {"index": 3, "data": {"is_stopby": True, "inaccessible": True}}
+    assert _PinMixin._pin_label_and_color(pins, wp, 10) == ("×", tuning.CLOSED_PIN_COLOR, None)

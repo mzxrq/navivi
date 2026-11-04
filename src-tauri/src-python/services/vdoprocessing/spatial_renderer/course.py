@@ -274,11 +274,17 @@ class _CourseOverviewMixin:
         )
         trace_end = anchors[-1][0]
         stats_at = float(cues["end"]) if "end" in cues else trace_end + 0.5
-        extras_at = float(cues["extras"]) if "extras" in cues else (stats_at + 4.0 if extras else None)
+        # Closed places (red ×) come after the stop-bys, at {closed}; drawn like them otherwise.
+        stopbys = [ap for ap in extras if not ap["data"].get("inaccessible")]
+        closed = [ap for ap in extras if ap["data"].get("inaccessible")]
+        extras_at = float(cues["extras"]) if "extras" in cues else (stats_at + 4.0 if stopbys else None)
+        closed_at = (float(cues["closed"]) if "closed" in cues
+                     else ((extras_at if extras_at is not None else stats_at) + 4.0 if closed else None))
         end_at = max(
             audio_seconds + 0.3 if audio_seconds else trace_end + 6.0,
             stats_at + 2.0,
             (extras_at + 3.0) if extras_at is not None else 0.0,
+            (closed_at + 3.0) if closed_at is not None else 0.0,
         )
 
         # Cards: every stop with a photo, laid out once (as the recap does) clear
@@ -308,7 +314,7 @@ class _CourseOverviewMixin:
             ch, cw = summary_card.shape[:2]
             drop = tuning.COURSE_STATS_DROP_PX
             reserved.append((w - cw - 20.0, h - ch - 20.0 + drop, w - 20.0, h - 20.0 + drop))
-        if extras:
+        if stopbys:
             reserved.append(tuple(float(v) for v in self.graphics.stopby_notice_box(w, h)))
         # Stop-bys with a photo get their card too, popping in with their pin at {extras}.
         card_popups = [ap for ap in on_route + extras if ap["data"].get("popup_image") and id(ap) not in returns]
@@ -338,9 +344,10 @@ class _CourseOverviewMixin:
             said = cues.get(str(ap.get("order")))
             if said is not None and ap["index"] != 0 and ap is not stop_popup:
                 ap["course_at"] = pin_reveal_time(ap["course_at"], said, route_at)
-        for k, ap in enumerate(extras):
-            ap["course_at"] = (extras_at or end_at) + k * tuning.COURSE_STOPBY_STAGGER_SECONDS
-            ap["pop_frame"] = int(round(ap["course_at"] * fps))
+        for group, at in ((stopbys, extras_at), (closed, closed_at)):
+            for k, ap in enumerate(group):
+                ap["course_at"] = (at if at is not None else end_at) + k * tuning.COURSE_STOPBY_STAGGER_SECONDS
+                ap["pop_frame"] = int(round(ap["course_at"] * fps))
 
         # The planned route under everything, drawn once.
         route_bg = current_bg.copy()

@@ -417,6 +417,11 @@ class _OverviewRenderMixin:
         # shown during the previous NORMAL waypoint's stop rather than
         # popping where it sits; a "Connect to Route" one is a genuine
         # stop and keeps its own arrival. See _attach_stopby_groups.
+        # Closed places (red ×) never stop or pop up on the walk: they appear together at {closed}, at the end.
+        self._closed_popups = []
+        if self.config.get("overview_style") != "course":
+            self._closed_popups = [ap for ap in active_popups if ap["data"].get("inaccessible")]
+            active_popups = [ap for ap in active_popups if not ap["data"].get("inaccessible")]
         self._attach_stopby_groups(active_popups)
 
         # Pins that would be drawn completely on top of each other are
@@ -1126,8 +1131,25 @@ class _OverviewRenderMixin:
                     outro_hold_sec, until_distance, distance_cue,
                 )
                 outro_hold_sec = until_distance
+        # The closed places' red × pins (and names) come in at {closed}, over the held summary frame.
+        closed_cue = audio_cues.get("closed") if audio_cues and getattr(self, "_closed_popups", None) else None
+        if closed_cue is not None:
+            outro_hold_sec = max(outro_hold_sec, closed_cue + tuning.CLOSED_HOLD_SECONDS - video.frames_written / fps)
+        closed_frame = None
         for _ in range(int(outro_hold_sec * fps)):
-            video.write(self.last_frame)
+            if closed_cue is not None and video.frames_written / fps >= closed_cue:
+                if closed_frame is None:
+                    closed_frame = self.last_frame.copy()
+                    for ap in self._closed_popups:
+                        self._draw_pin(closed_frame, ap, len(points))
+                        sprite = self._course_label_sprite(ap.get("label") or "")
+                        if sprite is not None:
+                            r = int(self.graphics.marker_radius)
+                            self.graphics.blit_sprite(closed_frame, sprite, (0, 0), int(ap["x"]) + r + 6,
+                                                      int(ap["y"]) - sprite.shape[0] // 2)
+                video.write(closed_frame)
+            else:
+                video.write(self.last_frame)
 
         hard_ended = False
         if stop_popup and self.config.get("enable_ending_highlight", True) and self.config.get("overview_style") != "course":

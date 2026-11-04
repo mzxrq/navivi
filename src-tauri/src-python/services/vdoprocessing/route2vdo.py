@@ -673,6 +673,8 @@ class RouteAnimator:
                     # silent pass-through pin (see render_residential_leg_
                     # pydeck's `landmarks` docstring).
                     "connect_to_route": bool(m.get("connect_to_route", False)),
+                    # Only when set: other legs' landmarks (and fingerprints) stay as they were.
+                    **({"inaccessible": True} if m.get("inaccessible") else {}),
                     "popup_image": m.get("popup_image"),
                     "freeze_seconds": m.get("freeze_seconds"),
                     # Residential legs are always fullscreen.

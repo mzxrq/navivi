@@ -47,6 +47,7 @@
   "outro_subtitle": "訪れた{count}か所",
   "outro_route_from": "{name} から",
   "outro_stopby_title": "立ち寄りスポット",
+  "outro_closed_title": "訪問できない場所",
   "outro_logo_title": "Powered by",
   "outro_summary": {
     "distance": "総距離",

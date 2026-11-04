@@ -64,7 +64,7 @@ def closest_leg_index(wp: dict, lats, lons) -> int:
 
 def _play_order(markers: list, marker_plans: dict, id_to_position: dict):
     """Sort key for a leg's markers: route order (`pos_in_chunk`), an off-route stop-by ("pops_after") right after
-    the stop-by it pops up at ("" = the departure stop, first), several in waypoint order."""
+    the stop-by it pops up at ("" = the departure stop, first), several in waypoint order, closed places last."""
     route_index = {
         m.get("waypoint_id"): i for i, m in enumerate(sorted(markers, key=lambda m: m.get("pos_in_chunk", 0)))
     }
@@ -72,8 +72,8 @@ def _play_order(markers: list, marker_plans: dict, id_to_position: dict):
     def key(m):
         after = marker_plans.get(m.get("waypoint_id"), {}).get("pops_after")
         if after is None:
-            return (route_index.get(m.get("waypoint_id"), 0), 0, 0)
-        return (route_index.get(after, -1), 1, id_to_position.get(m.get("waypoint_id"), 0))
+            return (route_index.get(m.get("waypoint_id"), 0), 0, 0, 0)
+        return (route_index.get(after, -1), 1, bool(m.get("inaccessible")), id_to_position.get(m.get("waypoint_id"), 0))
     return key
 
 
@@ -635,6 +635,8 @@ def inject_waypoint_popups(
                 # never batched, never stopped at - see popups.py).
                 "is_stopby": bool(wp.get("isStopBy", False) or wp_skipped),
                 "is_skipped": wp_skipped,
+                # A closed place (the editor's "Closed"): a red × pin, shown after the stop-bys at {closed}.
+                "inaccessible": bool(wp.get("inaccessible")),
                 # The editor's "Pause at Location" (default on): off, the
                 # overview walker doesn't stop here for the description.
                 "pause_at_waypoint": wp.get("pauseAtWaypoint") is not False,
