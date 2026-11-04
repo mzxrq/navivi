@@ -4376,8 +4376,8 @@ msgid "Qwen3-TTS setup"
 msgstr "Qwen3-TTSのセットアップ"
 
 #: src/features/map/components/WaypointEditor.tsx:384
-msgid "Read in the overview after the stop-bys, as the reason this place can't be visited."
-msgstr "概要動画で、立ち寄りスポットの後に、この場所を訪れられない理由として読み上げられます。"
+#~ msgid "Read in the overview after the stop-bys, as the reason this place can't be visited."
+#~ msgstr "概要動画で、立ち寄りスポットの後に、この場所を訪れられない理由として読み上げられます。"
 
 #: src/components/ui/ReviewStep.tsx:88
 msgid "Reading"
@@ -6368,6 +6368,10 @@ msgstr "ルート全体から"
 #: src/features/map/components/WaypointEditor.tsx:383
 msgid "Why it's closed"
 msgstr "訪問できない理由"
+
+#: src/features/map/components/WaypointEditor.tsx:384
+msgid "Why this place can't be visited. Read in the overview after the stop-bys, and in its photo clip before the leg that passes it."
+msgstr "この場所を訪れられない理由です。概要動画の立ち寄りスポットの後と、この場所の近くを通る区間の前に流れる写真クリップで読み上げられます。"
 
 #: src/components/ui/VideoLookSettings.tsx:108
 #: src/components/ui/VideoLookSettings.tsx:109

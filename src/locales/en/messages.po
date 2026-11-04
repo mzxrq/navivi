@@ -4376,8 +4376,8 @@ msgid "Qwen3-TTS setup"
 msgstr "Qwen3-TTS setup"
 
 #: src/features/map/components/WaypointEditor.tsx:384
-msgid "Read in the overview after the stop-bys, as the reason this place can't be visited."
-msgstr "Read in the overview after the stop-bys, as the reason this place can't be visited."
+#~ msgid "Read in the overview after the stop-bys, as the reason this place can't be visited."
+#~ msgstr "Read in the overview after the stop-bys, as the reason this place can't be visited."
 
 #: src/components/ui/ReviewStep.tsx:88
 msgid "Reading"
@@ -6376,6 +6376,10 @@ msgstr "Whole route first"
 #: src/features/map/components/WaypointEditor.tsx:383
 msgid "Why it's closed"
 msgstr "Why it's closed"
+
+#: src/features/map/components/WaypointEditor.tsx:384
+msgid "Why this place can't be visited. Read in the overview after the stop-bys, and in its photo clip before the leg that passes it."
+msgstr "Why this place can't be visited. Read in the overview after the stop-bys, and in its photo clip before the leg that passes it."
 
 #: src/components/ui/VideoLookSettings.tsx:108
 #: src/components/ui/VideoLookSettings.tsx:109

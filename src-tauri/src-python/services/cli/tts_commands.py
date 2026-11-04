@@ -20,6 +20,7 @@ from services.vdoprocessing.videopipeline.audio_step import (
     generate_overview_audio,
     generate_waypoint_audio,
     is_passed_only,
+    no_attraction,
     passed_only_reason,
     project_dictionary,
     stop_tts_server,
@@ -170,7 +171,7 @@ def _attraction_tts_skip_reason(waypoint) -> str:
     """Why a waypoint gets no attraction narration ("" when it does)."""
     if not isinstance(waypoint, dict):
         return "not a waypoint"
-    if is_passed_only(waypoint):
+    if no_attraction(waypoint):
         return passed_only_reason(waypoint)
     if not _resolve_attraction_narration_script(waypoint):
         return "no attraction narration"
@@ -221,7 +222,7 @@ def test_attraction_tts_all(
     )
     todo = [(i, w) for i, w in enumerate(waypoints) if not _attraction_tts_skip_reason(w)]
     for i, w in enumerate(waypoints):
-        if is_passed_only(w):
+        if no_attraction(w):
             _tracker.note(f"Skipped attraction TTS {i + 1}/{len(waypoints)}: {_label(w, i)} ({passed_only_reason(w)})")
 
     async def generate_all() -> list:

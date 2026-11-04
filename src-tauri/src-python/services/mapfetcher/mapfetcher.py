@@ -197,7 +197,8 @@ class MapFetcher:
                     # never actually trigger.
                     # The walk pauses here (stopby_visits: connected, or any
                     # stop-by with a photo in the "course" overview type).
-                    "connect_to_route": visits_stopby(waypoints[p]),
+                    # A Closed place is never walked to, but the leg stops on its fullscreen photo too.
+                    "connect_to_route": visits_stopby(waypoints[p]) or bool(waypoints[p].get("inaccessible")),
                     "inaccessible": bool(waypoints[p].get("inaccessible")),  # a closed place: a red × dot
                     # This waypoint's own stable job_config id -- lets
                     # route2vdo.py resolve its RAW position in job_config's

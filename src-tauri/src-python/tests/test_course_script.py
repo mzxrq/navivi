@@ -5,6 +5,7 @@ from services.localization.overview_cues import auto_tag_overview
 from services.localization.overview_script import (
     ROUTE_PIVOT_TEXT,
     build_tour_script,
+    closed_text,
     plan_budget,
     spoken_area,
     stopby_text,
@@ -186,6 +187,12 @@ def test_a_closed_place_is_told_after_the_stop_bys_with_its_reason():
     project["settings"]["overview_style"] = "walk"
     walk, _ = build_tour_script(project, cache)
     assert walk.index("{end}") < walk.index("{closed}") and walk.endswith("今日の旅は、ここまでです。")
+
+
+def test_a_closed_reason_that_names_the_place_is_not_prefixed_again():
+    project, _ = _with_a_closed_place()
+    project["waypoints"][-4]["attractionNarration"] = "観念窟は、落石のため立ち入り禁止です。"
+    assert closed_text(project).endswith("できません。観念窟は、落石のため立ち入り禁止です。")
 
 
 def test_a_closed_place_is_never_walked_to_or_batched():

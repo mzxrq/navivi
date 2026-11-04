@@ -37,10 +37,10 @@ def _unvisited_stopbys(waypoints: list) -> set:
     """0-based positions of waypoints the walker only passes (unconnected
     stop-bys, and waypoints skipped in video export) and return stops (their leg ends on a photo card): no
     attraction clip."""
-    from .audio_step import is_passed_only
+    from .audio_step import no_attraction
     from .render_look import _is_return_stop
 
-    return {pos for pos, wp in enumerate(waypoints) if is_passed_only(wp) or _is_return_stop(waypoints, pos)}
+    return {pos for pos, wp in enumerate(waypoints) if no_attraction(wp) or _is_return_stop(waypoints, pos)}
 
 
 def _waypoint_ids(project_dir: str, waypoints: Optional[list] = None) -> dict:

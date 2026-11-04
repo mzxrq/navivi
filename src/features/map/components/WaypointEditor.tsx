@@ -149,7 +149,7 @@ export function WaypointEditor({
   const hasArrivalVoice = !!wp.arrivingNarration?.trim();
   // The "Whole route first" type visits every stop-by: each is narrated, linked or not.
   const visited = !isClosed && (!isStopBy || isLinked || settings.overview_style === "course");
-  const hasAttractionVoice = !!wp.attractionNarration?.trim() && visited;
+  const hasAttractionVoice = !!wp.attractionNarration?.trim() && (visited || isClosed);
   const routeDirections = settings.overview_style === "course" && !!metadata.directory_path;
   const canRegen = !!metadata.directory_path && !wp.skipAssetGeneration && !wp.isStub;
 
@@ -381,7 +381,7 @@ export function WaypointEditor({
         {
           type: "attraction" as const,
           title: t`Why it's closed`,
-          description: t`Read in the overview after the stop-bys, as the reason this place can't be visited.`,
+          description: t`Why this place can't be visited. Read in the overview after the stop-bys, and in its photo clip before the leg that passes it.`,
           value: wp.attractionNarration || "",
           onChange: (v: string) => updateWaypoint(wp.id, { attractionNarration: v }),
         },

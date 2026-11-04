@@ -814,7 +814,9 @@ def closed_text(project: dict) -> str:
             continue
         text = re.sub(r"\{[^}]*\}", "", w.get("attractionNarration") or w.get("narration") or "").strip()
         reason = "".join([s for s in _SENTENCE_END.split(text) if s.strip()][:2]).strip()
-        lines.append(f"{clean_label(w)}は、{reason}" if reason else f"{clean_label(w)}です。")
+        name = clean_label(w)
+        # A reason that already names the place reads on its own (no "Aは、…Aは").
+        lines.append(reason if reason and name in reason else f"{name}は、{reason}" if reason else f"{name}です。")
     return "赤色で示した地点は、現在訪れることができません。" + "".join(lines) if lines else ""
 
 

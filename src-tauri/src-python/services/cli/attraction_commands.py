@@ -12,7 +12,7 @@ from services.vdoprocessing.videopipeline.attraction_step import (
     generate_waypoint_attraction_video,
     needs_wan,
 )
-from services.vdoprocessing.videopipeline.audio_step import is_passed_only, passed_only_reason
+from services.vdoprocessing.videopipeline.audio_step import no_attraction, passed_only_reason
 from services.vdoprocessing.videopipeline.helpers import (
     attraction_audio_filename,
     attraction_output_filename,
@@ -93,7 +93,7 @@ def _generate_attraction_video(
         raise ValueError(f"Waypoint {waypoint_index} must be an object")
     if not waypoint.get("popup_image"):
         raise ValueError(f"Waypoint {waypoint_index} has no popup_image")
-    if is_passed_only(waypoint):
+    if no_attraction(waypoint):
         raise ValueError(f"Waypoint {waypoint_index}: {passed_only_reason(waypoint)} (no attraction clip)")
 
     from services import tuning
@@ -158,10 +158,10 @@ def test_attraction_videos(
     candidates = [
         (index, waypoint)
         for index, waypoint in enumerate(waypoints)
-        if isinstance(waypoint, dict) and waypoint.get("popup_image") and not is_passed_only(waypoint)
+        if isinstance(waypoint, dict) and waypoint.get("popup_image") and not no_attraction(waypoint)
     ]
     for index, waypoint in enumerate(waypoints):
-        if is_passed_only(waypoint):
+        if no_attraction(waypoint):
             label = waypoint.get("label", f"Waypoint {index + 1}")
             _tracker.note(f"Skipped attraction video {index + 1}/{len(waypoints)}: {label} ({passed_only_reason(waypoint)})")
     results = []

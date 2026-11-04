@@ -220,6 +220,11 @@ def build_leg_sequence(
             for pos, wp in enumerate(waypoints) if wp.get("id")
         }
 
+        closed_points = {
+            wp_indices[pos] for pos, wp in enumerate(waypoints)
+            if wp.get("inaccessible") and pos < len(wp_indices)
+        }
+
         for seq_idx, leg_item in enumerate(sequence_data):
             start_idx, end_idx = leg_item["start_idx"], leg_item["end_idx"]
             chunk = route_df.iloc[start_idx : end_idx + 1]
@@ -310,7 +315,7 @@ def build_leg_sequence(
             max_wait = float(settings.get("max_early_arrival_seconds", MAX_EARLY_ARRIVAL_SECONDS))
             stop_positions = [
                 p for p in range(start_pos + 1, min(end_pos, len(waypoints)))
-                if visits_stopby(waypoints[p]) and waypoints[p].get("popup_image")
+                if (visits_stopby(waypoints[p]) or waypoints[p].get("inaccessible")) and waypoints[p].get("popup_image")
             ]
             # An off-route stop-by pops up at the stop before it in waypoint order, without walking: the departure
             # stop ("") or the connected stop-by before it, right after that one's photo. One close to the leg's
@@ -425,7 +430,11 @@ def build_leg_sequence(
                         img_w,
                         img_h,
                     ),
-                    "labels": route_labels[start_idx : end_idx + 1],
+                    # A closed place is never walked to: not in the leg's "A → B" chain.
+                    "labels": [
+                        None if start_idx + k in closed_points else label
+                        for k, label in enumerate(route_labels[start_idx : end_idx + 1])
+                    ],
                     # A residential clip starts at the previous waypoint,
                     # so only the destination popup may end its route
                     # animation. Including the start popup makes the renderer

@@ -49,6 +49,12 @@ def is_passed_only(waypoint: dict) -> bool:
     return is_unvisited_stopby(waypoint) or is_skipped(waypoint)
 
 
+def no_attraction(waypoint: dict) -> bool:
+    """is_passed_only, except a Closed place: never walked to, but its attraction video (speaking its narration)
+    plays before the leg that passes it (timeline_step)."""
+    return is_passed_only(waypoint) and (is_skipped(waypoint) or not waypoint.get("inaccessible"))
+
+
 def passed_only_reason(waypoint: dict) -> str:
     if is_skipped(waypoint):
         return "skipped in video export"
@@ -75,7 +81,7 @@ def has_own_attraction_clip(waypoint: dict) -> bool:
     popup_image), and the walker actually goes there."""
     return (
         isinstance(waypoint, dict)
-        and not is_passed_only(waypoint)
+        and not no_attraction(waypoint)
         and bool((waypoint.get("attractionNarration") or waypoint.get("narration") or "").strip())
         and has_attraction_media(waypoint)
     )
@@ -677,7 +683,10 @@ def existing_audio_data(project_config_path: str) -> dict:
         data["audio_paths"].append(str(main_path) if main else None)
         data["subtitle_paths"].append(None)
         attraction_path = audio_dir / attraction_audio_filename(idx, label)
-        attraction = None if skip or not _resolve_attraction_narration_script(wp) else analyse(attraction_path)
+        attraction = (
+            None if not isinstance(wp, dict) or no_attraction(wp) or not _resolve_attraction_narration_script(wp)
+            else analyse(attraction_path)
+        )
         data["attraction_audio_durations"].append(attraction["duration_seconds"] if attraction else 0.0)
         data["attraction_audio_paths"].append(str(attraction_path) if attraction else None)
 
@@ -904,7 +913,7 @@ def generate_audio(
             # append None) regardless of whether that loop's `continue`
             # branches fired for this same waypoint.
             for idx, wp in enumerate(waypoints):
-                if not isinstance(wp, dict) or is_passed_only(wp) or not _resolve_attraction_narration_script(wp):
+                if not isinstance(wp, dict) or no_attraction(wp) or not _resolve_attraction_narration_script(wp):
                     attraction_audio_paths.append(None)
                     attraction_audio_durations.append(0.0)
                     continue

@@ -44,6 +44,18 @@ def test_a_return_stop_gets_no_attraction_clip():
 
 
 
+def test_a_closed_place_keeps_its_attraction_video_but_is_never_walked_to():
+    from services.vdoprocessing.videopipeline.audio_step import no_attraction
+    from services.vdoprocessing.videopipeline.timeline_step import _unvisited_stopbys
+
+    stopby = dict(WP, isStopBy=True, connectToRoute=False)
+    closed = dict(stopby, inaccessible=True)
+    assert is_passed_only(closed) and not no_attraction(closed) and has_own_attraction_clip(closed)
+    assert no_attraction(stopby) and no_attraction(dict(closed, skipAssetGeneration=True))
+    wps = [dict(WP), closed, dict(WP, lat=34.3), dict(WP, lat=34.5)]
+    assert _unvisited_stopbys(wps) == set()
+
+
 def test_a_leg_with_a_deleted_piece_is_rendered_again():
     from pathlib import Path
 
@@ -71,6 +83,15 @@ def test_turning_a_stop_by_into_a_closed_place_changes_the_route_inputs():
     stopby = {"lat": 34.0, "lng": 135.0, "isStopBy": True, "connectToRoute": False}
     assert route_inputs_hash([stopby]) != route_inputs_hash([{**stopby, "inaccessible": True}])
     assert route_inputs_hash([stopby]) == route_inputs_hash([{**stopby, "inaccessible": False}])  # old projects keep theirs
+
+
+def test_a_leg_passing_a_place_turned_closed_is_rendered_again():
+    from services.vdoprocessing.route2vdo import _leg_fingerprint_parts, leg_changed_parts
+
+    lm = {"lat": 34.0, "lon": 135.0, "label": "経塚"}
+    old = _leg_fingerprint_parts([(34.0, 135.0)], "B", {"landmarks": [lm]}, route_inputs="r")
+    new = _leg_fingerprint_parts([(34.0, 135.0)], "B", {"landmarks": [{**lm, "inaccessible": True}]}, route_inputs="r")
+    assert "closed" in leg_changed_parts(new, old)
 
 
 def test_a_stop_by_now_walked_to_renders_its_leg_again():
