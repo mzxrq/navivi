@@ -15,6 +15,7 @@ dependency to load just for three lines of crop math.
 
 from __future__ import annotations
 
+import json
 import math
 import re
 import random
@@ -512,12 +513,13 @@ def cued_layout(duration_sec: float, cuts: List[Tuple[float, str]]) -> List[Tupl
     photo crossfades in starting at its cue. Before a late first cue a free photo shows; cues closer than two
     crossfades to the previous one (or to the end) are dropped."""
     cf = tuning.INTRO_CROSSFADE_SECONDS
+    gap = max(2 * cf, tuning.INTRO_MIN_SHOT_SECONDS)
     starts: List[Tuple[float, Optional[str]]] = []
     for t, photo in cuts:
         t = max(0.0, float(t))
-        if t > duration_sec - 2 * cf:
+        if t > duration_sec - gap:
             break
-        if starts and t < starts[-1][0] + 2 * cf:
+        if starts and t < starts[-1][0] + gap:
             continue
         starts.append((t, photo))
     if not starts:
@@ -732,9 +734,11 @@ def _source_seconds(src: str) -> float:
 def plan_shots(seconds: float, main: str, pool: List[str], lengths: Dict[str, float], cf: float, scene: int) -> List[str]:
     """The sources a scene of `seconds` plays: `main`, plus clips taken from `pool` (busiest first; the
     close-up scene takes from the busy end, the wide one from the plain end, others from the middle)
-    until every shot's equal share fits inside its clip. Takes them out of `pool`."""
+    until every shot's equal share fits inside its clip, but never below INTRO_MIN_SHOT_SECONDS a shot (a short
+    clip then holds its last frame instead). Takes them out of `pool`."""
     shots = [main]
-    while pool and (seconds + (len(shots) - 1) * cf) / len(shots) > min(lengths.get(s, 0.0) for s in shots):
+    while (pool and (seconds + (len(shots) - 1) * cf) / len(shots) > min(lengths.get(s, 0.0) for s in shots)
+           and (seconds + len(shots) * cf) / (len(shots) + 1) >= tuning.INTRO_MIN_SHOT_SECONDS):
         shots.append(pool.pop(0 if scene == 0 else -1 if scene == 1 else len(pool) // 2))
     return shots
 
@@ -763,6 +767,19 @@ def is_transport_stop(clip: str, waypoint_count: int) -> bool:
     return idx == 0 or idx >= waypoint_count - 1 or bool(_TRANSPORT.search(m.group(2)))
 
 
+def photo_clips(clip: str) -> List[str]:
+    """The kept raw clips of a multi-photo attraction clip, one per photo in photo order (its _inputs record's
+    keys); [] for a one-photo clip or when any is missing. The finished clip changes photo partway, so a slice
+    of it in the intro could show one photo for a moment and then swap; these show one photo each."""
+    folder, stem = Path(clip).parent, Path(clip).stem
+    try:
+        keys = json.loads((folder / "_inputs" / f"{stem}.json").read_text(encoding="utf-8")).get("keys") or []
+    except (OSError, ValueError):
+        return []
+    raws = [folder / f"raw_{stem}_{key}.mp4" for key in keys]
+    return [str(p) for p in raws] if len(raws) > 1 and all(p.is_file() for p in raws) else []
+
+
 def _scene_sources(waypoints: List[Dict[str, Any]], attraction_videos: List[str]) -> List[str]:
     from services.vdoprocessing.place_label import unburned_place_label
 
@@ -772,7 +789,7 @@ def _scene_sources(waypoints: List[Dict[str, Any]], attraction_videos: List[str]
     # have the place name burned in; those stops use their kept raw generation instead.
     clips = [p for p in attraction_videos if p and Path(p).is_file()]
     clean = [p for p in clips if unburned_place_label(p) is not None]
-    sources = clean + raw_footage([p for p in clips if p not in clean])
+    sources = [one for p in clean for one in (photo_clips(p) or [p])] + raw_footage([p for p in clips if p not in clean])
     if sources:
         return sources
     seen: List[str] = []
@@ -830,12 +847,15 @@ def scene_overrides(
     out: Dict[int, List[Tuple[float, str]]] = {}
     for t, photo in photo_cuts or []:
         k = max(i for i, st in enumerate(starts) if st <= max(t, 0.0))
-        idx = next((i for i, wp in enumerate(waypoints)
-                    if photo in (wp.get("popup_image") if isinstance(wp.get("popup_image"), list)
-                                 else [wp.get("popup_image")])), None)
+        photos_of = lambda wp: wp.get("popup_image") if isinstance(wp.get("popup_image"), list) else [wp.get("popup_image")]  # noqa: E731
+        idx = next((i for i, wp in enumerate(waypoints) if photo in photos_of(wp)), None)
         clip = next((c for c in attraction_videos or []
                      if c and idx is not None and Path(c).stem.startswith(f"04_attraction_{idx:02d}_")
                      and Path(c).is_file()), None)
+        singles = photo_clips(clip) if clip else []
+        nth = photos_of(waypoints[idx]).index(photo) if idx is not None else 0
+        if nth < len(singles):  # that photo's own move, not the clip that swaps photos partway
+            clip = singles[nth]
         if (clip or photo) not in [src for _, src in out.get(k, [])]:
             out.setdefault(k, []).append((max(t, 0.0) - starts[k], clip or photo))
     return out
@@ -843,11 +863,12 @@ def scene_overrides(
 
 def cued_shots(seconds: float, cued: List[Tuple[float, str]], cf: float) -> List[Tuple[str, float]]:
     """[(source, shot seconds)] for a scene of `seconds` with cues [(seconds into the scene, source)]: the first
-    plays from the scene's start, each later one crossfades in at its cue. A cue closer than two crossfades to
-    the previous one or to the scene's end is dropped. The shots, crossfaded, last exactly `seconds`."""
+    plays from the scene's start, each later one crossfades in at its cue. A cue that would leave a shot shorter
+    than INTRO_MIN_SHOT_SECONDS (or two crossfades) is dropped. The shots, crossfaded, last exactly `seconds`."""
+    gap = max(2 * cf, tuning.INTRO_MIN_SHOT_SECONDS)
     kept = [(0.0, cued[0][1])]
     for at, src in cued[1:]:
-        if kept[-1][0] + 2 * cf <= at <= seconds - 2 * cf:
+        if kept[-1][0] + gap <= at <= seconds - gap:
             kept.append((at, src))
     ends = [at for at, _ in kept[1:]] + [seconds]
     return [(src, end - at + (cf if i < len(kept) - 1 else 0.0)) for i, ((at, src), end) in enumerate(zip(kept, ends))]

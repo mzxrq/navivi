@@ -67,3 +67,31 @@ def test_one_scene_cue_in_a_three_scene_intro_is_used():
     starts = scene_starts([s["seconds"] for s in scenes], tuning.INTRO_CROSSFADE_SECONDS)
     assert len(scenes) == 3 and abs(starts[1] - (14.0 - tuning.INTRO_CROSSFADE_SECONDS / 2)) < 1e-6
     assert starts[1] < starts[2] < 30.0
+
+
+def test_a_two_photo_place_plays_each_photo_on_its_own_in_the_intro(tmp_path):
+    import json
+
+    from services.vdoprocessing.introclip import photo_clips, scene_overrides
+
+    clip = tmp_path / "04_attraction_01_郵便名柄館.mp4"
+    clip.write_bytes(b"x")
+    (tmp_path / "_inputs").mkdir()
+    (tmp_path / "_inputs" / "04_attraction_01_郵便名柄館.json").write_text(json.dumps({"keys": ["aaa", "bbb"]}))
+    for key in ("aaa", "bbb"):
+        (tmp_path / f"raw_04_attraction_01_郵便名柄館_{key}.mp4").write_bytes(b"x")
+    singles = photo_clips(str(clip))
+    assert [s.rsplit("_", 1)[-1] for s in singles] == ["aaa.mp4", "bbb.mp4"]
+    wps = [{"popup_image": "s.jpg"}, {"popup_image": ["one.jpg", "two.jpg"]}]
+    cued = scene_overrides([{"seconds": 9.0}], [(0.5, "two.jpg")], wps, [str(clip)])
+    assert cued == {0: [(0.5, singles[1])]}  # the second photo's own clip, not the one that swaps partway
+
+
+def test_no_intro_shot_is_shorter_than_the_minimum():
+    from services.vdoprocessing.introclip import cued_layout, cued_shots, plan_shots
+
+    cf, least = tuning.INTRO_CROSSFADE_SECONDS, tuning.INTRO_MIN_SHOT_SECONDS
+    assert [s for s, _ in cued_shots(9.0, [(0.0, "a"), (1.8, "b"), (5.0, "c")], cf)] == ["a", "c"]
+    shots = plan_shots(6.0, "main", ["p1", "p2", "p3", "p4"], {"main": 0.5, "p1": 0.5, "p2": 0.5, "p3": 0.5, "p4": 0.5}, cf, 2)
+    assert (6.0 + (len(shots) - 1) * cf) / len(shots) >= least
+    assert all(sec >= least for _, sec in cued_layout(12.0, [(0.0, "a"), (1.0, "b"), (6.0, "c")]))

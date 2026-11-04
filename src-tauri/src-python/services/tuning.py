@@ -1072,6 +1072,9 @@ INTRO_IMAGE_COUNT = 3
 # Each photo's time including its crossfades: total = COUNT*PER_IMAGE - (COUNT-1)*CROSSFADE.
 INTRO_PER_IMAGE_SECONDS = 3.5
 INTRO_CROSSFADE_SECONDS = 0.8
+# Shortest an intro photo/shot stays on screen: a {photo:X} cue sooner than this after the last is dropped,
+# and a scene isn't split into shots shorter than this (the user's pick, 2026-11-04: quick swaps looked rushed).
+INTRO_MIN_SHOT_SECONDS = 2.5
 # The overview narration starts on the intro (settings.overview_voice_over_intro): its opening (up to
 # {start}) plays over the photos, the intro lasting the fade from black + that, within MIN..MAX.
 DEFAULT_OVERVIEW_VOICE_OVER_INTRO = True
