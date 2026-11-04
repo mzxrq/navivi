@@ -143,6 +143,7 @@ export interface ProjectSettings {
 
   // Append "· N か所" to the intro/outro subtitle (default on).
   intro_place_count?: boolean;
+  intro_photo_motion?: boolean; // false: the intro's photos are held still (no zoom/pan); videos keep their own motion
   // Intro look: photo slideshow + title (absent), or a silent two-scene, text-led intro.
   intro_style?: "slideshow" | "cinematic" | "documentary";
   intro_lines?: string[]; // [opening, closing] for the text-led styles; empty = written by the script model

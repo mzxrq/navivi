@@ -176,6 +176,16 @@ export function OverviewPanel() {
                 </span>
               </div>
 
+              <label className="flex items-center gap-2 text-[11px] text-zinc-500 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={settings.intro_photo_motion !== false}
+                  onChange={(e) => updateSetting({ intro_photo_motion: e.target.checked })}
+                  className="accent-navi"
+                />
+                <Trans>Move the photos (slow zoom and pan)</Trans>
+              </label>
+
               {style !== "slideshow" &&
                 lineLabels.map((label, i) => (
                   <label key={i} className="block">

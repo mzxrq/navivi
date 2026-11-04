@@ -160,6 +160,7 @@ def render_intro_clip(
 
     logger.info("Intro step: building intro clip for project '%s'.", project_name)
     style = intro_style(job_config.get_settings() or {})
+    photo_motion = (job_config.get_settings() or {}).get("intro_photo_motion") is not False
     if style != "slideshow":
         from services.vdoprocessing.introclip import generate_styled_intro
 
@@ -168,12 +169,14 @@ def render_intro_clip(
             attraction_videos = sorted(str(p) for p in folder.glob("04_attraction_*.mp4"))
         return generate_styled_intro(str(video_dir), style, waypoints, attraction_videos, duration_sec=duration_sec,
                                      cuts=scene_cuts(cue_times) if duration_sec else None,
-                                     photo_cuts=photo_cuts(cue_times, waypoints) if duration_sec else None)
+                                     photo_cuts=photo_cuts(cue_times, waypoints) if duration_sec else None,
+                                     photo_motion=photo_motion)
     # The title and subtitle are a text item on the timeline (intro_text_item), not burned in.
     intro_path = generate_intro_clip(
         video_dir=str(video_dir), title=video_title, subtitle=video_subtitle, waypoints=waypoints,
         burn_text=False, duration_sec=duration_sec,
         photo_cuts=photo_cuts(cue_times, waypoints) if duration_sec else None,
+        photo_motion=photo_motion,
     )
 
     if intro_path:

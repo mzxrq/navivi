@@ -249,3 +249,28 @@ class TestStyledIntro:
         a = np.random.default_rng(0).integers(0, 255, (180, 320, 3), dtype=np.uint8)
         assert introclip.is_still(a, a.copy())
         assert not introclip.is_still(a, np.roll(a, 40, axis=1))
+
+
+def test_a_still_intro_photo_does_not_move(tmp_path):
+    import cv2
+    import numpy as np
+
+    from services import tuning
+    from services.vdoprocessing.introclip import _render_zoom_in
+
+    yy, xx = np.mgrid[0:540, 0:960]
+    image = np.dstack([xx * 255 // 960, yy * 255 // 540, (xx + yy) * 255 // 1500]).astype(np.uint8)
+    cv2.circle(image, (480, 270), 120, (255, 255, 255), -1)
+
+    def drift(zoom, pan):
+        out = tmp_path / f"{zoom[1]}_{pan[0]}.mp4"
+        _render_zoom_in(image, str(out), 0.5, zoom=zoom, pan=pan)
+        cap = cv2.VideoCapture(str(out))
+        frames = []
+        while (got := cap.read())[0]:
+            frames.append(got[1].astype(int))
+        cap.release()
+        return np.abs(frames[0] - frames[-1]).mean()
+
+    start = tuning.INTRO_ZOOM_START
+    assert drift((start, start), (0.0, 0.0)) < 0.2 * drift((start, tuning.INTRO_ZOOM_END), (0.3, 0.2))

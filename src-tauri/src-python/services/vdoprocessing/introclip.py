@@ -542,6 +542,7 @@ def generate_intro_clip(
     burn_text: bool = True,
     duration_sec: Optional[float] = None,
     photo_cuts: Optional[List[Tuple[float, str]]] = None,
+    photo_motion: bool = True,
 ) -> Optional[str]:
     """Picks up to INTRO_IMAGE_COUNT random, distinct waypoint popup images
     (a fresh pick every call), renders a slow zoom-in over each, crossfades
@@ -589,7 +590,8 @@ def generate_intro_clip(
             if image is None:
                 continue
             raw_path = video_dir_path / f".intro_raw_{run_id}_{idx}.mp4"
-            _render_zoom_in(image, str(raw_path), clip_sec)
+            _render_zoom_in(image, str(raw_path), clip_sec,
+                            zoom=(tuning.INTRO_ZOOM_START, tuning.INTRO_ZOOM_END if photo_motion else tuning.INTRO_ZOOM_START))
             per_clip_raw_paths.append(str(raw_path))
             rendered_secs.append(clip_sec)
 
@@ -860,8 +862,10 @@ def generate_styled_intro(
     duration_sec: Optional[float] = None,
     cuts: Optional[List[float]] = None,
     photo_cuts: Optional[List[Tuple[float, str]]] = None,
+    photo_motion: bool = True,
 ) -> Optional[str]:
     """`photo_cuts` [(seconds, photo)] ({photo:X} cues) choose the footage of the scene each falls in.
+    `photo_motion` False (settings.intro_photo_motion): photos are held still; video clips keep their own move.
     A text-led intro (tuning.INTRO_STYLE_SCENES[style]): a close-up scene, then a wide one, from the
     attraction clips (else the waypoint photos), crossfaded, faded from/to black, with the logo badge.
     The lines ride on the timeline's text track (intro_step.intro_text_items). None (logged) on failure."""
@@ -922,7 +926,8 @@ def generate_styled_intro(
                     image = stills[shot] if shot in stills else _read_image_safe(shot)
                     if image is None:
                         return None
-                    _render_zoom_in(image, part, shot_sec, scene["zoom"], scene["pan"], scene["dim"], scene["sat"])
+                    zoom, pan = (scene["zoom"], scene["pan"]) if photo_motion else ((scene["zoom"][0],) * 2, (0.0, 0.0))
+                    _render_zoom_in(image, part, shot_sec, zoom, pan, scene["dim"], scene["sat"])
             if len(parts) > 1:
                 _crossfade_chain(parts, secs, cf, raw)
                 raws.append(raw)
