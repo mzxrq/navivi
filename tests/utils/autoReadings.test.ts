@@ -20,6 +20,33 @@ describe("mergeAutoReadings", () => {
     ]);
   });
 
+  it("never adds a word again that is already there by hand, spaced or not", () => {
+    const manual = [{ word: "友ヶ島小展望台", reading: "ともがしましょうてんぼうだい" }];
+    const scan = [
+      { word: "友ヶ島 小展望台", reading: "ともがしま しょうてんぼうだい" },
+      { word: "友ヶ島小展望台", reading: "ともがしましょうてんぼうだい" },
+    ];
+    expect(mergeAutoReadings(manual, scan, [])).toBeNull();
+  });
+
+  it("drops an auto copy of a hand-typed word and an auto copy of another auto word", () => {
+    const current = [
+      { word: "友ヶ島", reading: "ともがしま", auto: true },
+      { word: "友ヶ島", reading: "ともがしま" },
+      { word: "北垂水小展望台", reading: "きたたるみしょうてんぼうだい", auto: true },
+      { word: "北垂水 小展望台", reading: "きたたるみ しょうてんぼうだい", auto: true },
+    ];
+    const scan = [
+      { word: "友ヶ島", reading: "ともがしま" },
+      { word: "北垂水小展望台", reading: "きたたるみしょうてんぼうだい" },
+      { word: "北垂水 小展望台", reading: "きたたるみ しょうてんぼうだい" },
+    ];
+    expect(mergeAutoReadings(current, scan, [])).toEqual([
+      { word: "友ヶ島", reading: "ともがしま" },
+      { word: "北垂水小展望台", reading: "きたたるみしょうてんぼうだい", auto: true },
+    ]);
+  });
+
   it("drops auto words no script uses, keeps manual ones", () => {
     const current = [
       { word: "海", reading: "うみ", auto: true },

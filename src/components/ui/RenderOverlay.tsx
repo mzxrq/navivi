@@ -48,6 +48,7 @@ import { db } from "../../services/db";
 import { runStage } from "../../services/sidecar";
 import { announceSetupRequired, announceVcRuntimeMissing, isSetupRequired, isVcRuntimeMissing } from "../../services/setup";
 import { GLOBAL_DICTIONARY_KEY } from "../../config/constants";
+import { sameWord } from "../../utils/autoReadings";
 
 type WizardStep = "generating" | "verifying" | "exporting" | "finished";
 
@@ -438,11 +439,12 @@ export function RenderOverlay() {
   const saveAfterRender = () => new Promise<void>((resolve, reject) => setSaveRequest({ done: resolve, fail: reject }));
 
   const applyPronunciationFixes = async (fixes: PronunciationFix[]) => {
-    const merge = (list: { word: string; reading: string }[], items: PronunciationFix[]) => {
+    // A fixed auto word becomes a hand entry, so the next auto scan can't put the old reading back.
+    const merge = (list: { word: string; reading: string; auto?: boolean }[], items: PronunciationFix[]) => {
       const next = list.map((entry) => ({ ...entry }));
       for (const fix of items) {
-        const found = next.find((entry) => entry.word === fix.word);
-        if (found) found.reading = fix.reading;
+        const i = next.findIndex((entry) => sameWord(entry.word, fix.word));
+        if (i >= 0) next[i] = { word: next[i].word, reading: fix.reading };
         else next.push({ word: fix.word, reading: fix.reading });
       }
       return next;

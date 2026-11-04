@@ -50,7 +50,9 @@ def is_passed_only(waypoint: dict) -> bool:
 
 
 def passed_only_reason(waypoint: dict) -> str:
-    return "skipped in video export" if is_skipped(waypoint) else "stop-by not connected to the route"
+    if is_skipped(waypoint):
+        return "skipped in video export"
+    return "closed, can't be visited" if waypoint.get("inaccessible") else "stop-by not connected to the route"
 
 
 # Whether a leg speaks only its route (arriving) narration. On when the

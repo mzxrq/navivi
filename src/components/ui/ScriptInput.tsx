@@ -14,6 +14,7 @@ import { warmUpModel } from "../../services/ollamaApi";
 import { aiEngine } from "../../services/ai/engine";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { nextStopNumber } from "../../utils/overviewScript";
+import { sameWord } from "../../utils/autoReadings";
 
 const getThinkingSteps = () => [
   t`Detecting context...`,
@@ -110,7 +111,7 @@ export function ScriptInput({
       const kanji = match[1];
       const kana = match[2];
 
-      const idx = newDict.findIndex((entry) => entry.word === kanji);
+      const idx = newDict.findIndex((entry) => sameWord(entry.word, kanji));
       if (idx >= 0) {
         newDict[idx] = { word: kanji, reading: kana };
       } else {
@@ -155,7 +156,7 @@ export function ScriptInput({
     let changed = false;
 
     for (const { word, reading } of found) {
-      const existing = dictionary.find((entry) => entry.word === word);
+      const existing = dictionary.find((entry) => sameWord(entry.word, word));
       if (!existing) {
         dictionary.push({ word, reading });
         changed = true;

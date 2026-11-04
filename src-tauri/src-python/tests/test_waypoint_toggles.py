@@ -63,3 +63,11 @@ def test_the_arrived_map_hold_only_plays_when_there_is_no_arrival_photo():
     src = inspect.getsource(pedestrian)
     between = src[src.index("cut_on_arrival = await _play_leg_photo_card("):src.index("hold_frames = max(0, int(")]
     assert between.rstrip().endswith("else:") and "\n                    if " not in between
+
+
+def test_turning_a_stop_by_into_a_closed_place_changes_the_route_inputs():
+    from services.vdoprocessing.route_inputs import route_inputs_hash
+
+    stopby = {"lat": 34.0, "lng": 135.0, "isStopBy": True, "connectToRoute": False}
+    assert route_inputs_hash([stopby]) != route_inputs_hash([{**stopby, "inaccessible": True}])
+    assert route_inputs_hash([stopby]) == route_inputs_hash([{**stopby, "inaccessible": False}])  # old projects keep theirs

@@ -15,7 +15,7 @@ _ROUTE_INPUT_FIELDS = (
 
 
 # Added later: hashed only when set, so older waypoints keep the same hash.
-_OPTIONAL_ROUTE_INPUT_FIELDS = ("skipAssetGeneration",)
+_OPTIONAL_ROUTE_INPUT_FIELDS = ("skipAssetGeneration", "inaccessible")
 
 
 def _row(wp):
