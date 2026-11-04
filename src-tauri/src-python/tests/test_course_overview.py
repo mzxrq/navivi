@@ -184,6 +184,16 @@ def test_a_stop_passed_twice_matches_its_first_pass():
     assert RouteGeometryProcessor.build_waypoint_index(df, wps) == [0, 2, 4, 5]
 
 
+def test_the_final_stop_is_on_the_routes_last_point():
+    import pandas as pd
+    from services.mapfetcher.mapgeometry import RouteGeometryProcessor
+
+    # the track passes the station (~33 m away) before reaching it, and runs 20 m on after it
+    df = pd.DataFrame({"latitude": [0.0, 0.0, 0.0, 0.0003, 0.00048], "longitude": [0.0, 0.01, 0.0199, 0.02, 0.02]})
+    wps = [{"lat": 0.0, "lng": 0.0}, {"lat": 0.0, "lng": 0.01}, {"lat": 0.0003, "lng": 0.0201}]
+    assert RouteGeometryProcessor.build_waypoint_index(df, wps) == [0, 1, 4]
+
+
 def test_an_off_track_stop_by_does_not_push_later_stops_ahead():
     import pandas as pd
     from services.mapfetcher.mapgeometry import RouteGeometryProcessor

@@ -461,7 +461,7 @@ class RouteGeometryProcessor:
         num_points = len(coords)
         indices: List[int] = []
         search_start = 0
-        for wp in waypoints:
+        for n, wp in enumerate(waypoints):
             lat, lng = wp["lat"], wp.get("lng", wp.get("lon"))
             window = coords[search_start:]
             if len(window) == 0:
@@ -479,6 +479,8 @@ class RouteGeometryProcessor:
             first = int(np.flatnonzero(near)[0])
             end = first + (int(np.argmin(near[first:])) if not near[first:].all() else len(near) - first)
             local_idx = first + int(np.argmin(dist[first:end]))  # the closest point of that first pass
+            if n == len(waypoints) - 1:
+                local_idx = int(np.argmin(dist))  # the trip ends at the final stop: its closest point, not an earlier pass
             global_idx = search_start + local_idx
             indices.append(global_idx)
             search_start = global_idx
@@ -502,6 +504,13 @@ class RouteGeometryProcessor:
         for i in range(1, len(indices)):
             if indices[i] <= indices[i - 1]:
                 indices[i] = min(num_points - 1, indices[i - 1] + 1)
+        # A track that runs on a few metres past the final stop still ends there: the end pin (E) and the
+        # overview's ending zoom look for the final stop on the route's last point.
+        tail = coords[indices[-1]:]
+        if len(tail) > 1 and not waypoints[-1].get("isStopBy"):
+            step = np.diff(tail, axis=0) * [111_320.0, 111_320.0 * np.cos(np.radians(tail[0, 0]))]
+            if np.hypot(step[:, 0], step[:, 1]).sum() <= tuning.LAST_STOP_TAIL_METERS:
+                indices[-1] = num_points - 1
         return indices
 
     # [Map] Douglas-Peucker algorithm for path simplification

@@ -378,6 +378,8 @@ POPUP_MIN_DISPLAY_SECONDS = 2.0
 STOPBY_BATCH_SECONDS = 0.5
 # A stop-by this close to a leg's line is walked to and pops up there; a farther one pops at the stop before it.
 STOPBY_WALK_NEAR_METERS = 100.0
+# A recorded track that runs on this little past the final stop still ends at it (its E pin and ending zoom).
+LAST_STOP_TAIL_METERS = 60.0
 STOPBY_CAMERA_MOVE_SECONDS = 1.2  # a leg's camera flying out to a far stop-by, and back to the route after
 # Stop-bys in one group that get a held card (the narration names at most 3); the rest get only their pin.
 STOPBY_BATCH_MAX_HELD = 4
