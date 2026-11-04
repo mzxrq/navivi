@@ -71,3 +71,12 @@ def test_turning_a_stop_by_into_a_closed_place_changes_the_route_inputs():
     stopby = {"lat": 34.0, "lng": 135.0, "isStopBy": True, "connectToRoute": False}
     assert route_inputs_hash([stopby]) != route_inputs_hash([{**stopby, "inaccessible": True}])
     assert route_inputs_hash([stopby]) == route_inputs_hash([{**stopby, "inaccessible": False}])  # old projects keep theirs
+
+
+def test_an_end_point_on_the_last_stop_gets_no_extra_leg():
+    from services.vdoprocessing.videopipeline.leg_sequence import _same_spot
+
+    last = {"label": "玉手駅", "lat": 34.45832512, "lng": 135.74841593}
+    assert _same_spot({"lat": 34.45832512, "lng": 135.74841593, "label": "玉手駅"}, last)
+    assert not _same_spot({"lat": 34.47, "lng": 135.76}, last)
+    assert not _same_spot({"lat": 34.45, "lng": 135.74}, None)

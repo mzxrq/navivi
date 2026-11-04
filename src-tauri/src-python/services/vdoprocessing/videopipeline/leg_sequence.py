@@ -11,7 +11,7 @@ from services import tuning, video_text
 from services.gpsparser.gpscalculator import GPSMath
 from services.localization.localization import format_waypoint_label
 from services.mapfetcher.graphicengine.pinimage import marker_for
-from services.vdoprocessing.route_inputs import route_inputs_hash
+from services.vdoprocessing.route_inputs import route_inputs_hash, same_place
 from services.vdoprocessing.stopby_visits import visits_stopby
 
 from .helpers import (
@@ -28,6 +28,11 @@ from .render_look import _is_return_stop, _leg_pin, _returns_to, _project_rgb, o
 # "No cached route for this leg" fallback below).
 _MIN_FERRY_SAMPLE_POINTS = 2
 _MAX_FERRY_SAMPLE_POINTS = 120
+
+def _same_spot(point: dict, waypoint) -> bool:
+    """A project's start/end point that is its first/last stop (the app saves both): no extra leg between them."""
+    return isinstance(waypoint, dict) and same_place(point, waypoint)
+
 
 def stopbys_near_the_route(waypoints: list, positions: list, lats, lons) -> dict:
     """{position: index of the closest leg point} for each not-connected stop-by within STOPBY_WALK_NEAR_METERS of
@@ -148,7 +153,8 @@ def build_leg_sequence(
         _end_pt = project_config.get("end_point") or {}
         res_waypoints = list(waypoints)
         res_wp_indices = list(wp_indices)
-        added_start = _start_pt.get("lat") is not None and (not res_wp_indices or res_wp_indices[0] != 0)
+        added_start = (_start_pt.get("lat") is not None and (not res_wp_indices or res_wp_indices[0] != 0)
+                       and not _same_spot(_start_pt, waypoints[0] if waypoints else None))
         if added_start:
             res_waypoints = [{
                 "lat": _start_pt["lat"],
@@ -159,7 +165,7 @@ def build_leg_sequence(
             res_wp_indices = [0] + res_wp_indices
         if _end_pt.get("lat") is not None and (
             not res_wp_indices or res_wp_indices[-1] != len(route_df) - 1
-        ):
+        ) and not _same_spot(_end_pt, waypoints[-1] if waypoints else None):
             res_waypoints = res_waypoints + [{
                 "lat": _end_pt["lat"],
                 "lng": _end_pt.get("lng", _end_pt.get("lon")),
