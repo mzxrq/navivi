@@ -876,7 +876,7 @@ def _draw_summary(
     longest = max(legs, key=lambda leg: leg["km"])
     longest_mode = _leg_modes(longest)[0]
     accent = tuple(reversed(tuning.DEFAULT_MARKER_COLOR))
-    stops = len(route_cards(legs)) - 1  # the numbered cards: no return stops, a round trip's end is its start
+    stops = len(route_cards(legs))  # every card, start and end too: no return stops, a round trip's start once
     tiles = [
         (lambda d, cx, cy, s: engine._draw_total_icon(d, cx, cy, s, tuning.OUTRO_TITLE_COLOR),
          labels["distance"], _fmt_km(brief["total_km"]), video_text.plural(labels, "legs", len(legs), count=len(legs))),
