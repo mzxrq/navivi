@@ -52,7 +52,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { placeNameOf } from "../../../utils/placeName";
 import { downloadPhotos, findPlacePhotos } from "../../../services/placePhotos";
-import { MAX_PHOTOS_PER_STOP, creditLine, shortCredit, withFoundPhotos } from "../../../utils/photoCredits";
+import { MAX_PHOTOS_PER_STOP, creditLine, shortCredit, videoCredit, withCredit, withFoundPhotos } from "../../../utils/photoCredits";
 
 const MAX_IMAGES = MAX_PHOTOS_PER_STOP;
 
@@ -723,7 +723,45 @@ export function WaypointEditor({
                               <p className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate" title={img}>
                                 {img.split(/\\|\//).pop()}
                               </p>
-                              {wp.imageCredits?.[img] && (
+                              <div className="flex items-center gap-1">
+                                <input
+                                  value={wp.imageCredits?.[img]?.text ?? ""}
+                                  onChange={(e) => {
+                                    updateWaypoint(wp.id, { imageCredits: withCredit(wp.imageCredits, img, { text: e.target.value }) });
+                                    setIsDirty(true);
+                                  }}
+                                  placeholder={(wp.imageCredits?.[img] && shortCredit(wp.imageCredits[img])) || t`Photo credit`}
+                                  title={t`Shown in the video while this photo is on screen`}
+                                  aria-label={t`Photo credit`}
+                                  className="flex-1 min-w-0 h-6 px-1.5 rounded-md border border-zinc-200 dark:border-white/10 bg-transparent text-[11px] text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-navi/40"
+                                />
+                                <div className="flex shrink-0 rounded-md border border-zinc-200 dark:border-white/10 overflow-hidden" role="radiogroup" aria-label={t`Credit corner`}>
+                                  {(["left", "right"] as const).map((corner) => {
+                                    const on = (wp.imageCredits?.[img]?.corner ?? "right") === corner;
+                                    return (
+                                      <button
+                                        key={corner}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={on}
+                                        disabled={!videoCredit(wp.imageCredits?.[img])}
+                                        onClick={() => {
+                                          updateWaypoint(wp.id, { imageCredits: withCredit(wp.imageCredits, img, { corner }) });
+                                          setIsDirty(true);
+                                        }}
+                                        title={corner === "left" ? t`Credit bottom left` : t`Credit bottom right`}
+                                        aria-label={corner === "left" ? t`Credit bottom left` : t`Credit bottom right`}
+                                        className={`w-6 h-6 flex items-center justify-center transition-colors disabled:opacity-40 ${
+                                          on ? "bg-navi/10 text-navi" : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                                        }`}
+                                      >
+                                        <span className={`block w-2.5 h-2.5 border-b-2 ${corner === "left" ? "border-l-2" : "border-r-2"} border-current`} />
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                              {wp.imageCredits?.[img]?.url && (
                                 <button
                                   type="button"
                                   onClick={() => void invoke("plugin:opener|open_url", { url: wp.imageCredits![img].url }).catch(console.error)}

@@ -582,6 +582,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           videos: wp.videos || [],
           videoSound: wp.videoSound || [],
           imagePans: wp.imagePans || wp.camera_pans || [],
+          imageCredits: wp.imageCredits || undefined,
           imageDisplay: wp.image_display || "pip",
           overviewHighlight: typeof wp.overviewHighlight === "boolean" ? wp.overviewHighlight : undefined,
           narration: wp.narration || "",

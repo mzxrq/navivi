@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@lingui/core/macro";
-import { Loader2, Music, Subtitles, Type, UnlinkIcon, Video, Volume2, VolumeX } from "../../components/ui/icons";
+import { Info, Loader2, Music, Subtitles, Type, UnlinkIcon, Video, Volume2, VolumeX } from "../../components/ui/icons";
 import { regenTargetOf } from "../../services/stopRegen";
 import {
   anchorCue,
@@ -47,7 +47,7 @@ interface PaneProps {
 
 const LABEL_W = 36;
 const GUTTER = 120;
-const LANE = { ruler: 26, video: 68, voice: 26, text: 34, subtitle: 34, music: 26 };
+const LANE = { ruler: 26, video: 68, voice: 26, text: 34, credit: 26, subtitle: 34, music: 26 };
 // Lanes plus room for the horizontal scrollbar.
 export const TIMELINE_HEIGHT = Object.values(LANE).reduce((a, b) => a + b, 0) + 48;
 
@@ -97,7 +97,10 @@ export function TimelinePane(props: PaneProps) {
 
   const { placed, total } = useMemo(() => layout(timeline), [timeline]);
   const cues = useMemo(() => placedCues(timeline, placed), [timeline, placed]);
-  const texts = useMemo(() => placedTexts(timeline, placed), [timeline, placed]);
+  const allTexts = useMemo(() => placedTexts(timeline, placed), [timeline, placed]);
+  // Photo credits get their own lane under the titles.
+  const texts = allTexts.filter((x) => x.kind !== "credit");
+  const credits = allTexts.filter((x) => x.kind === "credit");
   const width = Math.max(total * pps + GUTTER, 600);
 
   const timeAt = (clientX: number) => {
@@ -327,6 +330,31 @@ export function TimelinePane(props: PaneProps) {
       : null;
 
   const laneLabel = "sticky left-0 z-20 flex items-center justify-center bg-zinc-50 dark:bg-[#09090b] text-zinc-400 dark:text-zinc-500";
+  const TEXT_TONE = {
+    fuchsia: { box: "top-1 bottom-1 leading-[22px] bg-fuchsia-500/15", on: "ring-2 ring-fuchsia-500", off: "ring-1 ring-fuchsia-500/30", grip: "hover:bg-fuchsia-500/60" },
+    amber: { box: "top-0.5 bottom-0.5 leading-[20px] bg-amber-500/15", on: "ring-2 ring-amber-500", off: "ring-1 ring-amber-500/30", grip: "hover:bg-amber-500/60" },
+  };
+  const textBlock = (x: PlacedText, tone: keyof typeof TEXT_TONE) => {
+    const c = TEXT_TONE[tone];
+    const selected = selection?.type === "text" && selection.id === x.id;
+    return (
+      <div
+        key={x.id}
+        onPointerDown={(e) => onTextDown(e, x, "move")}
+        onContextMenu={(e) => {
+          onSelect({ type: "text", id: x.id });
+          props.onTextMenu(e, x);
+        }}
+        className={`absolute ${c.box} rounded-md px-1.5 text-[11px] truncate cursor-grab text-zinc-800 dark:text-zinc-100 ${selected ? c.on : c.off}`}
+        style={{ left: x.globalStart * pps, width: Math.max(6, (x.globalEnd - x.globalStart) * pps - 1) }}
+      >
+        <span className="font-semibold">{x.title.text}</span>
+        {x.subtitle.text && <span className="opacity-70"> · {x.subtitle.text}</span>}
+        <div onPointerDown={(e) => onTextDown(e, x, "start")} className={`absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize ${c.grip}`} />
+        <div onPointerDown={(e) => onTextDown(e, x, "end")} className={`absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize ${c.grip}`} />
+      </div>
+    );
+  };
 
   return (
     <div
@@ -455,29 +483,23 @@ export function TimelinePane(props: PaneProps) {
             <Type className="w-3.5 h-3.5" />
           </div>
           <div className="relative flex-1" data-lane="text">
-            {texts.map((x) => {
-              const selected = selection?.type === "text" && selection.id === x.id;
-              return (
-                <div
-                  key={x.id}
-                  onPointerDown={(e) => onTextDown(e, x, "move")}
-                  onContextMenu={(e) => {
-                    onSelect({ type: "text", id: x.id });
-                    props.onTextMenu(e, x);
-                  }}
-                  className={`absolute top-1 bottom-1 rounded-md px-1.5 text-[11px] leading-[22px] truncate cursor-grab bg-fuchsia-500/15 text-zinc-800 dark:text-zinc-100 ${
-                    selected ? "ring-2 ring-fuchsia-500" : "ring-1 ring-fuchsia-500/30"
-                  }`}
-                  style={{ left: x.globalStart * pps, width: Math.max(6, (x.globalEnd - x.globalStart) * pps - 1) }}
-                >
-                  <span className="font-semibold">{x.title.text}</span>
-                  {x.subtitle.text && <span className="opacity-70"> · {x.subtitle.text}</span>}
-                  <div onPointerDown={(e) => onTextDown(e, x, "start")} className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-fuchsia-500/60" />
-                  <div onPointerDown={(e) => onTextDown(e, x, "end")} className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-fuchsia-500/60" />
-                </div>
-              );
-            })}
+            {texts.map((x) => textBlock(x, "fuchsia"))}
+
             {!texts.length && <div className="absolute inset-0 flex items-center px-3 text-[12px] text-zinc-400 pointer-events-none">{t`Double-click to add a title`}</div>}
+          </div>
+        </div>
+
+        <div className="relative flex border-b border-zinc-200/70 dark:border-white/5" style={{ height: LANE.credit }} data-row>
+          <div className={laneLabel} style={{ width: LABEL_W }} title={t`Photo credits`}>
+            <Info className="w-3.5 h-3.5" />
+          </div>
+          <div className="relative flex-1" data-lane="credit">
+            {credits.map((x) => textBlock(x, "amber"))}
+            {!credits.length && (
+              <div className="absolute inset-0 flex items-center px-3 text-[11px] text-zinc-400 pointer-events-none">
+                {t`Photo credits typed in the stop editor appear here after Generate`}
+              </div>
+            )}
           </div>
         </div>
 

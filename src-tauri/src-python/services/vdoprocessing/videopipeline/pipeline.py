@@ -321,6 +321,7 @@ def run_full_pipeline(
         intro_text=intro_text_items(str(config_file_path), duration_sec=intro_seconds, cue_times=intro_cues) if intro_path else None,
         outro_text=outro_text_item(str(config_file_path)) if outro_path else None,
         place_label_look=job_config.get("settings", {}).get("place_label_look"),
+        photo_credit_look=job_config.get("settings", {}).get("photo_credit_look"),
         overview_voice_start=voice["voice_start"],
         intro_audio_path=(voice["intro_voice"] or {}).get("audio_path"),
         intro_subtitle_path=intro_subtitle_path if intro_path else None,

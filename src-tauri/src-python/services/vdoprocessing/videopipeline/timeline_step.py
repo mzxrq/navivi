@@ -147,6 +147,7 @@ def build_timeline(
     intro_text: Optional[Union[dict, list]] = None,
     outro_text: Optional[dict] = None,
     place_label_look: Optional[dict] = None,
+    photo_credit_look: Optional[dict] = None,
     overview_voice_start: Optional[float] = None,
     intro_audio_path: Optional[str] = None,
     intro_subtitle_path: Optional[str] = None,
@@ -423,6 +424,11 @@ def build_timeline(
             place = unburned_place_label(source_or_name)
             if place:
                 clip_texts.append({"start": 0.0, "end": round(length, 3), **place_text_item(place, place_label_look)})
+            from services.vdoprocessing.photo_credit import credit_items
+
+            match = _ATTRACTION_RE.search(source_name)
+            if match and int(match.group(1)) < len(run_waypoints):
+                clip_texts.extend(credit_items(run_waypoints[int(match.group(1))], length, photo_credit_look))
         all_texts.extend(
             {**x, "start": round(clip_start + x["start"], 3), "end": round(clip_start + x["end"], 3)}
             for x in clip_texts

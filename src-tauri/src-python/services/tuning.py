@@ -1239,6 +1239,12 @@ OUTRO_ROUTE_NAME_FONT_SIZE = 24
 OUTRO_NAME_BREAK_BEFORE = " （(・「"
 OUTRO_NAME_BREAK_AFTER = " ）)・」"
 OUTRO_ROUTE_FROM_FONT_SIZE = 15
+# A photo's credit over its attraction clip (photo_credit.py): a small dark box in a bottom corner, 1080p px.
+PHOTO_CREDIT_PREFIX = "ⓘ "
+PHOTO_CREDIT_FONT_PX = 26
+PHOTO_CREDIT_PADDING_PX = 8
+PHOTO_CREDIT_MARGIN_PX = 24
+PHOTO_CREDIT_BOX_OPACITY = 0.6
 OUTRO_ROUTE_DISTANCE_FONT_SIZE = 22
 # The route page's title + subtitle use the intro's text and styles at this fraction of its size.
 OUTRO_HEADING_SCALE = 0.7

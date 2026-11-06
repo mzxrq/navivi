@@ -78,7 +78,7 @@ export interface TextClip {
   animation?: TextAnimation; // absent = "pop"
   wipe_out?: number; // seconds at its end in which the block (box + lines) wipes away top -> bottom
   // What made it: the intro's or outro's title, an attraction's place name, or added by hand.
-  kind?: "intro" | "outro" | "place";
+  kind?: "intro" | "outro" | "place" | "credit";
 }
 
 export type TextAnimation = "pop" | "fade" | "none";

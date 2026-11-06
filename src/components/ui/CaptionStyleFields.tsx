@@ -127,7 +127,7 @@ export function CaptionStyleFields({
       )}
       {row("color", t`Text colour`, <ColorPicker label={t`Text colour`} value={style.color} onChange={(color) => onChange({ color })} />)}
       {caption && row("box", t`Background box`, <Switch checked={style.background} onChange={(v) => onChange({ background: v })} label={t`Background box`} />)}
-      {caption && style.background ? (
+      {style.background ? (
         <>
           {row(
             "box-color",
@@ -142,14 +142,24 @@ export function CaptionStyleFields({
             </div>,
             t`Percent`,
           )}
-          {row(
-            "box-radius",
-            t`Corner radius`,
-            <div className="w-24">
-              <IntInput value={style.background_radius} min={0} max={100} onCommit={(v) => onChange({ background_radius: v })} />
-            </div>,
-            t`Size in pixels on a 1080p frame; 0 is square`,
-          )}
+          {caption
+            ? row(
+                "box-radius",
+                t`Corner radius`,
+                <div className="w-24">
+                  <IntInput value={style.background_radius} min={0} max={100} onCommit={(v) => onChange({ background_radius: v })} />
+                </div>,
+                t`Size in pixels on a 1080p frame; 0 is square`,
+              )
+            : // A boxed title (a photo credit): the export pads its square box by the outline width.
+              row(
+                "box-padding",
+                t`Box padding`,
+                <div className="w-24">
+                  <IntInput value={style.outline_width} min={0} max={40} onCommit={(v) => onChange({ outline_width: v })} />
+                </div>,
+                t`Size in pixels on a 1080p frame`,
+              )}
         </>
       ) : (
         row(

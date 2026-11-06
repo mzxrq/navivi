@@ -6,6 +6,17 @@ export const MAX_PHOTOS_PER_STOP = 3;
 // The short form for under a photo; the file name goes in the tooltip.
 export const shortCredit = (c: PhotoCredit) => [c.author || undefined, c.license].filter(Boolean).join(" · ");
 
+// What the video shows over the photo: the typed credit, else the found photo's author and license (photo_credit.py).
+export const videoCredit = (c: PhotoCredit | undefined) => (c ? c.text?.trim() || shortCredit(c) : "");
+
+/** `credits` with photo `path`'s credit changed; a hand-typed one (no source page) that ends up empty is dropped. */
+export function withCredit(credits: Record<string, PhotoCredit> | undefined, path: string, patch: Partial<PhotoCredit>): Record<string, PhotoCredit> | undefined {
+  const next = { title: "", author: "", license: "", url: "", ...credits?.[path], ...patch };
+  const out = { ...credits, [path]: next };
+  if (!next.url && !next.text?.trim()) delete out[path];
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export const creditLine = (c: PhotoCredit) => [c.author || undefined, c.license, c.title.replace(/^File:/i, "")].filter(Boolean).join(" · ");
 
 // Photos found online go into the empty slots of a stop and never replace one the user chose. `null` when the stop is full.
@@ -45,7 +56,7 @@ export function collectCredits(waypoints: Waypoint[]): string[] {
     if (wp.skipAssetGeneration || (wp.videos?.length ?? 0) > 0) continue;
     for (const image of wp.images ?? []) {
       const credit = wp.imageCredits?.[image];
-      if (credit) lines.add(creditLine(credit));
+      if (credit) lines.add(credit.text?.trim() || creditLine(credit));
     }
   }
   return [...lines];

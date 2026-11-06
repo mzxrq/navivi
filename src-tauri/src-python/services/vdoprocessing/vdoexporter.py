@@ -256,8 +256,18 @@ def write_caption_ass(
             position=str(item.get("position") or "middle"),
             margins=tuple(_line_margin(line) for line in (kicker, title, subtitle)),
         ):
-            # Layer 1: above captions. Every look is in the event's own tags.
-            events.append(f"Dialogue: 1,{_ass_timestamp(a)},{_ass_timestamp(b)},Text,,0,0,0,,{_wipe_tag(item, a, play_w)}{text}")
+            # Layer 1: above captions. Every look is in the event's own tags. A title alone with a background
+            # (a photo credit) sits in a box: the TextBox style's opaque border, coloured by \3c, padded by \bord.
+            boxed = title_style.background and not sub_text.strip() and not kicker_text.strip()
+            if boxed:
+                from services.localization.text_style import _bgr
+
+                alpha = 255 - int(round(title_style.background_opacity * 255))
+                text = text.replace("}", f"\\3c&H{_bgr(title_style.background_color)}&\\3a&H{alpha:02X}&}}", 1)
+            events.append(
+                f"Dialogue: 1,{_ass_timestamp(a)},{_ass_timestamp(b)},{'TextBox' if boxed else 'Text'},,0,0,0,,"
+                f"{_wipe_tag(item, a, play_w)}{text}"
+            )
     path.write_text(
         "[Script Info]\nScriptType: v4.00+\nWrapStyle: 0\nScaledBorderAndShadow: yes\n"
         # 1080 lines tall, as wide as the frame's aspect, so style px read as 1080p px.
@@ -268,6 +278,7 @@ def write_caption_ass(
         "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
         + "".join(s.to_ass_style_line(n, drawn) + "\n" for (s, drawn), n in styles.items())
         + "Style: Text,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n"
+        + "Style: TextBox,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,3,0,0,5,0,0,0,1\n"
         + "\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
         + "".join(e + "\n" for e in events),
         encoding="utf-8",

@@ -400,6 +400,7 @@ function TextLookSection({ text, timeline, commit }: { text: TextClip; timeline:
   const applyToAll = () => {
     const look: Partial<TextClip> = {};
     for (const k of TEXT_LOOK_KEYS) (look as any)[k] = text[k];
+    if (text.kind === "credit") delete look.align;
     commit({
       ...timeline,
       texts: timeline.texts.map((x) =>
@@ -408,8 +409,8 @@ function TextLookSection({ text, timeline, commit }: { text: TextClip; timeline:
           : { ...x, ...look, title: { ...text.title, text: x.title.text }, subtitle: { ...text.subtitle, text: x.subtitle.text } },
       ),
     });
-    // Place names come from the pipeline: keep the look for its next run too.
-    if (text.kind === "place") {
+    // Place names and photo credits come from the pipeline: keep the look for its next run too.
+    if (text.kind === "place" || text.kind === "credit") {
       const saved: Record<string, unknown> = {};
       for (const which of ["title", "subtitle"] as const) {
         saved[`${which}_style`] = text[which].style;
@@ -418,7 +419,8 @@ function TextLookSection({ text, timeline, commit }: { text: TextClip; timeline:
         saved[`${which}_margin_top`] = text[which].margin_top;
       }
       for (const k of TEXT_LOOK_KEYS) saved[k] = text[k];
-      updateSettings({ place_label_look: JSON.parse(JSON.stringify(saved)) });
+      if (text.kind === "credit") delete saved.align; // each photo keeps its own corner
+      updateSettings({ [text.kind === "place" ? "place_label_look" : "photo_credit_look"]: JSON.parse(JSON.stringify(saved)) });
       setIsDirty(true);
     }
   };
@@ -461,15 +463,23 @@ function TextLookSection({ text, timeline, commit }: { text: TextClip; timeline:
           <IntInput value={text.margin_h ?? TEXT_DEFAULT_MARGIN} min={0} max={900} onCommit={(v) => patch({ margin_h: v })} />
         </Row>
       )}
-      {(peers.length > 0 || text.kind === "place") && (
+      {(peers.length > 0 || text.kind === "place" || text.kind === "credit") && (
         <>
           <button type="button" className={iconButton} onClick={applyToAll}>
-            {text.kind === "place" ? <Trans>Apply to all place names</Trans> : <Trans>Apply to all titles like this</Trans>}
+            {text.kind === "place" ? (
+              <Trans>Apply to all place names</Trans>
+            ) : text.kind === "credit" ? (
+              <Trans>Apply to all photo credits</Trans>
+            ) : (
+              <Trans>Apply to all titles like this</Trans>
+            )}
           </button>
           <p className="text-[11px] text-zinc-400">
             {text.kind === "place"
               ? t`Copies position and both lines' animation and style. Place names made later use it too.`
-              : t`Copies position and both lines' animation and style; the words stay.`}
+              : text.kind === "credit"
+                ? t`Copies size, box and distance from the edges; each keeps its own corner. Credits made later use it too.`
+                : t`Copies position and both lines' animation and style; the words stay.`}
           </p>
         </>
       )}

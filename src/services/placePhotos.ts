@@ -12,6 +12,8 @@ export interface PhotoCredit {
   author: string;
   license: string; // e.g. "CC BY-SA 4.0"
   url: string; // the file's page on Commons
+  text?: string; // the credit as typed in the stop editor; shown in the video over this photo
+  corner?: "left" | "right"; // which bottom corner of the video it sits in (right when unset)
 }
 
 export interface PhotoCandidate extends PhotoCredit {
