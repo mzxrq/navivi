@@ -65,3 +65,22 @@ def test_the_sub_course_clips_go_before_the_outro_with_its_title():
     assert out["texts"][0]["title"]["text"] == "Falls way" and out["texts"][0]["start"] == 20
     assert out["video_tracks"][2]["texts"][0]["animation"] == "none"
     assert out["total_duration_seconds"] == 38.0
+
+
+def test_the_sub_course_summary_counts_from_the_main_start():
+    import pandas as pd
+
+    from services.vdoprocessing.videopipeline.render_step import _sub_overview_frame
+
+    route = pd.DataFrame({"latitude": [0.0, 0.0, 0.0], "longitude": [0.0, 0.01, 0.02]})  # ~2.2 km, branch in the middle
+    sub = {
+        "track": [(0.0, 0.01), (0.01, 0.01)], "from_index": 1, "mode": "walking", "name": "Falls way",
+        "stops": [{"lat": 0.0, "lng": 0.01, "anchor": True}, {"lat": 0.01, "lng": 0.01}],
+    }
+    summary = {"total_distance_km": 2.2239, "total_duration_seconds": 2000.0}
+    extent = (-1000.0, 3000.0, -1000.0, 2000.0)
+    out = _sub_overview_frame(sub, route, [0, 1, 2], summary, {"walking": 4.0}, extent, 400, 300)
+    card = out["summary"]
+    assert abs(card["total_distance_km"] - 2.2239) < 0.01  # half the main course + the ~1.11 km sub course
+    assert abs(card["total_duration_seconds"] - (1000.0 + 1.1119 / 4.0 * 3600)) < 15
+    assert len(out["points"]) == 2 and out["stops"][1]["x"] == out["points"][1][0]

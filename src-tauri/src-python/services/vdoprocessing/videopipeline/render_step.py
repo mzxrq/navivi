@@ -226,7 +226,17 @@ def render_route_video(
     fetcher = MapFetcher(job_config=job_config_mgr or JobConfigManager(str(config_path)))
 
     purge_map_images_on_language_change(config_path.parent, project_config.get("map_language"))
-    bbox = overview_bounding_box(fetcher, route_df, project_config)
+    # The sub course plays after the main course in the same overview: the map is framed to hold both.
+    from services.config.sub_course import sub_course_overview
+
+    sub_overview = sub_course_overview(project_config, config_path.parent) if render_mode != "residential" else None
+    framed_df = route_df
+    if sub_overview:
+        import pandas as pd
+
+        lat, lon = zip(*sub_overview["track"])
+        framed_df = pd.concat([route_df[["latitude", "longitude"]], pd.DataFrame({"latitude": lat, "longitude": lon})])
+    bbox = overview_bounding_box(fetcher, framed_df, project_config)
 
     map_output_path, extent, (img_w, img_h) = fetcher.fetch_image(
         bounding_box=bbox, output_filename=map_output_path
@@ -525,6 +535,10 @@ def render_route_video(
         summary["total_duration_seconds"] = sum(mode_duration.values())
     if leg_stats:
         summary["leg_stats"] = leg_stats
+    if sub_overview:
+        animator.spatial_renderer.config["sub_course_overview"] = _sub_overview_frame(
+            sub_overview, route_df, wp_indices, summary, mode_speed_kmh, extent, img_w, img_h
+        )
 
     output_paths = animator.render(
         img_path=map_output_path,
@@ -582,3 +596,37 @@ def render_route_video(
             logger.warning("Step 4: Failed to write render manifest: %s", e)
 
     return output_paths
+
+def _sub_overview_frame(sub: dict, route_df, wp_indices: list, summary: dict, mode_speed_kmh: dict,
+                        extent, img_w: int, img_h: int) -> dict:
+    """The sub course on the overview's own image: its track and stops in pixels, plus its summary card's numbers:
+    the main course from its start to the branch stop, then the sub course (what someone taking it walks)."""
+    lat = np.array([p[0] for p in sub["track"]])
+    lon = np.array([p[1] for p in sub["track"]])
+    sub_km = float(np.nansum(GPSMath.haversine_vectorized(lat[:-1], lon[:-1], lat[1:], lon[1:])))
+    main_km, main_s = float(summary.get("total_distance_km") or 0.0), float(summary.get("total_duration_seconds") or 0.0)
+    branch = wp_indices[sub["from_index"]] if 0 <= sub["from_index"] < len(wp_indices) else 0
+    if branch > 0 and len(route_df) > 1:
+        m_lat, m_lon = route_df["latitude"].to_numpy()[: branch + 1], route_df["longitude"].to_numpy()[: branch + 1]
+        before_km = float(np.nansum(GPSMath.haversine_vectorized(m_lat[:-1], m_lon[:-1], m_lat[1:], m_lon[1:])))
+    else:
+        before_km = 0.0
+    before_s = main_s * before_km / main_km if main_km > 0 else 0.0
+    speed = mode_speed_kmh.get(sub["mode"]) or mode_speed_kmh.get("walking") or 4.0
+    sub_s = sub_km / speed * _SECONDS_PER_HOUR
+    stop_px = _project_route_to_pixels(
+        np.array([s["lat"] for s in sub["stops"]], dtype=float), np.array([s["lng"] for s in sub["stops"]], dtype=float),
+        extent, img_w, img_h,
+    )
+    return {
+        "points": [tuple(map(int, p)) for p in _project_route_to_pixels(lat, lon, extent, img_w, img_h)],
+        "stops": [{**s, "x": int(p[0]), "y": int(p[1])} for s, p in zip(sub["stops"], stop_px)],
+        "mode": sub["mode"],
+        "name": sub["name"],
+        "summary": {
+            "total_distance_km": before_km + sub_km,
+            "total_duration_seconds": before_s + sub_s,
+            "mode_breakdown": {sub["mode"]: before_km + sub_km},
+            "mode_duration": {sub["mode"]: before_s + sub_s},
+        },
+    }
