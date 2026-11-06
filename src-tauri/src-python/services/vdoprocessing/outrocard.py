@@ -61,6 +61,69 @@ def _truncate_to_width(
     return (truncated + ellipsis) if truncated else ellipsis
 
 
+def _word_edges(text: str) -> List[int]:
+    """Where one word ends and the next starts (葛城|一言主|神社), so a wrapped name never leaves one character alone."""
+    from services.localization.japanese_words import _tagger
+
+    tagger = _tagger()
+    if tagger is None:
+        return []
+    edges, pos = [], 0
+    for token in tagger(text):
+        at = text.find(token.surface, pos)
+        if at < 0:
+            continue
+        pos = at + len(token.surface)
+        if 0 < pos < len(text) and not (text[pos - 1].isascii() and text[pos - 1].isalpha() and text[pos].isascii() and text[pos].isalpha()):
+            edges.append(pos)
+    return edges
+
+
+def _wrap_at(draw: ImageDraw.ImageDraw, text: str, breaks: List[int], font: FreeTypeFont, max_width: float) -> List[str]:
+    """Greedy wrap: each line runs to the last break that still fits. [] when a piece is too wide alone."""
+    lines, start, last = [], 0, None
+    for i in breaks + [len(text)]:
+        if draw.textlength(text[start:i].strip(), font=font) <= max_width:
+            last = i
+            continue
+        if last is None:
+            return []
+        lines.append(text[start:last].strip())
+        start, last = last, (i if draw.textlength(text[last:i].strip(), font=font) <= max_width else None)
+        if last is None:
+            return []
+    return lines + [text[start:].strip()]
+
+
+def _name_lines(
+    draw: ImageDraw.ImageDraw, name: str, font_candidates, size: int, min_size: int, max_width: float
+) -> Tuple[List[str], FreeTypeFont, int]:
+    """A card's name on one line, else two split at a space or bracket, else between words, shrinking toward
+    `min_size` until a split fits; else three lines wrapped at those breaks; at `min_size` it splits where the line
+    fills and cuts the rest with "…"."""
+    font = _load_font(font_candidates, size)
+    if draw.textlength(name, font=font) <= max_width:
+        return [name], font, size
+    marks = [i for i in range(1, len(name)) if name[i] in tuning.OUTRO_NAME_BREAK_BEFORE or name[i - 1] in tuning.OUTRO_NAME_BREAK_AFTER]
+    breaks = sorted(set(marks) | set(_word_edges(name)))
+    sizes = range(size, min_size - 1, -1)
+    for s in sizes:
+        font = _load_font(font_candidates, s)
+        fits = lambda a: draw.textlength(a, font=font) <= max_width
+        for edges in (marks, breaks):
+            splits = sorted((abs(len(name) - 2 * i), name[:i].rstrip(), name[i:].lstrip()) for i in edges)
+            splits = [p for p in splits if p[1] and p[2] and fits(p[1]) and fits(p[2])]
+            if splits:
+                return [splits[0][1], splits[0][2]], font, s
+    for s in sizes:
+        font = _load_font(font_candidates, s)
+        lines = _wrap_at(draw, name, breaks, font, max_width)
+        if lines and len(lines) <= 3:
+            return lines, font, s
+    cut = max(i for i in range(1, len(name) + 1) if draw.textlength(name[:i], font=font) <= max_width or i == 1)
+    return [name[:cut], _truncate_to_width(draw, name[cut:].lstrip(), font, max_width)], font, min_size
+
+
 def _center_text(
     draw: ImageDraw.ImageDraw, text: str, font: FreeTypeFont, center_x: float, y: float, fill
 ) -> None:
@@ -636,7 +699,6 @@ def _build_route_page(
     draw = ImageDraw.Draw(page)
     if header_color:
         draw.rectangle([0, 0, width, panel_top - px(10)], fill=header_color)
-    name_font = _load_font(bold, px(tuning.OUTRO_ROUTE_NAME_FONT_SIZE))
     from_font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_REGULAR, px(tuning.OUTRO_ROUTE_FROM_FONT_SIZE))
     chip_font = _load_font(bold, px(tuning.OUTRO_LEG_FONT_SIZE))
     badge_font = _load_font(bold, px(15))
@@ -736,24 +798,20 @@ def _build_route_page(
         # Left: the destination name over where the leg started, centred on the card.
         text_x = thumb_x + thumb_w + px(16)
         text_w = divider_x - px(14) - text_x
-        font, size = name_font, px(tuning.OUTRO_ROUTE_NAME_FONT_SIZE)
-        while draw.textlength(leg["to"], font=font) > text_w and size > px(16):
-            size -= 1
-            font = _load_font(bold, size)
+        lines, font, size = _name_lines(draw, leg["to"], bold, px(tuning.OUTRO_ROUTE_NAME_FONT_SIZE), px(16), text_w)
+        line_h = size + px(4)
         from_size = px(tuning.OUTRO_ROUTE_FROM_FONT_SIZE)
-        block = size + px(10) + from_size
+        block = len(lines) * line_h - px(4) + px(10) + from_size
         name_y = top + (row_h - block) / 2 - px(2)
-        draw.text(
-            (text_x, name_y), _truncate_to_width(draw, leg["to"], font, text_w),
-            font=font, fill=tuning.OUTRO_TITLE_COLOR,
-        )
+        for n, line in enumerate(lines):
+            draw.text((text_x, name_y + n * line_h), line, font=font, fill=tuning.OUTRO_TITLE_COLOR)
         labels = video_text.current_labels()
         origin = _truncate_to_width(
             draw, labels["overview_start"] if start_card else labels["outro_route_from"].format(name=leg["from"]),
             from_font, text_w,
         )
         draw.text(
-            (text_x, name_y + size + px(10)), origin, font=from_font, fill=tuning.OUTRO_SUBTITLE_COLOR,
+            (text_x, name_y + block - from_size), origin, font=from_font, fill=tuning.OUTRO_SUBTITLE_COLOR,
         )
         if start_card:
             continue
@@ -825,18 +883,16 @@ def _draw_stopby_card(
 
     text_x = x + pad + thumb_w + px(16)
     text_w = x + card_w - px(18) - text_x
-    font, size = _load_font(bold, name_size), name_size
-    while draw.textlength(name, font=font) > text_w and size > px(16):
-        size -= 1
-        font = _load_font(bold, size)
-    block = size + (px(10) + fact_size if fact else 0)
+    lines, font, size = _name_lines(draw, name, bold, name_size, px(16), text_w)
+    line_h = size + px(4)
+    names_h = len(lines) * line_h - px(4)
+    block = names_h + (px(10) + fact_size if fact else 0)
     ty = y + (row_h - block) / 2 - px(2)
-    draw.text(
-        (text_x, ty), _truncate_to_width(draw, name, font, text_w), font=font, fill=tuning.OUTRO_TITLE_COLOR,
-    )
+    for n, line in enumerate(lines):
+        draw.text((text_x, ty + n * line_h), line, font=font, fill=tuning.OUTRO_TITLE_COLOR)
     if fact:
         draw.text(
-            (text_x, ty + size + px(10)), _truncate_to_width(draw, fact, fact_font, text_w),
+            (text_x, ty + names_h + px(10)), _truncate_to_width(draw, fact, fact_font, text_w),
             font=fact_font, fill=muted,
         )
 

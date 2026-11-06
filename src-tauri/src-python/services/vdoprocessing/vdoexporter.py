@@ -64,6 +64,11 @@ DEFAULT_CAPTION_STYLE = TextStyle(
 EDITOR_SUBTITLE_STYLE = DEFAULT_CAPTION_STYLE.to_subtitle_style()
 
 
+def item_animation(item: dict) -> Optional[str]:
+    """A text item's own animation; the outro's title is still unless set (mirrors itemAnimation in textStyle.ts)."""
+    return item.get("animation") or ("none" if item.get("kind") == "outro" else None)
+
+
 def caption_subtitle_style(raw: Optional[dict], check_font: bool = True) -> SubtitleStyle:
     style = DEFAULT_CAPTION_STYLE.merged(raw)
     if check_font:
@@ -243,7 +248,7 @@ def write_caption_ass(
         for a, b, text in title_events(
             title_text, sub_text, float(item["start"]), float(item["end"]),
             title_style, sub_style, int(round(cx)), cy, align=align,
-            animation=item.get("animation"),
+            animation=item_animation(item),
             title_motion={"animation": title.get("animation"), "delay": title.get("delay")},
             subtitle_motion={"animation": subtitle.get("animation"), "delay": subtitle.get("delay")},
             kicker=kicker_text, kicker_style=kicker_style,

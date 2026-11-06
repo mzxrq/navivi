@@ -1235,6 +1235,9 @@ DEFAULT_OUTRO_ROUTE_INFO = True
 OUTRO_ROUTE_ROW_HEIGHT = 128
 OUTRO_ROUTE_ROW_GAP = 16
 OUTRO_ROUTE_NAME_FONT_SIZE = 24
+# A card name too long for one line wraps before / after one of these first, else between words.
+OUTRO_NAME_BREAK_BEFORE = " （(・「"
+OUTRO_NAME_BREAK_AFTER = " ）)・」"
 OUTRO_ROUTE_FROM_FONT_SIZE = 15
 OUTRO_ROUTE_DISTANCE_FONT_SIZE = 22
 # The route page's title + subtitle use the intro's text and styles at this fraction of its size.

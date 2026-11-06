@@ -46,6 +46,34 @@ class TestTruncateToWidth:
         assert result == "…"
 
 
+class TestNameLines:
+    def test_a_long_name_wraps_at_its_bracket_and_keeps_its_size(self):
+        draw = ImageDraw.Draw(Image.new("RGB", (10, 10)))
+        bold = outrocard._GraphicsEngineBase.FONT_CANDIDATES_BOLD
+        name = "葛城第二十二経塚（神福寺跡）"
+        width = draw.textlength("葛城第二十二経塚", font=outrocard._load_font(bold, 24)) + 2
+        lines, _, size = outrocard._name_lines(draw, name, bold, 24, 16, width)
+        assert lines == ["葛城第二十二経塚", "（神福寺跡）"] and size == 24
+        assert outrocard._name_lines(draw, "短い", bold, 24, 16, width)[0] == ["短い"]
+
+    def test_an_english_name_shrinks_rather_than_splitting_a_word(self):
+        draw = ImageDraw.Draw(Image.new("RGB", (10, 10)))
+        bold = outrocard._GraphicsEngineBase.FONT_CANDIDATES_BOLD
+        width = draw.textlength("Katsuragi Mik", font=outrocard._load_font(bold, 24))
+        lines, _, size = outrocard._name_lines(draw, "Katsuragi Mikumari Shrine", bold, 24, 16, width)
+        assert lines == ["Katsuragi", "Mikumari Shrine"] and size < 24
+        width = draw.textlength("Hitokotonushi", font=outrocard._load_font(bold, 18)) + 2
+        lines = outrocard._name_lines(draw, "Katsuragi Hitokotonushi Shrine", bold, 24, 16, width)[0]
+        assert lines == ["Katsuragi", "Hitokotonushi", "Shrine"]
+
+    def test_without_a_bracket_it_wraps_between_words(self):
+        draw = ImageDraw.Draw(Image.new("RGB", (10, 10)))
+        bold = outrocard._GraphicsEngineBase.FONT_CANDIDATES_BOLD
+        width = draw.textlength("葛城一言主神", font=outrocard._load_font(bold, 24)) + 2
+        lines = outrocard._name_lines(draw, "葛城一言主神社", bold, 24, 16, width)[0]
+        assert len(lines) == 2 and all(len(line) > 1 for line in lines) and "".join(lines) == "葛城一言主神社"
+
+
 class TestCenterText:
     def test_draws_text_centered_on_x(self):
         img = Image.new("RGB", (200, 50), (0, 0, 0))
@@ -351,6 +379,14 @@ class TestOutroTitleAsText:
         assert item["kind"] == "outro" and item["position"] == "top"
         assert item["title"]["text"] == "My Trip" and item["title"]["style"]["color"] == "#ff0000"
         assert item["title"]["style"]["font_size"] > 0 and item["trim_end"] >= 0
+        assert item["animation"] == "none"
+
+    def test_an_older_outro_item_without_an_animation_is_still(self):
+        from services.vdoprocessing.vdoexporter import item_animation
+
+        assert item_animation({"kind": "outro"}) == "none"
+        assert item_animation({"kind": "outro", "animation": "fade"}) == "fade"
+        assert item_animation({"kind": "intro"}) is None
 
     def test_a_grid_outro_has_no_text_item(self, tmp_path):
         import json

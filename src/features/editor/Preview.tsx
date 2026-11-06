@@ -15,6 +15,7 @@ import {
   textBlockCenterY,
   lineFrame,
   lineMotion,
+  itemAnimation,
   stackedLineYs,
   textStyleToCss,
   applyLineMargins,
@@ -134,8 +135,8 @@ function TextOverlay({ texts }: { texts: PlacedText[] }) {
         const t = time - x.globalStart;
         const dur = x.globalEnd - x.globalStart;
         const paired = hasTitle && hasSub;
-        const tm = lineMotion("title", x.title.animation, x.title.delay, x.animation, dur, paired);
-        const sm = lineMotion("subtitle", x.subtitle.animation, x.subtitle.delay, x.animation, dur, paired);
+        const tm = lineMotion("title", x.title.animation, x.title.delay, itemAnimation(x), dur, paired);
+        const sm = lineMotion("subtitle", x.subtitle.animation, x.subtitle.delay, itemAnimation(x), dur, paired);
         const tf = lineFrame(t, dur, tm.animation, tm.delay);
         const sf = lineFrame(t, dur, sm.animation, sm.delay);
         // Same anchors as the export: the block's left/centre/right edge, vertically centred.
@@ -149,7 +150,7 @@ function TextOverlay({ texts }: { texts: PlacedText[] }) {
         const shift = x.align === "left" ? "translate(0, -50%)" : x.align === "right" ? "translate(0, -50%)" : "translate(-50%, -50%)";
         const kicker = { ...DEFAULT_TEXT_KICKER_STYLE, ...(x.kicker?.style ?? {}) };
         const hasKicker = !!x.kicker?.text.trim();
-        const km = lineMotion("kicker", x.kicker?.animation, x.kicker?.delay, x.animation, dur, paired);
+        const km = lineMotion("kicker", x.kicker?.animation, x.kicker?.delay, itemAnimation(x), dur, paired);
         const kf = lineFrame(t, dur, km.animation, km.delay);
         const cy = textBlockCenterY(x.position, x.margin_v, title.font_size, sub.font_size, hasTitle, hasSub, hasKicker ? kicker.font_size : 0);
         const { kickerY, titleY, subY } = applyLineMargins(

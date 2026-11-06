@@ -29,6 +29,7 @@ import {
   DEFAULT_TEXT_TITLE_STYLE,
   LineAnimation,
   lineMotion,
+  itemAnimation,
   resolveCaptionStyle,
   TEXT_DEFAULT_MARGIN,
 } from "../../utils/textStyle";
@@ -596,7 +597,7 @@ export function Inspector(p: InspectorProps) {
             title={t`Location line`}
             line={text.kicker ?? { text: "" }}
             defaults={DEFAULT_TEXT_KICKER_STYLE}
-            motion={lineMotion("kicker", text.kicker?.animation, text.kicker?.delay, text.animation, text.globalEnd - text.globalStart, paired)}
+            motion={lineMotion("kicker", text.kicker?.animation, text.kicker?.delay, itemAnimation(text), text.globalEnd - text.globalStart, paired)}
             onChange={(kicker) => patchText({ kicker })}
           />
         )}
@@ -604,14 +605,14 @@ export function Inspector(p: InspectorProps) {
           title={t`Title`}
           line={text.title}
           defaults={DEFAULT_TEXT_TITLE_STYLE}
-          motion={lineMotion("title", text.title.animation, text.title.delay, text.animation, text.globalEnd - text.globalStart, paired)}
+          motion={lineMotion("title", text.title.animation, text.title.delay, itemAnimation(text), text.globalEnd - text.globalStart, paired)}
           onChange={(title) => patchText({ title })}
         />
         <TextLineSection
           title={t`Subtitle`}
           line={text.subtitle}
           defaults={DEFAULT_TEXT_SUBTITLE_STYLE}
-          motion={lineMotion("subtitle", text.subtitle.animation, text.subtitle.delay, text.animation, text.globalEnd - text.globalStart, paired)}
+          motion={lineMotion("subtitle", text.subtitle.animation, text.subtitle.delay, itemAnimation(text), text.globalEnd - text.globalStart, paired)}
           onChange={(subtitle) => patchText({ subtitle })}
         />
         <div className="flex items-center gap-1 px-3 py-3">

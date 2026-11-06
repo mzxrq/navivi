@@ -261,6 +261,9 @@ export function textBlockCenterY(
 export type LineAnimation = "pop" | "rise" | "fade" | "none";
 const LINE_ANIMATIONS: LineAnimation[] = ["pop", "rise", "fade", "none"];
 
+/** A text item's own animation; the outro's title is still unless set (mirrors item_animation in vdoexporter.py). */
+export const itemAnimation = (x: { animation?: string; kind?: string }) => x.animation ?? (x.kind === "outro" ? "none" : undefined);
+
 /** A line's (animation, delay); mirrors line_motion in introclip.py. */
 export function lineMotion(
   which: "title" | "subtitle" | "kicker",

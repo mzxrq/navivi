@@ -64,7 +64,8 @@ def outro_text_item(project_config_path: str) -> Optional[dict]:
         return {"text": h[which], "style": style}
 
     item = {
-        "kind": "outro", "position": "top", "margin_v": tuning.OUTRO_TEXT_MARGIN_TOP,
+        # Still: without its own animation a line takes the intro's pop/rise (line_motion).
+        "kind": "outro", "animation": "none", "position": "top", "margin_v": tuning.OUTRO_TEXT_MARGIN_TOP,
         "title": line("title", DEFAULT_TITLE_STYLE), "subtitle": line("subtitle", DEFAULT_SUBTITLE_STYLE),
         "trim_end": end_card_seconds(),
     }
