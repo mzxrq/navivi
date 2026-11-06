@@ -571,15 +571,21 @@ fn export_blocking(app: &tauri::AppHandle, project_dir: &str) -> Result<String, 
 }
 
 #[tauri::command]
-async fn copy_asset_file(source_path: String, target_dir: String) -> Result<String, String> {
+async fn copy_asset_file(source_path: String, target_dir: String, target_name: Option<String>) -> Result<String, String> {
     let source = Path::new(&source_path);
     if source.file_name().is_none() {
         return Err("Invalid file name".into());
     }
+    // A chosen name (e.g. "place-1-2.jpg") must be a bare file name, never a path out of target_dir.
+    let name = match target_name.as_deref() {
+        Some(n) if !n.is_empty() && Path::new(n).file_name().map(|f| f == n).unwrap_or(false) => std::ffi::OsString::from(n),
+        Some(_) => return Err("Invalid target name".into()),
+        None => source.file_name().unwrap_or_default().to_os_string(),
+    };
     if let Err(e) = fs::create_dir_all(&target_dir) {
         return Err(format!("Failed to create directory: {}", e));
     }
-    let (target, already_there) = asset_target(source, Path::new(&target_dir));
+    let (target, already_there) = asset_target(source, Path::new(&target_dir), &name);
     if !already_there {
         fs::copy(source, &target).map_err(|e| format!("Failed to copy file: {}", e))?;
     }
@@ -589,8 +595,7 @@ async fn copy_asset_file(source_path: String, target_dir: String) -> Result<Stri
 /// Where an imported file goes: the file itself when it is already there (the same file, or one with the same
 /// bytes under that name), else its name, or "name (2).ext", "name (3).ext"... when another file has it. Two
 /// different DSC_0001.JPG imports used to overwrite each other, swapping one stop's photo for another's.
-fn asset_target(source: &Path, dir: &Path) -> (PathBuf, bool) {
-    let name = source.file_name().unwrap_or_default();
+fn asset_target(source: &Path, dir: &Path, name: &std::ffi::OsStr) -> (PathBuf, bool) {
     let stem = Path::new(name).file_stem().unwrap_or_default().to_string_lossy().to_string();
     let ext = Path::new(name).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
     let same_file = |candidate: &Path| {
@@ -627,6 +632,20 @@ fn same_bytes(a: &Path, b: &Path) -> std::io::Result<bool> {
         a.consume(n);
         b.consume(n);
     }
+}
+
+/// Where a downloaded file came from, as Windows noted it when the browser saved it (the file's Zone.Identifier
+/// stream, which copies keep): the page (ReferrerUrl) and the file's own address (HostUrl). Empty when unknown.
+#[tauri::command(async)]
+fn photo_origin(path: String) -> (Option<String>, Option<String>) {
+    let note = fs::read_to_string(format!("{path}:Zone.Identifier")).unwrap_or_default();
+    let field = |key: &str| {
+        note.lines()
+            .find_map(|l| l.trim().strip_prefix(key))
+            .map(|v| v.trim().to_string())
+            .filter(|v| v.starts_with("http"))
+    };
+    (field("ReferrerUrl="), field("HostUrl="))
 }
 
 #[tauri::command(async)]
@@ -784,6 +803,7 @@ pub fn run() {
             export_video,
             app_ready,
             copy_asset_file,
+            photo_origin,
             open_in_explorer,
             runtime::runtime_status,
             install_vc_runtime,
@@ -889,10 +909,22 @@ mod asset_tests {
         fs::write(card_a.join("GX01.MP4"), b"old clip, no stop uses it now").unwrap();
         fs::write(card_b.join("GX01.MP4"), b"new clip, same length as old!").unwrap();
 
-        assert_eq!(asset_target(&card_a.join("GX01.MP4"), &dir), (dir.join("GX01.MP4"), true));
+        let name = std::ffi::OsStr::new("GX01.MP4");
+        assert_eq!(asset_target(&card_a.join("GX01.MP4"), &dir, name), (dir.join("GX01.MP4"), true));
         // Same name and size, other bytes: never mistaken for the old clip.
-        assert_eq!(asset_target(&card_b.join("GX01.MP4"), &dir), (dir.join("GX01 (2).MP4"), false));
-        assert_eq!(asset_target(&dir.join("GX01.MP4"), &dir), (dir.join("GX01.MP4"), true));
+        assert_eq!(asset_target(&card_b.join("GX01.MP4"), &dir, name), (dir.join("GX01 (2).MP4"), false));
+        assert_eq!(asset_target(&dir.join("GX01.MP4"), &dir, name), (dir.join("GX01.MP4"), true));
+        // A chosen name: the copy takes it, and the same photo imported again reuses it.
+        // Windows' download note rides along with the file (NTFS stream) and says where it came from.
+        let photo = dir.join("Shrine-0-1.jpg");
+        fs::write(&photo, b"jpg").unwrap();
+        if fs::write(format!("{}:Zone.Identifier", photo.display()), "[ZoneTransfer]\r\nZoneId=3\r\nReferrerUrl=https://example.org/page\r\nHostUrl=https://example.org/a.jpg\r\n").is_ok() {
+            let origin = photo_origin(photo.display().to_string());
+            assert_eq!(origin, (Some("https://example.org/page".into()), Some("https://example.org/a.jpg".into())));
+        }
+        assert_eq!(photo_origin(card_b.join("GX01.MP4").display().to_string()), (None, None));
+        let named = std::ffi::OsStr::new("Shrine-1-1.MP4");
+        assert_eq!(asset_target(&card_a.join("GX01.MP4"), &dir, named), (dir.join("Shrine-1-1.MP4"), false));
         let _ = fs::remove_dir_all(&root);
     }
 }

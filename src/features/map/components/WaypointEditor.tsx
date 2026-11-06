@@ -52,7 +52,7 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { placeNameOf } from "../../../utils/placeName";
 import { downloadPhotos, findPlacePhotos } from "../../../services/placePhotos";
-import { MAX_PHOTOS_PER_STOP, creditLine, shortCredit, videoCredit, withCredit, withFoundPhotos } from "../../../utils/photoCredits";
+import { MAX_PHOTOS_PER_STOP, creditLine, photoSource, shortCredit, sourceHost, videoCredit, withCredit, withFoundPhotos } from "../../../utils/photoCredits";
 
 const MAX_IMAGES = MAX_PHOTOS_PER_STOP;
 
@@ -248,6 +248,23 @@ export function WaypointEditor({
     } finally {
       setFindingPhotos(false);
     }
+  };
+
+  // The page a downloaded photo came from (Windows notes it on the file), kept as the credit's link; the name is the user's to type.
+  const findSource = async (img: string) => {
+    const origin = await invoke<[string | null, string | null]>("photo_origin", { path: img }).catch(() => [null, null] as [null, null]);
+    const url = photoSource(origin);
+    if (url) {
+      // A starting credit to edit: the license is not on the file, so it is a guess to check on the page.
+      const text = wp.imageCredits?.[img]?.text?.trim() || `CC BY 4.0 · ${sourceHost(url)}`;
+      updateWaypoint(wp.id, { imageCredits: withCredit(wp.imageCredits, img, { url, text }) });
+      setIsDirty(true);
+      showToast(t`Found where this photo came from: ${sourceHost(url)}. Check its license on that page and edit the credit.`, "success");
+      return;
+    }
+    showToast(t`This photo doesn't say where it came from. Drop it into Google Lens to search for it.`, "info");
+    void invoke("open_in_explorer", { path: img }).catch(console.error);
+    void invoke("plugin:opener|open_url", { url: "https://lens.google.com/" }).catch(console.error);
   };
 
   const removeImage = (idx: number) => {
@@ -761,15 +778,25 @@ export function WaypointEditor({
                                   })}
                                 </div>
                               </div>
-                              {wp.imageCredits?.[img]?.url && (
+                              {wp.imageCredits?.[img]?.url ? (
                                 <button
                                   type="button"
                                   onClick={() => void invoke("plugin:opener|open_url", { url: wp.imageCredits![img].url }).catch(console.error)}
-                                  title={`${creditLine(wp.imageCredits[img])}
-${t`Open the photo's page on Wikimedia Commons`}`}
+                                  title={`${creditLine(wp.imageCredits[img]) || wp.imageCredits[img].url}
+${t`Open the page this photo came from`}`}
                                   className="block w-full text-left text-[10px] text-zinc-400 hover:text-navi truncate transition-colors"
                                 >
-                                  {shortCredit(wp.imageCredits[img])}
+                                  {shortCredit(wp.imageCredits[img]) || sourceHost(wp.imageCredits[img].url)}
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => void findSource(img)}
+                                  title={t`Look up where this photo was downloaded from and keep the link`}
+                                  className="flex items-center gap-1 text-[10px] text-zinc-400 hover:text-navi transition-colors"
+                                >
+                                  <Search className="w-3 h-3" />
+                                  <Trans>Find source</Trans>
                                 </button>
                               )}
                               <div>

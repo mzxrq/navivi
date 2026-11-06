@@ -9,7 +9,7 @@ import { routeCacheKey } from "../utils/routeCacheKey";
 import { stripApiKeys } from "../utils/apiKeys";
 import { mapboxTileLoader, segmentElevations } from "../utils/terrainElevation";
 import { pathProfile } from "../utils/legEstimate";
-import { importAssets } from "../utils/fileNames";
+import { importAssets, photoFileNames } from "../utils/fileNames";
 import { renameCredits } from "../utils/photoCredits";
 import { carryOverLooks, emptyTimeline, type ExportOptions, timelineFromEditorState, timelineFromPipeline, toManifest } from "../features/editor/model";
 import { i18n } from "@lingui/core";
@@ -220,7 +220,7 @@ export const saveProjectData = async (
   const gpxStr = gpxLines.join('\n');
   await writeTextFile(gpxPath, gpxStr);
 
-  const imageNames = await importAssets(imageAssetsDir, waypoints.flatMap((wp) => [...(wp.images ?? []), ...(wp.customMarker ? [wp.customMarker] : [])]));
+  const imageNames = await importAssets(imageAssetsDir, waypoints.flatMap((wp) => [...(wp.images ?? []), ...(wp.customMarker ? [wp.customMarker] : [])]), photoFileNames(waypoints));
   const videoNames = await importAssets(userVideoDir, waypoints.flatMap((wp) => wp.videos ?? []));
 
   const processedWaypoints = await Promise.all(

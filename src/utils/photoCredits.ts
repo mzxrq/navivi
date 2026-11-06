@@ -17,6 +17,30 @@ export function withCredit(credits: Record<string, PhotoCredit> | undefined, pat
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+// Sites a photo passes through without coming from: a chat or mail, a file converter, an AI image tool.
+const RELAY_HOSTS = /(^|\.)((chat|mail|drive)\.google\.com|(chat\.)?usercontent\.google\.com|googleusercontent\.com|convertio\.(co|me)|iloveimg\.com|firefly\.adobe\.com|discord(app)?\.com|line\.me|whatsapp\.com)$/i;
+
+/** The page a downloaded photo came from, from Rust `photo_origin` ([page, file] as Windows noted them): the page,
+ *  else the file's own address, skipping relays; null when neither tells. */
+export function photoSource([page, file]: [string | null, string | null]): string | null {
+  for (const url of [page, file]) {
+    try {
+      if (url && !RELAY_HOSTS.test(new URL(url).hostname)) return url;
+    } catch {
+      // not a URL
+    }
+  }
+  return null;
+}
+
+export const sourceHost = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+};
+
 export const creditLine = (c: PhotoCredit) => [c.author || undefined, c.license, c.title.replace(/^File:/i, "")].filter(Boolean).join(" · ");
 
 // Photos found online go into the empty slots of a stop and never replace one the user chose. `null` when the stop is full.
@@ -56,7 +80,8 @@ export function collectCredits(waypoints: Waypoint[]): string[] {
     if (wp.skipAssetGeneration || (wp.videos?.length ?? 0) > 0) continue;
     for (const image of wp.images ?? []) {
       const credit = wp.imageCredits?.[image];
-      if (credit) lines.add(credit.text?.trim() || creditLine(credit));
+      const line = credit && (credit.text?.trim() || creditLine(credit) || credit.url);
+      if (line) lines.add(line);
     }
   }
   return [...lines];
