@@ -86,17 +86,41 @@ def write_sub_config(main_config_path) -> Optional[Path]:
 
 def main_route_lonlat(job_config: dict) -> Optional[list]:
     """For a sub course's own config: the main course's track as [lon, lat] points (its raw_track.gpx); else None."""
-    import re
-
     main_dir = job_config.get("sub_course_of")
     if not main_dir:
         return None
+    return [[lon, lat] for lat, lon in _track_latlon(Path(main_dir) / "raw_track.gpx")] or None
+
+
+def _track_latlon(gpx_path: Path) -> list:
+    import re
+
     try:
-        text = (Path(main_dir) / "raw_track.gpx").read_text(encoding="utf-8")
+        text = gpx_path.read_text(encoding="utf-8")
     except OSError:
+        return []
+    return [(float(lat), float(lon)) for lat, lon in re.findall(r'<trkpt lat="([-\d.]+)" lon="([-\d.]+)"', text)]
+
+
+def sub_course_overview(job_config: dict, project_dir) -> Optional[dict]:
+    """What the main overview needs to play the sub course after the main course: its track [(lat, lon)], its
+    stops (anchors marked), the main stop it leaves from (`from_index`) and its title. None without one."""
+    sub = job_config.get("sub_course") or {}
+    stops = sub.get("waypoints") or []
+    gps = (job_config.get("source_files") or {}).get("sub_gps_route") or "raw_track_sub.gpx"
+    track = _track_latlon(Path(project_dir) / gps) if len(stops) > 1 else []
+    if len(track) < 2:
         return None
-    points = re.findall(r'<trkpt lat="([-\d.]+)" lon="([-\d.]+)"', text)
-    return [[float(lon), float(lat)] for lat, lon in points] or None
+    return {
+        "track": track,
+        "stops": [
+            {"lat": w.get("lat"), "lng": w.get("lng"), "label": w.get("label") or w.get("name") or "", "anchor": bool(w.get("branchOf"))}
+            for w in stops
+        ],
+        "from_index": int(sub.get("from_index", -1)),
+        "mode": stops[0].get("routeMode") or "walking",
+        "name": sub_course_name(job_config),
+    }
 
 
 def sub_course_name(job_config: dict) -> str:

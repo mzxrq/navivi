@@ -56,7 +56,7 @@ OVERVIEW_RENDER_VERSION = 12  # v12: the final stop sits on the route's last poi
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
 _OVERVIEW_CHECKPOINT_PARTS = (
     "render_version", "route_waypoints", "photos", "config.overview_cue_seconds", "config.overview_audio_seconds",
-    "job_config.map_language", "video_text",
+    "job_config.map_language", "video_text", "config.sub_course_overview",
 )
 # Config flags about the checkpoint itself, not the picture.
 _FINGERPRINT_SKIP_CONFIG = {"checkpoint_enabled", "overview_rerender"}
@@ -140,6 +140,55 @@ _MAX_STOPBY_BATCH_WAIT_SECONDS = 20.0
 
 
 class _OverviewRenderMixin:
+    def _render_sub_course_part(self, video, fps: int, clean_bg: np.ndarray, route_frame: np.ndarray) -> None:
+        """After the main course's summary: the main route stays, faded, the marker sets off again from the branch
+        stop along the sub course (config "sub_course_overview", render_step._sub_overview_frame), then its own
+        summary card (main start -> sub course end)."""
+        sub = self.config.get("sub_course_overview")
+        if not sub or len(sub.get("points") or []) < 2:
+            return
+        h, w = route_frame.shape[:2]
+        fade = tuning.SUB_COURSE_MAIN_FADE
+        base = cv2.addWeighted(route_frame, 1 - fade, cv2.resize(clean_bg, (w, h)), fade, 0)
+        color = tuning.SUB_COURSE_LINE_BGR
+        pts = np.asarray(sub["points"], dtype=float)
+        step = np.r_[0.0, np.cumsum(np.hypot(*np.diff(pts, axis=0).T))]
+        frames = max(2, int(tuning.SUB_COURSE_OVERVIEW_SECONDS * fps))
+        at = np.linspace(0.0, step[-1], frames)
+        path = [(int(x), int(y)) for x, y in zip(np.interp(at, step, pts[:, 0]), np.interp(at, step, pts[:, 1]))]
+        # Each stop's pin appears when the marker reaches it; anchors (main stops) are already on the map.
+        stops = [s for s in sub.get("stops") or [] if not s.get("anchor")]
+        reach = [int(np.argmin([(px - s["x"]) ** 2 + (py - s["y"]) ** 2 for px, py in path])) for s in stops]
+        title = sub.get("name") or ""
+        heading, prev = 0.0, None
+        for i, (cx, cy) in enumerate(path):
+            frame = base.copy()
+            self.graphics.draw_path(frame, path[: i + 1], [(sub.get("mode") or "walking", color)] * (i + 1))
+            for n, (s, r) in enumerate(zip(stops, reach), start=1):
+                if r <= i:
+                    self.graphics.draw_marker(frame, s["x"], s["y"], number=f"B{n}", color=color)
+            heading = self._smoothed_heading(heading, cx, cy, *(prev or (None, None)))
+            self.graphics.draw_transport_icon(frame, cx, cy, i, heading, mode=sub.get("mode") or "walking")
+            if title:
+                frame = self.graphics.render_top_banner(frame, title)
+            video.write(frame)
+            prev = (cx, cy)
+        end = frame
+        summary = sub.get("summary") or {}
+        card = self.graphics.render_summary_card(
+            distance_km=summary.get("total_distance_km", 0.0),
+            duration_seconds=summary.get("total_duration_seconds", 0.0),
+            mode_breakdown=summary.get("mode_breakdown"),
+            mode_duration=summary.get("mode_duration"),
+        )
+        final = self.graphics.composite_card_on_frame(end, card, alpha=1.0)
+        fade_frames = max(1, int(tuning.POPUP_FADE_SECONDS * fps))
+        for i in range(fade_frames):
+            video.write(cv2.addWeighted(final, (i + 1) / fade_frames, end, 1 - (i + 1) / fade_frames, 0))
+        for _ in range(int(tuning.SUB_COURSE_SUMMARY_HOLD_SECONDS * fps)):
+            video.write(final)
+        self.last_frame = final
+
     def render_overview(
         self,
         bg_path: str,
@@ -1150,6 +1199,8 @@ class _OverviewRenderMixin:
                 video.write(closed_frame)
             else:
                 video.write(self.last_frame)
+
+        self._render_sub_course_part(video, fps, current_bg, pre_popup_frame)
 
         hard_ended = False
         if stop_popup and self.config.get("enable_ending_highlight", True) and self.config.get("overview_style") != "course":

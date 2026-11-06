@@ -1243,6 +1243,12 @@ OUTRO_ROUTE_FROM_FONT_SIZE = 15
 SUB_COURSE_TITLE_SECONDS = 3.5
 # The main course drawn faint under a sub course leg (RGBA).
 SUB_COURSE_MAIN_LINE_COLOR = (150, 150, 150, 140)
+# Overview: after the main course's summary the sub course plays (overview._render_sub_course_part): its line in the
+# editor's sub course amber (BGR), the main route faded this much toward the bare map, the walk's length, the card's hold.
+SUB_COURSE_LINE_BGR = (11, 158, 245)
+SUB_COURSE_MAIN_FADE = 0.5
+SUB_COURSE_OVERVIEW_SECONDS = 8.0
+SUB_COURSE_SUMMARY_HOLD_SECONDS = 4.0
 OUTRO_ROUTE_DISTANCE_FONT_SIZE = 22
 # The route page's title + subtitle use the intro's text and styles at this fraction of its size.
 OUTRO_HEADING_SCALE = 0.7
