@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { inSubCourse, mainStops } from "../../../utils/courses";
 import {
   ChevronUp,
   ChevronDown,
@@ -147,8 +148,9 @@ export function WaypointEditor({
 
   const wpImages = wp.images || [];
   const imagePans = wp.imagePans || [];
-  const isStart = wpIndex === 0;
-  const isDest = wpIndex === waypoints.length - 1 && waypoints.length > 1;
+  const main = mainStops(waypoints);
+  const isStart = main[0]?.id === wpId;
+  const isDest = main.length > 1 && main[main.length - 1]?.id === wpId;
   const isEndpoint = isStart || isDest;
   const isStopBy = !!wp.isStopBy && !isEndpoint;
   const isLinked = !!wp.connectToRoute;
@@ -166,7 +168,7 @@ export function WaypointEditor({
   const visited = !isClosed && (!isStopBy || isLinked || settings.overview_style === "course");
   const hasAttractionVoice = !!wp.attractionNarration?.trim() && (visited || isClosed);
   const routeDirections = settings.overview_style === "course" && !!metadata.directory_path;
-  const canRegen = !!metadata.directory_path && !wp.skipAssetGeneration && !wp.isStub && !wp.isStreetView;
+  const canRegen = !!metadata.directory_path && !wp.skipAssetGeneration && !wp.isStub && !wp.isStreetView && !inSubCourse(wp);
 
   const regenerate = (kind: RegenKind) => regenerateStop(wpIndex, kind);
 

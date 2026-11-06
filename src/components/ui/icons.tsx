@@ -117,6 +117,7 @@ export {
   Navigation,
   Globe,
   Camera,
+  GitBranch,
   ChevronUp,
   Mountain, // ElevationProfile
   ChevronLeftCircle,

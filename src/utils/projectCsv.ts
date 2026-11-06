@@ -3,6 +3,7 @@ import { layout, placedCues, type TimelineData } from "../features/editor/model"
 import { distanceMeters, type LatLon } from "./gpxTrack";
 import { legEstimate, legFacts } from "./legEstimate";
 import { stopLabel } from "./stopLabel";
+import { legEnds } from "./courses";
 
 type Cell = string | number | boolean | null | undefined;
 
@@ -46,11 +47,12 @@ const pathMeters = (points: LatLon[]) => points.reduce((sum, p, i) => (i ? sum +
 // routeSegments[i] (see segmentElevations), which gives a routed leg its climb; without it only a drawn line with recorded
 // elevation has one. minutes_flat is the time without climb, so the climb's effect can be seen.
 export function legsCsv(waypoints: Waypoint[], routeSegments: RouteSegment[], terrain: (number[] | null | undefined)[] = []): string {
-  const routed = waypoints.map((w, index) => ({ w, index })).filter(({ w }) => !w.isStopBy || w.connectToRoute);
+  const at = (w: Waypoint) => ({ w, index: waypoints.findIndex((x) => x.id === w.id) });
+  const legs = legEnds(waypoints);
   const rows: Cell[][] = [];
-  for (let i = 0; i < routed.length - 1; i++) {
-    const from = routed[i];
-    const to = routed[i + 1];
+  for (let i = 0; i < legs.length; i++) {
+    const from = at(legs[i][0]);
+    const to = at(legs[i][1]);
     const seg = routeSegments[i];
     const usable = !!seg && seg.mode !== "calculating" && seg.positions.length >= 2;
     const meters = usable ? pathMeters(seg.positions) : distanceMeters([from.w.lat, from.w.lng], [to.w.lat, to.w.lng]);

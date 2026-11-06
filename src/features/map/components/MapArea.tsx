@@ -30,6 +30,7 @@ import { stopLabel } from "../../../utils/stopLabel";
 import { curvesOf, insertAnchor, moveAnchor, removeAnchors, toggleAnchorCurve } from "../../../utils/drawnPath";
 import { setDrawPreview } from "../drawPreview";
 import { DrawHandles } from "./DrawHandles";
+import { appendStop, inSubCourse, legEnds, mainStops } from "../../../utils/courses";
 
 export function MapArea() {
   const { i18n } = useLingui();
@@ -46,6 +47,7 @@ export function MapArea() {
     updateSettings,
     setActiveWaypointId,
     registerThumbnailGetter,
+    addToSub,
   } = useWorkspace();
   const { handleDroppedBrowserFiles, handleDroppedFiles, importRouteFile } = useFileActions();
 
@@ -431,19 +433,17 @@ export function MapArea() {
   const handleAddWaypoint = async (lat: number, lng: number) => {
     const newId = Math.random().toString(36).substring(7);
 
-    setWaypoints((prev) => [
-      ...prev,
-      {
+    setWaypoints((prev) =>
+      appendStop(prev, {
         id: newId,
         lat,
         lng,
         name: t`Locating...`,
         images: [],
         imagePans: [],
-        narration: "",
         routeMode: settings.default_route_mode || "walking",
-      },
-    ]);
+      }, addToSub),
+    );
     setIsDirty(true);
 
     try {
@@ -512,20 +512,18 @@ export function MapArea() {
   const handleAddStopByWaypoint = async (lat: number, lng: number) => {
     const newId = Math.random().toString(36).substring(7);
 
-    setWaypoints((prev) => [
-      ...prev,
-      {
+    setWaypoints((prev) =>
+      appendStop(prev, {
         id: newId,
         lat,
         lng,
         name: t`Locating...`,
         images: [],
         imagePans: [],
-        narration: "",
         routeMode: settings.default_route_mode || "walking",
         isStopBy: true,
-      },
-    ]);
+      }, addToSub),
+    );
     setIsDirty(true);
 
     try {
@@ -601,10 +599,10 @@ export function MapArea() {
   }, [waypoints]);
 
   const fitToLeg = (wpId: string) => {
-    const wpIndex = waypoints.findIndex((w) => w.id === wpId);
-    if (wpIndex === -1 || wpIndex >= waypoints.length - 1) return;
-    const wp = waypoints[wpIndex];
-    const nextWp = waypoints[wpIndex + 1];
+    const legs = legEnds(waypoints);
+    const wpIndex = legs.findIndex(([from]) => from.id === wpId);
+    if (wpIndex === -1) return;
+    const [wp, nextWp] = legs[wpIndex];
     const map = mapRef.current;
     if (!map) return;
 
@@ -817,12 +815,10 @@ export function MapArea() {
     );
   };
 
-  const activeIndex = waypoints.findIndex((w) => w.id === activeWaypointId);
-  const activeWp = activeIndex !== -1 ? waypoints[activeIndex] : null;
-  const nextWp =
-    activeIndex !== -1 && activeIndex < waypoints.length - 1
-      ? waypoints[activeIndex + 1]
-      : null;
+  // The leg being drawn: from the active stop to the next stop of its course (anchors placed on their main stop).
+  const activeLeg = legEnds(waypoints).find(([from]) => from.id === activeWaypointId);
+  const activeWp = activeLeg?.[0] ?? waypoints.find((w) => w.id === activeWaypointId) ?? null;
+  const nextWp = activeLeg?.[1] ?? null;
 
   const drawnCurves = isDrawMode && activeWp ? curvesOf(activeWp) : [];
   const toggleCurve = (idx: number) => {
@@ -951,9 +947,10 @@ export function MapArea() {
           />
 
           {waypoints.map((wp, index) => {
-            const isStart = index === 0;
-            const isEnd =
-              index === waypoints.length - 1 && waypoints.length > 1;
+            if (wp.branchOf) return null; // a sub course anchor sits on its main stop's pin
+            const main = mainStops(waypoints);
+            const isStart = !inSubCourse(wp) && main[0] === wp;
+            const isEnd = !inSubCourse(wp) && main.length > 1 && main[main.length - 1] === wp;
             const isSelected = wp.id === activeWaypointId && !isDrawMode;
 
             let pinType: "start" | "end" | "stopby" | "normal" = "normal";
@@ -969,11 +966,7 @@ export function MapArea() {
               pinType = "stopby";
               label = stopLabel(waypoints, index);
             } else {
-              let normalIndex = 1;
-              for (let i = 1; i < index; i++) {
-                if (!waypoints[i].isStopBy) normalIndex++;
-              }
-              label = normalIndex.toString();
+              label = stopLabel(waypoints, index);
             }
 
             if (wp.isStopBy) {

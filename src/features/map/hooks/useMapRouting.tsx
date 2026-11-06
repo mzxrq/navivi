@@ -4,6 +4,7 @@ import { getCurve, fillRouteCoordinates } from "../../../utils/mapUtils";
 import { sampleDrawnPath, curvesOf } from "../../../utils/drawnPath";
 import { routeCacheKey } from "../../../utils/routeCacheKey";
 import { closeGaps } from "../../../utils/gsiPaths";
+import { legEnds } from "../../../utils/courses";
 
 // kill switch fetcher
 const fetchWithTimeout = async (
@@ -135,11 +136,9 @@ export function useMapRouting() {
   >([]);
 
   useEffect(() => {
-    const routedWaypoints = waypoints.filter(
-      (wp) => !wp.isStopBy || wp.connectToRoute,
-    );
+    const legs = legEnds(waypoints);
 
-    if (routedWaypoints.length < 2) {
+    if (legs.length === 0) {
       setRouteSegments([]);
       return;
     }
@@ -154,9 +153,8 @@ export function useMapRouting() {
       cacheKey: string;
     }[] = [];
 
-    for (let i = 0; i < routedWaypoints.length - 1; i++) {
-      const wp1 = routedWaypoints[i];
-      const wp2 = routedWaypoints[i + 1];
+    for (let i = 0; i < legs.length; i++) {
+      const [wp1, wp2] = legs[i];
       const mode = wp1.routeMode || "driving";
       const cacheKey = routeCacheKey(wp1, wp2);
 

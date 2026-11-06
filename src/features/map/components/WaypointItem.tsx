@@ -26,6 +26,7 @@ import {
 import { LegColorButton } from "./LegColorButton";
 import { LegStats } from "./LegStats";
 import { stopLabel } from "../../../utils/stopLabel";
+import { courseOf, legIndexOf } from "../../../utils/courses";
 
 interface WaypointItemProps {
   wp: Waypoint;
@@ -108,8 +109,9 @@ export function WaypointItem({
     if (mode) setLegMode(wp, mode);
   };
 
-  const isStart = index === 0;
-  const isEnd = index === waypoints.length - 1 && waypoints.length > 1;
+  const course = courseOf(waypoints, wp);
+  const isStart = course[0]?.id === wp.id;
+  const isEnd = course.length > 1 && course[course.length - 1].id === wp.id;
   const displayLabel = wp.inaccessible ? "×" : stopLabel(waypoints, index);
 
   const imageCount = wp.images?.length ?? 0;
@@ -260,7 +262,7 @@ export function WaypointItem({
         )}
       </div>
 
-      {!isLast && !isListEditMode && !(wp.isStopBy && !wp.connectToRoute) && (
+      {legIndexOf(waypoints, wp.id) !== -1 && !isListEditMode && (
         <div
           onContextMenu={(e) => openContextMenu(e, legMenu(wp))}
           className="relative flex items-center gap-2.5 pl-1.5 pr-1.5 py-1"

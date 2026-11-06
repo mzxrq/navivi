@@ -1,5 +1,6 @@
 import { recordedLegElevation, sampleIndexes, elevationAlongPath } from "./elevation";
 import type { LatLon } from "./gpxTrack";
+import { legEnds } from "./courses";
 
 /** One decoded Terrain-RGB tile: metres above sea level, row-major, `size` x `size`. */
 export interface TerrainTile {
@@ -111,11 +112,10 @@ export async function segmentElevations(
   waypoints: StopLike[],
   load: TileLoader,
 ): Promise<(number[] | null)[]> {
-  const routed = waypoints.filter((wp) => !wp.isStopBy || wp.connectToRoute);
+  const legs = legEnds(waypoints);
   return Promise.all(
     segments.map(async (seg, i): Promise<number[] | null> => {
-      const from = routed[i];
-      const to = routed[i + 1];
+      const [from, to] = legs[i] ?? [];
       if (from && to && seg.mode === "draw") {
         const recorded = recordedLegElevation(seg.positions, from, to, from.customRoute, from.customRouteEle);
         if (recorded) return recorded;

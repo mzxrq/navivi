@@ -51,6 +51,8 @@ export interface Waypoint {
   videoOffset?: number;
   audioOffset?: number;
   timestamp?: string;
+  course?: "sub"; // a sub course stop (utils/courses.ts)
+  branchOf?: string; // a sub course anchor: the main stop it stands for
 }
 
 export interface RouteSegment {
@@ -91,6 +93,7 @@ export type LookMode = "walking" | "driving" | "car" | "ferry" | "airplane";
 export type VideoTextLanguage = "auto" | "en" | "ja";
 
 export interface ProjectSettings {
+  sub_course_name?: string; // the sub course's title (utils/courses.ts)
   fps: number;
   line_color: [number, number, number];
   line_thickness: number;
@@ -320,6 +323,8 @@ export interface WorkspaceState {
   setRouteSegments: Dispatch<SetStateAction<RouteSegment[]>>;
   activeWaypointId: string | null;
   setActiveWaypointId: (id: string | null) => void;
+  addToSub: boolean;
+  setAddToSub: (on: boolean) => void;
   routePoints: number[][];
   setRoutePoints: Dispatch<SetStateAction<number[][]>>;
   drawnRoute: [number, number][];

@@ -15,6 +15,7 @@ import {
   Edit2,
   Flag,
   Footprints,
+  GitBranch,
   LinkIcon,
   LocateFixed,
   MapPinPlus,
@@ -32,6 +33,7 @@ import { useWaypointActions } from "../../../hooks/useWaypointActions";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { RouteMode, Waypoint } from "../../../types/index";
 import { pathOf, reversedPathOf } from "../../../utils/drawnPath";
+import { courseOf, inSubCourse, legIndexOf, removeSubCourse, startSubCourse } from "../../../utils/courses";
 
 export type ModeOption = { id: RouteMode; icon: typeof Car; label: string };
 
@@ -62,8 +64,7 @@ export function useLegActions() {
   const setLegMode = (wp: Waypoint, mode: RouteMode) => {
     if (mode === wp.routeMode) return;
     if (mode === "draw") {
-      const routedWaypoints = waypoints.filter((w) => !w.isStopBy || w.connectToRoute);
-      const routedIndex = routedWaypoints.findIndex((w) => w.id === wp.id);
+      const routedIndex = legIndexOf(waypoints, wp.id);
       let newCustomRoute = wp.customRoute || [];
       const seg = routedIndex !== -1 ? routeSegments?.[routedIndex] : undefined;
       if (seg?.positions && seg.positions.length > 2) {
@@ -80,7 +81,7 @@ export function useLegActions() {
 }
 
 export function useStopMenus() {
-  const { waypoints, setWaypoints, updateWaypoint, setActiveWaypointId, setIsDirty } =
+  const { waypoints, setWaypoints, updateWaypoint, setActiveWaypointId, setIsDirty, setAddToSub } =
     useWorkspace();
   const { addReturnStop } = useWaypointActions();
   const modeOptions = useModeOptions();
@@ -126,14 +127,15 @@ export function useStopMenus() {
   };
 
   const legMenu = (wp: Waypoint): MenuEntry[] => {
-    const index = waypoints.findIndex((w) => w.id === wp.id);
-    if (index === -1 || index === waypoints.length - 1) return [];
+    if (legIndexOf(waypoints, wp.id) === -1) return [];
+    const course = courseOf(waypoints, wp);
+    const index = course.findIndex((w) => w.id === wp.id);
     const current = wp.routeMode || "driving";
     const pathEmpty = !wp.customRoute || wp.customRoute.length === 0;
     const drawnElsewhere = waypoints.filter(
       (w) => w.id !== wp.id && w.customRoute && w.customRoute.length > 0,
     );
-    const previousPath = index > 0 ? waypoints[index - 1].customRoute : undefined;
+    const previousPath = index > 0 ? course[index - 1].customRoute : undefined;
     const viaCount = wp.viaPoints?.length ?? 0;
 
     return [
@@ -164,7 +166,7 @@ export function useStopMenus() {
       !!previousPath?.length && {
         label: t`Retrace previous path`,
         icon: CornerDownLeft,
-        onSelect: () => setPath(wp.id, reversedPathOf(waypoints[index - 1])),
+        onSelect: () => setPath(wp.id, reversedPathOf(course[index - 1])),
       },
       VIA_MODES.includes(wp.routeMode) && {
         label: t`Adjust route`,
@@ -203,14 +205,24 @@ export function useStopMenus() {
   };
 
   const stopMenu = (wpId: string): MenuEntry[] => {
-    const index = waypoints.findIndex((w) => w.id === wpId);
-    const wp = waypoints[index];
+    const wp = waypoints.find((w) => w.id === wpId);
     if (!wp) return [];
-    const isLast = index === waypoints.length - 1;
+    const sub = inSubCourse(wp);
+    if (wp.branchOf) {
+      // A sub course anchor: only its leg, and the sub course itself.
+      return [
+        { type: "label", label: t`Sub course` },
+        legIndexOf(waypoints, wp.id) !== -1 && { label: t`Route to next stop`, icon: Route, submenu: legMenu(wp) },
+        { label: t`Remove sub course`, icon: Trash2, danger: true, onSelect: () => setWaypoints((prev) => removeSubCourse(prev)) },
+      ].filter(Boolean) as MenuEntry[];
+    }
+    const course = courseOf(waypoints, wp);
+    const index = course.indexOf(wp);
+    const isLast = index === course.length - 1;
     const currentType =
-      index === 0
+      index === 0 && !sub
         ? "start"
-        : isLast && waypoints.length > 1
+        : isLast && course.length > 1 && !sub
           ? "end"
           : wp.isStreetView
             ? "streetview"
@@ -234,13 +246,21 @@ export function useStopMenus() {
         label: t`Stop type`,
         icon: MapPinned,
         submenu: [
-          { label: t`Start`, checked: currentType === "start", onSelect: () => setStopType(wp.id, "start") },
+          !sub && { label: t`Start`, checked: currentType === "start", onSelect: () => setStopType(wp.id, "start") },
           { label: t`Stop`, checked: currentType === "normal", onSelect: () => setStopType(wp.id, "normal") },
           { label: t`Stop-by`, checked: currentType === "stopby", onSelect: () => setStopType(wp.id, "stopby") },
           { label: t`Closed`, checked: currentType === "closed", onSelect: () => setStopType(wp.id, "closed") },
-          { label: t`Street view`, checked: currentType === "streetview", onSelect: () => setStopType(wp.id, "streetview") },
-          { label: t`Destination`, checked: currentType === "end", onSelect: () => setStopType(wp.id, "end") },
-        ],
+          !sub && { label: t`Street view`, checked: currentType === "streetview", onSelect: () => setStopType(wp.id, "streetview") },
+          !sub && { label: t`Destination`, checked: currentType === "end", onSelect: () => setStopType(wp.id, "end") },
+        ].filter(Boolean) as MenuEntry[],
+      },
+      !sub && !isLast && !wp.isStopBy && !waypoints.some(inSubCourse) && {
+        label: t`Start a sub course here`,
+        icon: GitBranch,
+        onSelect: () => {
+          setWaypoints((prev) => startSubCourse(prev, wp.id));
+          setAddToSub(true);
+        },
       },
       wp.isStopBy && !wp.inaccessible && !wp.isStreetView && {
         label: t`On route`,
@@ -251,7 +271,7 @@ export function useStopMenus() {
           setIsDirty(true);
         },
       },
-      !isLast && { label: t`Route to next stop`, icon: Route, submenu: legMenu(wp) },
+      legIndexOf(waypoints, wp.id) !== -1 && { label: t`Route to next stop`, icon: Route, submenu: legMenu(wp) },
       separator,
       { label: t`Add return stop`, icon: CornerDownLeft, onSelect: () => addReturnStop(wp.id) },
       {

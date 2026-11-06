@@ -7,6 +7,7 @@ import { useUI } from "./useUI";
 import { refreshMedia } from "../features/editor/player";
 import { probeDuration, toAbsoluteProjectPath } from "../services/fileSystem";
 import { RegenKind, RouteClip, StopNarration, legModes, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, routeClipModes, runRegen, withOutroBurnedIn } from "../services/stopRegen";
+import { inSubCourse, mainStops } from "../utils/courses";
 
 // `leg`: a walking clip job's NN (02_waypoint_NN_*); `index` is then the stop it is listed under.
 type Job = { index: number | RouteClip; kind: RegenKind | "video" | "walk"; leg?: number; run: () => Promise<void> };
@@ -72,8 +73,10 @@ export function useStopRegen() {
   /** What stop `index` has to make again; null when it can't be made again. */
   const stopInfo = (index: number) => {
     const wp = waypoints[index];
-    if (!wp || !metadata.directory_path || wp.skipAssetGeneration || wp.isStub) return null;
-    const isEndpoint = index === 0 || (index === waypoints.length - 1 && waypoints.length > 1);
+    // shortcut: a sub course stop is made only by a full Generate until the pipeline can address it by index.
+    if (!wp || inSubCourse(wp) || !metadata.directory_path || wp.skipAssetGeneration || wp.isStub) return null;
+    const main = mainStops(waypoints);
+    const isEndpoint = index === 0 || (index === main.length - 1 && main.length > 1);
     const isStopBy = !!wp.isStopBy && !isEndpoint;
     // The "Whole route first" type visits every stop-by: each is narrated, linked or not.
     const visited = !isStopBy || !!wp.connectToRoute || settings.overview_style === "course";
