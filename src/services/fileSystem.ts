@@ -6,6 +6,7 @@ import { appConfig, fileSystem, GLOBAL_DICTIONARY_KEY, resolveVideoStyle } from 
 import { buildAssetManifest } from "../utils/manifestBuilder";
 import { TimelineData, RecentProjects, TextStyle, ProjectMetadata } from "../types";
 import { routeCacheKey } from "../utils/routeCacheKey";
+import { inSubCourse, legEnds, mainLegCount, mainStops, resolveAnchor, subStops } from "../utils/courses";
 import { stripApiKeys } from "../utils/apiKeys";
 import { mapboxTileLoader, segmentElevations } from "../utils/terrainElevation";
 import { pathProfile } from "../utils/legEstimate";
@@ -38,6 +39,44 @@ function calculateDistance(pos1: [number, number], pos2: [number, number]) {
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+export const SUB_TRACK = "raw_track_sub.gpx";
+
+// A GPX file in the shape GPSBabel / the Python reader expect: the stops as <wpt>, the legs joined into one <trkseg>.
+export function trackGpx(name: string, stops: { lat: number; lng: number; name?: string }[], segments: { positions: [number, number][]; mode?: string }[], legEle: (number[] | null)[]): string {
+  const lines: string[] = [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<gpx version="1.1" creator="${appConfig.name}" xmlns="http://www.topografix.com/GPX/1/1">`,
+    `  <time>${new Date().toISOString()}</time>`,
+  ];
+  for (const wp of stops) {
+    lines.push(` <wpt lat="${wp.lat}" lon="${wp.lng}">`, `   <name>${xmlText(wp.name || "Navivi Stop")}</name>`, ` </wpt>`);
+  }
+  lines.push(`  <trk>\n    <name>${xmlText(name)}</name>\n    <trkseg>`);
+  let currentTime = new Date();
+  let lastPos: [number, number] | null = null;
+  segments.forEach((segment, segIndex) => {
+    // Rough speed estimates: 15 m/s (~54 km/h) for driving, 1.4 m/s (~5 km/h) for walking
+    const speedMs = segment.mode === "walking" || segment.mode === "direct" || segment.mode === "draw" ? 1.4 : 15.0;
+    segment.positions.forEach((pos, posIndex) => {
+      const dist = lastPos ? calculateDistance(lastPos, pos) : 0;
+      currentTime = new Date(currentTime.getTime() + (dist / speedMs) * 1000);
+      lines.push(
+        `      <trkpt lat="${pos[0]}" lon="${pos[1]}">`,
+        `        <ele>${(legEle[segIndex]?.[posIndex] ?? 35).toFixed(1)}</ele>`, // 35 = no elevation known
+        `        <time>${currentTime.toISOString()}</time>`,
+        `        <speed>${speedMs.toFixed(6)}</speed>`,
+        `        <fix>3d</fix>`,
+        `        <sat>8</sat>`,
+        `        <hdop>1.0</hdop>`,
+        `      </trkpt>`,
+      );
+      lastPos = pos;
+    });
+  });
+  lines.push(`    </trkseg>\n  </trk>\n</gpx>`);
+  return lines.join("\n");
 }
 
 // A path that is already absolute (a drive letter or a leading slash) is left alone when a project is opened.
@@ -140,19 +179,6 @@ export const saveProjectData = async (
   const userVideoDir = await join(assetsDir, "video", "user");
   if (!(await exists(userVideoDir))) await mkdir(userVideoDir, { recursive: true });
 
-  // Initialize GPX String with GPSBabel expected headers
-  const gpxLines: string[] = [];
-  gpxLines.push(`<?xml version="1.0" encoding="UTF-8"?>`);
-  gpxLines.push(`<gpx version="1.1" creator="${appConfig.name}" xmlns="http://www.topografix.com/GPX/1/1">`);
-  gpxLines.push(`  <time>${new Date().toISOString()}</time>`);
-
-  // export waypoints
-  waypoints.forEach((wp) => {
-    gpxLines.push(` <wpt lat="${wp.lat}" lon="${wp.lng}">`);
-    const safeName = xmlText(wp.name || "Navivi Stop");
-    gpxLines.push(`   <name>${safeName}</name>`);
-    gpxLines.push(` </wpt>`);
-  });
 
   // The video colors the route by steepness from these <ele> values (Python reads them back from raw_track.gpx).
   // Without the switch, a token or a network they stay the old constant, which Python ignores as "no elevation".
@@ -172,59 +198,27 @@ export const saveProjectData = async (
   }
   const legEle = settings?.show_route_heatmap ? terrainEle : [];
   // Climb per leg, keyed by the leg's route cache key so Python only trusts it while the leg is unchanged.
-  const routedStops = waypoints.filter((wp) => !wp.isStopBy || wp.connectToRoute);
+  const legs = legEnds(waypoints);
   const legAscent = new Map<string, { m: number; key: string }>();
   terrainEle.forEach((ele, i) => {
-    const from = routedStops[i];
-    const to = routedStops[i + 1];
+    const [from, to] = legs[i] ?? [];
     const profile = ele && from && to && routeSegments[i] ? pathProfile(routeSegments[i].positions, ele) : null;
     if (profile) legAscent.set(from.id, { m: Math.round(profile.ascentM), key: routeCacheKey(from, to) });
   });
 
-  // track segments
-  gpxLines.push(`  <trk>\n    <name>${xmlText(projName)}</name>\n    <trkseg>`);
-
-  let currentTime = new Date();
-  let lastPos: [number, number] | null = null;
-
-  // export tracks
-  routeSegments.forEach((segment, segIndex) => {
-    // Rough speed estimates: 15 m/s (~54 km/h) for driving, 1.4 m/s (~5 km/h) for walking
-    const speedMs = (segment.mode === "walking" || segment.mode === "direct" || segment.mode === "draw") ? 1.4 : 15.0;
-
-    segment.positions.forEach((pos: [number, number], posIndex: number) => {
-      let dist = 0;
-
-      if (lastPos) {
-        dist = calculateDistance(lastPos, pos);
-      }
-
-      // Calculate time delta based on distance and assumed speed
-      const timeDeltaSeconds = lastPos ? dist / speedMs : 0;
-      currentTime = new Date(currentTime.getTime() + timeDeltaSeconds * 1000);
-
-      gpxLines.push(`      <trkpt lat="${pos[0]}" lon="${pos[1]}">`);
-      gpxLines.push(`        <ele>${(legEle[segIndex]?.[posIndex] ?? 35).toFixed(1)}</ele>`); // 35 = no elevation known
-      gpxLines.push(`        <time>${currentTime.toISOString()}</time>`);
-      gpxLines.push(`        <speed>${speedMs.toFixed(6)}</speed>`);
-      gpxLines.push(`        <fix>3d</fix>`);
-      gpxLines.push(`        <sat>8</sat>`);
-      gpxLines.push(`        <hdop>1.0</hdop>`);
-      gpxLines.push(`      </trkpt>`);
-
-      lastPos = pos;
-    });
-  });
-
-  gpxLines.push(`    </trkseg>\n  </trk>\n</gpx>`);
-  const gpxStr = gpxLines.join('\n');
-  await writeTextFile(gpxPath, gpxStr);
+  // The main course's track; a sub course gets its own file (Python reads it for the sub course only).
+  const mainLegs = mainLegCount(waypoints);
+  await writeTextFile(gpxPath, trackGpx(projName, mainStops(waypoints), routeSegments.slice(0, mainLegs), legEle.slice(0, mainLegs)));
+  const subs = subStops(waypoints);
+  if (subs.length > 1) {
+    await writeTextFile(await join(projectDir, SUB_TRACK), trackGpx(projName, subs, routeSegments.slice(mainLegs), legEle.slice(mainLegs)));
+  }
 
   const imageNames = await importAssets(imageAssetsDir, waypoints.flatMap((wp) => [...(wp.images ?? []), ...(wp.customMarker ? [wp.customMarker] : [])]));
   const videoNames = await importAssets(userVideoDir, waypoints.flatMap((wp) => wp.videos ?? []));
 
-  const processedWaypoints = await Promise.all(
-    waypoints.map(async (wp) => {
+  let processedWaypoints = await Promise.all(
+    waypoints.map((w) => resolveAnchor(w, waypoints)).map(async (wp) => {
       const relativeImagePaths: string[] = [];
       // A credit belongs to its photo, so it moves to the photo's new name when the file is copied into the project.
       const renamed = new Map<string, string>();
@@ -286,9 +280,14 @@ export const saveProjectData = async (
         inaccessible: wp.inaccessible || undefined,
         skipAssetGeneration: wp.skipAssetGeneration ?? undefined,
         pauseAtWaypoint: wp.pauseAtWaypoint ?? undefined,
+        branchOf: wp.branchOf || undefined,
       };
     })
   );
+  // Python reads the main course as `waypoints` and the sub course on its own (services/config/sub_course.py).
+  const subSaved = processedWaypoints.filter((_, i) => inSubCourse(waypoints[i]));
+  const allSaved = processedWaypoints;
+  processedWaypoints = allSaved.filter((_, i) => !inSubCourse(waypoints[i]));
 
   let thumbnailPath = metadata.thumbnail_path;
   
@@ -344,7 +343,7 @@ export const saveProjectData = async (
     theme: row.theme ?? undefined,
     status: row.status,
     thumbnail_path: thumbnailPath,
-    source_files: { gps_route: "raw_track.gpx" },
+    source_files: { gps_route: "raw_track.gpx", ...(subSaved.length > 1 ? { sub_gps_route: SUB_TRACK } : {}) },
     settings: { ...savedSettings, global_pronunciation_dictionary: (await db.appSettings.get(GLOBAL_DICTIONARY_KEY)) ?? [] },
     // Map labels and on-screen video text: the narration language (from the stop names and scripts on "Auto"),
     // so switching the app's own language never re-renders the project.
@@ -360,6 +359,12 @@ export const saveProjectData = async (
     start_point: startWp ? { lat: startWp.lat, lng: startWp.lng, label: startWp.label } : null,
     end_point: endWp ? { lat: endWp.lat, lng: endWp.lng, label: endWp.label } : null,
     waypoints: processedWaypoints,
+    sub_course: subSaved.length > 1 ? {
+      name: settings?.sub_course_name || "",
+      from_index: processedWaypoints.findIndex((w) => w.id === subSaved[0].branchOf),
+      ends_at_main_end: !!endWp && subSaved[subSaved.length - 1].branchOf === endWp.id,
+      waypoints: subSaved,
+    } : undefined,
   };
 
   // Written aside and renamed over: a crash mid-write must not leave the project's one file half written.
@@ -375,7 +380,7 @@ export const saveProjectData = async (
     }
   }
 
-  const manifest = buildAssetManifest(projId, processedWaypoints as any, settings);
+  const manifest = buildAssetManifest(projId, allSaved as any, settings);
   const metaDir = await join(projectDir, fileSystem.metaFolder);
   if (!(await exists(metaDir))) await mkdir(metaDir, { recursive: true });
   const manifestPath = await join(metaDir, "asset_manifest.json");
@@ -383,13 +388,7 @@ export const saveProjectData = async (
 
   const activeKeys = new Set<string>();
 
-  const routedWaypoints = waypoints.filter(wp => !wp.isStopBy || wp.connectToRoute);
-
-  for (let i = 0; i < routedWaypoints.length - 1; i++) {
-    const wp1 = routedWaypoints[i];
-    const wp2 = routedWaypoints[i + 1];
-    activeKeys.add(routeCacheKey(wp1, wp2));
-  }
+  for (const [wp1, wp2] of legs) activeKeys.add(routeCacheKey(wp1, wp2));
 
   const cleanCache: Record<string, [number, number][]> = {};
   let deletedCount = 0;

@@ -4,6 +4,7 @@ import type { MapRef } from "react-map-gl/mapbox";
 import { useWorkspace } from "../../../../hooks/useWorkspace";
 import { elevationAlongPath, recordedLegElevation, sampleIndexes, type LegElevation } from "../../../../utils/elevation";
 import type { LatLon } from "../../../../utils/gpxTrack";
+import { legEnds } from "../../../../utils/courses";
 
 export interface LegElevationState {
   legs: LegElevation[];
@@ -23,11 +24,10 @@ export function useLegElevations(mapRef: RefObject<MapRef | null>, is3D: boolean
   const terrain = useRef(new Map<string, number>());
 
   const base = useMemo(() => {
-    const routed = waypoints.filter((wp) => !wp.isStopBy || wp.connectToRoute);
+    const ends = legEnds(waypoints);
     return routeSegments.map((seg, i) => {
       const positions = seg.positions as LatLon[];
-      const from = routed[i];
-      const to = routed[i + 1];
+      const [from, to] = ends[i] ?? [];
       const recorded =
         from && to && seg.mode === "draw" ? recordedLegElevation(positions, from, to, from.customRoute, from.customRouteEle) : null;
       return { positions, mode: seg.mode, recorded };

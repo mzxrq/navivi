@@ -3,6 +3,7 @@ import { t } from "@lingui/core/macro";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import type { Waypoint } from "../../../types/index";
 import { legFacts } from "../../../utils/legEstimate";
+import { legEnds } from "../../../utils/courses";
 import { useSegmentElevation } from "../hooks/useSegmentElevations";
 
 const formatKm = (km: number) => (km < 1 ? t`${Math.round(km * 1000)} m` : t`${km.toFixed(1)} km`);
@@ -14,21 +15,19 @@ function formatMinutes(minutes: number) {
   return m === 0 ? t`${h} h` : t`${h} h ${m} min`;
 }
 
-// Distance and time of the leg that leaves `wp`, for the sidebar's leg row. The leg runs to the next *routed* stop
-// (same filter as useMapRouting), so a stop-by that is not connected to the route is not part of it.
+// Distance and time of the leg that leaves `wp`, for the sidebar's leg row (utils/courses.ts legEnds, as useMapRouting).
 export function LegStats({ wp }: { wp: Waypoint }) {
   const { waypoints, routeSegments } = useWorkspace();
-  const routed = useMemo(() => waypoints.filter((w) => !w.isStopBy || w.connectToRoute), [waypoints]);
-  const r = routed.findIndex((w) => w.id === wp.id);
+  const legs = useMemo(() => legEnds(waypoints), [waypoints]);
+  const r = legs.findIndex(([from]) => from.id === wp.id);
   const terrain = useSegmentElevation(r);
 
   const stats = useMemo(() => {
-    const to = routed[r + 1];
     const seg = routeSegments[r];
-    if (r < 0 || !to) return null;
+    if (r < 0) return null;
     if (!seg || seg.mode === "calculating" || seg.positions.length < 2) return "pending" as const;
-    return legFacts(wp, to, seg, terrain);
-  }, [routed, r, routeSegments, wp, terrain]);
+    return legFacts(legs[r][0], legs[r][1], seg, terrain);
+  }, [legs, r, routeSegments, terrain]);
 
   if (!stats) return null;
   if (stats === "pending") return <span className="text-[11px] text-zinc-400" aria-hidden>…</span>;

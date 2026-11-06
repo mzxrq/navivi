@@ -4,6 +4,7 @@ import { useWorkspace } from "../../../../hooks/useWorkspace";
 import { rgbToHex } from "../../../../components/ui/ColorSwatches";
 import { legGradients, type LegElevation } from "../../../../utils/elevation";
 import { usePreviewedWaypointId } from "../../drawPreview";
+import { legEnds, legIndexOf, mainLegCount, SUB_COURSE_COLOR } from "../../../../utils/courses";
 
 interface RouteLayerProps {
   uploadedRouteLine: number[][];
@@ -37,7 +38,7 @@ export function RouteLayer({
   // A leg being reshaped is drawn by the draw preview instead, so it does not show twice.
   const previewed = usePreviewedWaypointId();
   const hiddenLeg = previewed
-    ? waypoints.filter((wp) => !wp.isStopBy || wp.connectToRoute).findIndex((wp) => wp.id === previewed)
+    ? legIndexOf(waypoints, previewed)
     : -1;
 
   const gradients = useMemo(() => (heatmapOn ? legs.map(legGradients) : []), [heatmapOn, legs]);
@@ -63,9 +64,10 @@ export function RouteLayer({
     return { type: "FeatureCollection", features };
   }, [gradients, hiddenLeg]);
 
-  const legColors = waypoints
-    .filter((wp) => !wp.isStopBy || wp.connectToRoute)
-    .map((wp) => (wp.lineColor ? rgbToHex(wp.lineColor) : ""))
+  // The sub course's legs are amber unless given a color of their own.
+  const firstSubLeg = mainLegCount(waypoints);
+  const legColors = legEnds(waypoints)
+    .map(([wp], i) => (wp.lineColor ? rgbToHex(wp.lineColor) : i >= firstSubLeg ? SUB_COURSE_COLOR : ""))
     .join(",");
 
   const dynamicRouteGeoJSON = useMemo(() => {

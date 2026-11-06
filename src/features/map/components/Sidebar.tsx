@@ -12,6 +12,8 @@ import { WaypointItem } from "./WaypointItem";
 import { SegmentElevationsProvider } from "../hooks/useSegmentElevations";
 import { LocationSearch } from "../../../components/ui/LocationSearch";
 import { OverviewPanel } from "./OverviewPanel";
+import { reorderSub, SubCourseSection, SUB_LIST } from "./SubCourseSection";
+import { inSubCourse, mainStops } from "../../../utils/courses";
 import { requestForcedRender } from "../../../services/renderOptions";
 import { GenerateDialog } from "./GenerateDialog";
 import { AssetGroup, clearAssets } from "../../../services/assetCleanup";
@@ -117,11 +119,16 @@ export function Sidebar() {
     if (!result.destination) return;
     if (result.source.index === result.destination.index) return;
 
-    const newWaypoints = Array.from(waypoints);
+    if (result.source.droppableId !== result.destination.droppableId) return;
+    if (result.source.droppableId === SUB_LIST) {
+      setWaypoints((prev) => reorderSub(prev, result.source.index, result.destination!.index));
+      return;
+    }
+    const newWaypoints = mainStops(waypoints);
     const [reorderedItem] = newWaypoints.splice(result.source.index, 1);
     newWaypoints.splice(result.destination.index, 0, reorderedItem);
 
-    setWaypoints(newWaypoints);
+    setWaypoints([...newWaypoints, ...waypoints.filter(inSubCourse)]);
   };
 
   const exitEditMode = () => {
@@ -129,8 +136,9 @@ export function Sidebar() {
     setShowClearConfirm(false);
   };
 
-  const stopCount = waypoints.filter((w) => !w.isStopBy).length;
-  const stopByCount = waypoints.length - stopCount;
+  const main = mainStops(waypoints);
+  const stopCount = main.filter((w) => !w.isStopBy).length;
+  const stopByCount = main.length - stopCount;
   const canEditList = waypoints.length > 0 && !isRendering && !isPreviewing;
 
   return (
@@ -196,7 +204,7 @@ export function Sidebar() {
                   {...provided.droppableProps}
                   ref={provided.innerRef}
                 >
-                  {waypoints.map((wp, i) => (
+                  {main.map((wp, i) => (
                     <Draggable
                       key={wp.id}
                       draggableId={wp.id}
@@ -217,10 +225,10 @@ export function Sidebar() {
                         >
                           <WaypointItem
                             wp={wp}
-                            index={i}
+                            index={waypoints.indexOf(wp)}
                             isListEditMode={isListEditMode}
                             isFirst={i === 0}
-                            isLast={i === waypoints.length - 1}
+                            isLast={i === main.length - 1}
                             onEdit={() => setActiveWaypointId(wp.id)}
                             onDelete={() =>
                               setWaypoints(waypoints.filter((w) => w.id !== wp.id))
@@ -234,6 +242,7 @@ export function Sidebar() {
                 </div>
               )}
             </Droppable>
+            <SubCourseSection isListEditMode={isListEditMode} />
           </DragDropContext>
           </SegmentElevationsProvider>
         )}

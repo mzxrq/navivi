@@ -1,6 +1,16 @@
 import { Waypoint } from "../types";
+import { inSubCourse, mainStops } from "./courses";
 
-export function stopLabel(waypoints: Waypoint[], index: number): string {
+// Main stops: S, 1, 2, … E (stop-bys +1, +2); sub course stops B1, B2, … (an anchor shows the main stop's label).
+export function stopLabel(all: Waypoint[], at: number): string {
+  const wp = all[at];
+  if (wp && inSubCourse(wp)) {
+    const main = all.findIndex((w) => w.id === wp.branchOf);
+    if (main !== -1) return stopLabel(all, main);
+    return `B${all.filter((w) => inSubCourse(w) && !w.branchOf).indexOf(wp) + 1}`;
+  }
+  const waypoints = mainStops(all);
+  const index = waypoints.indexOf(wp);
   if (index === 0) return "S";
   if (index === waypoints.length - 1 && waypoints.length > 1) return "E";
   if (waypoints[index]?.isStopBy) {

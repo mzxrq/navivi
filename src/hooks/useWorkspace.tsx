@@ -35,6 +35,7 @@ import {
   readRenderedOverviewNarration,
 } from "../services/fileSystem";
 import { savedImages } from "../utils/waypointImages";
+import { withSubLast } from "../utils/courses";
 import {
   deleteProjectVersion,
   listProjectVersions,
@@ -107,9 +108,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     reset: resetWaypointHistory,
   } = useHistory<Waypoint[]>([], 50);
 
+  // Sub course stops stay after the main ones (utils/courses.ts).
   const setWaypoints = useCallback(
     (action: React.SetStateAction<Waypoint[]>) => {
-      _setWaypoints(action);
+      _setWaypoints((prev) => withSubLast(typeof action === "function" ? action(prev) : action));
       setIsDirty(true);
     },
     [_setWaypoints],
@@ -159,6 +161,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [routePoints, setRoutePoints] = useState<number[][]>([]);
   const [drawnRoute, setDrawnRoute] = useState<[number, number][]>([]);
   const [activeWaypointId, setActiveWaypointId] = useState<string | null>(null);
+  const [addToSub, setAddToSub] = useState(false); // new stops clicked on the map go to the sub course
 
   const [metadata, setMetadata] = useState<ProjectMetadata>(() => ({
     ...DefaultMetadata,
@@ -556,8 +559,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       adoptLegacyApiKeys(legacyKeys);
       if (data.settings) setSettings(data.settings);
 
+      const subSaved = (data.sub_course?.waypoints ?? []).map((wp: any) => ({ ...wp, course: "sub" }));
       resetWaypointHistory(
-        data.waypoints.map((wp: any) => ({
+        [...data.waypoints, ...subSaved].map((wp: any) => ({
+          course: wp.course,
+          branchOf: wp.branchOf || undefined,
           id: wp.id || crypto.randomUUID(),
           lat: wp.lat,
           lng: wp.lng,
@@ -717,6 +723,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setRouteSegments,
         activeWaypointId,
         setActiveWaypointId,
+        addToSub,
+        setAddToSub,
         routePoints,
         setRoutePoints,
         metadata,
