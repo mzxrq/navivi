@@ -40,6 +40,7 @@ from .subtitle_step import (
     build_overview_subtitle,
     build_subtitles,
 )
+from .sub_course_step import append_sub_course, render_sub_course
 from .timeline_step import build_timeline
 from .upscale_step import upscale_waypoint_images
 
@@ -279,6 +280,9 @@ def run_full_pipeline(
     video_paths, leg_narration_splits = compute_leg_narration_splits(
         video_paths, audio_data.get("audio_paths"), subtitle_paths, waypoints, str(project_dir)
     )
+    # The sub course (job_config sub_course) runs inside this stage, so the stage count stays the same.
+    sub_timeline = render_sub_course(str(config_file_path), force_regenerate, attractions_on, fast_render)
+    job_config = JobConfigManager(config_file_path)
     all_videos = video_paths + attraction_videos
 
     # Subtitles are burned once, onto the whole video, at export (render_timeline).
@@ -330,6 +334,7 @@ def run_full_pipeline(
         overview_audio_offset=voice["overview_lead"],
         waypoints=waypoints,  # as the run started: job_config.json may be edited meanwhile
     )
+    append_sub_course(timeline_path, sub_timeline, str(config_file_path))
     recorder.finish()
     tracker.on_stage = None
     tracker.clear()

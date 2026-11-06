@@ -1312,6 +1312,10 @@ PHOTO_CREDIT_FONT_PX = 26
 PHOTO_CREDIT_PADDING_PX = 8
 PHOTO_CREDIT_MARGIN_PX = 24
 PHOTO_CREDIT_BOX_OPACITY = 0.6
+# The sub course's name over its first clip (sub_course_step.py).
+SUB_COURSE_TITLE_SECONDS = 3.5
+# The main course drawn faint under a sub course leg (RGBA).
+SUB_COURSE_MAIN_LINE_COLOR = (150, 150, 150, 140)
 OUTRO_ROUTE_DISTANCE_FONT_SIZE = 22
 # The route page's title + subtitle use the intro's text and styles at this fraction of its size.
 OUTRO_HEADING_SCALE = 0.7

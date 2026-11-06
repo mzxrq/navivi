@@ -182,6 +182,7 @@ def render_residential_leg_pydeck(
     walker_color: List[int] | None = None,
     upcoming_color: List[int] | None = None,
     landmarks: Optional[List[Dict]] = None,
+    context_path: Optional[List[List[float]]] = None,
     arrival_hold_seconds: float = 2.0,
     route_chain: Optional[List[str]] = None,
     topdown_transition_seconds: float = tuning.LEG_ZOOM_SECONDS,
@@ -470,6 +471,13 @@ def render_residential_leg_pydeck(
     # as this leg and just painted over/confused this leg's own guide line
     # with an irrelevant one) -- each leg's clip shows only its own path.
     base_layers = [
+        # A sub course leg: the main course [lon, lat] faint underneath, for where it branches off.
+        *([pdk.Layer(
+            "GeoJsonLayer", id="main-course",
+            data=_route_linestring_feature(context_path, line_color=list(tuning.SUB_COURSE_MAIN_LINE_COLOR)),
+            stroked=True, filled=False, get_line_color="properties.line_color",
+            line_width_scale=1, line_width_min_pixels=max(2, line_thickness // 2),
+        )] if context_path and len(context_path) > 1 else []),
         pdk.Layer(
             "GeoJsonLayer", id="route-preview",
             data=(

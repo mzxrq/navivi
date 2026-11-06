@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { appendStop, legEnds, legIndexOf, mainLegCount, setEndsAtDestination, startSubCourse, subEnd, withSubLast } from "../../src/utils/courses";
 import { stopLabel } from "../../src/utils/stopLabel";
 import type { Waypoint } from "../../src/types";
+import { autoOrderKey, type Segment } from "../../src/features/editor/model";
 
 const stop = (id: string, lat: number, patch: Partial<Waypoint> = {}): Waypoint => ({ id, lat, lng: 0, name: id.toUpperCase(), routeMode: "walking", ...patch });
 const main = () => [stop("s", 0), stop("a", 1), stop("e", 2)];
@@ -35,5 +36,18 @@ describe("sub course", () => {
     const shuffled = [all[4], ...all.slice(0, 4), all[5]];
     expect(withSubLast(shuffled).map((w) => w.id)).toEqual(all.map((w) => w.id));
     expect(withSubLast(all)).toBe(all);
+  });
+});
+
+describe("auto edit order", () => {
+  it("puts the sub course's clips after the main course and before the outro", () => {
+    const seg = (video: string, kind: Segment["kind"]) => ({ video, kind }) as Segment;
+    const keys = [
+      seg("C:/p/assets/video/route/02_waypoint_05_Port.mp4", "route"),
+      seg("C:/p/.navivi/sub_course/assets/video/route/02_waypoint_01_Shrine.mp4", "route"),
+      seg("C:/p/assets/video/99_outro.mp4", "outro"),
+    ].map(autoOrderKey);
+    expect(keys[0][0]).toBeLessThan(keys[1][0]);
+    expect(keys[1][0]).toBeLessThan(keys[2][0]);
   });
 });
