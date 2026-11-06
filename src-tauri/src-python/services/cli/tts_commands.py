@@ -60,6 +60,13 @@ def _prepare(job_config_path: str, output_audio_dir: str | None = None, force: b
     )
 
 
+def _retake_args(retake: str | None) -> Dict[str, Any]:
+    """--retake= (a new take of the whole file) or --retake=2,5 (only those kept sentences) as generate_* kwargs."""
+    if retake is None:
+        return {}
+    return {"retake": True, "redo_pieces": [int(i) for i in retake.split(",") if i.strip().isdigit()] or None}
+
+
 def _record_cues(config_path: Path, settings: dict) -> None:
     if settings.get("use_narration_cues", True):
         record_cue_times(str(config_path), existing_audio_data(str(config_path)))
@@ -81,8 +88,9 @@ def test_tts(
     output_audio_dir: str | None = None,
     waypoint_index: int = 0,
     force: bool = False,
+    retake: str | None = None,
 ) -> Dict[str, Any]:
-    """Generate and inspect the leg narration audio for one waypoint."""
+    """Generate and inspect the leg narration audio for one waypoint. `retake`: see _retake_args."""
     settings, config_path, waypoints, output_dir, client, processor, p_dict = _prepare(
         job_config_path, output_audio_dir, force
     )
@@ -99,7 +107,7 @@ def test_tts(
         clip = asyncio.run(
             generate_waypoint_audio(
                 waypoint, waypoint_index, client, processor, output_dir,
-                force=force, pronunciation_dict=p_dict,
+                force=force, pronunciation_dict=p_dict, project_dir=config_path.parent, **_retake_args(retake),
             )
         )
     finally:
@@ -183,10 +191,11 @@ def test_attraction_tts(
     output_audio_dir: str | None = None,
     waypoint_index: int = 0,
     force: bool = False,
+    retake: str | None = None,
 ) -> Dict[str, Any]:
     """Generate the attraction-only narration audio (the clip the attraction
-    video plays) for one waypoint."""
-    _settings, _config_path, waypoints, output_dir, client, processor, p_dict = _prepare(
+    video plays) for one waypoint. `retake`: see _retake_args."""
+    _settings, config_path, waypoints, output_dir, client, processor, p_dict = _prepare(
         job_config_path, output_audio_dir, force
     )
     _check_index(waypoints, waypoint_index)
@@ -201,7 +210,7 @@ def test_attraction_tts(
         clip = asyncio.run(
             generate_attraction_audio_for_waypoint(
                 waypoint, waypoint_index, client, processor, output_dir,
-                force=force, pronunciation_dict=p_dict,
+                force=force, pronunciation_dict=p_dict, project_dir=config_path.parent, **_retake_args(retake),
             )
         )
     finally:
@@ -217,10 +226,10 @@ def test_attraction_tts_all(
 ) -> Dict[str, Any]:
     """Generate the attraction-only narration audio for every waypoint that
     has one (stop-bys not connected to the route are skipped)."""
-    _settings, _config_path, waypoints, output_dir, client, processor, p_dict = _prepare(
+    _settings, config_path, waypoints, output_dir, client, processor, p_dict = _prepare(
         job_config_path, output_audio_dir, force
     )
-    todo = [(i, w) for i, w in enumerate(waypoints) if not _attraction_tts_skip_reason(w)]
+    todo =[(i, w) for i, w in enumerate(waypoints) if not _attraction_tts_skip_reason(w)]
     for i, w in enumerate(waypoints):
         if no_attraction(w):
             _tracker.note(f"Skipped attraction TTS {i + 1}/{len(waypoints)}: {_label(w, i)} ({passed_only_reason(w)})")
@@ -232,7 +241,7 @@ def test_attraction_tts_all(
             clips.append(
                 await generate_attraction_audio_for_waypoint(
                     waypoint, index, client, processor, output_dir,
-                    force=force, pronunciation_dict=p_dict,
+                    force=force, pronunciation_dict=p_dict, project_dir=config_path.parent,
                 )
             )
         return clips

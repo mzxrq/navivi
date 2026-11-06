@@ -379,6 +379,21 @@ class TestQwen3Actions:
         assert result["success"], result
         assert seen == {"type": "Qwen3TTSClient", "voice": "alice", "filename": "qwen3_alice.wav"}
 
+    def test_a_dictionary_word_is_heard_as_a_new_take_in_the_projects_voice(self, monkeypatch, tmp_path, voice_lib):
+        seen = {}
+
+        async def speak(self, text, filename=None):
+            seen.update(voice=self.config.voice, text=text, fresh=self.bypass_cache, filename=filename)
+            return str(tmp_path / "x.wav")
+
+        monkeypatch.setattr(Qwen3TTSClient, "generate_speech", speak)
+        result = voice_commands.run_voice_action("tts_voice_preview", {
+            "tts": {"engine": "qwen3", "voice": "alice"}, "entry": {"word": "孝子", "reading": "きょうし"}, "new_take": True,
+        })
+        assert result["success"], result
+        assert (seen["voice"], seen["text"], seen["fresh"]) == ("alice", "キョウシ", True)
+        assert seen["filename"].startswith("qwen3_alice_")
+
     def test_a_qwen3_preview_still_needs_the_voice_file(self, voice_lib):
         result = voice_commands.run_voice_action("tts_voice_preview", {"engine": "qwen3", "voice": "nobody"})
         assert result["success"] is False and "nobody" in result["error"]

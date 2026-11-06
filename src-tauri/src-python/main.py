@@ -107,6 +107,9 @@ if __name__ == "__main__":
     force_arg = "--force" in sys.argv
     if force_arg:
         sys.argv = [arg for arg in sys.argv if arg != "--force"]
+    # --retake=[...]: overview-tts / tts / attraction-tts voice that file (or the listed kept sentences) anew.
+    retake_arg = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--retake=")), None)
+    sys.argv = [arg for arg in sys.argv if not arg.startswith("--retake=")]
     # --no-llm: overview-script builds its draft from the route facts alone.
     no_llm_arg = "--no-llm" in sys.argv
     if no_llm_arg:
@@ -288,19 +291,18 @@ if __name__ == "__main__":
                 # audio) -- passing output_dir_arg here used to put TTS test
                 # output in the video folder instead of the audio one.
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
-                result = test_tts(job_config_arg, None, waypoint_index_arg, force=force_arg)
+                result = test_tts(job_config_arg, None, waypoint_index_arg, force=force_arg, retake=retake_arg)
             elif mode_arg == "tts-all":
                 # [NOTE] [TTS] The pipeline's whole TTS step: overview, every leg and every attraction narration, plus cue times.
                 result = test_tts_all(job_config_arg, None, force=force_arg)
             elif mode_arg == "overview-tts":
                 # [NOTE] [TTS] Generates only the overview narration audio.
                 # --retake=intro|overview[:2,5]: that file (or those of its sentences) gets a new take even when its words are unchanged.
-                retake_arg = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--retake=")), None)
                 result = test_overview_tts(job_config_arg, None, force=force_arg, retake=retake_arg)
             elif mode_arg == "attraction-tts":
                 # [NOTE] [TTS] Generates the attraction-only narration audio for ONE waypoint (index from argv[3], default 0).
                 waypoint_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else 0
-                result = test_attraction_tts(job_config_arg, None, waypoint_index_arg, force=force_arg)
+                result = test_attraction_tts(job_config_arg, None, waypoint_index_arg, force=force_arg, retake=retake_arg)
             elif mode_arg == "attraction-tts-all":
                 # [NOTE] [TTS] Generates the attraction-only narration audio for every waypoint that has one (unconnected stop-bys are skipped).
                 result = test_attraction_tts_all(job_config_arg, None, force=force_arg)

@@ -83,13 +83,13 @@ export function useStopRegen() {
   };
 
   // Redo one stop's files through the single-stop CLI modes (one sidecar call at a time), then re-read them in the timeline.
-  // `narration`: from a timeline clip, only the narration that clip plays.
-  const regenerate = (index: number, kind: RegenKind, narration: StopNarration | null = null) => {
+  // `narration`: from a timeline clip, only the narration that clip plays. `pieces`: only those of its sentences (VoicePiecesDialog).
+  const regenerate = (index: number, kind: RegenKind, narration: StopNarration | null = null, pieces?: number[]) => {
     const dir = metadata.directory_path;
     const info = stopInfo(index);
     const stop = info && onlyNarration(info, narration);
     if (!dir || !stop || isRendering) return;
-    queue(index, kind, () => runStop(dir, index, kind, stop));
+    queue(index, kind, () => runStop(dir, index, kind, stop, pieces));
   };
 
   const queue = (index: number | RouteClip, kind: RegenKind | "video", run: () => Promise<void>) => {
@@ -97,14 +97,14 @@ export function useStopRegen() {
     if (waits) showToast(t`Added to the queue. It starts when the one before it is done.`, "info");
   };
 
-  const runStop = async (dir: string, index: number, kind: RegenKind, stop: NonNullable<ReturnType<typeof onlyNarration>>) => {
+  const runStop = async (dir: string, index: number, kind: RegenKind, stop: NonNullable<ReturnType<typeof onlyNarration>>, pieces?: number[]) => {
     showToast(
       kind === "voice" ? t`Making the new voice for this stop. The first one can take a while.` : kind === "subtitles" ? t`Making the subtitles for this stop.` : t`Making the photo clip for this stop. This can take a few minutes.`,
       "info",
     );
     try {
       await saveProject();
-      const { skipped } = await runRegen(`${dir}/job_config.json`, regenModes(kind, index, stop));
+      const { skipped } = await runRegen(`${dir}/job_config.json`, regenModes(kind, index, stop, pieces));
       const next = await refreshStopMedia(liveTimeline.current, index, kind, {
         probe: async (rel, mediaKind) => probeDuration(convertFileSrc(await toAbsoluteProjectPath(rel, dir)), mediaKind, 0),
         readText: async (rel) => readTextFile(await toAbsoluteProjectPath(rel, dir)),

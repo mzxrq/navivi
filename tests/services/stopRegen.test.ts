@@ -17,6 +17,13 @@ describe("regenModes", () => {
     expect(regenModes("voice", 3, both)).toEqual(["tts 3 --force", "attraction-tts 3 --force", "subtitle 3 --force", "subtitle-all"]);
   });
 
+  it("voices only the picked sentences again, the rest keep their audio", () => {
+    const attractionOnly = { hasArrivalVoice: false, hasAttractionVoice: true };
+    expect(regenModes("voice", 2, attractionOnly, [0, 3])).toEqual(["attraction-tts 2 --retake=0,3", "subtitle-all"]);
+    expect(regenModes("voice", 2, arrivalOnly, [1])).toEqual(["tts 2 --retake=1", "subtitle 2 --force"]);
+    expect(regenModes("voice", 2, arrivalOnly, [])).toEqual(["tts 2 --force", "subtitle 2 --force"]);
+  });
+
   it("makes sure the photo clip has its narration to size against, without redoing it", () => {
     expect(regenModes("photo", 2, both)).toEqual(["attraction-tts 2", "attraction 2 --force"]);
     expect(regenModes("photo", 2, arrivalOnly)).toEqual(["attraction 2 --force"]);

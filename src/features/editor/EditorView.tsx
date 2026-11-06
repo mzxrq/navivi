@@ -66,7 +66,8 @@ export function EditorView() {
   const [pps, setPps] = useState(0);
   const [exportOpen, setExportOpen] = useState(false);
   const [musicOpen, setMusicOpen] = useState(false);
-  const [piecesFor, setPiecesFor] = useState<"intro" | "overview" | null>(null);
+  // The narration file whose sentences are being picked, and what voices the picked ones again.
+  const [piecesFor, setPiecesFor] = useState<{ file: string; title: string; redo: (pieces: number[]) => void } | null>(null);
   const view = draft ?? timeline;
   const { placed, total } = useMemo(() => layout(view), [view]);
 
@@ -324,7 +325,17 @@ export function EditorView() {
         disabled: isRendering,
         submenu: [
           { label: t`Narration`, icon: Mic, onSelect: () => void regenerateClip(clip, "voice") },
-          { label: t`Choose sentences to voice again...`, icon: FileText, disabled: !dir, onSelect: () => setPiecesFor(clip) },
+          {
+            label: t`Choose sentences to voice again...`,
+            icon: FileText,
+            disabled: !dir,
+            onSelect: () =>
+              setPiecesFor({
+                file: clip === "intro" ? "00_intro_narration" : "00_overview_narration",
+                title: clip === "intro" ? t`Choose sentences of the intro to voice again` : t`Choose sentences of the overview to voice again`,
+                redo: (pieces) => regenerateClip(clip, "voice", pieces),
+              }),
+          },
           { label: t`Video`, icon: Film, onSelect: () => void regenerateClip(clip, "video") },
           // Voice first: the video follows the voice's length.
           { label: t`Narration and video`, icon: RotateCcw, onSelect: () => (regenerateClip(clip, "voice"), regenerateClip(clip, "video")) },
@@ -337,6 +348,19 @@ export function EditorView() {
         disabled: isRendering,
         submenu: [
           { label: t`Voice`, icon: Mic, disabled: !stop.hasArrivalVoice && !stop.hasAttractionVoice, onSelect: remake("voice") },
+          {
+            label: t`Choose sentences to voice again...`,
+            icon: FileText,
+            // One narration file per clip; English only (Japanese stop narration is voiced whole, audio_step._english_only).
+            disabled: !narration || !seg.audio || (!stop.hasArrivalVoice && !stop.hasAttractionVoice)
+              || timeline.subtitles.some((c) => c.segmentId === seg.id && /[぀-ヿ㐀-鿿]/.test(c.text)),
+            onSelect: () =>
+              setPiecesFor({
+                file: stem(seg.audio!),
+                title: t`Choose sentences of this narration to voice again`,
+                redo: (pieces) => void regenerate(stopIndex!, "voice", narration, pieces),
+              }),
+          },
           { label: t`Subtitles`, icon: Subtitles, disabled: !stop.hasArrivalVoice && !stop.hasAttractionVoice, onSelect: remake("subtitles") },
           { label: t`Photo clip`, icon: Film, disabled: !stop.hasPhotos, onSelect: remake("photo") },
           {
@@ -501,7 +525,7 @@ export function EditorView() {
 
       {musicOpen && <MusicPicker onPick={useLibraryTrack} onChooseFile={addMusicFile} onClose={() => setMusicOpen(false)} />}
       {piecesFor && dir && (
-        <VoicePiecesDialog dir={dir} clip={piecesFor} onRedo={(pieces) => regenerateClip(piecesFor, "voice", pieces)} onClose={() => setPiecesFor(null)} />
+        <VoicePiecesDialog dir={dir} file={piecesFor.file} title={piecesFor.title} onRedo={piecesFor.redo} onClose={() => setPiecesFor(null)} />
       )}
       {exportOpen && <ExportDialog timeline={timeline} projectDir={dir} projectName={metadata.project_name} onClose={() => setExportOpen(false)} />}
     </div>

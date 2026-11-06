@@ -26,13 +26,16 @@ def _manifest(folder: Path) -> Dict[str, Any]:
         return {}
 
 
-def load(folder: Path, voice: Optional[dict]) -> Dict[str, List[bytes]]:
-    """{sentence text: its takes} for the kept sentences spoken with `voice`; {} when the voice changed."""
+def load(folder: Path, voice: Optional[dict], locked_only: bool = False) -> Dict[str, List[bytes]]:
+    """{sentence text: its takes} for the kept sentences spoken with `voice`; {} when the voice changed.
+    `locked_only`: just the ones locked in the editor (they survive a forced remake)."""
     data = _manifest(folder)
     if data.get("voice") != voice:
         return {}
     out: Dict[str, List[bytes]] = {}
     for piece in data.get("pieces") or []:
+        if locked_only and not piece.get("locked"):
+            continue
         try:
             out[piece["text"]] = [(Path(folder) / name).read_bytes() for name in piece["takes"]]
         except (OSError, KeyError, TypeError):
@@ -41,8 +44,13 @@ def load(folder: Path, voice: Optional[dict]) -> Dict[str, List[bytes]]:
 
 
 def save(folder: Path, voice: Optional[dict], pieces: List[tuple]) -> None:
-    """Keeps `pieces` [(text, [take bytes])] as the file's sentences; takes no piece uses any more are removed."""
+    """Keeps `pieces` [(text, [take bytes])] as the file's sentences; takes no piece uses any more are removed.
+    A locked sentence stays locked while its text and takes are unchanged."""
     folder = Path(folder)
+    old = _manifest(folder)
+    locked = {
+        (p.get("text"), tuple(p.get("takes") or ())) for p in old.get("pieces") or [] if p.get("locked")
+    } if old.get("voice") == voice else set()
     try:
         folder.mkdir(parents=True, exist_ok=True)
         entries, used = [], set()
@@ -57,7 +65,7 @@ def save(folder: Path, voice: Optional[dict], pieces: List[tuple]) -> None:
                     os.replace(tmp, path)
                 names.append(name)
                 used.add(name)
-            entries.append({"text": text, "takes": names})
+            entries.append({"text": text, "takes": names, **({"locked": True} if (text, tuple(names)) in locked else {})})
         write_json_atomic(folder / MANIFEST, {"voice": voice, "pieces": entries})
         for path in folder.glob("*.wav"):
             if path.name not in used:

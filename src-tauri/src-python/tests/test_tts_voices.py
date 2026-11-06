@@ -180,6 +180,62 @@ def test_all_narration_speaks_the_pronunciation_dictionary(lib, tmp_path):
     assert "孝子" in leg(d)["text"]  # subtitles keep the kanji
 
 
+def test_stop_narration_keeps_its_sentences_and_redoes_only_the_picked_ones(lib, tmp_path):
+    from services.tts import voice_pieces
+
+    out = tmp_path / "audio"
+    out.mkdir()
+    seen = []
+
+    class FakeClient(_Client):
+        bypass_cache, pieces_dir, redo_texts = False, None, frozenset()
+
+        async def generate_speech(self, text, output_filename):
+            seen.append((output_filename, self.pieces_dir, set(self.redo_texts), self.bypass_cache))
+            return str(_wav(out / output_filename, 0.5, level=1000))
+
+    class FakeProcessor:
+        def analyze_pauses(self, path):
+            return {"duration_seconds": 0.5, "pauses": []}
+
+    wp = {"label": "A", "arrivingNarration": "One. Two.", "attractionNarration": "Three."}
+    c = FakeClient("none", 1.25)
+    leg = lambda **kw: asyncio.run(audio_step.generate_waypoint_audio(wp, 0, c, FakeProcessor(), out, project_dir=tmp_path, **kw))
+    att = lambda **kw: asyncio.run(audio_step.generate_attraction_audio_for_waypoint(wp, 0, c, FakeProcessor(), out, project_dir=tmp_path, **kw))
+    leg(), att()
+    name, folder, redo, bypass = seen[0]
+    assert folder == audio_step.pieces_dir(tmp_path, name) and not redo and not bypass
+    assert seen[1][1] == audio_step.pieces_dir(tmp_path, seen[1][0])
+    leg()
+    assert len(seen) == 2  # unchanged: reused, no new take
+
+    voice_pieces.save(folder, None, [("One.", [b"a"]), ("Two.", [b"b"])])
+    leg(retake=True, redo_pieces=[1])
+    assert seen[-1][2] == {"Two."} and not seen[-1][3]  # only the picked sentence, the rest from the kept takes
+    att(retake=True)
+    assert seen[-1][3]  # the whole file anew, past the cache
+    assert c.pieces_dir is None and not c.redo_texts and not c.bypass_cache  # the client is left as it was
+
+
+def test_a_locked_sentence_survives_a_forced_remake(tmp_path):
+    import json
+
+    from services.tts import voice_pieces
+
+    voice_pieces.save(tmp_path, {"v": 1}, [("One.", [b"a"]), ("Two.", [b"b"])])
+    manifest = tmp_path / voice_pieces.MANIFEST
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data["pieces"][0]["locked"] = True  # what the editor's lock button writes
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+
+    assert voice_pieces.load(tmp_path, {"v": 1}, locked_only=True) == {"One.": [b"a"]}
+    voice_pieces.save(tmp_path, {"v": 1}, [("One.", [b"a"]), ("Two.", [b"c"])])
+    assert voice_pieces.load(tmp_path, {"v": 1}, locked_only=True) == {"One.": [b"a"]}  # still locked
+    voice_pieces.save(tmp_path, {"v": 1}, [("One.", [b"new"]), ("Two.", [b"c"])])
+    assert voice_pieces.load(tmp_path, {"v": 1}, locked_only=True) == {}  # redone on purpose: unlocked
+    assert voice_pieces.load(tmp_path, {"v": 2}, locked_only=True) == {}  # another voice
+
+
 def test_cli_actions_return_json_errors(lib, tmp_path):
     assert run_voice_action("tts_voices_list", {})["voices"][0]["id"] == "none"
     res = run_voice_action("tts_voice_add", {"path": str(tmp_path / "missing.wav"), "id": "x"})

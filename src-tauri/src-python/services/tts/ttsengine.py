@@ -796,7 +796,8 @@ class IrodoriTTSClient:
             logger.info("TTS text of %d characters split into %d chunk(s).", len(text), len(chunks))
         from services.tts import voice_pieces
 
-        kept = voice_pieces.load(self.pieces_dir, self.pieces_voice) if self.pieces_dir and not self.bypass_cache else {}
+        # A forced remake still keeps the sentences locked in the editor.
+        kept = voice_pieces.load(self.pieces_dir, self.pieces_voice, locked_only=self.bypass_cache) if self.pieces_dir else {}
         takes: List[bytes] = []
         pieces = []
         for chunk in chunks or [text]:

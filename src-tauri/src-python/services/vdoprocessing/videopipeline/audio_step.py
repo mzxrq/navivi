@@ -361,17 +361,19 @@ def _replace_words(text: str, word: str, spoken: str) -> str:
 
 
 def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
+    from services.localization.localization import is_japanese
     from services.tts import name_check
 
     if not text or not dictionary:
         return text
+    english = not is_japanese(text)
     # Longest words first, so 三段壁 is replaced before a shorter entry such as 三段 can cut into it.
     # Typed entries can carry stray spaces ("Kisshousouji "), which glue or miss the word.
     entries = [{**e, "word": (e.get("word") or "").strip(), "reading": (e.get("reading") or "").strip()} for e in dictionary if isinstance(e, dict)]
     for entry in sorted(entries, key=lambda e: len(e["word"]), reverse=True):
         spoken = _spoken_form(entry)
-        if not spoken:
-            continue
+        if not spoken or (english and is_japanese(spoken)):
+            continue  # a kana reading would turn an English line Japanese (Qwen then reads all of it as Japanese)
         if _kanji_first(entry):
             name_check.remember_kanji(entry["word"], entry["reading"], spoken)
             continue
@@ -388,8 +390,10 @@ async def generate_attraction_audio_for_waypoint(
     force: bool = False,
     project_dir=None,
     pronunciation_dict: Sequence[dict] = (),
+    retake: bool = False,
+    redo_pieces: Optional[List[int]] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Generates (or reuses) one waypoint's attraction-only TTS audio, in
+    """`retake` / `redo_pieces`: see _speak. Generates (or reuses) one waypoint's attraction-only TTS audio, in
     its own "04_attraction_" filename namespace (see
     helpers.attraction_audio_filename) so it's never confused with — or
     accidentally overwritten by — that same waypoint's combined arrival+
@@ -412,7 +416,7 @@ async def generate_attraction_audio_for_waypoint(
         # no note: made before it existed, so only trust it when the dictionary changes nothing
         same_text = tts_script == script
     same_text = same_text or _keep_old_voice(existing_path, tts_script)
-    if not force and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
+    if not force and not retake and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
         logger.info(
             "Step 2: [%d] '%s' attraction narration already exists — skipping TTS.",
             idx + 1, label,
@@ -421,9 +425,9 @@ async def generate_attraction_audio_for_waypoint(
     else:
         logger.info(
             "Step 2: [%d] Generating attraction narration for: '%s' (%s)", idx + 1, label,
-            _remake_reason(existing_path, same_text, client, force),
+            "a new take" if retake else _remake_reason(existing_path, same_text, client, force),
         )
-        audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
+        audio_path = await _speak(client, tts_script, audio_filename, _english_only(project_dir, script), retake, redo_pieces)
         try:
             _spoken_text_path(audio_path).write_text(tts_script, encoding="utf-8")
         except OSError:
@@ -483,10 +487,40 @@ async def generate_overview_audio(
 
 
 def pieces_dir(project_dir, audio_filename: str) -> Path:
-    """Where an overview narration file keeps its sentences (voice_pieces.py)."""
+    """Where a narration file keeps its sentences (voice_pieces.py)."""
     from services.projectfiles import meta_dir
 
     return meta_dir(project_dir) / "voice_pieces" / Path(audio_filename).stem
+
+
+def _english_only(project_dir, script: str):
+    """Stop narration keeps its sentences only in English (the only language whose words come out unreliably)."""
+    from services.localization.localization import is_japanese
+
+    return None if is_japanese(script) else project_dir
+
+
+async def _speak(
+    client: Any, tts_script: str, audio_filename: str, project_dir=None, retake: bool = False,
+    redo_pieces: Optional[List[int]] = None,
+) -> str:
+    """Voices a narration file, reusing its kept sentences (voice_pieces.py) when `project_dir` is given.
+    `retake`: a new take past every cache; with `redo_pieces`, only those sentences, the rest keep their audio."""
+    from services.tts import voice_pieces
+
+    folder = pieces_dir(project_dir, audio_filename) if project_dir is not None else None
+    saved = tuple(getattr(client, k, d) for k, d in (
+        ("bypass_cache", False), ("pieces_dir", None), ("pieces_voice", None), ("redo_texts", frozenset()),
+    ))
+    client.pieces_dir, client.pieces_voice = folder, _client_fingerprint(client)
+    if retake and redo_pieces and folder is not None:
+        client.redo_texts = frozenset(voice_pieces.texts(folder, redo_pieces))
+    else:
+        client.bypass_cache = saved[0] or retake
+    try:
+        return await client.generate_speech(tts_script, output_filename=audio_filename)
+    finally:
+        client.bypass_cache, client.pieces_dir, client.pieces_voice, client.redo_texts = saved
 
 
 async def _voice_piece(
@@ -519,21 +553,7 @@ async def _voice_piece(
             "Step 2: Generating %s (%s).", audio_filename,
             "a new take" if retake else _remake_reason(existing_path, same_text, client, force),
         )
-        from services.tts import voice_pieces
-
-        folder = pieces_dir(project_dir, audio_filename) if project_dir is not None else None
-        saved = tuple(getattr(client, k, d) for k, d in (
-            ("bypass_cache", False), ("pieces_dir", None), ("pieces_voice", None), ("redo_texts", frozenset()),
-        ))
-        client.pieces_dir, client.pieces_voice = folder, _client_fingerprint(client)
-        if retake and redo_pieces and folder is not None:
-            client.redo_texts = frozenset(voice_pieces.texts(folder, redo_pieces))
-        else:
-            client.bypass_cache = saved[0] or retake
-        try:
-            audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
-        finally:
-            client.bypass_cache, client.pieces_dir, client.pieces_voice, client.redo_texts = saved
+        audio_path = await _speak(client, tts_script, audio_filename, project_dir, retake, redo_pieces)
         try:
             _spoken_text_path(audio_path).write_text(tts_script, encoding="utf-8")
         except OSError:
@@ -600,8 +620,11 @@ async def generate_waypoint_audio(
     output_dir: Path,
     force: bool = False,
     pronunciation_dict: Sequence[dict] = (),
+    project_dir=None,
+    retake: bool = False,
+    redo_pieces: Optional[List[int]] = None,
 ) -> Dict[str, Any]:
-    """Generates (or, if already present and not `force`, reuses) one
+    """`retake` / `redo_pieces`: see _speak. Generates (or, if already present and not `force`, reuses) one
     waypoint's TTS audio and its pause/duration analysis. Raises ValueError
     if the waypoint has no narration text — callers decide whether that
     should abort (CLI, fail-fast) or be padded over and continued past
@@ -621,7 +644,7 @@ async def generate_waypoint_audio(
 
     same_text = output_is_valid(existing_path) and (
         _spoken_text_matches(existing_path, script, waypoint, tts_script) or _keep_old_voice(existing_path, tts_script))
-    if not force and same_text and _voice_matches(existing_path, client):
+    if not force and not retake and same_text and _voice_matches(existing_path, client):
         logger.info(
             "Step 2: [%d] '%s' already exists — skipping TTS.", idx + 1, label
         )
@@ -629,9 +652,9 @@ async def generate_waypoint_audio(
     else:
         logger.info(
             "Step 2: [%d] Generating audio for: '%s' (%s)", idx + 1, label,
-            _remake_reason(existing_path, same_text, client, force),
+            "a new take" if retake else _remake_reason(existing_path, same_text, client, force),
         )
-        audio_path = await client.generate_speech(tts_script, output_filename=audio_filename)
+        audio_path = await _speak(client, tts_script, audio_filename, _english_only(project_dir, script), retake, redo_pieces)
         try:
             _spoken_text_path(audio_path).write_text(tts_script, encoding="utf-8")
         except OSError:
@@ -874,7 +897,8 @@ def generate_audio(
                 
                 try:
                     clip = await generate_waypoint_audio(
-                        wp, idx, client, processor, output_dir, force=force, pronunciation_dict=p_dict
+                        wp, idx, client, processor, output_dir, force=force, pronunciation_dict=p_dict,
+                        project_dir=config_path.parent,
                     )
                 except ValueError:
                     # Safety net for missing script
@@ -889,7 +913,8 @@ def generate_audio(
                     await asyncio.sleep(2.0)
                     try:
                         clip = await generate_waypoint_audio(
-                            wp, idx, client, processor, output_dir, force=force, pronunciation_dict=p_dict
+                            wp, idx, client, processor, output_dir, force=force, pronunciation_dict=p_dict,
+                            project_dir=config_path.parent,
                         )
                     except Exception as retry_exc:
                         logger.error("TTS retry failed for %s (%s). Skipping audio.", label, retry_exc)
@@ -924,7 +949,8 @@ def generate_audio(
                 tracker.show(f"Generating attraction TTS {idx + 1}/{len(waypoints)}: {label}")
                 try:
                     clip = await generate_attraction_audio_for_waypoint(
-                        wp, idx, client, processor, output_dir, force=force, pronunciation_dict=p_dict
+                        wp, idx, client, processor, output_dir, force=force, pronunciation_dict=p_dict,
+                        project_dir=config_path.parent,
                     )
                 except Exception as exc:
                     logger.warning(

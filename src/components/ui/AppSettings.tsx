@@ -39,9 +39,12 @@ import {
   Info,
   Mic,
   Monitor,
+  Loader2,
   Moon,
   NaviviType,
   Palette,
+  Pause,
+  Play,
   Plus,
   Settings,
   Sparkles,
@@ -767,6 +770,39 @@ function PronunciationEditor({
   entries: DictionaryEntry[];
   onChange: (next: DictionaryEntry[]) => void;
 }) {
+  const { settings } = useWorkspace();
+  const { showToast } = useUI();
+  const [listening, setListening] = useState<{ idx: number; state: "voicing" | "playing" } | null>(null);
+  const audio = useRef<HTMLAudioElement | null>(null);
+  const press = useRef(0); // a take that arrives after Stop or another press is dropped
+  useEffect(() => () => (press.current++, audio.current?.pause()), []);
+
+  // Every press is a new take in the project's voice, spelled as a narration line spells the word.
+  const listen = async (idx: number) => {
+    const mine = ++press.current;
+    audio.current?.pause();
+    if (listening?.idx === idx) return setListening(null);
+    const { word, reading } = entries[idx];
+    setListening({ idx, state: "voicing" });
+    const res = await callSidecar<{ path: string }>("tts_voice_preview", {
+      tts: settings.tts ?? {},
+      hardware: settings.hardware_spec_override,
+      entry: { word, reading },
+      new_take: true,
+    });
+    if (mine !== press.current) return;
+    if (!res.success) {
+      setListening(null);
+      if (!res.cancelled) showToast(t`Could not voice that word: ${res.error}`, "error");
+      return;
+    }
+    const a = new Audio(`${convertFileSrc(res.path)}?t=${Date.now()}`);
+    a.onended = () => setListening((cur) => (cur?.idx === idx ? null : cur));
+    audio.current = a;
+    setListening({ idx, state: "playing" });
+    a.play().catch(() => setListening(null));
+  };
+
   return (
     <>
       <div className="rounded-xl border border-zinc-200 dark:border-white/10 overflow-hidden">
@@ -779,7 +815,7 @@ function PronunciationEditor({
               <span className="flex-1">
                 <Trans>Reading (Furigana)</Trans>
               </span>
-              <span className="w-7" />
+              <span className="w-16" />
             </div>
             <div className="divide-y divide-zinc-100 dark:divide-white/5">
               {entries.map((entry, idx) => (
@@ -821,6 +857,22 @@ function PronunciationEditor({
                       <Trans>auto</Trans>
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => void listen(idx)}
+                    disabled={!entry.word.trim() || (!!listening && listening.idx !== idx && listening.state === "voicing")}
+                    aria-label={listening?.idx === idx ? t`Stop` : t`Listen (a new take each time)`}
+                    title={listening?.idx === idx ? t`Stop` : t`Listen (a new take each time)`}
+                    className={`flex items-center justify-center w-7 h-7 rounded-lg transition-colors disabled:opacity-40 ${
+                      listening?.idx === idx ? "bg-navi/10 text-navi" : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/5"
+                    }`}
+                  >
+                    {listening?.idx === idx ? (
+                      listening.state === "voicing" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pause className="w-3.5 h-3.5" />
+                    ) : (
+                      <Play className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                   <button
                     type="button"
                     onClick={() =>

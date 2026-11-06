@@ -10,13 +10,15 @@ export interface RegenStop {
 }
 
 // The single-stop CLI modes of main.py, in the order they must run. The stop's index is its place in job_config's waypoints.
-export function regenModes(kind: RegenKind, index: number, stop: RegenStop): string[] {
+// `pieces`: voice only those kept sentences again (VoicePiecesDialog); the others keep their audio.
+export function regenModes(kind: RegenKind, index: number, stop: RegenStop, pieces?: number[]): string[] {
   // The attraction narration's subtitles have no single-stop mode; subtitle-all remakes them (all subtitles are cheap).
   if (kind === "subtitles") return [stop.hasArrivalVoice ? `subtitle ${index} --force` : "subtitle-all --force"];
   if (kind === "photo") return [...(stop.hasAttractionVoice ? [`attraction-tts ${index}`] : []), `attraction ${index} --force`];
+  const redo = pieces?.length ? `--retake=${pieces.join(",")}` : "--force";
   return [
-    ...(stop.hasArrivalVoice ? [`tts ${index} --force`] : []),
-    ...(stop.hasAttractionVoice ? [`attraction-tts ${index} --force`] : []),
+    ...(stop.hasArrivalVoice ? [`tts ${index} ${redo}`] : []),
+    ...(stop.hasAttractionVoice ? [`attraction-tts ${index} ${redo}`] : []),
     ...(stop.hasArrivalVoice ? [`subtitle ${index} --force`] : []),
     ...(stop.hasAttractionVoice ? ["subtitle-all"] : []),
   ];

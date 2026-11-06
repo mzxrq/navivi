@@ -93,22 +93,37 @@ def install_comfyui(_payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def voice_preview(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """`tts`: a project's whole voice settings (the dictionary's Listen), else engine/voice/speed/quality.
+    `new_take`: skip the phrase cache, so every press is a fresh take."""
+    import hashlib
+
     from services.tts.ttsengine import make_tts_client
 
-    engine = str(payload.get("engine") or "irodori")
-    voice = str(payload.get("voice") or "").strip()
-    if engine != "kokoro" and not voices.voice_exists(voice):
-        raise FileNotFoundError(f"Voice '{voice}' was not found.")
-    tts = {"engine": engine, "voice": voice, "kokoro_voice": voice}
-    if payload.get("speed") is not None:
-        tts["speed"] = payload["speed"]
-    if payload.get("quality"):
-        tts["quality"] = payload["quality"]
+    tts = payload.get("tts") if isinstance(payload.get("tts"), dict) else None
+    if tts is None:
+        engine = str(payload.get("engine") or "irodori")
+        voice = str(payload.get("voice") or "").strip()
+        if engine != "kokoro" and not voices.voice_exists(voice):
+            raise FileNotFoundError(f"Voice '{voice}' was not found.")
+        tts = {"engine": engine, "voice": voice, "kokoro_voice": voice}
+        if payload.get("speed") is not None:
+            tts["speed"] = payload["speed"]
+        if payload.get("quality"):
+            tts["quality"] = payload["quality"]
     out_dir = voices.voices_dir() / ".preview"
     client = make_tts_client({"tts": tts, "hardware_spec_override": payload.get("hardware")}, out_dir)
+    client.bypass_cache = bool(payload.get("new_take"))
     config = client.config
     text = str(payload.get("text") or PREVIEW_TEXT).strip()
-    safe = re.sub(r"[^A-Za-z0-9_-]", "_", f"{engine}_{voice}")
+    if isinstance(payload.get("entry"), dict):  # a dictionary word, spelled for the voice the way a narration line spells it
+        from services.vdoprocessing.videopipeline.audio_step import apply_pronunciation_dictionary
+
+        entry = payload["entry"]
+        text = apply_pronunciation_dictionary(str(entry.get("word") or "").strip(), [entry]) or text
+    voice = str(config.voice)
+    # One file per word, so playing one never overwrites another mid-play.
+    word = f"_{hashlib.sha256(text.encode()).hexdigest()[:8]}" if payload.get("entry") else ""
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", f"{config.engine}_{voice}{word}")
     # Server left running on purpose: the next preview is fast, the idle watchdog stops it.
     path = asyncio.run(client.generate_speech(text, f"{safe}.wav"))
     return {"success": True, "voice": voice, "speed": config.speed, "text": text, "path": path}
