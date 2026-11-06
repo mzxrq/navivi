@@ -52,7 +52,7 @@ export function runStage(configPath: string, mode: string): Promise<string> {
 // for the voice list on mount neither cancels another screen's request nor stops a running stage.
 const READ_ONLY_MODES = new Set([
   "extract_words", "extract_place_words", "get_furigana",
-  "tts_voices_list", "tts_engines", "tts_cache_info", "system_info", "list_fonts", "overview_length",
+  "tts_voices_list", "tts_engines", "tts_cache_info", "system_info", "list_fonts", "overview_length", "tts_voice_preview",
 ]);
 
 // A utility mode with its input (a string is passed as is, anything else as JSON); never throws.

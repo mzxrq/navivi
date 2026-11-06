@@ -44,6 +44,6 @@ test.describe('Navivi UI Workflow', () => {
 
     // 5. Map Editor is loaded (aside represents the sidebar)
     await expect(page.locator('aside')).toBeVisible();
-    await expect(page.locator('header')).toContainText(/Untitled/i);
+    await expect(page.getByText(/Untitled Project/i).first()).toBeVisible(); // the title bar's project name
   });
 });

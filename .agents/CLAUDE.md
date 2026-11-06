@@ -42,8 +42,8 @@ python main.py render_timeline <timeline.json> [output_video]
 
 pytest was fully green on 2026-10-05 (the earlier known failures in `test_introclip.py` and `test_route_brief.py` no longer fail).
 
-E2E: `tests/e2e/*.spec.ts` (Playwright) mocks `window.__TAURI_INTERNALS__`; there is no
-`playwright.config.*` in the repo, so they need a running dev server and an ad-hoc config.
+E2E: `tests/e2e/*.spec.ts` (Playwright) mocks `window.__TAURI_INTERNALS__`. `npm run e2e` runs them in the installed
+Edge (`playwright.config.ts`, no browser download), reusing a dev server on :1420 or starting `npm run dev`.
 `test/` at the root holds older unittest-style tests of `main.py`.
 
 ## Frontend (`src/`)

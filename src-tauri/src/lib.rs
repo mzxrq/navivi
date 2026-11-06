@@ -254,6 +254,8 @@ const UTILITY_MODES: &[&str] = &[
     "extract_words", "extract_place_words", "get_furigana",
     // What the Voice tab, the setup checklist and the settings ask on every mount; on the shared slot they cancelled each other.
     "tts_voices_list", "tts_engines", "tts_cache_info", "system_info", "list_fonts", "overview_length",
+    // A voice sample (dictionary Listen, Voice tab preview): on the shared slot it killed a running "Make again" job.
+    "tts_voice_preview",
 ];
 
 #[tauri::command]
@@ -843,8 +845,8 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             // A force-closed window (or OS shutdown) previously left any
-            // running Python worker  Eand whatever bundled server it had
-            // itself spawned (TTS/ComfyUI)  Erunning with nothing left to
+            // running Python worker (and whatever bundled server it had
+            // itself spawned: TTS, ComfyUI) running with nothing left to
             // supervise it. Kill whatever this app is still tracking on exit.
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 if let Some(state) = app_handle.try_state::<BlueprintState>() {

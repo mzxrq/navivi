@@ -884,7 +884,7 @@ ${t`Open the page this photo came from`}`}
 
                 <OptionRow
                   title={t`Pause at Location`}
-                  description={t`Adds a brief pause in the generated video at this waypoint before continuing the journey`}
+                  description={t`In the overview, the marker waits here while the narration describes this place. Off: it walks on.`}
                 >
                   <Switch
                     checked={wp.pauseAtWaypoint !== false /* the video's default: on */}

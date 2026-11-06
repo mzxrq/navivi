@@ -688,8 +688,8 @@ msgid "Address"
 msgstr "アドレス"
 
 #: src/features/map/components/WaypointEditor.tsx:887
-msgid "Adds a brief pause in the generated video at this waypoint before continuing the journey"
-msgstr "このポイントで生成された動画に短い一時停止を挿入して、旅を続ける"
+#~ msgid "Adds a brief pause in the generated video at this waypoint before continuing the journey"
+#~ msgstr "このポイントで生成された動画に短い一時停止を挿入して、旅を続ける"
 
 #: src/features/map/components/WaypointItem.tsx:394
 msgid "Adjust"
@@ -2877,6 +2877,10 @@ msgstr "{0}個のポイントを正常にインポートしました"
 #: src/features/map/components/OverviewNarration.tsx:147
 msgid "In range"
 msgstr "範囲内"
+
+#: src/features/map/components/WaypointEditor.tsx:887
+msgid "In the overview, the marker waits here while the narration describes this place. Off: it walks on."
+msgstr "概要動画で、ナレーションがこの場所を説明している間、マーカーがここで止まります。オフにすると止まらずに進みます。"
 
 #: src/components/ui/ExportProjectDialog.tsx:114
 #: src/components/ui/ExportProjectDialog.tsx:120
