@@ -21,6 +21,8 @@ A script may carry inline tags that mark moments the video has to land on:
     {close}   intro only: the intro's heading fades out here
     {photo:X} intro only: the photo of the stop named X shows from here
               (recorded as "photo1:X", "photo2:X", ... in order)
+    {next}    attraction narration only: the stop's next photo comes in here
+              (recorded as "next1", "next2", ...; see audio_step._write_photo_cuts)
 
 Tags are never spoken. They are stripped before TTS and subtitles, and the
 position each one had in the spoken text is kept so its time can be worked out
@@ -33,7 +35,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}")
+CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|next|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}")
 
 
 @dataclass(frozen=True)
@@ -57,6 +59,7 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
     stop = None  # the last {n}: a {go} ends that stop's description
     scene = 1
     photos = 0
+    nexts = 0
     last = ""  # the last character kept
     for match in CUE_RE.finditer(text):
         piece = text[pos:match.start()]
@@ -69,6 +72,9 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
         if tag.startswith("photo:"):
             photos += 1
             cues.append(Cue(f"photo{photos}:{tag[6:].strip()}", length))
+        elif tag == "next":
+            nexts += 1
+            cues.append(Cue(f"next{nexts}", length))
         elif tag == "scene":
             scene += 1
             cues.append(Cue(f"scene{scene}", length))

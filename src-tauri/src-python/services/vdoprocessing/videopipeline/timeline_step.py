@@ -428,7 +428,10 @@ def build_timeline(
 
             match = _ATTRACTION_RE.search(source_name)
             if match and int(match.group(1)) < len(run_waypoints):
-                clip_texts.extend(credit_items(run_waypoints[int(match.group(1))], length, photo_credit_look))
+                from .audio_step import read_photo_cuts
+
+                cuts = read_photo_cuts(audio_path) if audio_path else None
+                clip_texts.extend(credit_items(run_waypoints[int(match.group(1))], length, photo_credit_look, cuts))
         all_texts.extend(
             {**x, "start": round(clip_start + x["start"], 3), "end": round(clip_start + x["end"], 3)}
             for x in clip_texts

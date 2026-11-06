@@ -1240,6 +1240,8 @@ OUTRO_NAME_BREAK_BEFORE = " （(・「"
 OUTRO_NAME_BREAK_AFTER = " ）)・」"
 OUTRO_ROUTE_FROM_FONT_SIZE = 15
 # A photo's credit over its attraction clip (photo_credit.py): a small dark box in a bottom corner, 1080p px.
+# A {next} cue in attraction narration that leaves a photo less than this on screen is ignored (equal split).
+ATTRACTION_MIN_PHOTO_SECONDS = 1.5
 PHOTO_CREDIT_PREFIX = "ⓘ "
 PHOTO_CREDIT_FONT_PX = 26
 PHOTO_CREDIT_PADDING_PX = 8
@@ -1294,7 +1296,7 @@ VIDEO_END_FADE_SECONDS = 1.0
 TTS_MODEL = "irodori-tts"
 # "cpu", "cuda" or "auto"; NAVIVI_TTS_DEVICE overrides (read when the server starts). CPU on purpose: GPU TTS
 # drove the card to ~7.8 GB and hard-shut the PC (HYPERVISOR_ERROR) more than once, even with short chunks.
-TTS_DEVICE = "cpu"
+TTS_DEVICE = "cuda"
 # Longest text per TTS request: about 15 s of speech (~4.4 characters a second).
 TTS_MAX_CHUNK_CHARS = 60
 # Shortest request: a short trailing chunk is merged into the one before (Irodori "coasts" past the end of a

@@ -95,6 +95,7 @@ def generate_waypoint_attraction_video(
         output_filename=output_filename,
         place_label=label,
         force=force,
+        photo_cuts=read_photo_cuts(audio_path) if audio_path else None,
     )
 
     if result_path:
@@ -124,7 +125,7 @@ def generate_waypoint_attraction_video(
     return {"status": "failed", "label": label, "output_filename": output_filename}
 
 
-from .audio_step import is_passed_only, is_unvisited_stopby, no_attraction, passed_only_reason  # noqa: E402,F401  (shared rule: see audio_step)
+from .audio_step import is_passed_only, is_unvisited_stopby, no_attraction, passed_only_reason, read_photo_cuts  # noqa: E402,F401  (shared rule: see audio_step)
 
 
 def render_attraction_videos(

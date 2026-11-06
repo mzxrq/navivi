@@ -631,6 +631,8 @@ export function WaypointEditor({
                           onGenerate={(prompt) => handleGenerateScript(section.type, prompt)}
                           aiEnabled={!!settings.ai_features_enabled || (routeDirections && section.type === "arriving")}
                           promptOptional={routeDirections && section.type === "arriving"}
+                          // Over the photos, a {next} picks when the next one comes in; the walk's cues mean nothing there.
+                          cues={section.type === "attraction" ? ((wp.images?.length ?? 0) > 1 ? ["next"] : []) : undefined}
                         />
                       </section>
                     ))}

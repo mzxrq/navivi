@@ -36,9 +36,11 @@ def credit_text_item(text: str, corner: str = "right", look: Optional[dict] = No
     return item
 
 
-def credit_items(waypoint: dict, clip_seconds: float, look: Optional[dict] = None) -> List[dict]:
-    """One item per credited photo of a stop's attraction clip, over that photo's equal share of it (the clip shows
-    its photos one after another). A stop with its own footage shows none."""
+def credit_items(
+    waypoint: dict, clip_seconds: float, look: Optional[dict] = None, cuts: Optional[List[float]] = None,
+) -> List[dict]:
+    """One item per credited photo of a stop's attraction clip, over that photo's part of it: from one {next} cue
+    (`cuts`, as img2vdo.photo_shares cuts the clip) to the next, else an equal share. A stop with its own footage shows none."""
     if not isinstance(waypoint, dict) or waypoint.get("videos"):
         return []
     images = [p for p in waypoint.get("images") or [] if p]
@@ -47,6 +49,11 @@ def credit_items(waypoint: dict, clip_seconds: float, look: Optional[dict] = Non
     by_name = {Path(k).name.lower(): v for k, v in credits.items()}
     by_stem = {Path(k).stem.lower(): v for k, v in credits.items()}
     share = clip_seconds / len(images) if images else 0.0
+    edges = [share * i for i in range(len(images) + 1)]
+    if cuts and len(cuts) == len(images) - 1:
+        cued = [0.0, *[float(c) for c in cuts], clip_seconds]
+        if min(b - a for a, b in zip(cued, cued[1:])) >= tuning.ATTRACTION_MIN_PHOTO_SECONDS:
+            edges = cued
     items = []
     for i, path in enumerate(images):
         p = Path(path)
@@ -54,6 +61,6 @@ def credit_items(waypoint: dict, clip_seconds: float, look: Optional[dict] = Non
             (v for stem, v in by_stem.items() if p.stem.lower().startswith(stem)), None)
         text = credit_text(credit)
         if text and share > 0:
-            items.append({"start": round(i * share, 3), "end": round((i + 1) * share, 3),
+            items.append({"start": round(edges[i], 3), "end": round(edges[i + 1], 3),
                           **credit_text_item(text, credit.get("corner") or "right", look)})
     return items

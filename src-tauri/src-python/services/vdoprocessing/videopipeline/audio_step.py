@@ -435,12 +435,40 @@ async def generate_attraction_audio_for_waypoint(
         _write_voice_note(audio_path, client)
 
     analysis = processor.analyze_pauses(audio_path)
+    _write_photo_cuts(audio_path, waypoint.get("attractionNarration") or waypoint.get("narration") or "", analysis)
     return {
         "text": script,
         "audio_path": audio_path,
         "duration_seconds": analysis.get("duration_seconds", 0.0),
         "pauses": analysis.get("pauses", []),
     }
+
+
+def photo_cuts_path(audio_path) -> Path:
+    """Beside an attraction narration: where its {next} cues fall (seconds), so photo 2, 3, … come in there."""
+    return Path(str(audio_path) + ".photos.json")
+
+
+def read_photo_cuts(audio_path) -> List[float]:
+    try:
+        cuts = json.loads(photo_cuts_path(audio_path).read_text(encoding="utf-8")).get("cuts") or []
+        return [float(c) for c in cuts]
+    except (OSError, ValueError, TypeError, AttributeError):
+        return []
+
+
+def _write_photo_cuts(audio_path, tagged: str, analysis: dict) -> None:
+    clean, cues = strip_cues(tagged)
+    cues = [c for c in cues if c.tag.startswith("next")]
+    path = photo_cuts_path(audio_path)
+    if not cues:
+        path.unlink(missing_ok=True)
+        return
+    times = measured_cue_times(
+        audio_path, cues, clean, analysis.get("duration_seconds", 0.0), analysis.get("pauses", []),
+    )
+    cuts = sorted(round(t, 3) for tag, t in times.items() if tag.startswith("next"))
+    write_json_atomic(path, {"cuts": cuts})
 
 
 async def generate_overview_audio(

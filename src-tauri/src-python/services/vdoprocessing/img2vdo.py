@@ -124,14 +124,26 @@ class AttractionVideoGenerator:
         except (OSError, json.JSONDecodeError):
             return {}
 
+    @staticmethod
+    def photo_shares(target: float, count: int, cuts: Optional[List[float]]) -> Optional[List[float]]:
+        """Seconds each photo stays on: from one {next} cue (`cuts`, seconds into the narration) to the next; None
+        (an equal split) without a usable cut per photo after the first."""
+        if count < 2 or target <= 0 or not cuts or len(cuts) != count - 1:
+            return None
+        edges = [0.0, *[float(c) for c in cuts], float(target)]
+        shares = [b - a for a, b in zip(edges, edges[1:])]
+        return shares if min(shares) >= tuning.ATTRACTION_MIN_PHOTO_SECONDS else None
+
     def _write_inputs(
         self, output_filename: str, keys: List[str], pans: List[str],
-        requested: Optional[dict] = None, target: Optional[float] = None,
+        requested: Optional[dict] = None, target: Optional[float] = None, cuts: Optional[List[float]] = None,
     ) -> None:
         """`requested`: seconds each photo clip (by key) was generated for;
-        `target`: the narration length the deliverable was fitted to."""
+        `target`: the narration length the deliverable was fitted to; `cuts`: its {next} cues."""
         path = self._inputs_path(output_filename)
         record = {"keys": keys, "pans": pans, "requested": requested or {}, "tail": self._tail_signature()}
+        if cuts:
+            record["cuts"] = [round(float(c), 2) for c in cuts]
         if target is not None:
             record["target"] = round(float(target), 3)
         try:
@@ -820,10 +832,11 @@ class AttractionVideoGenerator:
         output_filename: str,
         place_label: Optional[str],
         photos: Optional[List[str]] = None,
+        shares: Optional[List[float]] = None,
     ) -> Optional[str]:
         """A multi-photo waypoint's clips as one deliverable: each fitted to
-        an equal share of the narration (_fit_clip_to_share), joined in
-        order, then finalized like a single clip."""
+        its share of the narration (`shares`, from {next} cues, else equal; _fit_clip_to_share),
+        joined in order, then finalized like a single clip."""
         stem = Path(output_filename).stem
         share = target_audio_duration / len(clips) if target_audio_duration > 0 else None
         temps: List[str] = []
@@ -834,7 +847,7 @@ class AttractionVideoGenerator:
                     fitted.append(clip)
                     continue
                 path = self._fit_clip_to_share(
-                    clip, share, preset, self.output_dir / f"share_{stem}_{i:02d}.mp4",
+                    clip, shares[i] if shares else share, preset, self.output_dir / f"share_{stem}_{i:02d}.mp4",
                     photo_path=photos[i] if photos else None,
                 )
                 if path != clip:
@@ -876,8 +889,11 @@ class AttractionVideoGenerator:
         output_filename: str = "waypoint_final.mp4",
         place_label: Optional[str] = None,
         force: bool = False,
+        photo_cuts: Optional[List[float]] = None,
     ) -> Optional[str]:
         """
+        `photo_cuts`: seconds into the narration where photo 2, 3, … come in (the script's {next} cues); unset or
+        not one per photo: an equal split.
         Main processor:
         1. Checks if popup_image is a list or single string.
         2. Generates clips for all images using paired prompts.
@@ -955,11 +971,14 @@ class AttractionVideoGenerator:
                 "(unchanged photos reuse their clips).", output_filename,
             )
 
+        shares = self.photo_shares(target_audio_duration, len(image_list), photo_cuts)
+        cuts = [round(float(c), 2) for c in photo_cuts] if shares else None
         final_path = self.output_dir / output_filename
         refit = False
         if not force and not inputs_changed and output_is_valid(final_path):
-            # A changed tail style refits from the kept clips (CPU only), like a narration change.
+            # A changed tail style or {next} cue refits from the kept clips (CPU only), like a narration change.
             tail_changed = "keys" in recorded and recorded.get("tail") != self._tail_signature()
+            tail_changed = tail_changed or ("keys" in recorded and recorded.get("cuts") != cuts)
             if not tail_changed and self._fits_narration(final_path, recorded, target_audio_duration):
                 if "keys" not in recorded:
                     self._write_inputs(output_filename, keys, pans)
@@ -1015,7 +1034,9 @@ class AttractionVideoGenerator:
         clip_presets = []
         built_keys = []
         requested_by_key = dict(recorded.get("requested") or {})
+        equal_share = per_clip_duration
         for idx, img_path in enumerate(image_list):
+            per_clip_duration = min(shares[idx], self._MAX_EXTENDED_CLIP_SECONDS) if shares else equal_share
             # Match image index to prompt index (fallback to the last prompt if we run out)
             current_prompt = (
                 prompt_list[idx]
@@ -1076,6 +1097,7 @@ class AttractionVideoGenerator:
             final_output = self._combine_clips(
                 generated_clips, clip_presets, target_audio_duration, output_filename, place_label,
                 photos=[image_list[keys.index(k)] for k in built_keys],
+                shares=[shares[keys.index(k)] for k in built_keys] if shares and len(built_keys) == len(keys) else None,
             )
         else:
             # 3. Single image: fit duration, place at output_filename, upscale.
@@ -1097,7 +1119,7 @@ class AttractionVideoGenerator:
             self._write_inputs(
                 output_filename, built_keys, pans,
                 {k: requested_by_key[k] for k in built_keys if k in requested_by_key},
-                target=target_audio_duration,
+                target=target_audio_duration, cuts=cuts,
             )
             self._remove_orphan_raws(stem, keys)
         return final_output
