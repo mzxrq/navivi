@@ -228,7 +228,8 @@ const stem = (p: string) => baseName(p).replace(/\.[^.]+$/, "");
 
 export function autoOrderKey(seg: Segment): [number, number] {
   const name = baseName(seg.video).replace(/^\d+_/, "");
-  const n = Number(/_(\d+)(?:_|\.)/.exec(name)?.[1] ?? 0);
+  // The sub course's clips (in .navivi/sub_course/) come after the whole main course, in their own order.
+  const n = Number(/_(\d+)(?:_|\.)/.exec(name)?.[1] ?? 0) + (/[\\/]sub_course[\\/]/.test(seg.video ?? "") ? 1e4 : 0);
   switch (seg.kind) {
     case "intro":
       return [-2, 0];

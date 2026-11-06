@@ -586,6 +586,7 @@ class RouteAnimator:
         # the attraction pipeline actually produced.
         waypoint_id_to_idx: Dict[str, int] = {}
         attraction_dir = None
+        _raw_job_config: Dict[str, Any] = {}
         job_config_path = self.config.get("res_route_path")
         if job_config_path and os.path.exists(job_config_path):
             try:
@@ -603,6 +604,10 @@ class RouteAnimator:
                 attraction_dir = self.out_dir.parent / "attraction"
             except (OSError, json.JSONDecodeError) as e:
                 logger.warning(f"Could not read job_config for attraction-video lookup: {e}")
+        # A sub course's legs show the main course faint under them.
+        from services.config.sub_course import main_route_lonlat
+
+        context_path = main_route_lonlat(_raw_job_config)
 
         def _attraction_video_for(waypoint_id: Optional[str], label: Optional[str]) -> Optional[str]:
             if not waypoint_id or waypoint_id not in waypoint_id_to_idx or attraction_dir is None:
@@ -837,7 +842,7 @@ class RouteAnimator:
                 ),
                 walker_color=res_data.get("line_color"),
                 target_duration_seconds=target_duration,
-                landmarks=landmarks, route_chain=leg_labels or None,
+                landmarks=landmarks, route_chain=leg_labels or None, context_path=context_path,
                 # Straight-down bird's-eye chase cam (still follows/rotates
                 # with the walker, just never tilts) rather than the
                 # angled 55deg default — settings.res_follow_pitch lets a
