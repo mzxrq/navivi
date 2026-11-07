@@ -558,8 +558,9 @@ ATTRACTION_NARRATION_TAIL_SECONDS = 1.0
 ATTRACTION_SLOW_MOVE_ZOOM_PER_SEC = 0.012
 # How time left after the animation is filled (only when the chain is capped short of the narration):
 # "zoomout" eases back out to the full picture; "drift" a slow random push-in; "photo" dissolves to the
-# photo and holds (the user's pick, 2026-10-30: no clip played backwards); "reverse" plays the animation back and forth.
-ATTRACTION_SLOW_MOVE_STYLE = "photo"
+# photo and holds; "reverse" plays the animation back and forth. "drift" since 2026-11-07: the user doesn't want
+# the clip to end on the whole original photo.
+ATTRACTION_SLOW_MOVE_STYLE = "drift"
 ATTRACTION_SLOW_MOVE_MAX_ZOOM_OUT = 0.12
 # The dissolve into that photo; 0 = a hard cut.
 ATTRACTION_TAIL_PHOTO_FADE_SECONDS = 0.5
@@ -1012,6 +1013,8 @@ PARALLAX_LAMA_MAX_SIDE = 1824
 # 2 layers split at the foreground/background break: 3 tore a pole between layers.
 PARALLAX_LAYERS = 2
 PARALLAX_PAN = 0.08
+# These moves slide the whole photo flat (no depth, so nothing bends); the user found 3D pans warp too much (2026-11-07).
+PARALLAX_FLAT_PRESETS = ("panleft", "panright")
 PARALLAX_PAN_PUSH = 0.04
 PARALLAX_ZOOM = 0.16
 PARALLAX_ARC = 0.015

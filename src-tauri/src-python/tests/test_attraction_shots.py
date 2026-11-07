@@ -74,11 +74,19 @@ class TestParallax:
         assert len(frames) == round(FPS)
         assert frames[0].shape[:2] == (1080, 1920)
 
-    def test_pan_right_moves_content_left_near_more_than_far(self, clip):
+    def test_pan_right_moves_content_left_near_more_than_far(self, clip, monkeypatch):
+        monkeypatch.setattr(parallax_generator.tuning, "PARALLAX_FLAT_PRESETS", ())
         frames = clip("panright")
         far = self._shift(frames[0], frames[-1], 100, 700)
         near = self._shift(frames[0], frames[-1], 1220, 1820)
         assert far < -5 and near < far
+
+    def test_flat_pan_slides_the_whole_photo_evenly(self, clip, monkeypatch):
+        monkeypatch.setattr(parallax_generator.tuning, "PARALLAX_PAN_PUSH", 0.0)  # its slight zoom isn't depth
+        frames = clip("panright")  # panright is flat by default, whatever the depth says
+        far = self._shift(frames[0], frames[-1], 100, 700)
+        near = self._shift(frames[0], frames[-1], 1220, 1820)
+        assert far < -5 and abs(near - far) < 1.5
 
     def test_zoom_in_grows_the_picture(self, tmp_path, monkeypatch):
         monkeypatch.setattr(parallax_generator, "_lama", False)

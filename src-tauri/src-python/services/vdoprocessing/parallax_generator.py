@@ -385,6 +385,8 @@ def generate_parallax_clip(
         preset = "zoomout"
     if preset not in _PANS + ("zoomin", "zoomout", "walk"):
         preset = "zoomin"
+    if preset in tuning.PARALLAX_FLAT_PRESETS:
+        depth_fn = lambda img: np.full(img.shape[:2], 0.5, np.float32)  # one flat layer: a plain slide, no warp
     photo = read_image(image_path)
     if photo is None:
         raise RuntimeError(f"Cannot read {image_path}")
