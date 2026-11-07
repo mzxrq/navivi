@@ -7,6 +7,7 @@ import {
   rgbToHex,
 } from "../../../components/ui/ColorSwatches";
 import {
+  Camera,
   Car,
   Copy,
   CopyPlus,
@@ -85,12 +86,12 @@ export function useStopMenus() {
   const modeOptions = useModeOptions();
   const { startDrawing, startAdjusting, setLegMode } = useLegActions();
 
-  const setStopType = (wpId: string, type: "start" | "end" | "stopby" | "closed" | "normal") => {
+  const setStopType = (wpId: string, type: "start" | "end" | "stopby" | "closed" | "normal" | "streetview") => {
     setWaypoints((prev) => {
       const next = [...prev];
       const index = next.findIndex((w) => w.id === wpId);
       if (index === -1) return prev;
-      const wp = { ...next[index], inaccessible: undefined };
+      const wp = { ...next[index], inaccessible: undefined, isStreetView: undefined };
       if (type === "start") {
         next.splice(index, 1);
         next.unshift({ ...wp, isStopBy: false, connectToRoute: undefined });
@@ -101,6 +102,9 @@ export function useStopMenus() {
         next[index] = { ...wp, isStopBy: true, connectToRoute: false };
       } else if (type === "closed") {
         next[index] = { ...wp, isStopBy: true, connectToRoute: false, inaccessible: true };
+      } else if (type === "streetview") {
+        // Off the route like an unconnected stop-by, so no routing code sees it; saved apart (fileSystem street_views).
+        next[index] = { ...wp, isStopBy: true, connectToRoute: false, isStreetView: true };
       } else {
         next[index] = { ...wp, isStopBy: false, connectToRoute: undefined };
       }
@@ -208,7 +212,9 @@ export function useStopMenus() {
         ? "start"
         : isLast && waypoints.length > 1
           ? "end"
-          : wp.inaccessible
+          : wp.isStreetView
+            ? "streetview"
+            : wp.inaccessible
             ? "closed"
             : wp.isStopBy
               ? "stopby"
@@ -232,10 +238,11 @@ export function useStopMenus() {
           { label: t`Stop`, checked: currentType === "normal", onSelect: () => setStopType(wp.id, "normal") },
           { label: t`Stop-by`, checked: currentType === "stopby", onSelect: () => setStopType(wp.id, "stopby") },
           { label: t`Closed`, checked: currentType === "closed", onSelect: () => setStopType(wp.id, "closed") },
+          { label: t`Street view`, checked: currentType === "streetview", onSelect: () => setStopType(wp.id, "streetview") },
           { label: t`Destination`, checked: currentType === "end", onSelect: () => setStopType(wp.id, "end") },
         ],
       },
-      wp.isStopBy && !wp.inaccessible && {
+      wp.isStopBy && !wp.inaccessible && !wp.isStreetView && {
         label: t`On route`,
         icon: LinkIcon,
         checked: !!wp.connectToRoute,
@@ -315,12 +322,14 @@ export function useStopMenus() {
     add: {
       stop: () => void;
       stopBy: () => void;
+      streetView: () => void;
       start: () => void;
       end: () => void;
     },
   ): MenuEntry[] => [
       { label: t`Add stop here`, icon: MapPinPlus, onSelect: add.stop },
       { label: t`Add stop-by here`, icon: MapPinPlus, onSelect: add.stopBy },
+      { label: t`Add street view here`, icon: Camera, onSelect: add.streetView },
       separator,
       { label: t`Add as start`, icon: MapPinned, onSelect: add.start },
       { label: t`Add as destination`, icon: Flag, onSelect: add.end },

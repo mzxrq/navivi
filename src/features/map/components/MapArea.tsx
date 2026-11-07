@@ -406,6 +406,7 @@ export function MapArea() {
       mapMenu(lat, lng, {
         stop: () => handleAddWaypoint(lat, lng),
         stopBy: () => handleAddStopByWaypoint(lat, lng),
+        streetView: () => handleAddStreetView(lat, lng),
         start: () => handleAddSpWaypoint(lat, lng, "start"),
         end: () => handleAddSpWaypoint(lat, lng, "end"),
       }),
@@ -543,6 +544,22 @@ export function MapArea() {
         ),
       );
     }
+  };
+
+  // A photo card for the leg passing it; put before the destination so the destination stays last. Opens its editor for the photo.
+  const handleAddStreetView = (lat: number, lng: number) => {
+    const newId = crypto.randomUUID();
+    setWaypoints((prev) => {
+      const at = Math.max(0, prev.length - 1);
+      const wp = {
+        id: newId, lat, lng, name: t`Street view ${prev.filter((w) => w.isStreetView).length + 1}`,
+        images: [], imagePans: [], routeMode: settings.default_route_mode || "walking",
+        isStopBy: true, connectToRoute: false, isStreetView: true,
+      };
+      return [...prev.slice(0, at), wp, ...prev.slice(at)];
+    });
+    setActiveWaypointId(newId);
+    setIsDirty(true);
   };
 
   const removeAnchor = (idx: number) => {

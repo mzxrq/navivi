@@ -207,7 +207,7 @@ export function WaypointItem({
                   wp.inaccessible ? "bg-red-500/10 text-red-600" : "bg-zinc-100 dark:bg-white/5 text-zinc-500"
                 }`}
               >
-                {wp.inaccessible ? <Trans>Closed</Trans> : <Trans>Stop-by</Trans>}
+                {wp.inaccessible ? <Trans>Closed</Trans> : wp.isStreetView ? <Trans>Street view</Trans> : <Trans>Stop-by</Trans>}
               </span>
             )}
           </div>

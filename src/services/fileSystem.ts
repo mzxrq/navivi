@@ -146,8 +146,8 @@ export const saveProjectData = async (
   gpxLines.push(`<gpx version="1.1" creator="${appConfig.name}" xmlns="http://www.topografix.com/GPX/1/1">`);
   gpxLines.push(`  <time>${new Date().toISOString()}</time>`);
 
-  // export waypoints
-  waypoints.forEach((wp) => {
+  // export waypoints (street views are photo cards, not stops)
+  waypoints.filter((wp) => !wp.isStreetView).forEach((wp) => {
     gpxLines.push(` <wpt lat="${wp.lat}" lon="${wp.lng}">`);
     const safeName = xmlText(wp.name || "Navivi Stop");
     gpxLines.push(`   <name>${safeName}</name>`);
@@ -309,8 +309,13 @@ export const saveProjectData = async (
     thumbnailPath = firstUploadedImage;
   }
 
-  const startWp = processedWaypoints[0];
-  const endWp = processedWaypoints[processedWaypoints.length - 1];
+  // Street views are only photo cards on the leg passing them (Python route2vdo): kept out of the stop list it reads.
+  const stops = processedWaypoints.filter((_, i) => !waypoints[i].isStreetView);
+  const streetViews = processedWaypoints
+    .filter((_, i) => waypoints[i].isStreetView)
+    .map((w) => ({ id: w.id, lat: w.lat, lng: w.lng, label: w.label, image: w.images[0] ?? "" }));
+  const startWp = stops[0];
+  const endWp = stops[stops.length - 1];
 
   // SQLite is the source of truth; job_config.json / .nvv are exported from it for Python.
   const row = await db.projects.upsert({
@@ -350,7 +355,7 @@ export const saveProjectData = async (
     // so switching the app's own language never re-renders the project.
     map_language: resolveNarrationLanguage(
       settings?.narration_language,
-      processedWaypoints.flatMap((w) => [w.name ?? "", w.arrivingNarration ?? "", w.attractionNarration ?? ""]),
+      stops.flatMap((w) => [w.name ?? "", w.arrivingNarration ?? "", w.attractionNarration ?? ""]),
       i18n.locale || "en",
     ),
     ...overviewNarrationFields(metadata),
@@ -359,7 +364,8 @@ export const saveProjectData = async (
     enable_intro: row.enableIntro,
     start_point: startWp ? { lat: startWp.lat, lng: startWp.lng, label: startWp.label } : null,
     end_point: endWp ? { lat: endWp.lat, lng: endWp.lng, label: endWp.label } : null,
-    waypoints: processedWaypoints,
+    waypoints: stops,
+    ...(streetViews.length ? { street_views: streetViews } : {}),
   };
 
   // Written aside and renamed over: a crash mid-write must not leave the project's one file half written.
@@ -528,6 +534,15 @@ export const loadProjectData = async (forcePath?: string, isFolder = false) => {
 
   if (data.source_files?.gps_route && !data.source_files.gps_route.match(/^[a-zA-Z]:\\/) && !data.source_files.gps_route.startsWith('/')) {
     data.source_files.gps_route = await join(projectDir, data.source_files.gps_route);
+  }
+
+  // Street views (saved apart, see saveProjectData) are waypoints again in the editor, before the destination.
+  if (data.waypoints && Array.isArray(data.street_views) && data.street_views.length) {
+    const views = data.street_views.map((v: any) => ({
+      id: v.id, lat: v.lat, lng: v.lng, label: v.label, images: v.image ? [v.image] : [],
+      isStopBy: true, connectToRoute: false, isStreetView: true,
+    }));
+    data.waypoints = [...data.waypoints.slice(0, -1), ...views, ...data.waypoints.slice(-1)];
   }
 
   if (data.waypoints) {

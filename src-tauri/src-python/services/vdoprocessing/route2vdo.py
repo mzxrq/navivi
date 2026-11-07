@@ -23,7 +23,7 @@ from services.logger.progress import tracker
 from services import runtime_paths, tuning, video_text
 from services.mapbox_token import resolve_mapbox_token
 from services.mapfetcher.maplanguage import resolve_map_style
-from services.mapfetcher.street_photos import resolve_mapillary_token, turn_photos
+from services.mapfetcher.street_photos import resolve_mapillary_token, street_view_landmarks, turn_photos
 from services.projectfiles import meta_dir, write_json_atomic
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.pydeckrecorder import record_headless_video
@@ -586,6 +586,7 @@ class RouteAnimator:
         # the attraction pipeline actually produced.
         waypoint_id_to_idx: Dict[str, int] = {}
         attraction_dir = None
+        _raw_job_config: Dict[str, Any] = {}
         job_config_path = self.config.get("res_route_path")
         if job_config_path and os.path.exists(job_config_path):
             try:
@@ -631,6 +632,14 @@ class RouteAnimator:
         # give it a live per-leg "[i/N] rendering leg -> label" line instead
         # -- pedestrian.py's own tracker calls inside render_residential_leg_
         # pydeck further subdivide THIS leg's own share of that line.
+        # Street view waypoints: a pop-up photo card on the leg passing nearest, timed by its {view} cues.
+        # shortcut: a one-leg re-render only weighs that leg, so a street view near its ends can land on it; fine for now.
+        street_views = street_view_landmarks(
+            _raw_job_config.get("street_views") or [],
+            [list(zip(r.get("lats"), r.get("lons"))) if r.get("lats") is not None else [] for r in res_sequence],
+            Path(job_config_path).parent if job_config_path else Path("."),
+            [r.get("street_view_cues") or [] for r in res_sequence],
+        )
         tracker.begin_substeps(len(res_sequence))
         prev_end_view = None
         for i, res_data in enumerate(res_sequence):
@@ -718,6 +727,7 @@ class RouteAnimator:
                     and self.config.get("street_photos_at_turns", tuning.STREET_PHOTOS_AT_TURNS)):
                 photo_dir = meta_dir(Path(self.config["res_route_path"]).parent) / "streetview"
                 landmarks += turn_photos([list(p) for p in leg_latlon], photo_dir, mapillary_token)
+            landmarks += street_views[i]
 
             # Every connectToRoute landmark in THIS leg, in the same order
             # `landmarks` (and therefore pedestrian.py's own cut sequence)

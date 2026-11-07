@@ -173,3 +173,61 @@ def _mapillary(get, token, lat, lon, bearing, cache_dir: Path) -> Optional[str]:
     if not (cache_dir / name).exists():
         _download(get(img["thumb_1024_url"]).content, cache_dir / name, (img.get("creator") or {}).get("username"))
     return name
+
+def _meters(a_lat: float, a_lon: float, b_lat: float, b_lon: float) -> float:
+    k = math.cos(math.radians((a_lat + b_lat) / 2))
+    return math.hypot((a_lat - b_lat) * 110540.0, (a_lon - b_lon) * 111320.0 * k)
+
+
+def street_view_landmarks(
+    street_views: List[Dict], legs_latlon: List[List[List[float]]], project_dir, cues: Optional[List[List[tuple]]] = None,
+) -> List[List[Dict]]:
+    """The project's street view waypoints (job_config `street_views`) as pop-up photo cards, per leg: each goes to the
+    one leg whose track passes nearest, within tuning.STREET_VIEW_MAX_OFF_ROUTE_M. On a leg they are in the order the
+    walker passes them; the n-th takes the leg's n-th {view} cue (`cues[leg]`: [(piece, show s, hide s)]) and pops in
+    and out on the voice, the rest pop in at their spot for the turn-photo time."""
+    from services import tuning
+
+    out: List[List[Dict]] = [[] for _ in legs_latlon]
+    for sv in street_views or []:
+        image = sv.get("image")
+        if not image or sv.get("lat") is None or sv.get("lng") is None:
+            continue
+        best = None
+        for leg, track in enumerate(legs_latlon):
+            for k, (lat, lon) in enumerate(track):
+                d = _meters(float(sv["lat"]), float(sv["lng"]), float(lat), float(lon))
+                if best is None or d < best[0]:
+                    best = (d, leg, k)
+        if best is None or best[0] > tuning.STREET_VIEW_MAX_OFF_ROUTE_M:
+            logger.info("Street view %s is %s from every leg; not shown.", sv.get("label") or sv.get("id"),
+                        "far" if best else "with no leg")
+            continue
+        path = Path(image)
+        out[best[1]].append({
+            "lat": float(sv["lat"]), "lon": float(sv["lng"]), "passing": True, "street_view": True, "_at": best[2],
+            "popup_image": str(path if path.is_absolute() else (Path(project_dir) / path).resolve()),
+        })
+    for leg, cards in enumerate(out):
+        cards.sort(key=lambda c: c.pop("_at"))
+        for card, cue in zip(cards, cues[leg] if cues and leg < len(cues) else []):
+            piece, show, hide = cue
+            card.update(piece=int(piece), show_seconds=round(float(show), 2), hide_seconds=round(float(hide), 2))
+    return out
+
+
+def view_cue_spans(times: Dict[str, float], piece: int) -> List[tuple]:
+    """[(piece, show, hide)] from one narration's measured cue times (view1/viewend1, …), in order: kept to
+    STREET_VIEW_MIN … MAX seconds, and never running into the next card's show time."""
+    from services import tuning
+
+    spans = []
+    n = 1
+    while f"view{n}" in times:
+        show = float(times[f"view{n}"])
+        hide = float(times.get(f"viewend{n}", show))
+        spans.append([show, min(max(hide, show + tuning.STREET_VIEW_MIN_SECONDS), show + tuning.STREET_VIEW_MAX_SECONDS)])
+        n += 1
+    for a, b in zip(spans, spans[1:]):
+        a[1] = min(a[1], b[0])
+    return [(piece, s, h) for s, h in spans]

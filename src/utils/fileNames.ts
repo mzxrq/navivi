@@ -22,8 +22,9 @@ export function photoFileNames(waypoints: Waypoint[]): Map<string, string> {
   const names = new Map<string, string>();
   let stopBys = 0;
   let closed = 0;
+  let views = 0;
   waypoints.forEach((wp, i) => {
-    const tag = wp.inaccessible ? `c${++closed}` : wp.isStopBy ? `s${++stopBys}` : stopLabel(waypoints, i);
+    const tag = wp.isStreetView ? `v${++views}` : wp.inaccessible ? `c${++closed}` : wp.isStopBy ? `s${++stopBys}` : stopLabel(waypoints, i);
     const place = (wp.name ?? "").replace(/[<>:"/\\|?*\x00-\x1f]/g, "").replace(/[. ]+$/, "").trim().slice(0, 60) || "stop";
     (wp.images ?? []).forEach((src, k) => {
       const ext = /\.[^.\\/]+$/.exec(src)?.[0] ?? "";

@@ -116,6 +116,7 @@ export {
   MoreVertical, //TimelineView
   Navigation,
   Globe,
+  Camera,
   ChevronUp,
   Mountain, // ElevationProfile
   ChevronLeftCircle,

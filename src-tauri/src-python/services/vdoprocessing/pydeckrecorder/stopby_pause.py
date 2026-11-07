@@ -25,8 +25,10 @@ async def _play_stopby_photo_pause(
     advance_frame=None, frame_index: int = 0, frame_total: int = 0,
     small_hold_seconds: Optional[float] = None,
     avoid_lonlat: Optional[List[Tuple[float, float]]] = None,
+    hold_seconds: Optional[float] = None,
 ):
     """`avoid_lonlat`: the leg's route; the card goes where it covers the least of it.
+    `hold_seconds` (pip_only): the card's whole time on screen, from a street view's {view}…{/view}; else ~1.2 s.
 
     Pauses the walk right where it is, for a connected stop-by (see
     `landmarks` docstring): its own photo pops in as a small leader-line
@@ -167,8 +169,8 @@ async def _play_stopby_photo_pause(
         # frozen behavior) if the caller didn't wire up `advance_frame`.
         idx = frame_index
         pop_frames = max(1, int(0.3 * fps))
-        hold_frames = max(1, int(0.5 * fps))
         fade_frames = max(1, int(0.4 * fps))
+        hold_frames = max(1, int((hold_seconds or 1.2) * fps) - pop_frames - fade_frames)
         for i in range(pop_frames + hold_frames + fade_frames):
             if i < pop_frames:
                 alpha = _ease_in_out_cubic((i + 1) / pop_frames)

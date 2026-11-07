@@ -1242,6 +1242,11 @@ OUTRO_ROUTE_FROM_FONT_SIZE = 15
 # A photo's credit over its attraction clip (photo_credit.py): a small dark box in a bottom corner, 1080p px.
 # A {next} cue in attraction narration that leaves a photo less than this on screen is ignored (equal split).
 ATTRACTION_MIN_PHOTO_SECONDS = 1.5
+# Street view waypoints (job_config street_views) as pop-up cards on the leg that passes within this many metres;
+# a {view} cue's card stays at least / at most this long (street_photos.view_cue_spans).
+STREET_VIEW_MAX_OFF_ROUTE_M = 80.0
+STREET_VIEW_MIN_SECONDS = 1.2
+STREET_VIEW_MAX_SECONDS = 8.0
 PHOTO_CREDIT_PREFIX = "ⓘ "
 PHOTO_CREDIT_FONT_PX = 26
 PHOTO_CREDIT_PADDING_PX = 8

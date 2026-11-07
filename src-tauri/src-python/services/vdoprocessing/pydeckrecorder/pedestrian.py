@@ -1298,6 +1298,7 @@ async def _record_leg(
                         if frame_state["cuts"] > cuts_before:
                             piece_lead = (frame_state["count"] - frame_state["clip_start"]) / fps
                             write_audio_offset(proc_ref["real_path"], piece_lead)
+                            _voice_from(piece_lead)
                     if view != (locked_lon, locked_lat, locked_zoom):
                         await _ease_view(view, (locked_lon, locked_lat, locked_zoom), tuning.STOPBY_CAMERA_MOVE_SECONDS)
 
@@ -1335,8 +1336,19 @@ async def _record_leg(
                 # connected stop-by's own trigger point never clobbers it).
                 pip_triggers: Dict[int, Dict] = {}
                 _pip_candidates = []
+                # Street view cards with {view} cues pop in on the voice instead (below): the n-th second of the
+                # current piece's narration, counted from where it starts in the clip.
+                timed_views = sorted(
+                    (lm for lm in landmarks or [] if lm.get("show_seconds") is not None),
+                    key=lambda lm: (lm["piece"], lm["show_seconds"]),
+                )
+                voice = {"piece": 0, "start": None}
+
+                def _voice_from(offset_seconds: float) -> None:
+                    voice["piece"], voice["start"] = frame_state["cuts"], frame_state["clip_start"] + offset_seconds * fps
+
                 for lm in (landmarks or []):
-                    if lm.get("connect_to_route") or not lm.get("popup_image"):
+                    if lm.get("connect_to_route") or not lm.get("popup_image") or lm.get("show_seconds") is not None:
                         continue
                     lm_lat, lm_lon = lm.get("lat"), lm.get("lon")
                     if lm_lat is None or lm_lon is None:
@@ -1486,6 +1498,7 @@ async def _record_leg(
                     for _ in range(int(round((cue - lead_in) * fps))):
                         await _write_frame(frame_state["last"])
                 write_audio_offset(output_path, max(0.0, lead_in - cue))
+                _voice_from(max(0.0, lead_in - cue))
                 logger.info(
                     "Leg opening %.2fs, {start} cue %s -> narration delayed %.2fs.",
                     lead_in, f"{cue:.2f}s" if start_cue_seconds is not None else "none",
@@ -1531,6 +1544,7 @@ async def _record_leg(
                                 write_audio_offset(
                                     proc_ref["real_path"], (frame_state["count"] - frame_state["clip_start"]) / fps
                                 )
+                                _voice_from((frame_state["count"] - frame_state["clip_start"]) / fps)
                             await _play_followers(stopby_lm.get("waypoint_id"), index)
 
                         # Dynamic hop to the NEXT segment's framing for the new clip!
@@ -1590,7 +1604,26 @@ async def _record_leg(
                         if frame_state["cuts"] > cuts_before:
                             piece_lead = (frame_state["count"] - frame_state["clip_start"]) / fps
                             write_audio_offset(proc_ref["real_path"], piece_lead)
+                            _voice_from(piece_lead)
                             logger.info("Piece opening %.2fs -> its narration delayed %.2fs.", piece_lead, piece_lead)
+
+                    while timed_views and timed_views[0]["piece"] < voice["piece"]:
+                        timed_views.pop(0)  # its piece is over before the voice got there
+                    if (
+                        timed_views and voice["start"] is not None and timed_views[0]["piece"] == voice["piece"]
+                        and (frame_state["count"] - voice["start"]) / fps >= timed_views[0]["show_seconds"]
+                    ):
+                        view_lm = timed_views.pop(0)
+                        index = await _play_stopby_photo_pause(
+                            page, _write_frame, _cut_to_new_clip, fps, html_dir, port,
+                            view_lm, locked_lon, locked_lat, locked_zoom, output_size, index,
+                            pitch=follow_pitch, pip_only=True,
+                            advance_frame=_draw_walker_frame, frame_index=index + 1,
+                            frame_total=next((k for k in all_trigger_indices if k > index), frame_total),
+                            avoid_lonlat=route_lonlat,
+                            hold_seconds=view_lm["hide_seconds"] - view_lm["show_seconds"],
+                        )
+                        continue
 
                     pip_lm = pip_triggers.get(index)
                     if pip_lm is not None:

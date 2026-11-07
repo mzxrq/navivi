@@ -41,6 +41,7 @@ export interface Waypoint {
   pauseAtWaypoint?: boolean;
   generatingScriptType?: "arriving" | "attraction" | null;
   isStopBy?: boolean;
+  isStreetView?: boolean; // a photo card on the leg that passes it (job_config street_views); also isStopBy, never routed
   inaccessible?: boolean; // "Closed": a stop-by that can't be visited any more; its narration is the reason
   drawStyle?: "linear" | "spline"; // legacy: a "spline" leg with no customRouteCurve reads as every anchor smooth
   customRouteCurve?: AnchorCurve[]; // parallel to customRoute; ignored when its length differs

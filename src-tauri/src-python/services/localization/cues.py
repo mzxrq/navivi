@@ -23,6 +23,9 @@ A script may carry inline tags that mark moments the video has to land on:
               (recorded as "photo1:X", "photo2:X", ... in order)
     {next}    attraction narration only: the stop's next photo comes in here
               (recorded as "next1", "next2", ...; see audio_step._write_photo_cuts)
+    {view}    leg narration only: the next street view card pops in here, and {/view} takes
+              it down (recorded as "view1"/"viewend1", ...; without {/view} it goes at the end
+              of that sentence; see leg_sequence.street_view_cues)
 
 Tags are never spoken. They are stripped before TTS and subtitles, and the
 position each one had in the spoken text is kept so its time can be worked out
@@ -35,7 +38,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|next|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}")
+CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|next|/view|view|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}")
 
 
 @dataclass(frozen=True)
@@ -60,6 +63,7 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
     scene = 1
     photos = 0
     nexts = 0
+    views = 0
     last = ""  # the last character kept
     for match in CUE_RE.finditer(text):
         piece = text[pos:match.start()]
@@ -72,6 +76,12 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
         if tag.startswith("photo:"):
             photos += 1
             cues.append(Cue(f"photo{photos}:{tag[6:].strip()}", length))
+        elif tag == "view":
+            views += 1
+            cues.append(Cue(f"view{views}", length))
+        elif tag == "/view":
+            if views and all(c.tag != f"viewend{views}" for c in cues):
+                cues.append(Cue(f"viewend{views}", length))
         elif tag == "next":
             nexts += 1
             cues.append(Cue(f"next{nexts}", length))
@@ -87,7 +97,19 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
         if last == " " and text[pos:pos + 1] == " ":
             pos += 1
     parts.append(text[pos:])
-    return "".join(parts), cues
+    clean = "".join(parts)
+    return clean, _close_views(clean, cues)
+
+
+def _close_views(clean: str, cues: List[Cue]) -> List[Cue]:
+    """A {view} with no {/view} ends with its sentence (the next 。！？ after it, or the end of the script)."""
+    tags = {c.tag for c in cues}
+    for cue in [c for c in cues if c.tag.startswith("view") and not c.tag.startswith("viewend")]:
+        end_tag = "viewend" + cue.tag[4:]
+        if end_tag not in tags:
+            end = next((i + 1 for i in range(cue.char_index, len(clean)) if clean[i] in "。！？!?."), len(clean))
+            cues.append(Cue(end_tag, end))
+    return cues
 
 
 def clean_text(text: Optional[str]) -> str:

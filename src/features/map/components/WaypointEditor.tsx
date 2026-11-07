@@ -143,6 +143,11 @@ export function WaypointEditor({
   const isStopBy = !!wp.isStopBy && !isEndpoint;
   const isLinked = !!wp.connectToRoute;
   const isClosed = !!wp.inaccessible && !isEndpoint;
+  // A street view is only a photo card in the leg that passes it: just its name and photo here.
+  const isStreetView = !!wp.isStreetView;
+  useEffect(() => {
+    if (isStreetView) setActiveTab("images");
+  }, [isStreetView, wp.id]);
   const stopType = isClosed ? "closed" : isStopBy ? "stopby" : "stop";
   const label = isClosed ? "×" : stopLabel(waypoints, wpIndex);
 
@@ -151,7 +156,7 @@ export function WaypointEditor({
   const visited = !isClosed && (!isStopBy || isLinked || settings.overview_style === "course");
   const hasAttractionVoice = !!wp.attractionNarration?.trim() && (visited || isClosed);
   const routeDirections = settings.overview_style === "course" && !!metadata.directory_path;
-  const canRegen = !!metadata.directory_path && !wp.skipAssetGeneration && !wp.isStub;
+  const canRegen = !!metadata.directory_path && !wp.skipAssetGeneration && !wp.isStub && !wp.isStreetView;
 
   const regenerate = (kind: RegenKind) => regenerateStop(wpIndex, kind);
 
@@ -573,7 +578,7 @@ export function WaypointEditor({
                     ["images", t`Photos`, `${wpImages.length}/${MAX_IMAGES}`],
                     ["videos", t`Videos`, `${(wp.videos ?? []).length}/${MAX_VIDEOS}`],
                   ] as const
-                ).map(([id, tabLabel, count]) => (
+                ).filter(([id]) => !isStreetView || id === "images").map(([id, tabLabel, count]) => (
                   <button
                     key={id}
                     type="button"
@@ -632,7 +637,7 @@ export function WaypointEditor({
                           aiEnabled={!!settings.ai_features_enabled || (routeDirections && section.type === "arriving")}
                           promptOptional={routeDirections && section.type === "arriving"}
                           // Over the photos, a {next} picks when the next one comes in; the walk's cues mean nothing there.
-                          cues={section.type === "attraction" ? ((wp.images?.length ?? 0) > 1 ? ["next"] : []) : undefined}
+                          cues={section.type === "attraction" ? ((wp.images?.length ?? 0) > 1 ? ["next"] : []) : waypoints.some((w) => w.isStreetView) ? ["start", "arrive", "end", "view", "/view"] : undefined}
                         />
                       </section>
                     ))}
@@ -855,6 +860,18 @@ ${t`Open the page this photo came from`}`}
             </div>
 
             <aside className="w-60 max-[1159px]:w-48 shrink-0 border-l border-zinc-100 dark:border-white/5 bg-zinc-50/60 dark:bg-white/1.5 flex flex-col overflow-y-auto custom-scrollbar">
+              {isStreetView ? (
+                <div className="p-4 space-y-2 text-[11px] leading-relaxed text-zinc-500">
+                  <p>
+                    <Trans>A street view is a photo card in the walk that passes it, to show the way. Only its first photo is used.</Trans>
+                  </p>
+                  <p>
+                    <Trans>In the next stop's arriving script, these cues set when the card pops in and when it goes:</Trans>{" "}
+                    <code className="text-zinc-700 dark:text-zinc-300">{"{view} … {/view}"}</code>.{" "}
+                    <Trans>Without them it shows briefly as the walker passes.</Trans>
+                  </p>
+                </div>
+              ) : (
               <div className="p-4 space-y-4 flex-1">
                 {isMarkedForRegen && (
                   <div className="p-2.5 rounded-md bg-amber-500/10 border border-amber-500/25 flex items-start gap-2">
@@ -963,8 +980,9 @@ ${t`Open the page this photo came from`}`}
                   </div>
                 </div>
               </div>
+              )}
 
-              <div className="p-3 border-t border-zinc-100 dark:border-white/5">
+              <div className="p-3 border-t border-zinc-100 dark:border-white/5 mt-auto">
                 {confirmDelete ? (
                   <div className="flex items-center gap-1.5">
                     <span className="flex-1 text-[11px] text-zinc-600 dark:text-zinc-400">
