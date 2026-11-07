@@ -1984,7 +1984,7 @@ msgstr "Distance, climb, walking time and via points between neighbouring stops"
 #~ msgid "Distance, mode and via points between neighbouring stops"
 #~ msgstr "Distance, mode and via points between neighbouring stops"
 
-#: src/components/ui/VideoLookSettings.tsx:216
+#: src/components/ui/VideoLookSettings.tsx:217
 msgid "Distance, time and mode on each card."
 msgstr "Distance, time and mode on each card."
 
@@ -4868,8 +4868,8 @@ msgstr "Route color"
 #~ msgid "Route colour"
 #~ msgstr "Route colour"
 
-#: src/components/ui/VideoLookSettings.tsx:216
 #: src/components/ui/VideoLookSettings.tsx:217
+#: src/components/ui/VideoLookSettings.tsx:218
 msgid "Route facts"
 msgstr "Route facts"
 
@@ -5039,6 +5039,10 @@ msgstr "Saved with the project"
 #: src/components/ui/ScriptInput.tsx:303
 msgid "Scan script for all Kanji and add to Dictionary"
 msgstr "Scan script for all Kanji and add to Dictionary"
+
+#: src/components/ui/VideoLookSettings.tsx:213
+msgid "Scrapbook"
+msgstr "Scrapbook"
 
 #: src/components/ui/ScriptInput.tsx:207
 msgid "Script"

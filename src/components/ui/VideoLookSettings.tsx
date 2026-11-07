@@ -203,13 +203,14 @@ export function VideoLookSettings({ options, onChange }: Props) {
         {on("enable_outro") && (
           <>
             <Row title={t`Outro style`}>
-              <Segmented<"scroll" | "grid">
+              <Segmented<"scroll" | "grid" | "scrapbook">
                 compact
                 value={options.outro_style ?? d.outro_style}
                 onChange={set("outro_style")}
                 options={[
                   { id: "scroll", label: t`Scrolling` },
                   { id: "grid", label: t`Grid` },
+                  { id: "scrapbook", label: t`Scrapbook` },
                 ]}
               />
             </Row>

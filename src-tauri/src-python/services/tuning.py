@@ -1213,6 +1213,10 @@ OUTRO_CARD_ASPECT = 4 / 3  # thumbnail width:height
 # "scroll" (default): cards three to a row, scrolled credits-style; "grid": the held frame above.
 # settings.outro_style overrides.
 DEFAULT_OUTRO_STYLE = "scroll"
+# "scrapbook": polaroids on paper, then a stamp (title, distance, travel time), held this long before the logos.
+OUTRO_SCRAPBOOK_HOLD_SECONDS = 2.0
+OUTRO_SCRAPBOOK_PAPER_COLOR: Tuple[int, int, int] = (243, 236, 222)
+OUTRO_SCRAPBOOK_STAMP_COLOR: Tuple[int, int, int] = (196, 40, 40)
 # settings.enable_outro: false drops the outro clip from the video.
 DEFAULT_ENABLE_OUTRO = True
 OUTRO_SCROLL_COLS = 3

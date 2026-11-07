@@ -7,6 +7,8 @@ styles (tuning.DEFAULT_OUTRO_STYLE / settings.outro_style):
   the logos alone, centred.
 - "grid": one composited frame, every card squeezed onto a single screen,
   held for a fixed duration.
+- "scrapbook": the stops' photos drop onto paper as polaroids, then a round
+  stamp with the title, distance and travel time; then the logo end card.
 
 Standalone (PIL-only compositing + a plain ffmpeg `-loop 1` hold), reusing
 the same bundled Japanese-capable fonts as graphicengine/base.py rather
@@ -17,12 +19,13 @@ from __future__ import annotations
 
 import itertools
 import math
+import random
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageOps
 from PIL.ImageFont import FreeTypeFont, load_default, truetype
 
 from services.mapfetcher.graphicengine.base import _GraphicsEngineBase
@@ -1045,9 +1048,11 @@ def _scroll_offsets(
     return offsets
 
 
-def _end_card(size: Tuple[int, int]) -> Optional[np.ndarray]:
-    """The logos under a small "Powered by" title, centred on the background;
-    None without logos."""
+def _end_card(
+    size: Tuple[int, int], background: Optional[Image.Image] = None, text_color=tuning.OUTRO_SUBTITLE_COLOR,
+) -> Optional[np.ndarray]:
+    """The logos under a small "Powered by" title, centred on the background
+    (the outro's plain colour unless given); None without logos."""
     width, height = size
     k = height / _CANVAS_H
 
@@ -1061,10 +1066,10 @@ def _end_card(size: Tuple[int, int]) -> Optional[np.ndarray]:
     font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, font_size)
     gap = px(tuning.OUTRO_LOGO_TITLE_GAP)
     top = (height - (font_size + gap + logos.height)) // 2
-    card = Image.new("RGB", size, tuning.OUTRO_BG_COLOR)
+    card = background.convert("RGB") if background is not None else Image.new("RGB", size, tuning.OUTRO_BG_COLOR)
     _center_text(
         ImageDraw.Draw(card), video_text.current_labels()["outro_logo_title"], font,
-        width / 2, top, tuning.OUTRO_SUBTITLE_COLOR,
+        width / 2, top, text_color,
     )
     card.paste(logos, ((width - logos.width) // 2, top + font_size + gap), logos)
     return np.asarray(card, dtype=np.float32)
@@ -1128,10 +1133,14 @@ def _write_scroll_clip(
         fades = (last + (end_card - last) * ((i + 1) / steps) for i in range(steps))
         hold = (end_card for _ in range(int(round(tuning.OUTRO_LOGO_HOLD_SECONDS * fps))))
         frames = itertools.chain(frames, fades, hold)
+    return _pipe_frames(frames, output_path, fps, size)
 
-    ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
+
+def _pipe_frames(frames, output_path: Path, fps: int, size: Tuple[int, int]) -> bool:
+    """RGB frames (float or uint8 arrays) piped straight into an h264 mp4."""
+    width, height = size
     cmd = [
-        ffmpeg_cmd, "-y", *tuning.ffmpeg_pipe_log_args(),
+        FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_pipe_log_args(),
         "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{width}x{height}",
         "-r", str(fps), "-i", "-",
         "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast",
@@ -1140,7 +1149,7 @@ def _write_scroll_clip(
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
         for frame in frames:
-            proc.stdin.write(frame.astype(np.uint8).tobytes())
+            proc.stdin.write(np.asarray(frame).astype(np.uint8).tobytes())
         proc.stdin.close()
         stderr = proc.stderr.read().decode("utf-8", errors="replace")
         if proc.wait() != 0:
@@ -1150,6 +1159,187 @@ def _write_scroll_clip(
         proc.kill()
         raise
     return True
+
+
+def scrapbook_layout(count: int, size: Tuple[int, int]):
+    """(card width, [(cx, cy, degrees)] per card, (cx, cy, radius) of the stamp): a loose grid with the
+    bottom-right cell kept for the stamp, columns chosen so the cards come out as big as possible."""
+    width, height = size
+    rng = random.Random(7)
+    best = None
+    for cols in range(2, 9):
+        rows = math.ceil((count + 1) / cols)
+        cell_w, cell_h = width * 0.97 / cols, height * 0.96 / rows
+        # Nearly a full cell: neighbouring polaroids only just overlap, as in a real scrapbook.
+        card_w = min(cell_w * 0.9, cell_h * 0.95 / _POLAROID_RATIO)
+        if best is None or card_w > best[0]:
+            best = (card_w, cols, rows, cell_w, cell_h)
+    card_w, cols, rows, cell_w, cell_h = best
+    x0, y0 = width * 0.015, height * 0.02
+    cells = [(c, r) for r in range(rows) for c in range(cols)]
+    stamp_cell = cells.pop()  # bottom-right
+    cards = []
+    for c, r in cells[:count]:
+        jx, jy = rng.uniform(-0.05, 0.05) * cell_w, rng.uniform(-0.04, 0.04) * cell_h
+        # Neighbours lean opposite ways, so each card's edge stands out where they overlap.
+        tilt = rng.uniform(3, 8) * (1 if (c + r) % 2 else -1)
+        cards.append((x0 + (c + 0.5) * cell_w + jx, y0 + (r + 0.5) * cell_h + jy, tilt))
+    sc, sr = stamp_cell
+    stamp = (x0 + (sc + 0.5) * cell_w, y0 + (sr + 0.5) * cell_h, min(cell_w, cell_h) * 0.5)
+    return card_w, cards, stamp
+
+
+_INK = (60, 55, 50)  # scrapbook text on paper
+_POLAROID_RATIO = 1.0  # card height / width: a 4:3 photo plus the white frame and name strip
+
+
+def _polaroid(path: str, badge: str, name: str, card_w: int) -> Optional[Image.Image]:
+    border = max(4, card_w // 24)
+    pw = card_w - 2 * border
+    ph = int(pw * 3 / 4)
+    thumb = _rounded_thumbnail(path, (pw, ph), 2)
+    if thumb is None:
+        return None
+    card_h = int(card_w * _POLAROID_RATIO)
+    card = Image.new("RGBA", (card_w, card_h), (255, 255, 255, 255))
+    card.alpha_composite(thumb, (border, border))
+    draw = ImageDraw.Draw(card)
+    bold = _GraphicsEngineBase.FONT_CANDIDATES_BOLD
+    size = max(10, card_w // 10)
+    r, gap = size * 0.62, size * 0.35
+    # A long name goes on two lines (split between words) beside the badge.
+    lines, font, _ = _name_lines(draw, name, bold, size, max(8, card_w // 15), card_w - 2 * border - 2 * r - gap)
+    line_h = font.size * 1.2
+    block_w = max(draw.textlength(line, font=font) for line in lines)
+    left = (card_w - (2 * r + gap + block_w)) / 2
+    cy = (border + ph + card_h) / 2
+    draw.ellipse([left, cy - r, left + 2 * r, cy + r], fill=tuning.OUTRO_BADGE_COLOR)
+    draw.text((left + r, cy), badge, font=_load_font(bold, int(r * 1.15)), fill="white", anchor="mm")
+    for k, line in enumerate(lines):
+        draw.text((left + 2 * r + gap, cy + (k - (len(lines) - 1) / 2) * line_h), line, font=font, fill=_INK, anchor="lm")
+    return _with_shadow(card, max(4, card_w // 30))
+
+
+def _with_shadow(img: Image.Image, blur: int) -> Image.Image:
+    pad = blur * 3
+    out = Image.new("RGBA", (img.width + 2 * pad, img.height + 2 * pad), (0, 0, 0, 0))
+    out.paste((0, 0, 0, 80), (pad, pad + blur, pad + img.width, pad + blur + img.height))
+    out = out.filter(ImageFilter.GaussianBlur(blur))
+    out.alpha_composite(img, (pad, pad))
+    return out
+
+
+def _stamp(radius: int, lines: List[str]) -> Image.Image:
+    """A round ink stamp: the title big, then each further line smaller."""
+    color = (*tuning.OUTRO_SCRAPBOOK_STAMP_COLOR, 235)
+    size = 2 * radius + 4
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    c = size / 2
+    draw.ellipse([2, 2, size - 3, size - 3], outline=color, width=max(3, radius // 17))
+    inner = radius * 0.86
+    draw.ellipse([c - inner, c - inner, c + inner, c + inner], outline=color, width=max(1, radius // 55))
+    bold = _GraphicsEngineBase.FONT_CANDIDATES_BOLD
+    sizes = [radius * 0.42] + [radius * 0.25] * (len(lines) - 1)
+    fonts = []
+    for text, fs in zip(lines, sizes):
+        font = _load_font(bold, int(fs))
+        while font.size > 8 and draw.textlength(text, font=font) > inner * 1.7:
+            font = _load_font(bold, font.size - 2)
+        fonts.append(font)
+    gap = radius * 0.06
+    total = sum(f.size for f in fonts) + gap * (len(fonts) - 1)
+    y = c - total / 2
+    for text, font in zip(lines, fonts):
+        draw.text((c, y + font.size / 2), text, font=font, fill=color, anchor="mm")
+        y += font.size + gap
+    return img
+
+
+def _ease(t: float) -> float:
+    t = min(max(t, 0.0), 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def _place(canvas: Image.Image, img: Image.Image, cx: float, cy: float, scale: float, alpha: float, angle: float):
+    if scale <= 0.01 or alpha <= 0.01:
+        return
+    im = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))), Image.BILINEAR)
+    im = im.rotate(angle, resample=Image.BICUBIC, expand=True)
+    if alpha < 1:
+        im.putalpha(im.getchannel("A").point(lambda v: int(v * alpha)))
+    canvas.alpha_composite(im, (int(cx - im.width / 2), int(cy - im.height / 2)))
+
+
+def _write_scrapbook_clip(
+    title: str, waypoints: List[Dict[str, Any]], brief: Optional[Dict[str, Any]],
+    output_path: Path, fps: int, size: Tuple[int, int],
+) -> bool:
+    """Polaroids of the stops (S, 1, 2 … E) drop one by one onto paper, then a round stamp with the title,
+    distance and travel time lands in the bottom-right cell; then the logo end card, as after the scroll."""
+    width, height = size
+    route = [wp for wp in waypoints if not wp.get("isStopBy") or wp.get("connectToRoute")]
+    stops = [
+        ("S" if i == 0 else "E" if i == len(route) - 1 else str(i), wp)
+        for i, wp in enumerate(route) if _first_image(wp)
+    ][: tuning.OUTRO_MAX_CARDS]
+    card_w, spots, (sx, sy, sr) = scrapbook_layout(len(stops), size)
+    cards = []
+    for (badge, wp), (cx, cy, angle) in zip(stops, spots):
+        card = _polaroid(_first_image(wp), badge, str(wp.get("label") or wp.get("name") or ""), int(card_w))
+        if card is not None:
+            cards.append((card, cx, cy, angle))
+    lines = [title]
+    if brief and brief.get("legs"):
+        lines += [_fmt_km(brief["total_km"]), _engine()._format_duration_ja(brief["total_minutes"] * 60)]
+    stamp = _stamp(int(sr), lines)
+
+    noise = np.random.default_rng(1).normal(0, 5, (height, width, 1))
+    paper = np.clip(np.asarray(tuning.OUTRO_SCRAPBOOK_PAPER_COLOR, np.float32) + noise, 0, 255).astype(np.uint8)
+    paper_bg = Image.fromarray(paper)
+    settled = paper_bg.convert("RGBA")
+    gap = min(0.4, 4.0 / max(1, len(cards)))
+    drop, start = 0.35, 0.3
+    stamp_at = start + len(cards) * gap + drop
+    end = stamp_at + 0.25 + tuning.OUTRO_SCRAPBOOK_HOLD_SECONDS
+
+    def frames():
+        nonlocal settled
+        landed = 0
+        last = None
+        for f in range(int(round(end * fps))):
+            t = f / fps
+            while landed < len(cards) and t >= start + landed * gap + drop:
+                card, cx, cy, angle = cards[landed]
+                _place(settled, card, cx, cy, 1.0, 1.0, angle)
+                landed += 1
+            img = settled.copy()
+            for i in range(landed, len(cards)):
+                e = _ease((t - start - i * gap) / drop)
+                if e > 0:
+                    card, cx, cy, angle = cards[i]
+                    _place(img, card, cx, cy - card_w * 0.2 * (1 - e), 1.25 - 0.25 * e, e, angle + 8 * (1 - e))
+            u = (t - stamp_at) / 0.25
+            if u > 0:
+                e = min(u, 1.0)
+                _place(img, stamp, sx, sy, 1.8 - 0.8 * e, e, -12)
+            last = np.asarray(img.convert("RGB"), dtype=np.float32)
+            yield last
+        end_card = _end_card(size, paper_bg, _INK)
+        if end_card is not None:
+            # Barn door: the logo card closes in from the top and bottom edges at once, meeting in the middle.
+            steps = max(1, int(round(tuning.OUTRO_LOGO_FADE_SECONDS * fps)))
+            rows = np.arange(height, dtype=np.float32)[:, None, None]
+            soft = max(6.0, height / 30)
+            for i in range(steps):
+                band = _ease((i + 1) / steps) * height / 2
+                edge = np.maximum(band - rows, rows - (height - band))  # >0 inside a door: px from its edge
+                shadow = 1 - 0.45 * np.clip(1 + edge / soft, 0, 1)  # each door casts a soft shadow on the photos
+                yield np.where(edge > 0, end_card, last * shadow)
+            for _ in range(int(round(tuning.OUTRO_LOGO_HOLD_SECONDS * fps))):
+                yield end_card
+
+    return _pipe_frames(frames(), output_path, fps, size)
 
 
 def generate_outro_clip(
@@ -1187,6 +1377,14 @@ def generate_outro_clip(
     partial_path = video_dir_path / f".{Path(output_filename).stem}.partial.mp4"
 
     try:
+        if style == "scrapbook":
+            if not _write_scrapbook_clip(
+                (heading or {}).get("subtitle") or project_name or "", waypoints, brief, partial_path, tuning.INTRO_FPS, size or (1920, 1080),
+            ):
+                return None
+            replace_into(partial_path, output_path)
+            logger.info("Outro clip generated: %s (scrapbook)", output_path)
+            return str(output_path)
         if style == "scroll":
             size = size or (_CANVAS_W, _CANVAS_H)
             page = _build_scroll_page(project_name or "", waypoints_with_image, size, brief, heading)

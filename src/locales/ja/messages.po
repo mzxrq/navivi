@@ -1984,7 +1984,7 @@ msgstr "隣り合う地点どうしの距離、登り、歩行時間、経由点
 #~ msgid "Distance, mode and via points between neighbouring stops"
 #~ msgstr "隣り合う地点どうしの距離、移動手段、経由点"
 
-#: src/components/ui/VideoLookSettings.tsx:216
+#: src/components/ui/VideoLookSettings.tsx:217
 msgid "Distance, time and mode on each card."
 msgstr "各カードに距離、時間、移動手段を表示します。"
 
@@ -4864,8 +4864,8 @@ msgstr "ルートの色"
 #~ msgid "Route colour"
 #~ msgstr "ルートの色"
 
-#: src/components/ui/VideoLookSettings.tsx:216
 #: src/components/ui/VideoLookSettings.tsx:217
+#: src/components/ui/VideoLookSettings.tsx:218
 msgid "Route facts"
 msgstr "ルートの情報"
 
@@ -5035,6 +5035,10 @@ msgstr "プロジェクトに保存されます"
 #: src/components/ui/ScriptInput.tsx:303
 msgid "Scan script for all Kanji and add to Dictionary"
 msgstr "スクリプト内にあるすべての漢字をスキャンし辞書に追加する"
+
+#: src/components/ui/VideoLookSettings.tsx:213
+msgid "Scrapbook"
+msgstr "スクラップブック"
 
 #: src/components/ui/ScriptInput.tsx:207
 msgid "Script"
