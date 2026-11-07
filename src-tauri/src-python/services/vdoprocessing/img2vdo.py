@@ -970,7 +970,7 @@ class AttractionVideoGenerator:
 
         # A CPU-only clip is another clip than the AI one: switching the setting makes the moves again.
         cpu = self._cpu_only()
-        keys = [self._clip_key(img, pan) + ("c2" if cpu and pan != STILL_PRESET else "") for img, pan in zip(image_list, pans)]
+        keys = [self._clip_key(img, pan) + ("c3" if cpu and pan != STILL_PRESET else "") for img, pan in zip(image_list, pans)]
         recorded = self._read_inputs(output_filename)
         if "keys" in recorded:
             inputs_changed = recorded["keys"] != keys

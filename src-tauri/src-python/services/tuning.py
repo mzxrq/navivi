@@ -1013,8 +1013,8 @@ PARALLAX_LAMA_MAX_SIDE = 1824
 # 2 layers split at the foreground/background break: 3 tore a pole between layers.
 PARALLAX_LAYERS = 2
 PARALLAX_PAN = 0.08
-# These moves slide the whole photo flat (no depth, so nothing bends); the user found 3D pans warp too much (2026-11-07).
-PARALLAX_FLAT_PRESETS = ("panleft", "panright")
+# These moves slide or zoom the whole photo flat (no depth, so nothing bends); the user found 3D warps too much (2026-11-07).
+PARALLAX_FLAT_PRESETS = ("panleft", "panright", "zoomin", "zoomout")
 PARALLAX_PAN_PUSH = 0.04
 PARALLAX_ZOOM = 0.16
 PARALLAX_ARC = 0.015
