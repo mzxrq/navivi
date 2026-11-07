@@ -1217,6 +1217,16 @@ DEFAULT_OUTRO_STYLE = "scroll"
 OUTRO_SCRAPBOOK_HOLD_SECONDS = 2.0
 OUTRO_SCRAPBOOK_PAPER_COLOR: Tuple[int, int, int] = (243, 236, 222)
 OUTRO_SCRAPBOOK_STAMP_COLOR: Tuple[int, int, int] = (196, 40, 40)
+# "map": the overview map dimmed this much toward OUTRO_BG_COLOR.
+OUTRO_MAP_DIM = 0.35
+# Per stop: its leg is traced, its photo pops up (OUTRO_MAP_POPUP_WIDTH of the frame wide), holds, slides to
+# the leg's summary card, which holds; at the end every photo and the trip's summary card hold.
+OUTRO_MAP_LEG_TRACE_SECONDS = 1.0
+OUTRO_MAP_PHOTO_SECONDS = 0.8
+OUTRO_MAP_SLIDE_SECONDS = 0.4
+OUTRO_MAP_DETAIL_SECONDS = 1.2
+OUTRO_MAP_POPUP_WIDTH = 0.3
+OUTRO_MAP_HOLD_SECONDS = 2.5
 # settings.enable_outro: false drops the outro clip from the video.
 DEFAULT_ENABLE_OUTRO = True
 OUTRO_SCROLL_COLS = 3

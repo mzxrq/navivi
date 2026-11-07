@@ -180,7 +180,7 @@ export interface ProjectSettings {
   overview_intro_clean_hold_seconds?: number;
   enable_ending_highlight?: boolean;
   enable_outro?: boolean;
-  outro_style?: "scroll" | "grid" | "scrapbook";
+  outro_style?: "scroll" | "grid" | "scrapbook" | "map";
   outro_route_info?: boolean;
   // The outro's title box: height in 1080-line px and fill colour ("#RRGGBB"; unset = the page background),
   // and its text styles (unset = the intro's).

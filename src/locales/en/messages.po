@@ -1984,7 +1984,7 @@ msgstr "Distance, climb, walking time and via points between neighbouring stops"
 #~ msgid "Distance, mode and via points between neighbouring stops"
 #~ msgstr "Distance, mode and via points between neighbouring stops"
 
-#: src/components/ui/VideoLookSettings.tsx:217
+#: src/components/ui/VideoLookSettings.tsx:218
 msgid "Distance, time and mode on each card."
 msgstr "Distance, time and mode on each card."
 
@@ -4868,8 +4868,8 @@ msgstr "Route color"
 #~ msgid "Route colour"
 #~ msgstr "Route colour"
 
-#: src/components/ui/VideoLookSettings.tsx:217
 #: src/components/ui/VideoLookSettings.tsx:218
+#: src/components/ui/VideoLookSettings.tsx:219
 msgid "Route facts"
 msgstr "Route facts"
 
@@ -4885,6 +4885,10 @@ msgstr "Route Line"
 #: src/features/map/components/MapLayers/RouteStyling.tsx:76
 msgid "Route Lines Config"
 msgstr "Route Lines Config"
+
+#: src/components/ui/VideoLookSettings.tsx:214
+msgid "Route map"
+msgstr "Route map"
 
 #: src/components/ui/AppSettings.tsx:450
 #: src/components/view/ProjectSettingsModal.tsx:213

@@ -11,6 +11,25 @@ from services.config.job_config import JobConfigManager
 from .helpers import logger, project_video_dir
 
 
+def route_map_inputs(config_path: Path) -> dict:
+    """The "map" outro's background: the overview's own framing of the route, fetched as one image (cached
+    tiles, CPU), with its Web Mercator extent and the route's points."""
+    from services.mapfetcher.mapfetcher import MapFetcher
+
+    from .gps_step import process_gps
+    from .overview_framing import overview_bounding_box
+
+    route_df = process_gps(str(config_path))["route"]
+    job_config = JobConfigManager(str(config_path))
+    fetcher = MapFetcher(job_config=job_config)
+    target = config_path.parent / "assets" / "image" / "map" / "outro_map.png"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    saved, extent, _ = fetcher.fetch_image(
+        bounding_box=overview_bounding_box(fetcher, route_df, job_config.data), output_filename=str(target),
+    )
+    return {"map": saved, "extent": tuple(extent), "track": list(zip(route_df["latitude"], route_df["longitude"]))}
+
+
 def _route_frame_size(video_dir: Path) -> Optional[Tuple[int, int]]:
     """The frame size most of the project's route clips have - what the
     final export sizes the whole video to (see VideoExporter._timeline_size)
@@ -129,10 +148,20 @@ def render_outro_clip(project_config_path: str) -> Optional[str]:
     # The scroll's title is a text-track item (outro_text_item), so the timeline editor can change it.
     heading["burn_text"] = style != "scroll"
 
+    route_map = None
+    if style == "map":
+        try:
+            route_map = route_map_inputs(config_path)
+        except Exception as exc:
+            logger.warning("Outro step: no map for the route map outro (%s) - scrolling outro instead.", exc)
+            style = "scroll"
+            heading["burn_text"] = False
+
     logger.info("Outro step: building %s outro clip for project '%s'.", style, project_name)
     outro_path = generate_outro_clip(
         video_dir=str(video_dir), project_name=title, waypoints=waypoints, style=style,
-        size=_route_frame_size(Path(video_dir)), brief=brief, heading=heading,
+        size=_route_frame_size(Path(video_dir)), brief=brief, heading=heading, route_map=route_map,
+        settings=settings,
     )
 
     if outro_path:

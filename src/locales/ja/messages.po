@@ -1984,7 +1984,7 @@ msgstr "隣り合う地点どうしの距離、登り、歩行時間、経由点
 #~ msgid "Distance, mode and via points between neighbouring stops"
 #~ msgstr "隣り合う地点どうしの距離、移動手段、経由点"
 
-#: src/components/ui/VideoLookSettings.tsx:217
+#: src/components/ui/VideoLookSettings.tsx:218
 msgid "Distance, time and mode on each card."
 msgstr "各カードに距離、時間、移動手段を表示します。"
 
@@ -4864,8 +4864,8 @@ msgstr "ルートの色"
 #~ msgid "Route colour"
 #~ msgstr "ルートの色"
 
-#: src/components/ui/VideoLookSettings.tsx:217
 #: src/components/ui/VideoLookSettings.tsx:218
+#: src/components/ui/VideoLookSettings.tsx:219
 msgid "Route facts"
 msgstr "ルートの情報"
 
@@ -4881,6 +4881,10 @@ msgstr "ルート線"
 #: src/features/map/components/MapLayers/RouteStyling.tsx:76
 msgid "Route Lines Config"
 msgstr "ルート線の設定"
+
+#: src/components/ui/VideoLookSettings.tsx:214
+msgid "Route map"
+msgstr "ルート地図"
 
 #: src/components/ui/AppSettings.tsx:450
 #: src/components/view/ProjectSettingsModal.tsx:213

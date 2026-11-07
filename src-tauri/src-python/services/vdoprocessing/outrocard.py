@@ -1193,7 +1193,7 @@ _INK = (60, 55, 50)  # scrapbook text on paper
 _POLAROID_RATIO = 1.0  # card height / width: a 4:3 photo plus the white frame and name strip
 
 
-def _polaroid(path: str, badge: str, name: str, card_w: int) -> Optional[Image.Image]:
+def _polaroid(path: str, badge: str, name: str, card_w: int, badge_color=tuning.OUTRO_BADGE_COLOR) -> Optional[Image.Image]:
     border = max(4, card_w // 24)
     pw = card_w - 2 * border
     ph = int(pw * 3 / 4)
@@ -1213,7 +1213,7 @@ def _polaroid(path: str, badge: str, name: str, card_w: int) -> Optional[Image.I
     block_w = max(draw.textlength(line, font=font) for line in lines)
     left = (card_w - (2 * r + gap + block_w)) / 2
     cy = (border + ph + card_h) / 2
-    draw.ellipse([left, cy - r, left + 2 * r, cy + r], fill=tuning.OUTRO_BADGE_COLOR)
+    draw.ellipse([left, cy - r, left + 2 * r, cy + r], fill=badge_color)
     draw.text((left + r, cy), badge, font=_load_font(bold, int(r * 1.15)), fill="white", anchor="mm")
     for k, line in enumerate(lines):
         draw.text((left + 2 * r + gap, cy + (k - (len(lines) - 1) / 2) * line_h), line, font=font, fill=_INK, anchor="lm")
@@ -1273,7 +1273,7 @@ def _place(canvas: Image.Image, img: Image.Image, cx: float, cy: float, scale: f
 
 def _write_scrapbook_clip(
     title: str, waypoints: List[Dict[str, Any]], brief: Optional[Dict[str, Any]],
-    output_path: Path, fps: int, size: Tuple[int, int],
+    output_path: Path, fps: int, size: Tuple[int, int], colors: Optional[Dict[str, Any]] = None,
 ) -> bool:
     """Polaroids of the stops (S, 1, 2 … E) drop one by one onto paper, then a round stamp with the title,
     distance and travel time lands in the bottom-right cell; then the logo end card, as after the scroll."""
@@ -1286,7 +1286,10 @@ def _write_scrapbook_clip(
     card_w, spots, (sx, sy, sr) = scrapbook_layout(len(stops), size)
     cards = []
     for (badge, wp), (cx, cy, angle) in zip(stops, spots):
-        card = _polaroid(_first_image(wp), badge, str(wp.get("label") or wp.get("name") or ""), int(card_w))
+        card = _polaroid(
+            _first_image(wp), badge, str(wp.get("label") or wp.get("name") or ""), int(card_w),
+            (colors or {}).get("marker", tuning.OUTRO_BADGE_COLOR),
+        )
         if card is not None:
             cards.append((card, cx, cy, angle))
     lines = [title]
@@ -1342,6 +1345,331 @@ def _write_scrapbook_clip(
     return _pipe_frames(frames(), output_path, fps, size)
 
 
+def _route_badges(waypoints: List[Dict[str, Any]]) -> List[Tuple[str, Dict[str, Any]]]:
+    """The route's stops (stop-bys only when connected) as (S / 1 / 2 … / E, waypoint)."""
+    route = [wp for wp in waypoints if not wp.get("isStopBy") or wp.get("connectToRoute")]
+    return [("S" if i == 0 else "E" if i == len(route) - 1 else str(i), wp) for i, wp in enumerate(route)]
+
+
+def _map_badge(draw: ImageDraw.ImageDraw, cx: float, cy: float, r: float, text: str, color) -> None:
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color, outline="white", width=max(2, int(r / 6)))
+    draw.text((cx, cy), text, font=_load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, int(r * 1.1)), fill="white", anchor="mm")
+
+
+def _boxes_hit(box, boxes) -> int:
+    x0, y0, x1, y1 = box
+    return sum(x0 < b[2] and b[0] < x1 and y0 < b[3] and b[1] < y1 for b in boxes)
+
+
+def _points_in(box, pts: np.ndarray) -> int:
+    x0, y0, x1, y1 = box
+    return int(((pts[:, 0] > x0) & (pts[:, 0] < x1) & (pts[:, 1] > y0) & (pts[:, 1] < y1)).sum())
+
+
+def _free_spot(x, y, bw, bh, size, route_pts, blocked, pins, margin=12.0):
+    """Centre of a bw x bh box near (x, y), inside the frame, covering as little of the other boxes, the pins and
+    the route as it can (in that order), then as near the point as it can."""
+    width, height = size
+    best = None
+    for dist in (0.75, 1.0, 1.35, 1.8, 2.4):
+        for ang in range(0, 360, 20):
+            cx = min(max(x + dist * max(bw, bh) * math.cos(math.radians(ang)), bw / 2 + margin), width - bw / 2 - margin)
+            cy = min(max(y - dist * max(bw, bh) * math.sin(math.radians(ang)), bh / 2 + margin), height - bh / 2 - margin)
+            box = (cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2)
+            score = (_boxes_hit(box, blocked) * 1e9 + _points_in(box, pins) * 1e7 + _points_in(box, route_pts) * 1e3
+                     + math.dist((cx, cy), (x, y)))
+            if best is None or score < best[0]:
+                best = (score, cx, cy)
+    return best[1], best[2]
+
+
+def _project_engine(settings: Dict[str, Any]):
+    """A GraphicsEngine with the project's colours and summary-card style, for the summary cards."""
+    from services.mapfetcher.graphicengine import GraphicsEngine
+
+    return GraphicsEngine(
+        line_color=settings.get("line_color", tuning.DEFAULT_LINE_COLOR),
+        marker_color=settings.get("marker_color", tuning.DEFAULT_MARKER_COLOR),
+        summary_card_style=settings.get("summary_card_style", tuning.DEFAULT_SUMMARY_CARD_STYLE),
+    )
+
+
+def _bgra_image(card: np.ndarray) -> Image.Image:
+    return Image.fromarray(np.ascontiguousarray(card[:, :, [2, 1, 0, 3]]), "RGBA")
+
+
+def _leg_detail_card(
+    engine, leg: Dict[str, Any], ends: Tuple[Tuple[str, str], Tuple[str, str]], size: Tuple[int, int], marker_rgb,
+) -> Image.Image:
+    """The route map pop-up's other side: from → to, the leg's distance and time big, then its modes (icon, name,
+    distance) and its climb. Drawn to fill the pop-up's photo area."""
+    w, h = size
+    k = h / 432
+    labels = video_text.current_labels()
+    bold, regular = _GraphicsEngineBase.FONT_CANDIDATES_BOLD, _GraphicsEngineBase.FONT_CANDIDATES_REGULAR
+    muted = (120, 126, 138)
+    card = Image.new("RGBA", size, (247, 248, 250, 255))
+    d = ImageDraw.Draw(card)
+
+    # From → to, each with its badge.
+    font = _load_font(bold, int(28 * k))
+    r = int(17 * k)
+    y = int(52 * k)
+    half = (w - int(70 * k)) / 2
+    for n, (badge, name) in enumerate(ends):
+        x0 = int(24 * k) if n == 0 else int(w / 2 + 35 * k - 0 * k)
+        d.ellipse([x0, y - r, x0 + 2 * r, y + r], fill=marker_rgb)
+        d.text((x0 + r, y), badge, font=_load_font(bold, int(r * 1.15)), fill="white", anchor="mm")
+        # A long name goes on two lines, split between words.
+        lines, nf, _ = _name_lines(d, name, bold, font.size, int(20 * k), half - 2 * r - 14 * k)
+        lines = lines[:2]
+        for j, line in enumerate(lines):
+            d.text((x0 + 2 * r + 10 * k, y + (j - (len(lines) - 1) / 2) * nf.size * 1.15), line, font=nf,
+                   fill=_INK, anchor="lm")
+    d.text((w / 2, y), "→", font=_load_font(bold, int(34 * k)), fill=muted, anchor="mm")
+    d.line([(24 * k, 96 * k), (w - 24 * k, 96 * k)], fill=(222, 225, 231), width=max(1, int(2 * k)))
+
+    # Distance and time.
+    label_font = _load_font(regular, int(26 * k))
+    value_font = _load_font(bold, int(66 * k))
+    stats = [(labels.get("distance_label", "Distance"), _fmt_km(leg["km"])),
+             (labels.get("duration_fallback", "Time"), engine._format_duration_ja(leg["minutes"] * 60))]
+    for n, (label, value) in enumerate(stats):
+        cx = w * (0.27 if n == 0 else 0.73)
+        d.text((cx, 140 * k), label, font=label_font, fill=muted, anchor="mm")
+        vf = value_font
+        while vf.size > 20 and d.textlength(value, font=vf) > w * 0.44:
+            vf = _load_font(bold, vf.size - 2)
+        d.text((cx, 205 * k), value, font=vf, fill=_INK, anchor="mm")
+    d.line([(w / 2, 125 * k), (w / 2, 245 * k)], fill=(222, 225, 231), width=max(1, int(2 * k)))
+    d.line([(24 * k, 275 * k), (w - 24 * k, 275 * k)], fill=(222, 225, 231), width=max(1, int(2 * k)))
+
+    # Modes, then the climb.
+    chips = []
+    for piece in leg.get("pieces") or [leg]:
+        mode = piece.get("mode", "walking")
+        name = labels.get("mode_name", {}).get(mode, mode)
+        chips.append((mode, f"{name}  {_fmt_km(piece['km'])}" if len(leg.get("pieces") or []) > 1 else name))
+    chip_font = _load_font(bold, int(30 * k))
+    icon = int(40 * k)
+    x, cy = 28 * k, 340 * k
+    for mode, text in chips:
+        color = _mode_rgb(engine, mode)
+        engine._draw_mode_icon(d, mode, int(x + icon / 2), int(cy), icon, (*color, 255))
+        d.text((x + icon + 10 * k, cy), text, font=chip_font, fill=color, anchor="lm")
+        x += icon + 10 * k + d.textlength(text, font=chip_font) + 28 * k
+    if leg.get("ascent_m"):
+        climb = f"{labels.get('elevation_profile', '')} +{int(leg['ascent_m'])} m".strip()
+        d.text((w - 28 * k, cy), climb, font=chip_font, fill=muted, anchor="rm")
+    return card
+
+
+def _write_route_map_clip(
+    title: str, waypoints: List[Dict[str, Any]], brief: Optional[Dict[str, Any]], route_map: Dict[str, Any],
+    output_path: Path, fps: int, size: Tuple[int, int], settings: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """The overview map, dimmed, with the route traced again one leg at a time. At each stop its photo pops up
+    big (kept off the route line), slides left to that leg's summary card (distance and time), and closes before
+    the next leg. At the end every photo pops up small beside its pin with the trip's summary card, as in the
+    overview; then the logo end card."""
+    settings = settings or {}
+    colors = _project_colors(settings)
+    engine = _project_engine(settings)
+    width, height = size
+    k = height / 1080
+    xmin, xmax, ymin, ymax = route_map["extent"]
+    R = 6378137.0
+
+    def to_px(lat: float, lon: float) -> Tuple[float, float]:
+        x = R * math.radians(lon)
+        y = R * math.log(math.tan(math.pi / 4 + math.radians(lat) / 2))
+        return (x - xmin) / (xmax - xmin) * width, (ymax - y) / (ymax - ymin) * height
+
+    base = Image.open(route_map["map"]).convert("RGB").resize(size, Image.LANCZOS)
+    base = Image.blend(base, Image.new("RGB", size, tuning.OUTRO_BG_COLOR), tuning.OUTRO_MAP_DIM).convert("RGBA")
+    pts = [to_px(lat, lon) for lat, lon in route_map["track"]]
+    seg = [math.dist(p, q) for p, q in zip(pts, pts[1:])]
+    samples = []
+    for p, q, d in zip(pts, pts[1:], seg):
+        n = max(1, int(d / 6))
+        samples += [(p[0] + (q[0] - p[0]) * i / n, p[1] + (q[1] - p[1]) * i / n) for i in range(n)]
+    route_samples = np.array(samples or [(0.0, 0.0)])
+    line_rgb = colors.get("line", tuple(reversed(tuning.DEFAULT_LINE_COLOR))[:3])
+    marker_rgb = colors.get("marker", tuning.OUTRO_BADGE_COLOR)
+    bold = _GraphicsEngineBase.FONT_CANDIDATES_BOLD
+    legs_by_to = {leg.get("to_id"): leg for leg in (brief or {}).get("legs") or []}
+
+    # Stops in walk order, each at the first track point near it after the previous stop.
+    stops, start = [], 0
+    for badge, wp in _route_badges(waypoints):
+        x, y = to_px(wp["lat"], wp.get("lng", wp.get("lon")))
+        d2 = [(x - p[0]) ** 2 + (y - p[1]) ** 2 for p in pts[start:]]
+        i = start + int(np.argmin(d2)) if d2 else len(pts) - 1
+        start = i
+        stops.append({"badge": badge, "x": x, "y": y, "i": i, "wp": wp, "leg": legs_by_to.get(wp.get("id"))})
+    pins = np.array([(s["x"], s["y"]) for s in stops])
+
+    # The big pop-up: photo with the stop's name under it; it slides over to the leg card.
+    pw = int(width * tuning.OUTRO_MAP_POPUP_WIDTH)
+    ph = int(pw * 3 / 4)
+    pad, strip = int(10 * k), int(64 * k)
+    box_w, box_h = pw + 2 * pad, ph + pad + strip
+    name_font = _load_font(bold, int(34 * k))
+    name_of = lambda s: str(s["wp"].get("label") or s["wp"].get("name") or "")
+    for n, s in enumerate(stops):
+        photo = _first_image(s["wp"])
+        s["photo"] = _rounded_thumbnail(photo, (pw, ph), int(10 * k)) if photo else None
+        s["leg_card"] = _leg_detail_card(
+            engine, s["leg"], ((stops[n - 1]["badge"], name_of(stops[n - 1])), (s["badge"], name_of(s))), (pw, ph),
+            marker_rgb,
+        ) if s["leg"] and n else None
+        s["box"] = _free_spot(s["x"], s["y"], box_w, box_h, size, route_samples, [], pins)
+
+    def popup(s, slide: float) -> Image.Image:
+        card = Image.new("RGBA", (box_w, box_h), (0, 0, 0, 0))
+        ImageDraw.Draw(card).rounded_rectangle([0, 0, box_w - 1, box_h - 1], int(16 * k), fill="white")
+        view = Image.new("RGBA", (pw, ph), (*tuning.OUTRO_BG_COLOR, 255))
+        shift = int(round(_ease(slide) * pw))
+        if s["photo"] is not None and shift < pw:
+            view.alpha_composite(s["photo"].crop((shift, 0, pw, ph)), (0, 0))
+        if s["leg_card"] is not None and shift > 0:
+            view.alpha_composite(s["leg_card"].crop((0, 0, shift, ph)), (pw - shift, 0))
+        mask = Image.new("L", (pw, ph), 0)
+        ImageDraw.Draw(mask).rounded_rectangle([0, 0, pw - 1, ph - 1], int(10 * k), fill=255)
+        card.paste(view, (pad, pad), mask)
+        d = ImageDraw.Draw(card)
+        r = int(20 * k)
+        name = _truncate_to_width(d, str(s["wp"].get("label") or s["wp"].get("name") or ""), name_font, pw - 3 * r)
+        tw = d.textlength(name, font=name_font)
+        left = (box_w - (2 * r + 12 * k + tw)) / 2
+        cy = pad + ph + strip / 2
+        d.ellipse([left, cy - r, left + 2 * r, cy + r], fill=marker_rgb)
+        d.text((left + r, cy), s["badge"], font=_load_font(bold, int(r * 1.15)), fill="white", anchor="mm")
+        d.text((left + 2 * r + 12 * k, cy), name, font=name_font, fill=_INK, anchor="lm")
+        return _with_shadow(card, max(4, int(10 * k)))
+
+    # Timeline: S pops up; then for each leg: trace, pop, photo, slide to the leg card, close.
+    T = tuning
+    trace_s, pop_s, close_s = T.OUTRO_MAP_LEG_TRACE_SECONDS, 0.3, 0.25
+    events = []  # (trace start, pop at, slide at or None, close at, gone at)
+    t = 0.3
+    for n, s in enumerate(stops):
+        trace0 = t
+        if n:
+            t += trace_s
+        pop = t
+        slide = pop + pop_s + T.OUTRO_MAP_PHOTO_SECONDS if s["leg_card"] is not None else None
+        close = slide + T.OUTRO_MAP_SLIDE_SECONDS + T.OUTRO_MAP_DETAIL_SECONDS if slide else pop + pop_s + T.OUTRO_MAP_PHOTO_SECONDS
+        events.append((trace0, pop, slide, close, close + close_s))
+        t = close + close_s
+    recap_at = t + 0.2
+
+    # Recap: every photo small beside its pin, and the trip's summary card bottom-right.
+    total_card = None
+    if brief and brief.get("legs"):
+        rows = _mode_totals(brief)
+        total_card = _bgra_image(engine.render_summary_card(
+            distance_km=brief["total_km"], duration_seconds=brief["total_minutes"] * 60,
+            mode_breakdown={m: km for m, km, _ in rows}, mode_duration={m: mins * 60 for m, _, mins in rows},
+        ))
+    blocked = []
+    sm = 20 * k
+    if total_card is not None:
+        blocked.append((width - total_card.width - sm, height - total_card.height - sm, width - sm, height - sm))
+    cw, ch = int(210 * k), int(140 * k)
+    for s in stops:
+        s["small"] = None
+        if s["photo"] is not None:
+            p = int(6 * k)
+            card = Image.new("RGBA", (cw + 2 * p, ch + 2 * p), (0, 0, 0, 0))
+            ImageDraw.Draw(card).rounded_rectangle([0, 0, card.width - 1, card.height - 1], int(14 * k), fill="white")
+            card.alpha_composite(s["photo"].resize((cw, ch), Image.LANCZOS), (p, p))
+            s["small"] = _with_shadow(card, max(4, int(8 * k)))
+            bw, bh = cw + 20 * k, ch + 20 * k
+            s["spot"] = _free_spot(s["x"], s["y"], bw, bh, size, route_samples, blocked, pins)
+            blocked.append((s["spot"][0] - bw / 2, s["spot"][1] - bh / 2, s["spot"][0] + bw / 2, s["spot"][1] + bh / 2))
+    end = recap_at + len(stops) * 0.08 + 0.4 + T.OUTRO_MAP_HOLD_SECONDS
+
+    def draw_line(img, a: int, b: int, frac: float = 1.0):
+        line = pts[a: b + 1]
+        if len(line) < 2:
+            return
+        if frac < 1:
+            sub = np.concatenate([[0.0], np.cumsum(seg[a:b])])
+            n = int(np.searchsorted(sub, frac * sub[-1]))
+            line = line[: max(2, n + 1)]
+        d = ImageDraw.Draw(img)
+        d.line(line, fill=(255, 255, 255, 255), width=int(14 * k), joint="curve")
+        d.line(line, fill=(*line_rgb, 255), width=int(8 * k), joint="curve")
+
+    def frames():
+        trail = base.copy()  # finished legs and their pins
+        done = -1
+        last = None
+        for f in range(int(round(end * fps))):
+            t = f / fps
+            while done + 1 < len(stops) and t >= events[done + 1][1]:
+                done += 1
+                if done:
+                    draw_line(trail, stops[done - 1]["i"], stops[done]["i"])
+            img = trail.copy()
+            nxt = done + 1
+            if 0 < nxt < len(stops) and t >= events[nxt][0]:
+                draw_line(img, stops[nxt - 1]["i"], stops[nxt]["i"], _ease((t - events[nxt][0]) / trace_s))
+            for s in stops[: done + 1]:  # pins stay above every line
+                _map_badge(ImageDraw.Draw(img), s["x"], s["y"], 18 * k, s["badge"], marker_rgb)
+            if done >= 0 and t < events[done][4]:
+                _, pop, slide, close, _ = events[done]
+                s = stops[done]
+                scale = _back((t - pop) / pop_s) if t < close else 1 - _ease((t - close) / close_s)
+                sl = min(max((t - slide) / T.OUTRO_MAP_SLIDE_SECONDS, 0.0), 1.0) if slide else 0.0
+                bx, by = s["box"]
+                if scale > 0.02:
+                    ImageDraw.Draw(img).line([(s["x"], s["y"]), (bx, by)], fill=(255, 255, 255, 220), width=max(2, int(3 * k)))
+                    _place(img, popup(s, sl), bx, by, scale, 1.0, 0)
+                _map_badge(ImageDraw.Draw(img), s["x"], s["y"], 18 * k, s["badge"], marker_rgb)
+            if t >= recap_at:
+                for j, s in enumerate(stops):
+                    sc = _back((t - recap_at - j * 0.08) / 0.35) if s["small"] is not None else 0
+                    if sc > 0:
+                        ImageDraw.Draw(img).line([(s["x"], s["y"]), s["spot"]], fill=(255, 255, 255, 200), width=max(2, int(3 * k)))
+                        _place(img, s["small"], s["spot"][0], s["spot"][1], sc, 1.0, 0)
+                for s in stops:
+                    _map_badge(ImageDraw.Draw(img), s["x"], s["y"], 18 * k, s["badge"], marker_rgb)
+                a = _ease((t - recap_at - 0.2) / 0.5)
+                if total_card is not None and a > 0:
+                    cx = width - sm - total_card.width / 2 + (1 - a) * 60 * k
+                    _place(img, total_card, cx, height - sm - total_card.height / 2, 1.0, a, 0)
+            last = np.asarray(img.convert("RGB"), dtype=np.float32)
+            yield last
+        end_card = _end_card(size)
+        if end_card is not None:
+            steps = max(1, int(round(tuning.OUTRO_LOGO_FADE_SECONDS * fps)))
+            for i in range(steps):
+                yield last + (end_card - last) * ((i + 1) / steps)
+            for _ in range(int(round(tuning.OUTRO_LOGO_HOLD_SECONDS * fps))):
+                yield end_card
+
+    return _pipe_frames(frames(), output_path, fps, size)
+
+
+def _project_colors(settings: Optional[Dict[str, Any]]) -> Dict[str, Tuple[int, int, int]]:
+    """The project's pin and route colours (settings are BGR, like tuning) as RGB."""
+    out = {}
+    for key, name in (("marker_color", "marker"), ("line_color", "line")):
+        value = (settings or {}).get(key)
+        if isinstance(value, (list, tuple)) and len(value) >= 3:
+            out[name] = tuple(int(v) for v in reversed(value[:3]))
+    return out
+
+
+def _back(t: float) -> float:
+    """0 → 1 with a small overshoot: a card popping up."""
+    t = min(max(t, 0.0), 1.0)
+    c = 1.70158
+    return 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2
+
+
 def generate_outro_clip(
     video_dir: str,
     project_name: str,
@@ -1352,8 +1680,12 @@ def generate_outro_clip(
     size: Optional[Tuple[int, int]] = None,
     brief: Optional[Dict[str, Any]] = None,
     heading: Optional[Dict[str, Any]] = None,
+    route_map: Optional[Dict[str, Any]] = None,
+    settings: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
-    """Builds the outro in `style` ("scroll" or "grid" - see the module
+    """`route_map` ({"map", "extent", "track"}, outro_step.route_map_inputs) is the "map" style's background;
+    `settings` (the project's) give the scrapbook and map styles their pin and route colours and summary cards.
+    Builds the outro in `style` ("scroll" or "grid" - see the module
     docstring) as an mp4; duration_sec is the grid's hold (the scroll's own
     length follows the page). `size` is the finished video's frame size,
     which the scroll is drawn at (default: the 1280x704 canvas). `brief`
@@ -1377,9 +1709,19 @@ def generate_outro_clip(
     partial_path = video_dir_path / f".{Path(output_filename).stem}.partial.mp4"
 
     try:
+        if style == "map" and route_map:
+            if not _write_route_map_clip(
+                (heading or {}).get("subtitle") or project_name or "", waypoints, brief, route_map, partial_path,
+                tuning.INTRO_FPS, size or (1920, 1080), settings,
+            ):
+                return None
+            replace_into(partial_path, output_path)
+            logger.info("Outro clip generated: %s (route map)", output_path)
+            return str(output_path)
         if style == "scrapbook":
             if not _write_scrapbook_clip(
-                (heading or {}).get("subtitle") or project_name or "", waypoints, brief, partial_path, tuning.INTRO_FPS, size or (1920, 1080),
+                (heading or {}).get("subtitle") or project_name or "", waypoints, brief, partial_path, tuning.INTRO_FPS,
+                size or (1920, 1080), _project_colors(settings),
             ):
                 return None
             replace_into(partial_path, output_path)
