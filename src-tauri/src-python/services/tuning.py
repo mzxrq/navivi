@@ -354,7 +354,7 @@ OVERVIEW_BANNER_NEAR_SECONDS = 3.0
 # Px kept free at the top of the overview for the "next stop" banner.
 OVERVIEW_TOP_CARD_CLEARANCE = 60
 # Share of the frame height kept free at the bottom for the burned-in captions (up to two lines).
-OVERVIEW_BOTTOM_CARD_CLEARANCE = 0.1
+OVERVIEW_BOTTOM_CARD_CLEARANCE = 0.05
 # Ending recap: every photo card fades in at once, over this long.
 RECAP_GROUP_FADE_SECONDS = 0.4
 # Recap leader-line/border colors, cycled around the ring so neighbouring cards differ (BGR, Tableau10-based,
