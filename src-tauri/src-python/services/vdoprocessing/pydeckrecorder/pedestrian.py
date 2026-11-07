@@ -43,7 +43,7 @@ from .leg_camera import (
     _project_lonlat_to_px,
 )
 from .leg_hud import (
-    _COMPASS_SVG, _DEFAULT_MODE_HUD, _MODE_HUD, _css_rgba, _heading_label, _hud_css, _hud_text, _localized_hud,
+    compass_svg, _DEFAULT_MODE_HUD, _MODE_HUD, _css_rgba, _heading_label, _hud_css, _hud_text, _localized_hud,
     _remaining_minutes, _walk_headings,
 )
 from .pin_icons import (
@@ -985,7 +985,7 @@ async def _record_leg(
                     }""",
                     [_hud_css(theme), mode_hud["banner_icon"], mode_hud["time_label"], mode_hud["icon"], route_chain,
                      hud_card_png is not None,
-                     _COMPASS_SVG.format(size=int(tuning.RESIDENTIAL_COMPASS_SIZE_PX))
+                     compass_svg(int(tuning.RESIDENTIAL_COMPASS_SIZE_PX))
                      if tuning.RESIDENTIAL_SHOW_COMPASS else "",
                      hud_labels["distance_label"]],
                 )

@@ -1,4 +1,5 @@
 {
+  "compass_points": ["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
   "mode_name": {
     "walking": "Walk",
     "driving": "Drive",

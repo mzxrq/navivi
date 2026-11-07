@@ -1,4 +1,5 @@
 {
+  "compass_points": ["北", "北東", "東", "南東", "南", "南西", "西", "北西"],
   "mode_name": {
     "walking": "歩く",
     "driving": "運転",

@@ -170,7 +170,7 @@ _COMPASS_SVG = """<svg id="hud-compass" width="{size}" height="{size}" viewBox="
 <line class="tick" x1="93" y1="50" x2="87" y2="50"/>
 <line class="tick" x1="50" y1="93" x2="50" y2="87"/>
 <line class="tick" x1="7" y1="50" x2="13" y2="50"/>
-<text class="letter" x="50" y="31" text-anchor="middle">N</text>
+<text class="letter" x="50" y="31" text-anchor="middle">{north}</text>
 <g id="hud-compass-needle">
 <polygon class="tail" points="50,82 57,50 43,50"/>
 <polygon fill="#d93a32" points="50,18 57,50 43,50"/>
@@ -182,10 +182,20 @@ _COMPASS_SVG = """<svg id="hud-compass" width="{size}" height="{size}" viewBox="
 _COMPASS_POINTS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 
 
+def _compass_points() -> Tuple[str, ...]:
+    """N, NE, … clockwise in the video's language (labels_<lang>.json "compass_points"; 北, 北東, … in Japanese)."""
+    points = video_text.current_labels().get("compass_points")
+    return tuple(points) if isinstance(points, list) and len(points) == 8 else _COMPASS_POINTS
+
+
+def compass_svg(size: int) -> str:
+    return _COMPASS_SVG.format(size=size, north=_compass_points()[0])
+
+
 def _heading_label(deg: float) -> str:
-    """e.g. 47.3 -> "NE 47°"."""
+    """e.g. 47.3 -> "NE 47°" ("北東 47°" in Japanese)."""
     deg = round(deg) % 360
-    return f"{_COMPASS_POINTS[int((deg + 22.5) // 45) % 8]} {deg}°"
+    return f"{_compass_points()[int((deg + 22.5) // 45) % 8]} {deg}°"
 
 
 def _walk_headings(lons, lats, window_m: float) -> List[float]:

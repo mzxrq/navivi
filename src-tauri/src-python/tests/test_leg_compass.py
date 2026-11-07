@@ -29,10 +29,21 @@ def test_degenerate():
     assert _walk_headings([135.0] * 3, [35.0] * 3, 20.0) == [0.0, 0.0, 0.0]
 
 
-def test_heading_label():
+def test_heading_label(monkeypatch):
+    from services import video_text
+    from services.vdoprocessing.pydeckrecorder.leg_hud import compass_svg
+
+    monkeypatch.setattr(video_text, "current_labels", lambda: video_text.labels_for("en"))
     assert _heading_label(0.2) == "N 0°"
     assert _heading_label(47.3) == "NE 47°"
     assert _heading_label(180.0) == "S 180°"
     assert _heading_label(289.6) == "W 290°"
     assert _heading_label(300.0) == "NW 300°"
     assert _heading_label(359.7) == "N 0°"
+    assert ">N</text>" in compass_svg(80)
+
+    # A Japanese video: 北 西 東 南 on the dial's letter and the heading label.
+    monkeypatch.setattr(video_text, "current_labels", lambda: video_text.labels_for("ja"))
+    assert _heading_label(92.0) == "東 92°"
+    assert _heading_label(225.0) == "南西 225°"
+    assert ">北</text>" in compass_svg(80)
