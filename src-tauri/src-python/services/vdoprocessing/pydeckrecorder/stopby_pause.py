@@ -94,7 +94,7 @@ async def _play_stopby_photo_pause(
     # the whole time, a connected stop-by's card only starts here before
     # growing to fullscreen, but there's no reason for the two to look
     # like different card sizes in the moment before that growth.
-    card_w = 200.0
+    card_w = tuning.STREET_PHOTO_CARD_WIDTH if stopby.get("street_view") else 200.0
     card_h = card_w * (float(out_h) / float(out_w))
     card_gap = 26.0
     card_margin = 16.0

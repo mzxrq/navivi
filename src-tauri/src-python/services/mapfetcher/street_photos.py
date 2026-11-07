@@ -131,7 +131,7 @@ def turn_photos(points: List[List[float]], cache_dir: Path, token: str) -> List[
         key = f"{lat:.5f},{lon:.5f},{round(turn['bearing'] / 15.0) * 15 % 360}"
         cached = index.get(key, False)
         if cached and (cache_dir / cached).exists():
-            out.append({"lat": lat, "lon": lon, "popup_image": str(cache_dir / cached), "passing": True})
+            out.append({"lat": lat, "lon": lon, "popup_image": str(cache_dir / cached), "passing": True, "street_view": True})
             continue
         if cached is None or refused:
             continue
@@ -146,7 +146,7 @@ def turn_photos(points: List[List[float]], cache_dir: Path, token: str) -> List[
             continue
         index[key], changed = name, True
         if name:
-            out.append({"lat": lat, "lon": lon, "popup_image": str(cache_dir / name), "passing": True})
+            out.append({"lat": lat, "lon": lon, "popup_image": str(cache_dir / name), "passing": True, "street_view": True})
         else:
             logger.info("No Mapillary photo near the turn at %.5f,%.5f.", lat, lon)
     if changed:
