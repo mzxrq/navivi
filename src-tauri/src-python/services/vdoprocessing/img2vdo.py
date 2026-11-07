@@ -330,6 +330,10 @@ class AttractionVideoGenerator:
         if normalize_camera_pan(prompt_text) == STILL_PRESET:
             return self._still_clip(local_image_path, str(save_path), duration_sec)
 
+        # Project setting "AI photo clips" off: every move is the 3D photo on the CPU, ComfyUI never starts.
+        if self._cpu_only():
+            return self._parallax_clip(local_image_path, str(save_path), duration_sec, prompt_text)
+
         if normalize_camera_pan(prompt_text) in tuning.ATTRACTION_JUMP_CUT_PRESETS:
             from services.vdoprocessing.jump_cut import generate_jump_cut, upscaled_photo
 
@@ -396,6 +400,11 @@ class AttractionVideoGenerator:
             return str(save_path)
 
         return self._parallax_clip(local_image_path, str(save_path), duration_sec, prompt_text)
+
+    def _cpu_only(self) -> bool:
+        """settings.photo_clip_engine "cpu": no ComfyUI, the 3D photo move for every preset."""
+        settings = self.config.get_settings() if hasattr(self.config, "get_settings") else {}
+        return str((settings or {}).get("photo_clip_engine") or "ai").lower() == "cpu"
 
     @staticmethod
     def _parallax_clip(image_path: str, save_path: str, duration_sec: float, preset) -> Optional[str]:
@@ -957,7 +966,11 @@ class AttractionVideoGenerator:
             normalize_camera_pan(prompt_list[min(i, len(prompt_list) - 1)] if prompt_list else "")
             for i in range(len(image_list))
         ]
-        keys = [self._clip_key(img, pan) for img, pan in zip(image_list, pans)]
+        from services.vdoprocessing.camera_pan import STILL_PRESET
+
+        # A CPU-only clip is another clip than the AI one: switching the setting makes the moves again.
+        cpu = self._cpu_only()
+        keys = [self._clip_key(img, pan) + ("c2" if cpu and pan != STILL_PRESET else "") for img, pan in zip(image_list, pans)]
         recorded = self._read_inputs(output_filename)
         if "keys" in recorded:
             inputs_changed = recorded["keys"] != keys

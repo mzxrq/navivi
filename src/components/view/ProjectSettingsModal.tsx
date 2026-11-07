@@ -99,6 +99,7 @@ export function ProjectSettingsModal({
           await db.settings.patch(project.projectId, {
             routeMarker: s.routeMarker ?? null,
             enable_attraction_videos: s.enable_attraction_videos,
+            photo_clip_engine: s.photo_clip_engine,
             use_narration_cues: s.use_narration_cues,
             attraction_fade_seconds: s.attraction_fade_seconds,
             ...lookPatch(s),
@@ -267,6 +268,17 @@ function ProjectSettingsForm({
             checked={options.enable_attraction_videos ?? true}
             onChange={(v) => setOption({ enable_attraction_videos: v })}
             label={t`Animate photos at stops`}
+          />
+        </OptionRow>
+        <OptionRow
+          title={t`AI photo clips`}
+          description={t`On: moves are made with AI on the graphics card (ComfyUI). Off: a 3D photo move on the processor only, no ComfyUI. Changing it makes the photo clips again.`}
+        >
+          <Switch
+            checked={options.photo_clip_engine !== "cpu"}
+            disabled={options.enable_attraction_videos === false}
+            onChange={(v) => setOption({ photo_clip_engine: v ? "ai" : "cpu" })}
+            label={t`AI photo clips`}
           />
         </OptionRow>
         <OptionRow
