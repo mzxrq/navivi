@@ -3,6 +3,7 @@ pins, stop-by dots), as deck.gl layers or SVG data URLs."""
 
 from __future__ import annotations
 
+import math
 import urllib.parse
 from html import escape
 from typing import Dict, List, Optional, Tuple
@@ -22,7 +23,8 @@ _CLOSED_DOT_URL = "data:image/svg+xml;charset=utf-8," + urllib.parse.quote(
 
 
 def _landmark_layers(
-    landmarks: List[Dict], id_prefix: str = "stopby", white_dot: bool = False
+    landmarks: List[Dict], id_prefix: str = "stopby", white_dot: bool = False,
+    avoid: Optional[List[Tuple[float, float]]] = None,
 ) -> List[pdk.Layer]:
     """landmarks: [{"lat", "lon", ("label")}, ...] -- small unnumbered brown
     dots with a plain label beside them, matching the reference video's
@@ -69,6 +71,7 @@ def _landmark_layers(
             f"{id_prefix}-labels",
             size_px=26,
             pixel_offset_y=10,
+            avoid=avoid, clear_above=10, clear_side=12,
         )
     )
     return layers
@@ -222,26 +225,65 @@ def _label_pill_svg_url(
     return "data:image/svg+xml;charset=utf-8," + urllib.parse.quote(svg), width
 
 
+def _fit_meters_per_px(path: List[Tuple[float, float]]) -> float:
+    """Roughly the leg camera's scale: it frames the whole path, north-up, in 1920x1080."""
+    lats, lons = [p[0] for p in path], [p[1] for p in path]
+    k = math.cos(math.radians(sum(lats) / len(lats)))
+    w_m, h_m = (max(lons) - min(lons)) * 111320 * k, (max(lats) - min(lats)) * 110540
+    return max(w_m / 1920, h_m / 1080, 0.05) * 1.25
+
+
+def label_offset(
+    lat: float, lon: float, w: float, h: float, path: List[Tuple[float, float]], mpp: float,
+    below: float, above: float, side: float,
+) -> Tuple[float, float]:
+    """Pixel offset (x right, y down) of a w x h pill's centre from its point: below, above, right or left
+    of it, whichever covers the least of `path` [(lat, lon)] (ties keep that order)."""
+    k = math.cos(math.radians(lat))
+    pts = [((p_lon - lon) * 111320 * k / mpp, (lat - p_lat) * 110540 / mpp) for p_lat, p_lon in path]
+    samples = []
+    for (ax, ay), (bx, by) in zip(pts, pts[1:]):
+        n = max(1, int(math.hypot(bx - ax, by - ay) / 3))
+        samples += [(ax + (bx - ax) * i / n, ay + (by - ay) * i / n) for i in range(n + 1)]
+    boxes = [
+        (-w / 2, below, w / 2, below + h), (-w / 2, -above - h, w / 2, -above),
+        (side, -h / 2, side + w, h / 2), (-side - w, -h / 2, -side, h / 2),
+    ]
+    m = 4  # the line's own width
+    hits = [sum(x0 - m <= x <= x1 + m and y0 - m <= y <= y1 + m for x, y in samples) for x0, y0, x1, y1 in boxes]
+    x0, y0, x1, y1 = boxes[hits.index(min(hits))]
+    return (x0 + x1) / 2, (y0 + y1) / 2
+
+
 def _label_pill_layer(
-    entries: List[Dict], layer_id: str, size_px: int = 34, pixel_offset_y: int = 0
+    entries: List[Dict], layer_id: str, size_px: int = 34, pixel_offset_y: int = 0,
+    avoid: Optional[List[Tuple[float, float]]] = None, clear_above: int = 0, clear_side: int = 0,
 ) -> List[pdk.Layer]:
     """One IconLayer of place-name pills. `entries`: [{"lat", "lon",
-    "text"}, ...]. Anchored by its TOP edge (anchorY=0) so each pill hangs
-    just BELOW its own point rather than covering the pin standing above
-    it. `pixel_offset_y`: extra downward push (device pixels) past that
-    anchor -- 0 is fine for a teardrop pin, whose own tip already sits
+    "text"}, ...]. Without `avoid` each pill hangs just BELOW its own point
+    rather than covering the pin standing above it. `pixel_offset_y`: the
+    gap (pixels) between the point and the pill's top edge -- 0 is fine for a teardrop pin, whose own tip already sits
     exactly at the point, but a small round marker (e.g. a landmark dot,
     which is CENTERED on the point) needs a positive offset or the pill's
-    top edge cuts straight through the dot instead of sitting below it."""
+    top edge cuts straight through the dot instead of sitting below it.
+    `avoid`: the route [(lat, lon)]; each pill then goes below, above
+    (`clear_above` px over the point, past the pin) or beside it
+    (`clear_side` px), wherever it hides the least of the route line."""
+    mpp = _fit_meters_per_px(avoid) if avoid and len(avoid) > 1 else None
     data = []
     for e in entries:
         text = str(e.get("text") or "").strip()
         if not text:
             continue
         url, width = _label_pill_svg_url(text)
+        w = width * size_px / _LABEL_H
+        offset = (
+            label_offset(e["lat"], e["lon"], w, size_px, avoid, mpp, pixel_offset_y, clear_above, clear_side)
+            if mpp else (0, pixel_offset_y + size_px / 2)
+        )
         data.append({
-            "lon": e["lon"], "lat": e["lat"],
-            "icon": {"url": url, "width": width, "height": _LABEL_H, "anchorY": 0},
+            "lon": e["lon"], "lat": e["lat"], "offset": [round(offset[0]), round(offset[1])],
+            "icon": {"url": url, "width": width, "height": _LABEL_H},
         })
     if not data:
         return []
@@ -250,6 +292,6 @@ def _label_pill_layer(
             "IconLayer", id=layer_id, data=data,
             get_icon="icon", get_position="[lon, lat]",
             get_size=size_px, size_units="'pixels'", size_scale=1, pickable=False,
-            get_pixel_offset=f"[0, {pixel_offset_y}]",
+            get_pixel_offset="offset",
         )
     ]

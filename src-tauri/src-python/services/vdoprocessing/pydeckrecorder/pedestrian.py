@@ -336,7 +336,8 @@ def render_residential_leg_pydeck(
             line_width_scale=1, line_width_min_pixels=line_thickness,
         ),
     ]
-    base_layers.extend(_landmark_layers(landmarks or [], id_prefix="leg-landmark", white_dot=True))
+    route_pts = list(zip(df_raw["lat"], df_raw["lon"]))  # place-name pills sit where they hide the least of it
+    base_layers.extend(_landmark_layers(landmarks or [], id_prefix="leg-landmark", white_dot=True, avoid=route_pts))
     # The start pin is static (this leg's starting point never moves) so it
     # goes straight into base_layers and is visible for the whole clip, same
     # as the destination pin below.
@@ -365,7 +366,7 @@ def render_residential_leg_pydeck(
             [{"lon": start_lon, "lat": start_lat, "text": start_label}],
             "leg-start-label",
             size_px=34,
-            pixel_offset_y=8,
+            pixel_offset_y=8, avoid=route_pts, clear_above=64, clear_side=26,
         )
     )
     # Destination pin + name pill, shown for the whole leg (stop-by-cut
@@ -391,7 +392,7 @@ def render_residential_leg_pydeck(
             [{"lon": dest_lon, "lat": dest_lat, "text": dest_label or ""}],
             "leg-dest-label",
             size_px=34,
-            pixel_offset_y=8,
+            pixel_offset_y=8, avoid=route_pts, clear_above=64, clear_side=26,
         )
     )
 
