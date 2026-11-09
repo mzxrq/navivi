@@ -72,3 +72,34 @@ def test_raster_provider_uses_the_chosen_style_and_retina(monkeypatch):
     assert default["id"] == "mapbox/streets-v12" and default["r"] == "@2x"
     chosen = fetcher._build_provider({"mapbox_style_id": "mapbox/dark-v11", "mapbox_retina": False})
     assert chosen["id"] == "mapbox/dark-v11" and chosen["r"] == ""
+
+
+def test_a_new_leg_version_invalidates_the_whole_render_checkpoint(tmp_path, monkeypatch):
+    from services.vdoprocessing import route2vdo
+    from services.vdoprocessing.videopipeline import render_checkpoint
+
+    route = {"route": pd.DataFrame({"latitude": [35.0, 35.1], "longitude": [139.0, 139.1]}), "summary": {}}
+    cfg = tmp_path / "job_config.json"
+    cfg.write_text(json.dumps({"waypoints": [], "settings": {}}), encoding="utf-8")
+    before = render_checkpoint._checkpoint_parts(str(cfg), route, [], [])
+    monkeypatch.setattr(route2vdo, "LEG_RENDER_VERSION", route2vdo.LEG_RENDER_VERSION + 1)
+    after = render_checkpoint._checkpoint_parts(str(cfg), route, [], [])
+    assert before["route.leg_version"] != after["route.leg_version"]
+    assert "route.leg_version" in render_checkpoint.ROUTE_CHECKPOINT_PARTS
+
+
+def test_a_moved_leg_cue_invalidates_the_render_checkpoint(tmp_path):
+    from services.vdoprocessing.videopipeline import render_checkpoint
+
+    route = {"route": pd.DataFrame({"latitude": [35.0, 35.1], "longitude": [139.0, 139.1]}), "summary": {}}
+    cfg = tmp_path / "job_config.json"
+    cfg.write_text(json.dumps({"waypoints": [], "settings": {}}), encoding="utf-8")
+    store = tmp_path / ".navivi" / "narration_cues.json"
+    store.parent.mkdir()
+
+    def part(start):
+        store.write_text(json.dumps({"a": {"base": "x", "cue_times": {"start": start}}}), encoding="utf-8")
+        return render_checkpoint._checkpoint_parts(str(cfg), route, [10.0], [])["route.leg_voice"]
+
+    assert part(4.95) != part(0.0)
+    assert "route.leg_voice" in render_checkpoint.ROUTE_CHECKPOINT_PARTS

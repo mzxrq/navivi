@@ -111,6 +111,11 @@ def _checkpoint_parts(
     from services.vdoprocessing.spatial_renderer.overview import OVERVIEW_RENDER_VERSION
 
     parts["route.overview_version"] = str(OVERVIEW_RENDER_VERSION)
+    # Likewise a new leg look (LEG_RENDER_VERSION): without it here, the whole render was skipped before any
+    # leg compared its own fingerprint, so a version bump never reached a project that had rendered before.
+    from services.vdoprocessing.route2vdo import LEG_RENDER_VERSION
+
+    parts["route.leg_version"] = str(LEG_RENDER_VERSION)
     # Map labels and on-screen text follow this; a project saved before it was written has none.
     language = config_data.get("map_language")
     if language:
@@ -151,7 +156,12 @@ def _checkpoint_parts(
         for key, value in cues.items():
             parts[f"narration_cues.{key}"] = _short_hash(value)
     except (OSError, ValueError):
-        pass
+        cues = {}
+    # The legs' voices: where each one's cues fall and how long it is (a moved {start} retimes its leg).
+    parts["route.leg_voice"] = _short_hash([
+        sorted((k, (v or {}).get("cue_times")) for k, v in cues.items() if k != "overview" and isinstance(v, dict)),
+        [round(float(d or 0), 2) for d in audio_durations or []],
+    ])
     for i, value in enumerate(audio_durations or []):
         parts[f"audio_durations[{i}]"] = _short_hash(value)
     for i, value in enumerate(audio_pauses or []):
@@ -169,7 +179,8 @@ def _checkpoint_parts(
 # route.map_language: the label/on-screen text language (absent for a config that never had one).
 ROUTE_CHECKPOINT_PARTS = (
     "route.waypoints", "route.overview_flags", "route.photos", "route.markers", "route.map_style",
-    "route.overview_voice", "route.map_language", "route.labels", "route.overview_version",
+    "route.overview_voice", "route.map_language", "route.labels", "route.overview_version", "route.leg_version",
+    "route.leg_voice",
 )
 
 
