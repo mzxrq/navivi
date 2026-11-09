@@ -1004,6 +1004,14 @@ def _opener(text: str) -> str:
     return lead if len(lead) <= 4 else ""
 
 
+def leg_facts_line(trip: dict) -> str:
+    """The Route map overview's line at a stop, said while its leg card shows: the distance (the way line
+    before it already told the time)."""
+    km = float(trip.get("km") or 0.0)
+    distance = f"{round(km * 1000, -1):.0f}メートル" if km < 1 else f"{km:.1f}キロ"
+    return f"ここまで{distance}の道のりでした。"
+
+
 def build_tour_script(
     project: dict,
     routing_cache: Optional[dict],
@@ -1145,6 +1153,8 @@ def build_tour_script(
         if n is None:
             continue
         label = trip["to"]
+        # Route map: the voice reads the leg's numbers while its card shows them (the walker holds until {go}).
+        facts_line = leg_facts_line(trip) if overview_style(project) == "map" else ""
         if not describes_stops(project):
             # A stop that hosts stop-by cards freezes the map: say what is
             # around it (never the stop's own description or name again).
@@ -1152,10 +1162,10 @@ def build_tour_script(
             text = f"{'や'.join(names[:3])}も、この近くにあります。" if names and budget["describe"].get(n) else ""
             report.append({"kind": f"stop{n}", "text": text, "used": "template", "raw": None,
                            "budget_chars": chars(budget["describe"].get(n, 0.0))})
-            parts.append("{%d}%s{go}" % (n, text))
+            parts.append("{%d}%s%s{go}" % (n, facts_line, text))
             previous = text or previous
             continue
-        describe_chars = chars(budget["describe"][n])
+        describe_chars = max(chars(budget["describe"][n]) - len(facts_line), _MIN_PASSAGE_CHARS)
         facts = _facts(places.get(n, {}))
         # The way line just before this (`previous`) is required to already
         # name `label` (check_transition) - when it did, the description
@@ -1181,7 +1191,7 @@ def build_tour_script(
             ),
             fallback,
         )
-        parts.append("{%d}%s{go}" % (n, describe))
+        parts.append("{%d}%s%s{go}" % (n, facts_line, describe))
         previous = describe
 
     # The closing line plays over the ending, so it lasts at least as long as

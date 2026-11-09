@@ -77,7 +77,7 @@ export const videoLookDefaults = {
     overview_intro_clean_hold_seconds: 1.5,
     enable_ending_highlight: true,
     enable_outro: true,
-    outro_style: "scroll" as "scroll" | "grid" | "scrapbook" | "map",
+    outro_style: "scroll" as "scroll" | "grid" | "scrapbook",
     outro_route_info: true,
     start_pin_color: [19, 136, 3] as Rgb,
     end_pin_color: [217, 15, 81] as Rgb,

@@ -260,7 +260,15 @@ DEFAULT_OVERVIEW_DESCRIBE_STOPS = True
 # "course" - the whole route is shown first, then traced, with the stop-bys
 #            last; the course-guide script (overview_script.build_course_script).
 DEFAULT_OVERVIEW_STYLE = "walk"
-OVERVIEW_STYLES = ("walk", "course")
+OVERVIEW_STYLES = ("walk", "course", "map")
+# "map" overview: each main stop's photo pops up this much bigger than a walk card, shows this long, then
+# slides over to its leg card in this long (spatial_renderer/map_style.py, popup_box.slide_to_card).
+OVERVIEW_MAP_CARD_SCALE = 2.6
+OVERVIEW_MAP_PHOTO_SECONDS = 0.8
+OVERVIEW_MAP_SLIDE_SECONDS = 0.5
+# The walker stands at each Route map stop at least this long (photo, slide, then time to read the leg card);
+# the card closes as it walks on.
+OVERVIEW_MAP_MIN_STOP_SECONDS = 3.5
 # The arriving script the course style writes from the route (localization/leg_script.py):
 # "brief" = one sentence, the overall direction only; "turns" = every turn on the way.
 # Overridable per project via job_config.json's settings.leg_directions.
@@ -339,7 +347,7 @@ BIG_MAP_ZOOM_TARGET = 2.6
 ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST = 9.5
 
 # --- Popup / transition timing ----------------------------------------------
-POPUP_FADE_SECONDS = 1.5
+POPUP_FADE_SECONDS = 0.6
 # The overview's opening start/end cards stay fully up at least this long; a later {start} keeps them up.
 OVERVIEW_INTRO_CARD_MIN_SECONDS = 2.0
 # Minimum gap between two popups triggering, so a cluster of stops doesn't pop on one frame.
@@ -1220,17 +1228,10 @@ DEFAULT_OUTRO_STYLE = "scroll"
 OUTRO_SCRAPBOOK_HOLD_SECONDS = 2.0
 OUTRO_SCRAPBOOK_PAPER_COLOR: Tuple[int, int, int] = (243, 236, 222)
 OUTRO_SCRAPBOOK_STAMP_COLOR: Tuple[int, int, int] = (196, 40, 40)
-# "map": the overview map dimmed this much toward OUTRO_BG_COLOR.
-OUTRO_MAP_DIM = 0.35
-# Per stop: its leg is traced, its photo pops up (OUTRO_MAP_POPUP_WIDTH of the frame wide), holds, slides to
-# the leg's summary card, which holds; at the end every photo and the trip's summary card hold.
-OUTRO_MAP_LEG_TRACE_SECONDS = 1.0
-OUTRO_MAP_PHOTO_SECONDS = 0.8
-OUTRO_MAP_SLIDE_SECONDS = 0.4
-OUTRO_MAP_DETAIL_SECONDS = 1.2
-OUTRO_MAP_POPUP_WIDTH = 0.3
-OUTRO_MAP_HOLD_SECONDS = 2.5
-# settings.enable_outro: false drops the outro clip from the video.
+# How much of its grid cell a scrapbook card takes (1.0 = touching its neighbours).
+OUTRO_SCRAPBOOK_CARD_FILL = 0.8
+# Card names, and the default color of the title and subtitle (editable in the timeline), RGB.
+OUTRO_SCRAPBOOK_INK: Tuple[int, int, int] = (60, 55, 50)
 DEFAULT_ENABLE_OUTRO = True
 OUTRO_SCROLL_COLS = 3
 OUTRO_SCROLL_MARGIN = 40  # px between cards

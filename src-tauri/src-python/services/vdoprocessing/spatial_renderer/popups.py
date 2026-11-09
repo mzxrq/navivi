@@ -1625,8 +1625,13 @@ class _PopupMixin:
         for bp in flowing[MAX_CONCURRENT_FLOW_POPUPS:]:
             bp["popup"].pop("beside_box", None)
         if flowing_visible:
+            # Room for the biggest card drawn (a "map" overview's stop card is OVERVIEW_MAP_CARD_SCALE), not the
+            # default size: a spot clear of the route for a small card was covered by the big one.
+            card_w, card_h = self.graphics.beside_card_footprint(
+                max(float(bp["popup"].get("card_scale", 1.0)) for bp in flowing_visible)
+            )
             self._layout_recap_popups(
-                flowing_visible, w, h, route_obstacles=route_obstacles, fps=fps
+                flowing_visible, w, h, card_w=card_w, card_h=card_h, route_obstacles=route_obstacles, fps=fps
             )
 
         hud_popups: List[Optional[Dict]] = [None] * len(baked_popups)

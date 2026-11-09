@@ -597,14 +597,15 @@ export function AppSettings() {
                 <Section title={t`Style`}>
                   <Row
                     title={t`Video style`}
-                    description={t`Walk the route: a walker travels the map and stops at each place. Whole route first: the whole route is shown and traced, stop-bys come last, and every stop-by gets its own stop in its leg. Each style has its own overview script; switching rewrites an automatic one.`}
+                    description={t`Walk the route: a walker travels the map and stops at each place. Whole route first: the whole route is shown and traced, stop-bys come last, and every stop-by gets its own stop in its leg. Route map: like Walk the route, but each stop's photo pops up big and slides over to that leg's distance and time. Each style has its own overview script; switching rewrites an automatic one.`}
                   >
-                    <Segmented<"walk" | "course">
+                    <Segmented<"walk" | "course" | "map">
                       value={settings.overview_style ?? "walk"}
                       onChange={(v) => updateProject({ overview_style: v })}
                       options={[
                         { id: "walk", label: t`Walk the route` },
                         { id: "course", label: t`Whole route first` },
+                        { id: "map", label: t`Route map` },
                       ]}
                       className="w-72"
                     />

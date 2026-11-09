@@ -923,6 +923,7 @@ class _OverviewAnimationMixin:
                     if triggered_popup.get("no_pause"):
                         early = 0
                         wait["n"] = 0  # "Pause at Location" off: walk straight on
+                    map_stop = self.config.get("overview_style") == "map" and triggered_popup.get("card_scale")
                     # A stop described until its {go}: wait until the voice
                     # gets there (arriving late shortens the stop, never
                     # makes it run past the {go}).
@@ -951,10 +952,15 @@ class _OverviewAnimationMixin:
                     # fixed freeze_seconds, so it hands off to the next
                     # popup right around when that waypoint is reached
                     # instead of lingering past it or vanishing early.
+                    if map_stop and not triggered_popup.get("no_pause"):
+                        # Route map: stand here long enough to see the photo and read the leg card.
+                        wait["n"] = max(wait["n"], int(tuning.OVERVIEW_MAP_MIN_STOP_SECONDS * fps))
                     display_seconds = float(
                         triggered_popup.get("leg_display_seconds")
                         or triggered_popup["data"].get("freeze_seconds", _DEFAULT_FREEZE_SECONDS)
                     ) + wait["n"] / fps  # the card stays up while the walker waits
+                    if map_stop:
+                        display_seconds = wait["n"] / fps + self._POPUP_FADE_SECONDS  # closes as the walker leaves
                     # pending_popups here is whatever's LEFT after this one
                     # was just popped off the front — i.e. how many other
                     # already-triggered popups are still queued behind it,
@@ -1025,6 +1031,8 @@ class _OverviewAnimationMixin:
                         target_frames_left = max(
                             wrap_up_frames, remaining_for_min_display, hold_left + wrap_up_frames
                         )
+                        if self.config.get("overview_style") == "map":
+                            target_frames_left = wrap_up_frames  # one big card at a time: the last one closes now
                         bp["frames_left"] = min(bp["frames_left"], target_frames_left)
 
                     new_bp = self._make_baked_popup(

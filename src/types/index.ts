@@ -139,7 +139,7 @@ export interface ProjectSettings {
   intro_location_manual?: boolean; // typed by the user: stop following the first waypoint
   intro_location_at?: string; // first waypoint "lat,lng" (3 dp) intro_location was detected for
   overview_intro?: string; // course introduction: opens the "course" overview narration, spoken over the intro photos
-  overview_style?: "walk" | "course"; // overview video type; each has its own script (absent = walk)
+  overview_style?: "walk" | "course" | "map"; // overview video type; each has its own script (absent = walk)
 
   // Append "· N か所" to the intro/outro subtitle (default on).
   intro_place_count?: boolean;
@@ -179,7 +179,7 @@ export interface ProjectSettings {
   overview_intro_clean_hold_seconds?: number;
   enable_ending_highlight?: boolean;
   enable_outro?: boolean;
-  outro_style?: "scroll" | "grid" | "scrapbook" | "map";
+  outro_style?: "scroll" | "grid" | "scrapbook";
   outro_route_info?: boolean;
   // The outro's title box: height in 1080-line px and fill colour ("#RRGGBB"; unset = the page background),
   // and its text styles (unset = the intro's).

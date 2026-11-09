@@ -672,6 +672,7 @@ def inject_waypoint_popups(
                 # of the previous normal waypoint's stop instead — see
                 # overview.py's _attach_stopby_groups.
                 "connect_to_route": bool(wp.get("connectToRoute", False) and not wp_skipped),
+                "id": wp.get("id"),  # the "map" overview's leg cards (route_brief legs' to_id)
                 # This waypoint's own true GPS coordinates — separate from
                 # route_points[c_idx] (the nearest point on the RECORDED
                 # TRACK, used for x/y). A stop-by that's only observed from

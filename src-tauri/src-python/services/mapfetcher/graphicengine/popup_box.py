@@ -98,6 +98,32 @@ class _PopupBoxMixin:
             longest = max(draw.textlength(line, font=font) for line in lines)
         return lines, font
 
+    def slide_to_card(self, data: Dict, photo: np.ndarray) -> np.ndarray:
+        """The "map" overview's pop-up: the photo for OVERVIEW_MAP_PHOTO_SECONDS of being shown, then it slides
+        left and the stop's leg card (data["leg_card_bgr"], map_style.attach_leg_cards) slides in after it.
+        Counts the frames each stop's card has been drawn (one draw per frame)."""
+        card = data.get("leg_card_bgr")
+        if card is None:
+            return photo
+        counts = self.__dict__.setdefault("_slide_frames", {})
+        shown = counts[id(data)] = counts.get(id(data), 0) + 1
+        p = (shown / getattr(self, "slide_fps", 30) - tuning.OVERVIEW_MAP_PHOTO_SECONDS) / tuning.OVERVIEW_MAP_SLIDE_SECONDS
+        if p <= 0:
+            return photo
+        p = min(1.0, p)
+        p = p * p * (3 - 2 * p)
+        h, w = card.shape[:2]
+        ph, pw = photo.shape[:2]
+        s = max(w / pw, h / ph)
+        fit = cv2.resize(photo, (math.ceil(pw * s), math.ceil(ph * s)), interpolation=cv2.INTER_AREA)
+        y0, x0 = (fit.shape[0] - h) // 2, (fit.shape[1] - w) // 2
+        fit = fit[y0:y0 + h, x0:x0 + w]
+        shift = int(round(p * w))
+        out = card.copy()
+        out[:, : w - shift] = fit[:, shift:]
+        out[:, w - shift:] = card[:, :shift]
+        return out
+
     def popup_card_geometry(
         self, popup_info: Dict, w: int, h: int
     ) -> Tuple[int, int, int, int]:
@@ -214,6 +240,8 @@ class _PopupBoxMixin:
         # [NOTE] [Animation] Missing/unreadable popup_image silently skips the entire card draw, returning the frame unchanged rather than raising or drawing a placeholder.
         if image_path and (line_only or os.path.exists(image_path)):
             pop_img = None if line_only else self.read_image_safe(image_path, copy=False)  # only resized below
+            if pop_img is not None and "recap_line_color" not in popup_info:
+                pop_img = self.slide_to_card(popup_info["data"], pop_img)
             if line_only or pop_img is not None:
                 hud_corner = popup_info.get("hud_corner")
                 is_beside = hud_corner not in self.HUD_CORNERS
