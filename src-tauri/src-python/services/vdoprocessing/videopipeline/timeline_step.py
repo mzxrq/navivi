@@ -476,6 +476,7 @@ def build_timeline(
             if (
                 kind == "route" and ordered[k + 1][0] == "route" and leg
                 and (Path(source).parent / f"{leg.group(0)}endview.json").exists()
+                and not (Path(source).parent / f"{leg.group(0)}nofade").exists()
             ):
                 tracks[k]["fade_into_next_seconds"] = attraction_fade_seconds
     # The goodbye dissolves into the outro card instead of cutting to it.

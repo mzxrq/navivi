@@ -140,3 +140,22 @@ def test_subtitles_are_written_into_the_timeline_to_burn_at_export(tmp_path, mon
     # attraction starts after the 10s leg; attraction narration has no offset
     assert data["subtitles"][-1] == {"start": 11.0, "end": 12.0, "text": "look"}
     assert data["total_duration_seconds"] == 16.0
+
+
+def test_legs_joined_at_a_stop_with_no_narration_cut_without_a_dissolve(tmp_path):
+    (tmp_path / "job_config.json").write_text(json.dumps({"waypoints": [{"id": "a"}, {"id": "b"}, {"id": "c"}]}),
+                                              encoding="utf-8")
+    route = tmp_path / "assets/video/route"
+    legs = [_touch(route / "02_waypoint_01_b.mp4"), _touch(route / "02_waypoint_02_c.mp4")]
+    for n, target in ((1, "b"), (2, "c")):
+        (route / f"02_waypoint_0{n}_pieces.json").write_text(
+            json.dumps({"pieces": [{"file": f"02_waypoint_0{n}_{target}.mp4", "target_waypoint_id": target}]}),
+            encoding="utf-8")
+    _touch(route / "02_waypoint_01_endview.json")  # the two legs share their camera at b
+
+    fades = lambda: dict(_order(build_timeline(  # noqa: E731
+        video_paths=legs, attraction_videos=[], final_videos=legs, project_dir=str(tmp_path),
+        attraction_fade_seconds=0.8)))
+    assert fades()["02_waypoint_01_b.mp4"] == 0.8  # a return stop: dissolve
+    _touch(route / "02_waypoint_01_nofade")  # b has no narration
+    assert fades()["02_waypoint_01_b.mp4"] is None

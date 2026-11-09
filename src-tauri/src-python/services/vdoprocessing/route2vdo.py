@@ -62,7 +62,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # v7: leg card numbers are the overview card's own per-leg numbers;
 # v8: stop-bys are framed too, and the summary card sits lower;
 # v9: the 3D leg HUD card sits as low as the 2D one).
-LEG_RENDER_VERSION = 11  # v11: place-name pills move off the route line (2026-11-07)
+LEG_RENDER_VERSION = 15  # v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
 # Bumped when the heatmap legs' elevation profile card changes (only those legs re-render; v1: the card).
 LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
@@ -587,11 +587,14 @@ class RouteAnimator:
         waypoint_id_to_idx: Dict[str, int] = {}
         attraction_dir = None
         _raw_job_config: Dict[str, Any] = {}
+        wp_by_id: Dict[Any, Dict[str, Any]] = {}
+        from services.vdoprocessing.videopipeline.audio_step import no_narration_stop
         job_config_path = self.config.get("res_route_path")
         if job_config_path and os.path.exists(job_config_path):
             try:
                 with open(job_config_path, "r", encoding="utf-8") as f:
                     _raw_job_config = json.load(f)
+                wp_by_id = {w.get("id"): w for w in _raw_job_config.get("waypoints", []) if isinstance(w, dict)}
                 for _idx, _wp in enumerate(_raw_job_config.get("waypoints", [])):
                     if _wp.get("id"):
                         waypoint_id_to_idx[_wp["id"]] = _idx
@@ -792,7 +795,10 @@ class RouteAnimator:
             dest_freeze_seconds = dest_popup.get("freeze_seconds")
             dest_narration_seconds = dest_popup.get("audio_duration")
             # A return stop only pops its photo up as a card: its place had its fullscreen visit already.
-            dest_image_display = "pip" if res_data.get("dest_is_return") else "fullscreen"
+            # So does a place with nothing to tell (no attraction clip follows): the walk goes on.
+            dest_wp = wp_by_id.get(res_data.get("end_waypoint_id"))
+            dest_quiet = dest_wp is not None and no_narration_stop(dest_wp)
+            dest_image_display = "pip" if res_data.get("dest_is_return") or dest_quiet else "fullscreen"
             if not dest_popup_image:
                 # A trailing synthetic end_point leg's own destination has
                 # no popup of its own (see render_step.py's
@@ -874,18 +880,28 @@ class RouteAnimator:
             if self.config.get("overview_style") == "course":  # likewise: the walker slows down before each stop
                 leg_kwargs["arrival_slow_seconds"] = tuning.COURSE_ARRIVAL_SLOW_SECONDS
             # A return stop's photo never opens a leg fullscreen (only set then, so other legs stay as rendered).
-            if res_data.get("start_is_return") or (res_data.get("dest_is_return") and not start_popup_image):
+            start_wp = wp_by_id.get(res_data.get("start_waypoint_id"))
+            start_quiet = start_wp is not None and no_narration_stop(start_wp)  # no fullscreen came before this leg
+            if (res_data.get("start_is_return") or (res_data.get("dest_is_return") and not start_popup_image)
+                    or start_quiet):
                 leg_kwargs["opening_photo"] = False
             # Legs joined at a return stop: this leg's last frame is the next one's first.
             next_leg = res_sequence[i + 1] if i + 1 < len(res_sequence) else {}
-            if res_data.get("dest_is_return") and next_leg.get("start_is_return"):
+            # So are legs joined at a stop with nothing to tell (no attraction clip between them).
+            if (res_data.get("dest_is_return") and next_leg.get("start_is_return")) or dest_quiet:
                 leg_kwargs["end_view_path"] = str(self.out_dir / f"{leg_glob_prefix}endview.json")
-            if res_data.get("start_is_return") and prev_end_view:
+            if (res_data.get("start_is_return") or start_quiet) and prev_end_view:
                 try:
                     leg_kwargs["opening_view"] = json.loads(Path(prev_end_view).read_text(encoding="utf-8"))
                 except (OSError, ValueError):
                     pass
             prev_end_view = leg_kwargs.get("end_view_path")
+            # Marks a join at a stop with nothing to tell: the timeline cuts there (same frame), no dissolve.
+            no_fade = self.out_dir / f"{leg_glob_prefix}nofade"
+            if dest_quiet:
+                no_fade.touch()
+            else:
+                no_fade.unlink(missing_ok=True)
             # Everything this leg's clip is made from. Existing files are
             # only reused when it matches what they were rendered from: a
             # bare existence check kept legs rendered with an old walk

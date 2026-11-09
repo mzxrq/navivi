@@ -49,13 +49,25 @@ def is_passed_only(waypoint: dict) -> bool:
     return is_unvisited_stopby(waypoint) or is_skipped(waypoint)
 
 
+def no_narration_stop(waypoint: dict) -> bool:
+    """Nothing to tell or show at this place: no attraction narration and no video of its own. It gets no
+    attraction clip; its photo only pops up as a card in its legs (no fullscreen), and the walk goes on."""
+    # Only a narration left empty in the editor (the app always saves the field): a config without it keeps a clip.
+    return ("attractionNarration" in waypoint and not (waypoint["attractionNarration"] or "").strip()
+            and not (waypoint.get("videos") or []))
+
+
 def no_attraction(waypoint: dict) -> bool:
     """is_passed_only, except a Closed place: never walked to, but its attraction video (speaking its narration)
-    plays before the leg that passes it (timeline_step)."""
+    plays before the leg that passes it (timeline_step). Never for a place with nothing to tell (no_narration_stop)."""
+    if no_narration_stop(waypoint):
+        return True
     return is_passed_only(waypoint) and (is_skipped(waypoint) or not waypoint.get("inaccessible"))
 
 
 def passed_only_reason(waypoint: dict) -> str:
+    if no_narration_stop(waypoint) and not is_passed_only(waypoint):
+        return "no attraction narration"
     if is_skipped(waypoint):
         return "skipped in video export"
     return "closed, can't be visited" if waypoint.get("inaccessible") else "stop-by not connected to the route"
