@@ -108,7 +108,7 @@ def _name_lines(
     if draw.textlength(name, font=font) <= max_width:
         return [name], font, size
     marks = [i for i in range(1, len(name)) if name[i] in tuning.OUTRO_NAME_BREAK_BEFORE or name[i - 1] in tuning.OUTRO_NAME_BREAK_AFTER]
-    breaks = sorted(set(marks) | set(_word_edges(name)))
+    breaks = sorted(i for i in set(marks) | set(_word_edges(name)) if name[i - 1] not in tuning.OUTRO_NAME_NO_BREAK_AFTER)
     sizes = range(size, min_size - 1, -1)
     for s in sizes:
         font = _load_font(font_candidates, s)
@@ -1161,21 +1161,22 @@ def _pipe_frames(frames, output_path: Path, fps: int, size: Tuple[int, int]) -> 
     return True
 
 
-def scrapbook_layout(count: int, size: Tuple[int, int]):
-    """(card width, [(cx, cy, degrees)] per card, (cx, cy, radius) of the stamp): a loose grid with the
-    bottom-right cell kept for the stamp, columns chosen so the cards come out as big as possible."""
+def scrapbook_layout(count: int, size: Tuple[int, int], top: float = 0.0):
+    """(card width, [(cx, cy, degrees)] per card, (cx, cy, radius) of the stamp): a loose grid below `top`
+    (px kept for the heading) with the bottom-right cell kept for the stamp, columns chosen so the cards
+    come out as big as possible."""
     width, height = size
     rng = random.Random(7)
     best = None
     for cols in range(2, 9):
         rows = math.ceil((count + 1) / cols)
-        cell_w, cell_h = width * 0.97 / cols, height * 0.96 / rows
+        cell_w, cell_h = width * 0.97 / cols, (height - top) * 0.96 / rows
         # Nearly a full cell: neighbouring polaroids only just overlap, as in a real scrapbook.
-        card_w = min(cell_w * 0.9, cell_h * 0.95 / _POLAROID_RATIO)
+        card_w = min(cell_w, cell_h / _POLAROID_RATIO) * tuning.OUTRO_SCRAPBOOK_CARD_FILL
         if best is None or card_w > best[0]:
             best = (card_w, cols, rows, cell_w, cell_h)
     card_w, cols, rows, cell_w, cell_h = best
-    x0, y0 = width * 0.015, height * 0.02
+    x0, y0 = width * 0.015, top + (height - top) * 0.02
     cells = [(c, r) for r in range(rows) for c in range(cols)]
     stamp_cell = cells.pop()  # bottom-right
     cards = []
@@ -1189,7 +1190,9 @@ def scrapbook_layout(count: int, size: Tuple[int, int]):
     return card_w, cards, stamp
 
 
-_INK = (60, 55, 50)  # scrapbook text on paper
+_INK = tuning.OUTRO_SCRAPBOOK_INK  # scrapbook text on paper
+SCRAPBOOK_HEADING_SIZES = (64, 34)  # title, subtitle px at 1080p (the text item's default sizes)
+SCRAPBOOK_HEADING_MARGIN = 24  # px from the top
 _POLAROID_RATIO = 1.0  # card height / width: a 4:3 photo plus the white frame and name strip
 
 
@@ -1274,6 +1277,7 @@ def _place(canvas: Image.Image, img: Image.Image, cx: float, cy: float, scale: f
 def _write_scrapbook_clip(
     title: str, waypoints: List[Dict[str, Any]], brief: Optional[Dict[str, Any]],
     output_path: Path, fps: int, size: Tuple[int, int], colors: Optional[Dict[str, Any]] = None,
+    heading: Optional[Dict[str, Any]] = None,
 ) -> bool:
     """Polaroids of the stops (S, 1, 2 … E) drop one by one onto paper, then a round stamp with the title,
     distance and travel time lands in the bottom-right cell; then the logo end card, as after the scroll."""
@@ -1283,7 +1287,17 @@ def _write_scrapbook_clip(
         ("S" if i == 0 else "E" if i == len(route) - 1 else str(i), wp)
         for i, wp in enumerate(route) if _first_image(wp)
     ][: tuning.OUTRO_MAX_CARDS]
-    card_w, spots, (sx, sy, sr) = scrapbook_layout(len(stops), size)
+    # The title and subtitle across the top: a text-track item the editor can restyle (outro_step), or burned
+    # in (burn_text) when the caller wants them in the video. Either way the cards keep below their band.
+    k = height / 1080
+    head = [(t, f) for t, f in (
+        ((heading or {}).get("title") or "", _load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, int(SCRAPBOOK_HEADING_SIZES[0] * k))),
+        ((heading or {}).get("subtitle") or "", _load_font(_GraphicsEngineBase.FONT_CANDIDATES_REGULAR, int(SCRAPBOOK_HEADING_SIZES[1] * k))),
+    ) if t.strip()]
+    top = (sum(f.size * 1.3 for _, f in head) + (SCRAPBOOK_HEADING_MARGIN + 16) * k) if head else 0.0
+    if not (heading or {}).get("burn_text", True):
+        head = []
+    card_w, spots, (sx, sy, sr) = scrapbook_layout(len(stops), size, top)
     cards = []
     for (badge, wp), (cx, cy, angle) in zip(stops, spots):
         card = _polaroid(
@@ -1301,6 +1315,12 @@ def _write_scrapbook_clip(
     paper = np.clip(np.asarray(tuning.OUTRO_SCRAPBOOK_PAPER_COLOR, np.float32) + noise, 0, 255).astype(np.uint8)
     paper_bg = Image.fromarray(paper)
     settled = paper_bg.convert("RGBA")
+    hd = ImageDraw.Draw(settled)
+    y = SCRAPBOOK_HEADING_MARGIN * k
+    for text, font in head:
+        hd.text((width / 2, y + font.size * 0.65), _truncate_to_width(hd, text, font, width * 0.9), font=font,
+                fill=tuning.OUTRO_SCRAPBOOK_INK, anchor="mm")
+        y += font.size * 1.3
     gap = min(0.4, 4.0 / max(1, len(cards)))
     drop, start = 0.35, 0.3
     stamp_at = start + len(cards) * gap + drop

@@ -57,7 +57,8 @@ def outro_text_item(project_config_path: str) -> Optional[dict]:
     settings = job_config.get("settings", {}) or {}
     if not settings.get("enable_outro", tuning.DEFAULT_ENABLE_OUTRO):
         return None
-    if str(settings.get("outro_style", tuning.DEFAULT_OUTRO_STYLE)).lower() != "scroll":
+    style_name = _outro_style(settings)
+    if style_name not in ("scroll", "scrapbook"):
         return None
     h = _outro_heading(job_config)
     if not (h["title"] or h["subtitle"] or h["kicker"]):
@@ -77,6 +78,19 @@ def outro_text_item(project_config_path: str) -> Optional[dict]:
     }
     if h["kicker"]:
         item["kicker"] = line("kicker", DEFAULT_KICKER_STYLE)
+    if style_name == "scrapbook":
+        # Ink on the paper, in the band the cards leave free (outrocard.SCRAPBOOK_HEADING_*); no box.
+        from services.vdoprocessing.outrocard import SCRAPBOOK_HEADING_MARGIN, SCRAPBOOK_HEADING_SIZES
+
+        ink = "#%02X%02X%02X" % tuning.OUTRO_SCRAPBOOK_INK
+        for which, size in zip(("title", "subtitle"), SCRAPBOOK_HEADING_SIZES):
+            style = dict(h[f"{which}_style"]) if isinstance(h[f"{which}_style"], dict) else {}
+            for key, value in (("font_size", size), ("color", ink), ("shadow", 0.0), ("outline_width", 0.0)):
+                style.setdefault(key, value)
+            item[which] = {"text": h[which], "style": style}
+        item["margin_v"] = SCRAPBOOK_HEADING_MARGIN
+        item.pop("kicker", None)
+        return item
     # The cards scroll the full frame, so the box behind the title is what hides them. It starts as tall as
     # the title block (the old pinned box); settings.outro_header_color / outro_header_height seed it and
     # the timeline editor's "Box behind" changes it.
@@ -119,7 +133,7 @@ def render_outro_clip(project_config_path: str) -> Optional[str]:
         return None
 
     # settings.outro_style: "scroll" (default, tuning.DEFAULT_OUTRO_STYLE) or "grid".
-    style = str(settings.get("outro_style", tuning.DEFAULT_OUTRO_STYLE)).lower()
+    style = _outro_style(settings)
 
     brief = None
     if settings.get("outro_route_info", tuning.DEFAULT_OUTRO_ROUTE_INFO):

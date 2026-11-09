@@ -1259,6 +1259,8 @@ OUTRO_ROUTE_NAME_FONT_SIZE = 24
 # A card name too long for one line wraps before / after one of these first, else between words.
 OUTRO_NAME_BREAK_BEFORE = " （(・「"
 OUTRO_NAME_BREAK_AFTER = " ）)・」"
+# Never a line break right after these: 第 and numbers stay with what follows (葛城 / 第二十三経塚).
+OUTRO_NAME_NO_BREAK_AFTER = "第一二三四五六七八九十百千0123456789"
 OUTRO_ROUTE_FROM_FONT_SIZE = 15
 # A photo's credit over its attraction clip (photo_credit.py): a small dark box in a bottom corner, 1080p px.
 # A {next} cue in attraction narration that leaves a photo less than this on screen is ignored (equal split).

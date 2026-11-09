@@ -24,3 +24,30 @@ def test_route_badges_and_project_colors():
         "marker": (255, 0, 0), "line": (255, 200, 0),  # settings are BGR
     }
     assert _project_colors({}) == {}
+
+
+def test_scrapbook_title_is_an_editable_text_item_in_ink(tmp_path):
+    import json
+
+    from services import tuning
+    from services.vdoprocessing.videopipeline.outro_step import outro_text_item
+
+    cfg = tmp_path / "job_config.json"
+    cfg.write_text(json.dumps({
+        "project_name": "p", "video_title": "葛城修験", "video_subtitle": "葛城の道", "waypoints": [],
+        "settings": {"enable_outro": True, "outro_style": "scrapbook", "outro_route_info": False},
+    }, ensure_ascii=False), encoding="utf-8")
+    item = outro_text_item(str(cfg))
+    assert item["title"]["text"] == "葛城修験" and item["subtitle"]["text"] == "葛城の道"
+    assert item["title"]["style"]["color"] == "#%02X%02X%02X" % tuning.OUTRO_SCRAPBOOK_INK
+    assert "box" not in item
+
+
+def test_a_long_name_never_breaks_inside_its_number():
+    from PIL import Image, ImageDraw
+
+    from services.mapfetcher.graphicengine.base import _GraphicsEngineBase as B
+    from services.vdoprocessing.outrocard import _name_lines
+
+    draw = ImageDraw.Draw(Image.new("RGB", (8, 8)))
+    assert _name_lines(draw, "葛城第二十三経塚", B.FONT_CANDIDATES_BOLD, 30, 20, 160)[0] == ["葛城", "第二十三経塚"]
