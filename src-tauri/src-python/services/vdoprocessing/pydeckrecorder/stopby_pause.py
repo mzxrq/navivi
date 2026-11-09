@@ -244,7 +244,7 @@ async def _play_stopby_photo_pause(
     # nothing left to "point at" once the photo covers the whole frame).
     # This is the LAST beat of the CURRENT clip -- cut_to_new_clip below
     # closes it the instant this loop ends.
-    grow_frames = max(1, int(0.6 * fps))
+    grow_frames = max(1, int(tuning.FULLSCREEN_GROW_SECONDS * fps))
     for i in range(grow_frames):
         t = _ease_in_out_cubic((i + 1) / grow_frames)
         left = card_box[0] + (full_box[0] - card_box[0]) * t
@@ -311,7 +311,7 @@ async def _play_stopby_photo_pause(
         full_png = await page.screenshot(**_FRAME_SHOT)
         for _ in range(max(1, int(full_hold_sec * fps))):
             await write_frame(full_png)
-        shrink_frames = max(1, int(0.6 * fps))
+        shrink_frames = max(1, int(tuning.FULLSCREEN_SHRINK_SECONDS * fps))
         for i in range(shrink_frames):
             t = _ease_in_out_cubic((i + 1) / shrink_frames)
             box = [f + (c - f) * t for f, c in zip(full_box, card_box)]

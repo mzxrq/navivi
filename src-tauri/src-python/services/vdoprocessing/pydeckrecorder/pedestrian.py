@@ -40,7 +40,7 @@ from .elevation import leg_segment_colors, profile_card, quantize, usable_height
 from .routedata import interpolate_route_data, patch_pydeck_html
 from .leg_camera import (
     _LEG_TOP_MARGIN_PX, _ease_in_out_cubic, _fit_view_for_path, _framed_points, _leg_bottom_margin_px,
-    _project_lonlat_to_px,
+    _clear_card_spot, _project_lonlat_to_px,
 )
 from .leg_hud import (
     compass_svg, _DEFAULT_MODE_HUD, _MODE_HUD, _css_rgba, _heading_label, _hud_css, _hud_text, _localized_hud,
@@ -547,7 +547,7 @@ async def _record_leg(
         image_path, freeze_seconds_raw, card_key: str, marker_px=None, grow: bool = False,
         cut_after: bool = False, hold_seconds: Optional[float] = None,
         quick: bool = False, small_hold_seconds: Optional[float] = None,
-        pip_end: bool = False,
+        pip_end: bool = False, view=None,
     ) -> bool:
         """Shared by every one of this leg's photo beats -- the opening
         departure preview (`start_popup_image`, only ever set on the trip's
@@ -601,7 +601,7 @@ async def _record_leg(
 
         # quick (the at-arrival photo): a brief pop-in and an immediate grow
         # to fullscreen - a transition, not a beat to sit on.
-        fade_in_s, small_hold_s, grow_s = (0.2, 0.0, 0.6) if quick else (0.3, 0.4, 0.7)
+        fade_in_s, small_hold_s, grow_s = (0.2, 0.0, tuning.FULLSCREEN_GROW_SECONDS) if quick else (0.3, 0.4, tuning.FULLSCREEN_GROW_SECONDS)
         if small_hold_seconds is not None:
             small_hold_s = float(small_hold_seconds)  # arrived early: the small card waits for the voice
         if hold_seconds is not None:
@@ -657,9 +657,21 @@ async def _record_leg(
         edge_margin = 20.0
         card_left = min(max(card_left, edge_margin), out_w - card_w - edge_margin)
         card_top = min(max(card_top, edge_margin), out_h - card_h - edge_margin)
+        anchor_x = card_left + card_w / 2.0
+        anchor_y = card_top + card_h
+        if view is not None:
+            # `view` (lon, lat, zoom, pitch): the camera this card is shown in; the card goes where it covers
+            # the least of the route line (it used to sit straight above the pin, on top of the line).
+            route_px = [
+                _project_lonlat_to_px(lo, la, view[0], view[1], view[2], output_size, pitch=view[3])
+                for lo, la in zip(smooth_df["lon"][::3], smooth_df["lat"][::3])
+            ]
+            card_left, card_top = _clear_card_spot(
+                route_px, marker_px[0], leader_target_y, card_w, card_h, card_gap, edge_margin, out_w, out_h,
+            )
+            anchor_x = min(max(marker_px[0], card_left), card_left + card_w)
+            anchor_y = min(max(leader_target_y, card_top), card_top + card_h)
         card_box = (card_left, card_top, card_w, card_h)
-        anchor_x = card_box[0] + card_w / 2.0
-        anchor_y = card_box[1] + card_h
 
         if grow:
             # Pop in AT the small card size with the leader line already
@@ -856,7 +868,7 @@ async def _record_leg(
             [marker_px[0], leader_target_y],
         )
 
-        shrink_frames = max(1, int(0.7 * fps))
+        shrink_frames = max(1, int(tuning.FULLSCREEN_SHRINK_SECONDS * fps))
         for i in range(shrink_frames):
             t = _ease_in_out_cubic((i + 1) / shrink_frames)
             left = full_box[0] + (card_box[0] - full_box[0]) * t
@@ -1228,11 +1240,13 @@ async def _record_leg(
                             await _write_frame(warm_png)
                     elif start_popup_image:
                         await _play_leg_photo_card(
-                            start_popup_image, start_popup_freeze_seconds, "start"
+                            start_popup_image, start_popup_freeze_seconds, "start",
+                            view=(from_view["lon"], from_view["lat"], from_view["zoom"], from_view["pitch"]),
                         )
                     elif dest_popup_image:
                         await _play_leg_photo_card(
-                            dest_popup_image, dest_popup_freeze_seconds, "dest_opening"
+                            dest_popup_image, dest_popup_freeze_seconds, "dest_opening",
+                            view=(from_view["lon"], from_view["lat"], from_view["zoom"], from_view["pitch"]),
                         )
 
                     for i in range(intro_frames):
@@ -1796,6 +1810,7 @@ async def _record_leg(
                                 else max(0.0, arrival_wait_seconds - tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS)
                             ),
                             pip_end=dest_image_display == "pip",
+                            view=(locked_lon, locked_lat, locked_zoom, follow_pitch),
                             hold_seconds=(
                                 arrival_photo_hold_seconds
                                 if arrival_photo_hold_seconds is not None
