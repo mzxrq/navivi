@@ -131,8 +131,13 @@ def _render_zoom_in(
     """Renders a Ken Burns move over a still image: the visible crop goes from
     zoom[0] to zoom[1] (ease-in-out) while its centre drifts by `pan` (a
     fraction of the free crop room, from -pan to +pan), then dims/desaturates."""
-    sh, sw = image_bgr.shape[:2]
     out_w, out_h = tuning.INTRO_WIDTH, tuning.INTRO_HEIGHT
+    # Shrunk once (area filter) to about twice the frame, so the per-frame warp below never aliases.
+    fit_w, fit_h = _cover_fit(image_bgr.shape[1], image_bgr.shape[0], out_w / out_h)
+    shrink = min(1.0, 2.0 * out_w / fit_w)
+    if shrink < 1.0:
+        image_bgr = cv2.resize(image_bgr, None, fx=shrink, fy=shrink, interpolation=cv2.INTER_AREA)
+    sh, sw = image_bgr.shape[:2]
     fit_w, fit_h = _cover_fit(sw, sh, out_w / out_h)
 
     num_frames = max(1, round(duration_sec * tuning.INTRO_FPS))
@@ -145,9 +150,12 @@ def _render_zoom_in(
         half_w, half_h = fit_w * z / 2, fit_h * z / 2
         cx = sw / 2 + pan[0] * (2 * t - 1) * max(0.0, sw / 2 - half_w)
         cy = sh / 2 + pan[1] * (2 * t - 1) * max(0.0, sh / 2 - half_h)
-        x0, y0, x1, y1 = _crop_rect(cx, cy, half_w, half_h, sw, sh)
-        crop = image_bgr[y0:y1, x0:x1]
-        frame = cv2.resize(crop, (out_w, out_h), interpolation=cv2.INTER_LANCZOS4)
+        half_w, half_h = min(half_w, sw / 2), min(half_h, sh / 2)
+        cx, cy = min(max(cx, half_w), sw - half_w), min(max(cy, half_h), sh - half_h)
+        # Sub-pixel crop: a whole-pixel crop stepped visibly on a slow zoom.
+        s = out_w / (2 * half_w)
+        m = np.float32([[s, 0, -(cx - half_w) * s], [0, s, -(cy - half_h) * s]])
+        frame = cv2.warpAffine(image_bgr, m, (out_w, out_h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REFLECT)
         if sat < 1.0:
             gray = cv2.cvtColor(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
             frame = cv2.addWeighted(frame, sat, gray, 1.0 - sat, 0)
