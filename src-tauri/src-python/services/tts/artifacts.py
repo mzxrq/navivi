@@ -67,6 +67,35 @@ def find_stray_bursts(samples: np.ndarray, sample_rate: int) -> List[Tuple[int, 
     return found
 
 
+def trim_edge_silence(wav: bytes, keep_seconds: float, threshold_db: float) -> bytes:
+    """A take with its leading and trailing silence cut to `keep_seconds` (quieter than `threshold_db`
+    below full scale), so the pause between sentences is the join's gap, not the server's padding.
+    The take unchanged when it can't be read or is all silence."""
+    import io
+
+    try:
+        with wave.open(io.BytesIO(wav), "rb") as w:
+            params = w.getparams()
+            if params.sampwidth != 2:
+                return wav
+            raw = w.readframes(params.nframes)
+    except (wave.Error, EOFError):
+        return wav
+    frames = np.frombuffer(raw, dtype=np.int16).reshape(-1, params.nchannels)
+    loud = np.nonzero(np.abs(frames).max(axis=1) > 32768 * 10 ** (threshold_db / 20))[0]
+    if not len(loud):
+        return wav
+    keep = int(params.framerate * keep_seconds)
+    start, end = max(0, loud[0] - keep), min(len(frames), loud[-1] + 1 + keep)
+    if start == 0 and end == len(frames):
+        return wav
+    out = io.BytesIO()
+    with wave.open(out, "wb") as w:
+        w.setparams(params)
+        w.writeframes(frames[start:end].tobytes())
+    return out.getvalue()
+
+
 def cut_off_ratio(wav: bytes) -> float:
     """How loud a take's last 80 ms is against its speech level (90th percentile of 20 ms windows),
     trailing digital silence (the server's end pad) ignored. Measured: <=0.12 for lines that end

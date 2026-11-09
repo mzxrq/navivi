@@ -33,7 +33,7 @@ from services.ffconcat import concat_entry
 from services.tts import phrase_cache
 from services.tts.errors import TTSNotReady
 from services.gpu_cooldown import wait_for_gpu_cooldown
-from services.tts.artifacts import cut_off_ratio, remove_stray_bursts
+from services.tts.artifacts import cut_off_ratio, remove_stray_bursts, trim_edge_silence
 from services.localization.sentence_split import SENTENCE_END
 from services.logger.logger import setup_logger
 from services.projectfiles import replace_into, write_atomic
@@ -813,6 +813,9 @@ class IrodoriTTSClient:
             takes += chunk_takes
         if self.pieces_dir:
             voice_pieces.save(self.pieces_dir, self.pieces_voice, pieces)
+        takes = [
+            trim_edge_silence(t, tuning.TTS_EDGE_SILENCE_KEEP_SECONDS, tuning.TTS_EDGE_SILENCE_DB) for t in takes
+        ]
         if len(takes) == 1:
             write_atomic(file_path, takes[0])
             self._remove_stray_bursts(file_path)

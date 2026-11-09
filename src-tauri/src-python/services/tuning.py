@@ -1348,8 +1348,12 @@ TTS_KANJI_FIRST = False
 TTS_NAME_CHECK_MIN_CHARS = 3  # kana, not counting ー: shorter runs (ゴール) are left alone unless a plain ending follows (ミワ神社)
 TTS_NAME_CHECK_MODEL = "kotoba-tech/kotoba-whisper-v2.0-faster"  # Japanese Whisper for faster-whisper, ~1.5 GB, downloaded on first use
 # Each sentence is its own request; the silence between them is random in this range (no metronome clicks).
-TTS_SENTENCE_GAP_MIN_SECONDS = 0.25
-TTS_SENTENCE_GAP_MAX_SECONDS = 0.5
+TTS_SENTENCE_GAP_MIN_SECONDS = 0.2
+TTS_SENTENCE_GAP_MAX_SECONDS = 0.35
+# Each take's own leading/trailing silence (quieter than this dBFS) is cut to this before the join: the server
+# pads every take, which made the pauses ~0.6 s (2026-11-09: 25.6 s of a 94 s overview was silence).
+TTS_EDGE_SILENCE_DB = -45.0
+TTS_EDGE_SILENCE_KEEP_SECONDS = 0.05
 TTS_VOICE = "jvs004"  # Irodori's only bundled voice preset as of writing
 # Playback speed sent to Irodori (1.0 = natural); validated against MIN/MAX before the request.
 TTS_SPEED = 1
