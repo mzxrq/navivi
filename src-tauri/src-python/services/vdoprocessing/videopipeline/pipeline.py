@@ -14,7 +14,6 @@ from services.ollama_memory import unload_ollama_models
 from services.logger.progress import tracker
 from services.render_estimate import StageRecorder
 from services.localization.overview_script import overview_style
-from services.localization.subtitle import caption_layout
 from services.vdoprocessing.stopby_visits import set_visit_all_stopbys
 from services.vdoprocessing.vdoexporter import VideoExporter, sweep_stale_temp_files
 
@@ -160,9 +159,8 @@ def run_full_pipeline(
         tracker.stage("Generating subtitles...")
         subtitle_dir = project_subtitle_dir(project_dir)
         apply_cued_scripts(waypoints, project_dir)
-        layout = caption_layout(JobConfigManager(config_file_path).data.get("settings"))
         subtitle_paths = build_subtitles(
-            waypoints, audio_data.get("audio_paths", []), str(subtitle_dir), force=force_regenerate, layout=layout
+            waypoints, audio_data.get("audio_paths", []), str(subtitle_dir), force=force_regenerate
         )
         # Re-read: TTS restores overview_narration on disk after job_config was loaded.
         overview_subtitle_path = build_overview_subtitle(
@@ -182,7 +180,6 @@ def run_full_pipeline(
             audio_data.get("attraction_audio_paths", []),
             str(subtitle_dir),
             force=force_regenerate,
-            layout=layout,
         )
 
     # --- STEP 2c ---

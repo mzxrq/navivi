@@ -211,14 +211,17 @@ def street_view_landmarks(
     for leg, cards in enumerate(out):
         cards.sort(key=lambda c: c.pop("_at"))
         for card, cue in zip(cards, cues[leg] if cues and leg < len(cues) else []):
-            piece, show, hide = cue
+            piece, show, hide, *wait = cue
             card.update(piece=int(piece), show_seconds=round(float(show), 2), hide_seconds=round(float(hide), 2))
+            if wait and wait[0]:
+                card["wait"] = True
     return out
 
 
 def view_cue_spans(times: Dict[str, float], piece: int) -> List[tuple]:
     """[(piece, show, hide)] from one narration's measured cue times (view1/viewend1, …), in order: kept to
-    STREET_VIEW_MIN … MAX seconds, and never running into the next card's show time."""
+    STREET_VIEW_MIN … MAX seconds, and never running into the next card's show time. A {view wait}
+    (viewwait1, …) adds a 4th item, True: the walker waits at the card's spot."""
     from services import tuning
 
     spans = []
@@ -226,8 +229,9 @@ def view_cue_spans(times: Dict[str, float], piece: int) -> List[tuple]:
     while f"view{n}" in times:
         show = float(times[f"view{n}"])
         hide = float(times.get(f"viewend{n}", show))
-        spans.append([show, min(max(hide, show + tuning.STREET_VIEW_MIN_SECONDS), show + tuning.STREET_VIEW_MAX_SECONDS)])
+        hide = min(max(hide, show + tuning.STREET_VIEW_MIN_SECONDS), show + tuning.STREET_VIEW_MAX_SECONDS)
+        spans.append([show, hide, f"viewwait{n}" in times])
         n += 1
     for a, b in zip(spans, spans[1:]):
         a[1] = min(a[1], b[0])
-    return [(piece, s, h) for s, h in spans]
+    return [(piece, s, h, True) if w else (piece, s, h) for s, h, w in spans]

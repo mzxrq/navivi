@@ -24,7 +24,7 @@ const getThinkingSteps = () => [
   t`Polishing voiceover tone...`,
 ];
 
-export type CueTag = "start" | "arrive" | "end" | "n" | "go" | "next" | "view" | "/view";
+export type CueTag = "start" | "arrive" | "end" | "n" | "go" | "next" | "view" | "view wait" | "/view";
 
 const getCueHints = (): Record<CueTag, string> => ({
   start: t`Insert a cue: the walk starts moving at this point`,
@@ -34,6 +34,7 @@ const getCueHints = (): Record<CueTag, string> => ({
   go: t`Insert a cue: the description of that stop ends here and the overview moves on`,
   next: t`Insert a cue: the next photo comes in here`,
   view: t`Insert a cue: the next street view photo pops up here`,
+  "view wait": t`Insert a cue: the walker stops at the next street view and its photo pops up here, until {/view}`,
   "/view": t`Insert a cue: the street view photo goes away here (without it: at the end of the sentence)`,
 });
 

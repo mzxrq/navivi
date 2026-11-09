@@ -669,8 +669,6 @@ export function AppSettings() {
                   onChange={(patch) =>
                     updateProject({ caption_style: { ...(settings.caption_style ?? {}), ...patch } })
                   }
-                  longLines={settings.subtitle_long_lines ?? "split"}
-                  onLongLines={(v) => updateProject({ subtitle_long_lines: v })}
                 />
               </>
             )}
@@ -977,13 +975,9 @@ function Badge({
 function CaptionStyleSection({
   style,
   onChange,
-  longLines,
-  onLongLines,
 }: {
   style: Required<TextStyle>;
   onChange: (patch: TextStyle) => void;
-  longLines: "split" | "wrap";
-  onLongLines: (v: "split" | "wrap") => void;
 }) {
   return (
     <Section title={t`Subtitles`} hint={t`Every subtitle starts from this look`}>
@@ -1001,20 +995,6 @@ function CaptionStyleSection({
           </Row>
         )}
       />
-      <Row
-        title={t`Long subtitles`}
-        description={t`When a sentence doesn't fit on one line. Applies the next time the video is generated.`}
-      >
-        <Segmented<"split" | "wrap">
-          value={longLines}
-          onChange={onLongLines}
-          options={[
-            { id: "split", label: t`One line at a time` },
-            { id: "wrap", label: t`Two lines` },
-          ]}
-          className="w-64"
-        />
-      </Row>
     </Section>
   );
 }

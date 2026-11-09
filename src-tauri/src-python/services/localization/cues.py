@@ -25,7 +25,8 @@ A script may carry inline tags that mark moments the video has to land on:
               (recorded as "next1", "next2", ...; see audio_step._write_photo_cuts)
     {view}    leg narration only: the next street view card pops in here, and {/view} takes
               it down (recorded as "view1"/"viewend1", ...; without {/view} it goes at the end
-              of that sentence; see leg_sequence.street_view_cues)
+              of that sentence; see leg_sequence.street_view_cues). {view wait} also stops the
+              walker at the street view's spot while its card is up ("viewwait1", ...)
 
 Tags are never spoken. They are stripped before TTS and subtitles, and the
 position each one had in the spoken text is kept so its time can be worked out
@@ -38,7 +39,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|next|/view|view|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}")
+CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|next|/view|view wait|view|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}")
 
 
 @dataclass(frozen=True)
@@ -76,9 +77,11 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
         if tag.startswith("photo:"):
             photos += 1
             cues.append(Cue(f"photo{photos}:{tag[6:].strip()}", length))
-        elif tag == "view":
+        elif tag in ("view", "view wait"):
             views += 1
             cues.append(Cue(f"view{views}", length))
+            if tag == "view wait":
+                cues.append(Cue(f"viewwait{views}", length))
         elif tag == "/view":
             if views and all(c.tag != f"viewend{views}" for c in cues):
                 cues.append(Cue(f"viewend{views}", length))
@@ -104,7 +107,7 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
 def _close_views(clean: str, cues: List[Cue]) -> List[Cue]:
     """A {view} with no {/view} ends with its sentence (the next 。！？ after it, or the end of the script)."""
     tags = {c.tag for c in cues}
-    for cue in [c for c in cues if c.tag.startswith("view") and not c.tag.startswith("viewend")]:
+    for cue in [c for c in cues if re.fullmatch(r"view\d+", c.tag)]:
         end_tag = "viewend" + cue.tag[4:]
         if end_tag not in tags:
             end = next((i + 1 for i in range(cue.char_index, len(clean)) if clean[i] in "。！？!?."), len(clean))

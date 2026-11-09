@@ -6,7 +6,7 @@ import pytest
 
 from services import tuning
 from services.localization.sentence_split import SENTENCE_END, split_sentences
-from services.localization.subtitle import SubtitleBuilder, TextSegmenter, line_budget
+from services.localization.subtitle import SubtitleBuilder, TextSegmenter
 from services.tts import kokoro_server
 from services.tts.errors import TTSNotReady
 from services.tts.ttsengine import KokoroTTSClient, make_tts_client, split_text_for_tts, tts_config_from_settings
@@ -31,22 +31,17 @@ def test_japanese_sentences_are_cut_as_before():
 
 
 def test_captions_do_not_break_at_abbreviations_or_decimals():
-    assert TextSegmenter.split_clauses("Walk to Mt. Kabuto, 1.5 km away.") == ["Walk to Mt. Kabuto,", "1.5 km away."]
+    assert TextSegmenter.split_clauses("Walk to Mt. Kabuto, 1.5 km away. Then rest!") == [
+        "Walk to Mt. Kabuto,",
+        "1.5 km away.",
+        "Then rest!",
+    ]
     assert TextSegmenter.split_clauses("駅から、出発します。") == ["駅から、", "出発します。"]
 
 
-def test_an_english_caption_gets_a_wider_line_than_a_japanese_one():
-    assert line_budget("Walk to the top of Mt. Kabuto", 20) == 40
-    assert line_budget("甲山の山頂へ向かいます", 20) == 20
-    assert line_budget("", 20) == 20
-
-
-def test_a_long_english_clause_keeps_every_word_on_lines_as_wide_as_english_needs():
+def test_a_long_english_sentence_is_one_caption_on_one_line():
     clause = "Continue along the ridge until you reach the signpost for the pass."
-    cues = SubtitleBuilder.build(clause, 6.0, [], max_chars_per_line=20)
-    assert " ".join(cue.text for cue in cues) == clause
-    assert all(len(line) <= 40 for cue in cues for line in cue.text.split("\n"))
-    assert len(cues) < 4  # at 20 characters a line it would take 4
+    assert [c.text for c in SubtitleBuilder.build(clause, 6.0, [])] == [clause]
 
 
 def test_tts_chunks_english_at_sentence_ends_and_joins_back_exactly():

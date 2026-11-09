@@ -91,14 +91,14 @@ _ATTRACTION_RE = re.compile(r"04_attraction_(\d+)_")
 _OVERVIEW_FILENAME = "01_overview.mp4"
 
 
-def _write_srt(script: str, audio_path, subtitle_path: Path, layout: Optional[dict]) -> int:
+def _write_srt(script: str, audio_path, subtitle_path: Path) -> int:
     """Times `script` against its audio and writes the .srt only when it changed. Always
-    rebuilt (milliseconds), so a line-layout setting change applies without --force."""
+    rebuilt (milliseconds)."""
     from services.localization.subtitle import SRTDocument, SubtitleBuilder
     from services.tts.ttsengine import AudioProcessor
 
     analysis = AudioProcessor().analyze_pauses(str(audio_path))
-    cues = SubtitleBuilder.build(script, analysis["duration_seconds"], analysis["pauses"], **(layout or {}))
+    cues = SubtitleBuilder.build(script, analysis["duration_seconds"], analysis["pauses"])
     if not (subtitle_path.exists() and subtitle_path.read_text(encoding="utf-8") == SRTDocument.to_string(cues)):
         SRTDocument.write(cues, str(subtitle_path))
     return len(cues)
@@ -110,7 +110,6 @@ def build_waypoint_subtitle(
     audio_path: Optional[str],
     output_dir,
     force: bool = False,
-    layout: Optional[dict] = None,
 ) -> Dict[str, Any]:
     """Builds (or, if already present and not `force`, reuses) one
     waypoint's .srt subtitle file from its narration text and matching TTS
@@ -132,7 +131,7 @@ def build_waypoint_subtitle(
     label = waypoint.get("label", f"Waypoint {idx + 1}")
     output_dir = Path(output_dir)
     subtitle_path = output_dir / f"{Path(audio_path).stem}.srt"
-    cue_count = _write_srt(script, audio_path, subtitle_path, layout)
+    cue_count = _write_srt(script, audio_path, subtitle_path)
     return {
         "index": idx,
         "label": label,
@@ -162,16 +161,13 @@ def build_overview_subtitle(
     if not script or not audio_path or not Path(audio_path).exists():
         return None
 
-    from services.localization.subtitle import caption_layout
-
     subtitle_path = Path(output_dir) / f"{Path(audio_path).stem}.srt"
-    _write_srt(script, audio_path, subtitle_path, caption_layout(project_config.get("settings")))
+    _write_srt(script, audio_path, subtitle_path)
     return str(subtitle_path)
 
 
 def build_subtitles(
     waypoints: list, audio_paths: list, output_subtitle_dir: str, force: bool = False,
-    layout: Optional[dict] = None,
 ) -> list:
     """Step: builds .srt subtitle files for every narrated waypoint that
     has matching TTS audio, keeping the returned list index-aligned with
@@ -185,7 +181,7 @@ def build_subtitles(
         audio_path = audio_paths[idx] if idx < len(audio_paths) else None
         tracker.show(f"Generating subtitle {idx + 1}/{total}")
         try:
-            result = build_waypoint_subtitle(wp, idx, audio_path, output_dir, force=force, layout=layout)
+            result = build_waypoint_subtitle(wp, idx, audio_path, output_dir, force=force)
             subtitle_paths.append(result["subtitle_path"])
         except (ValueError, FileNotFoundError):
             subtitle_paths.append(None)
@@ -201,7 +197,6 @@ def build_subtitles(
 
 def build_attraction_subtitles(
     waypoints: list, attraction_audio_paths: list, output_subtitle_dir: str, force: bool = False,
-    layout: Optional[dict] = None,
 ) -> list:
     """Step: builds .srt subtitle files for each waypoint's ATTRACTION-only
     narration (attractionNarration alone — see
@@ -232,7 +227,7 @@ def build_attraction_subtitles(
             continue
 
         try:
-            _write_srt(script, audio_path, subtitle_path, layout)
+            _write_srt(script, audio_path, subtitle_path)
             subtitle_paths.append(str(subtitle_path))
         except Exception as e:
             logger.error("Failed to build attraction subtitle for waypoint %d: %s", idx, e)

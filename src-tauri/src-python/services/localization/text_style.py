@@ -81,7 +81,7 @@ _BREAK_AFTER = set("、。，！？")
 
 
 def _is_word_char(ch: str) -> bool:
-    return ch.isascii() and ch.isalnum()
+    return (ch.isascii() and ch.isalnum()) or "０" <= ch <= "９"
 
 
 def _is_kana(ch: str) -> bool:
@@ -105,7 +105,8 @@ def _break_index(rest: str, max_chars: int, target: int) -> tuple:
         return cut, 1
     # Prefer just after a 、/。 near the balanced point.
     window = range(max(1, target - max_chars // 3), min(len(rest) - 1, max_chars) + 1)
-    marks = [i for i in window if rest[i - 1] in _BREAK_AFTER]
+    marks = [i for i in window if rest[i - 1] in _BREAK_AFTER
+             and not (i > 1 and _is_word_char(rest[i - 2]) and _is_word_char(rest[i]))]
     if marks:
         return min(marks, key=lambda i: abs(i - target)), 0
     phrases = _phrase_breaks(rest, window)

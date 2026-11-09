@@ -91,7 +91,7 @@ export function textStyleToCss(s: Required<TextStyle>): CSSProperties {
 const NO_LINE_START = new Set([..."、。，．・：；？！ー）」』】〕〉》｝)]}!?.,:;%"]);
 const NO_LINE_END = new Set([..."（「『【〔〈《｛([{"]);
 const BREAK_AFTER = new Set([..."、。，！？"]);
-const isWordChar = (ch: string) => /^[A-Za-z0-9]$/.test(ch);
+const isWordChar = (ch: string) => /^[A-Za-z0-9０-９]$/.test(ch);
 const isKana = (ch: string) => /^[ぁ-ゟ]$/.test(ch);
 const isPhraseStart = (ch: string) => /^[一-鿿ァ-ヺ]$/.test(ch) || isWordChar(ch) || NO_LINE_END.has(ch);
 
@@ -102,7 +102,7 @@ function breakIndex(rest: string[], max: number, target: number): [number, numbe
   if (spaces.length) return [nearest(spaces), 1];
   const marks: number[] = [];
   for (let i = Math.max(1, target - Math.floor(max / 3)); i <= Math.min(rest.length - 1, max); i++) {
-    if (BREAK_AFTER.has(rest[i - 1])) marks.push(i);
+    if (BREAK_AFTER.has(rest[i - 1]) && !(i > 1 && isWordChar(rest[i - 2]) && isWordChar(rest[i]))) marks.push(i);
   }
   if (marks.length) return [nearest(marks), 0];
   // Rough bunsetsu ends: hiragana (particles, okurigana) followed by kanji/katakana/Latin.

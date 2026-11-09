@@ -57,3 +57,13 @@ def test_photo_card_moves_off_the_route_line():
     assert left > 960 or left + 200 < 960  # beside it, not above or below
     horizontal = [(x, 540) for x in range(0, 1920, 4)]
     assert spot(horizontal) == (960 - 100, 540 - 26 - 112)  # clear above: the old spot is kept
+
+
+def test_photo_card_keeps_off_props_with_a_longer_leader():
+    from services.vdoprocessing.pydeckrecorder.leg_camera import _clear_card_spot
+
+    # Props right around the marker on every near side: only a farther spot is free.
+    props = [(700, 300, 520, 480)]
+    left, top = _clear_card_spot([], 960, 540, 200, 112, 26, 16, 1920, 1080, props)
+    assert left + 200 <= 700 or left >= 1220 or top + 112 <= 300 or top >= 780
+    assert _clear_card_spot([], 960, 540, 200, 112, 26, 16, 1920, 1080, []) == (860, 402)

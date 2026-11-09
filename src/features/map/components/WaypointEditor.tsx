@@ -637,7 +637,7 @@ export function WaypointEditor({
                           aiEnabled={!!settings.ai_features_enabled || (routeDirections && section.type === "arriving")}
                           promptOptional={routeDirections && section.type === "arriving"}
                           // Over the photos, a {next} picks when the next one comes in; the walk's cues mean nothing there.
-                          cues={section.type === "attraction" ? ((wp.images?.length ?? 0) > 1 ? ["next"] : []) : waypoints.some((w) => w.isStreetView) ? ["start", "arrive", "end", "view", "/view"] : undefined}
+                          cues={section.type === "attraction" ? ((wp.images?.length ?? 0) > 1 ? ["next"] : []) : waypoints.some((w) => w.isStreetView) ? ["start", "arrive", "end", "view", "view wait", "/view"] : undefined}
                         />
                       </section>
                     ))}
@@ -869,6 +869,10 @@ ${t`Open the page this photo came from`}`}
                     <Trans>In the next stop's arriving script, these cues set when the card pops in and when it goes:</Trans>{" "}
                     <code className="text-zinc-700 dark:text-zinc-300">{"{view} … {/view}"}</code>.{" "}
                     <Trans>Without them it shows briefly as the walker passes.</Trans>
+                  </p>
+                  <p>
+                    <code className="text-zinc-700 dark:text-zinc-300">{"{view wait}"}</code>{" "}
+                    <Trans>in place of the opening cue also stops the walker at the street view until the card goes.</Trans>
                   </p>
                 </div>
               ) : (

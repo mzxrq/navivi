@@ -250,20 +250,31 @@ def _point_at_fraction(route_lonlat: List[List[float]], cum_km: List[float], tot
     return route_lonlat
 
 
-def _clear_card_spot(route_px, mx, my, w, h, gap, margin, out_w, out_h) -> Tuple[float, float]:
-    """(left, top) of a w x h card beside the marker at (mx, my) that covers the
-    fewest route points: above first (the old spot), then below, right, left, diagonals."""
+def _clear_card_spot(route_px, mx, my, w, h, gap, margin, out_w, out_h, obstacles=()) -> Tuple[float, float]:
+    """(left, top) of a w x h card beside the marker at (mx, my): first off every on-screen prop in
+    `obstacles` (left, top, w, h), then with the shortest leader, then covering the fewest route points.
+    Above first (the old spot), then below, right, left, diagonals; the leader grows only when the near spots hit a prop."""
     pad = 10.0  # the route line's own width
     spots = [
-        (mx - w / 2, my - gap - h), (mx - w / 2, my + gap), (mx + gap, my - h / 2), (mx - gap - w, my - h / 2),
-        (mx + gap, my - gap - h), (mx - gap - w, my - gap - h), (mx + gap, my + gap), (mx - gap - w, my + gap),
+        (ring, s)
+        for ring, g in enumerate((gap, gap * 3, gap * 6, gap * 10))
+        for s in (
+            (mx - w / 2, my - g - h), (mx - w / 2, my + g), (mx + g, my - h / 2), (mx - g - w, my - h / 2),
+            (mx + g, my - g - h), (mx - g - w, my - g - h), (mx + g, my + g), (mx - g - w, my + g),
+        )
     ]
 
     def clamp(left, top):
         return min(max(left, margin), out_w - w - margin), min(max(top, margin), out_h - h - margin)
 
-    def covered(spot):
-        left, top = spot
+    def hidden(left, top):
+        return sum(
+            max(0.0, min(left + w, ol + ow) - max(left, ol)) * max(0.0, min(top + h, ot + oh) - max(top, ot))
+            for ol, ot, ow, oh in obstacles
+        )
+
+    def covered(left, top):
         return sum(left - pad <= x <= left + w + pad and top - pad <= y <= top + h + pad for x, y in route_px)
 
-    return min((clamp(*s) for s in spots), key=covered)
+    placed = [(ring, clamp(*s)) for ring, s in spots]
+    return min(placed, key=lambda p: (hidden(*p[1]), p[0], covered(*p[1])))[1]

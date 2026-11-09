@@ -113,10 +113,20 @@ async def _play_stopby_photo_pause(
         max(marker_y - card_gap - card_h, card_margin), out_h - card_h - card_margin
     )
     anchor_x, anchor_y = card_left + card_w / 2.0, card_top + card_h
-    if avoid_lonlat:
+    # Props already on screen (summary/elevation card, banner, compass, another photo card): the card keeps off them.
+    obstacles = await page.evaluate(
+        """() => [...document.querySelectorAll('[id^="hud-"], #section-caption, #my-popup-pip, #leg-dest-preview')]
+            .filter((el) => getComputedStyle(el).display !== 'none' && Number(getComputedStyle(el).opacity) > 0)
+            .map((el) => el.getBoundingClientRect())
+            .filter((r) => r.width > 0 && r.height > 0)
+            .map((r) => [r.left, r.top, r.width, r.height])"""
+    )
+    route_px = [
+        _project_lonlat_to_px(lo, la, view_lon, view_lat, zoom, output_size, pitch=pitch) for lo, la in avoid_lonlat or ()
+    ]
+    if route_px or obstacles:
         card_left, card_top = _clear_card_spot(
-            [_project_lonlat_to_px(lo, la, view_lon, view_lat, zoom, output_size, pitch=pitch) for lo, la in avoid_lonlat],
-            marker_x, marker_y, card_w, card_h, card_gap, card_margin, out_w, out_h,
+            route_px, marker_x, marker_y, card_w, card_h, card_gap, card_margin, out_w, out_h, obstacles,
         )
         anchor_x = min(max(marker_x, card_left), card_left + card_w)
         anchor_y = min(max(marker_y, card_top), card_top + card_h)
@@ -172,6 +182,8 @@ async def _play_stopby_photo_pause(
         fade_frames = max(1, int(0.4 * fps))
         hold_frames = max(1, int((hold_seconds or 1.2) * fps) - pop_frames - fade_frames)
         for i in range(pop_frames + hold_frames + fade_frames):
+            if advance_frame is not None and idx >= frame_total:
+                break  # walked up to the next trigger: give way to it rather than freeze the walker
             if i < pop_frames:
                 alpha = _ease_in_out_cubic((i + 1) / pop_frames)
             elif i < pop_frames + hold_frames:

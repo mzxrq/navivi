@@ -21,18 +21,11 @@ from services.logger.logger import setup_logger
 # Logging configuration
 logger = setup_logger("SubtitleService")
 
-# Clause delimiters TTS engines (and human speech) naturally pause on.
-_CLAUSE_DELIMITERS = re.compile(r"([、。！？!?,.])")
+# Each caption is one whole sentence or comma-joined clause on one line; the comma of "1,200" is not a break.
+_CLAUSE_DELIMITERS = re.compile(r"((?:[。！？!?.]+|、|(?<!\d)[,，]|[,，](?!\d))[」』）)]*)")
 _HIDDEN_POINT = "․"  # one dot leader: stands in for a period that must not split a clause
 _DECIMAL_POINT = re.compile(r"(?<=\d)\.(?=\d)")
 _ABBREVIATION_POINT = re.compile(r"\b(%s)\." % "|".join(ABBREVIATIONS))
-
-
-def line_budget(text: str, max_chars_per_line: int) -> int:
-    """The line length for `text`: the budget counts Japanese characters, and a Latin letter is about half as wide."""
-    letters = [c for c in text if c.isalpha()]
-    latin = sum(1 for c in letters if c.isascii())
-    return max_chars_per_line * 2 if letters and latin * 2 > len(letters) else max_chars_per_line
 
 
 # [Config] Default subtitle style for libass/FFmpeg `force_style` override
@@ -128,20 +121,6 @@ class TextSegmenter:
             clauses.append(buf.strip())
         return [c.replace(_HIDDEN_POINT, ".") for c in clauses or [text]]
 
-    @staticmethod
-    def split_lines(text: str, max_chars_per_line: int = 24) -> List[str]:
-        """A clause too long for one line becomes several one-line captions, broken
-        evenly at a space, punctuation or phrase end (kinsoku-safe). Captions are never 2 lines."""
-        text = text.strip()
-        if not text:
-            return []
-        # A closing 、。 is dropped on display, so it doesn't count.
-        if len(text.rstrip("、。")) <= max_chars_per_line:
-            return [text]
-        from services.localization.text_style import wrap_line
-
-        return wrap_line(text, max_chars_per_line)
-
 
 # [Subtitle] SpeakingTimelineMapper: maps pure speaking-time onto real timeline
 class SpeakingTimelineMapper:
@@ -231,16 +210,14 @@ def spoken_weight(text: str) -> int:
 
 def align_to_pauses(
     weights: List[int], speech: List[Tuple[float, float]], max_group: int = 6, unsnapped_cost: float = 1.0,
-    soft: Optional[List[bool]] = None,
 ) -> Optional[List[Tuple[float, float]]]:
     """Places clause boundaries in the voice's real pauses, choosing the pauses whose
     spans best match each clause's spoken length (DP over clause count x pause).
-    Clauses with no pause between them share a span by weight. soft[i]: the break after
-    clause i is a line split mid-sentence, cheap to leave off a pause. None if it can't fit."""
+    Clauses with no pause between them share a span by weight. None if it can't fit."""
     n = len(weights)
     if n == 0 or not speech:
         return None
-    miss = [unsnapped_cost * (0.1 if soft and soft[i] else 1.0) for i in range(n)]
+    miss = [unsnapped_cost] * n
     # Nodes: 0 = voice start, 1..P = gaps between speech intervals, P+1 = voice end.
     opens = [speech[0][0]] + [s for s, _ in speech[1:]]
     closes = [e for _, e in speech[:-1]] + [speech[-1][1]]
@@ -304,16 +281,8 @@ class SubtitleBuilder:
         text: str,
         duration_seconds: float,
         pauses: List[Dict[str, float]],
-        max_chars_per_line: int = tuning.SUBTITLE_MAX_CHARS_PER_LINE,
-        lines_per_caption: int = 1,
     ) -> List[SubtitleCue]:
-        clauses, soft = [], []
-        for clause in TextSegmenter.split_clauses(strip_bracket_tags(text)):
-            lines = TextSegmenter.split_lines(clause, line_budget(clause, max_chars_per_line))
-            per = max(1, lines_per_caption)
-            parts = ["\n".join(lines[i : i + per]) for i in range(0, len(lines), per)]
-            clauses += parts
-            soft += [True] * (len(parts) - 1) + [False]
+        clauses = TextSegmenter.split_clauses(strip_bracket_tags(text))
         if not clauses:
             return []
 
@@ -329,7 +298,7 @@ class SubtitleBuilder:
             ]
         else:
             weights = [spoken_weight(c) for c in clauses]
-            spans = align_to_pauses(weights, mapper._speaking_intervals, soft=soft)
+            spans = align_to_pauses(weights, mapper._speaking_intervals)
             if spans is None:
                 total = sum(weights)
                 spans = mapper.allocate([mapper.total_speaking_time * w / total for w in weights])
@@ -366,22 +335,6 @@ class SRTDocument:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(cls.to_string(cues))
         return output_path
-
-
-def caption_layout(settings: Optional[dict] = None) -> Dict[str, int]:
-    """SubtitleBuilder.build's line options from the project's settings: line length from
-    caption_style.max_chars_per_line, and settings.subtitle_long_lines "split" | "wrap"."""
-    settings = settings or {}
-    style = settings.get("caption_style") or {}
-    try:
-        max_chars = int(style.get("max_chars_per_line") or 0)
-    except (TypeError, ValueError):
-        max_chars = 0
-    wrap = (settings.get("subtitle_long_lines") or tuning.SUBTITLE_LONG_LINES) == "wrap"
-    return {
-        "max_chars_per_line": max_chars if max_chars > 0 else tuning.SUBTITLE_MAX_CHARS_PER_LINE,
-        "lines_per_caption": 2 if wrap else 1,
-    }
 
 
 def caption_style(settings: Optional[dict] = None) -> SubtitleStyle:

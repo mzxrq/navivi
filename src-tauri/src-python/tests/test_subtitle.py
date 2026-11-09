@@ -49,6 +49,11 @@ class TestTextSegmenter:
         clauses = TextSegmenter.split_clauses("Hello, world and more")
         assert clauses == ["Hello,", "world and more"]
 
+    def test_split_clauses_breaks_at_sentence_ends_and_commas_not_in_numbers(self):
+        assert TextSegmenter.split_clauses("約1,200年前、１，５００人が来た！？「すごい。」本当です") == [
+            "約1,200年前、", "１，５００人が来た！？", "「すごい。」", "本当です",
+        ]
+
     def test_split_clauses_empty_text_returns_empty_list(self):
         assert TextSegmenter.split_clauses("") == []
         assert TextSegmenter.split_clauses("   ") == []
@@ -57,34 +62,6 @@ class TestTextSegmenter:
         assert TextSegmenter.split_clauses("no punctuation here") == [
             "no punctuation here"
         ]
-
-    def test_split_lines_short_text_stays_one_caption(self):
-        text = "a" * 24
-        assert TextSegmenter.split_lines(text, max_chars_per_line=24) == [text]
-
-    def test_split_lines_breaks_at_space_not_mid_word(self):
-        text = "a" * 10 + " " + "b" * 10
-        assert TextSegmenter.split_lines(text, max_chars_per_line=12) == ["a" * 10, "b" * 10]
-
-    def test_split_lines_no_natural_break_falls_back_to_hard_cut(self):
-        assert TextSegmenter.split_lines("あ" * 30, max_chars_per_line=10) == ["あ" * 10] * 3
-
-    def test_split_lines_never_starts_a_line_with_closing_punctuation(self):
-        text = "曲がりくねった道を2時間21分ほど歩くと、"
-        assert TextSegmenter.split_lines(text, max_chars_per_line=20) == [text]
-        assert TextSegmenter.split_lines("「" + "あ" * 9 + "」です", max_chars_per_line=10)[1][0] != "」"
-
-    def test_split_lines_balances_at_a_phrase_end(self):
-        lines = TextSegmenter.split_lines("昔の修験者たちが歩いた古い道に入っていきます", max_chars_per_line=20)
-        assert lines == ["昔の修験者たちが歩いた", "古い道に入っていきます"]
-
-    def test_long_text_is_never_truncated(self):
-        text = " ".join(["word"] * 20)
-        assert " ".join(TextSegmenter.split_lines(text, max_chars_per_line=8)) == text
-
-    def test_split_lines_empty_text_returns_nothing(self):
-        assert TextSegmenter.split_lines("") == []
-
 
 class TestSpeakingTimelineMapper:
     def test_no_pauses_single_speaking_interval(self):
@@ -168,24 +145,11 @@ class TestSubtitleBuilder:
         for a, b in zip(cues, cues[1:]):
             assert a.end == pytest.approx(b.start)
 
-    def test_a_clause_too_long_for_one_line_becomes_consecutive_one_line_cues(self):
-        cues = SubtitleBuilder.build("自然豊かな風景の中で静かに佇む歴史ある寺院です。", 5.0, [])
-        assert [c.text for c in cues] == ["自然豊かな風景の中で静かに", "佇む歴史ある寺院です。"]
-        assert all("\n" not in c.text for c in cues)
-        assert cues[0].end == pytest.approx(cues[1].start)
+    def test_a_long_sentence_stays_one_cue_on_one_line(self):
+        text = "自然豊かな風景の中で静かに佇む歴史ある約1,200年前の寺院です。次へ向かいます。"
+        cues = SubtitleBuilder.build(text, 5.0, [])
+        assert [c.text for c in cues] == ["自然豊かな風景の中で静かに佇む歴史ある約1,200年前の寺院です。", "次へ向かいます。"]
         assert cues[-1].end == pytest.approx(5.0)
-
-    def test_wrap_mode_keeps_two_lines_per_cue_and_never_truncates(self):
-        cues = SubtitleBuilder.build("あ" * 50 + "。", 6.0, [], max_chars_per_line=10, lines_per_caption=2)
-        assert [c.text.count("\n") for c in cues] == [1, 1, 1]
-        assert "".join(c.text.replace("\n", "") for c in cues) == "あ" * 50 + "。"
-
-    def test_caption_layout_reads_project_settings(self):
-        from services.localization.subtitle import caption_layout
-
-        assert caption_layout(None) == {"max_chars_per_line": 20, "lines_per_caption": 1}
-        settings = {"subtitle_long_lines": "wrap", "caption_style": {"max_chars_per_line": 16}}
-        assert caption_layout(settings) == {"max_chars_per_line": 16, "lines_per_caption": 2}
 
     def test_build_cues_are_in_chronological_order(self):
         cues = SubtitleBuilder.build(

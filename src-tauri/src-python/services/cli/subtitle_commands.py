@@ -6,7 +6,6 @@ domain's core module."""
 from pathlib import Path
 from typing import Any, Dict
 
-from services.localization.subtitle import caption_layout
 from services.logger.progress import tracker as _tracker
 from services.vdoprocessing.videopipeline.helpers import (
     project_audio_dir,
@@ -34,7 +33,7 @@ def test_subtitle(
     force: bool = False,
 ) -> Dict[str, Any]:
     """Generate subtitles for one waypoint from its matching TTS audio."""
-    layout = caption_layout(_apply_pipeline_settings(job_config_path))
+    _apply_pipeline_settings(job_config_path)
     config_path, waypoints = _load_tts_waypoints(job_config_path)
     apply_cued_scripts(waypoints, config_path.parent)
     if waypoint_index < 0 or waypoint_index >= len(waypoints):
@@ -48,7 +47,7 @@ def test_subtitle(
     output_dir = Path(output_subtitle_dir) if output_subtitle_dir else project_subtitle_dir(config_path.parent)
 
     result = build_waypoint_subtitle(
-        waypoint, waypoint_index, str(audio_path), output_dir, force=force, layout=layout
+        waypoint, waypoint_index, str(audio_path), output_dir, force=force
     )
     return {"success": True, **result}
 
@@ -62,13 +61,13 @@ def test_subtitles(
     the narration audio already on disk."""
     import json
 
-    layout = caption_layout(_apply_pipeline_settings(job_config_path))
+    _apply_pipeline_settings(job_config_path)
     config_path, waypoints = _load_tts_waypoints(job_config_path)
     apply_cued_scripts(waypoints, config_path.parent)
     output_dir = Path(output_subtitle_dir) if output_subtitle_dir else project_subtitle_dir(config_path.parent)
     audio = existing_audio_data(str(config_path))
 
-    subtitle_paths = build_subtitles(waypoints, audio["audio_paths"], str(output_dir), force=force, layout=layout)
+    subtitle_paths = build_subtitles(waypoints, audio["audio_paths"], str(output_dir), force=force)
     overview_path = build_overview_subtitle(
         json.loads(config_path.read_text(encoding="utf-8")),
         audio.get("overview_audio_path"), str(output_dir), force=force, script=audio.get("overview_text"),
@@ -80,7 +79,7 @@ def test_subtitles(
             intro.get("audio_path"), str(output_dir), force=force, script=intro.get("text"),
         )
     attraction_paths = build_attraction_subtitles(
-        waypoints, audio["attraction_audio_paths"], str(output_dir), force=force, layout=layout
+        waypoints, audio["attraction_audio_paths"], str(output_dir), force=force
     )
     _tracker.clear()
     return {

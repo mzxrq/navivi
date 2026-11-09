@@ -80,6 +80,44 @@ def _segment_plan(df_raw, leg_dist_km, landmarks, total_seconds):
     return plan
 
 
+def _wait_view_plan(df_raw, leg_dist_km, plan, landmarks):
+    """Splits `plan` ([(last raw index, seconds)], one segment per narration piece) so the walker reaches each
+    {view wait} street view when the voice gets to its {view}, stands still until {/view}, then walks on: the
+    walk loses that hold, so the piece keeps its length. A cue that comes before the walker could get there
+    (e.g. at the start of the script) walks there at the piece's own pace and waits from then on.
+    Returns (plan, [(walk seconds at the spot, card, hold seconds)], held seconds). A wait that doesn't fit its
+    piece (spot out of order, or too late) stays a plain {view}."""
+    waits = sorted(
+        (lm for lm in landmarks or [] if lm.get("wait") and lm.get("show_seconds") is not None),
+        key=lambda lm: (lm["piece"], lm["show_seconds"]),
+    )
+    if not waits:
+        return plan, [], 0.0
+    out, spots, held, walked, start_idx = [], [], 0.0, 0.0, 0
+    for piece, (end_idx, seconds) in enumerate(plan):
+        idx, used = start_idx, 0.0  # used: this piece's voice seconds already spent walking or waiting
+        for lm in (w for w in waits if w["piece"] == piece):
+            show, hide = float(lm["show_seconds"]), float(lm["hide_seconds"])
+            seg = df_raw.iloc[idx + 1 : end_idx]
+            if seg.empty or hide > seconds - 0.5:
+                continue
+            spot = int(((seg["lat"] - lm["lat"]) ** 2 + (seg["lon"] - lm["lon"]) ** 2).idxmin())
+            span_km = leg_dist_km[end_idx] - leg_dist_km[idx]
+            pace = (seconds - used) * (leg_dist_km[spot] - leg_dist_km[idx]) / span_km if span_km > 0 else 0.0
+            walk = max(show - used, min(pace, (hide - used) / 2), 0.5)
+            hold = hide - used - walk
+            if hold < 1.0:
+                continue
+            out.append((spot, walk))
+            walked += walk
+            spots.append((walked, lm, hold))
+            idx, used, held = spot, hide, held + hold
+        out.append((end_idx, seconds - used))
+        walked += seconds - used
+        start_idx = end_idx
+    return out, spots, held
+
+
 def render_residential_leg_pydeck(
     leg_latlon: List[Tuple[float, float]],
     dest_label: str,
@@ -293,6 +331,11 @@ def render_residential_leg_pydeck(
         max(1.0, float(target_duration_seconds)) if target_duration_seconds is not None
         else max(3.0, (total_leg_km / travel_speed_kmh) * 3600.0)
     )
+    wait_spots = []
+    if target_duration_seconds is not None:
+        waited_plan, wait_spots, held = _wait_view_plan(df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], landmarks)
+        if wait_spots:
+            segment_plan, leg_duration = waited_plan, leg_duration - held
     total_frames = max(10, int(leg_duration * fps))
 
     smooth_df = interpolate_route_data(
@@ -461,7 +504,7 @@ def render_residential_leg_pydeck(
             arrival_photo_hold_seconds, arrival_wait_seconds, dest_image_display,
             hud_card_png=hud_card_png, theme=theme, bottom_reserve_px=bottom_reserve_px,
             segment_colors=segment_colors, opening_photo=opening_photo,
-            opening_view=opening_view, end_view_path=end_view_path,
+            opening_view=opening_view, end_view_path=end_view_path, wait_spots=wait_spots,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -486,8 +529,11 @@ async def _record_leg(
     opening_photo: bool = True,
     opening_view: Optional[Dict] = None,
     end_view_path: Optional[str] = None,
+    wait_spots: Optional[List] = None,
 ):
+    """`wait_spots`: [(walk seconds, card, hold seconds)] for {view wait} street views (see _wait_view_plan)."""
     from playwright.async_api import async_playwright
+    wait_spots = wait_spots or []
 
     hud_labels = video_text.current_labels()
     hud_minutes = hud_labels["hud_minutes"]
@@ -1339,10 +1385,18 @@ async def _record_leg(
                 _pip_candidates = []
                 # Street view cards with {view} cues pop in on the voice instead (below): the n-th second of the
                 # current piece's narration, counted from where it starts in the clip.
+                waiting = {id(lm) for _, lm, _ in wait_spots}
                 timed_views = sorted(
-                    (lm for lm in landmarks or [] if lm.get("show_seconds") is not None),
+                    (lm for lm in landmarks or [] if lm.get("show_seconds") is not None and id(lm) not in waiting),
                     key=lambda lm: (lm["piece"], lm["show_seconds"]),
                 )
+                # {view wait}: the walk plan brings the walker to the spot on the cue; the card holds it there.
+                wait_triggers: Dict[int, Tuple[Dict, float]] = {}
+                for walked_s, lm, hold_s in wait_spots:
+                    k = min(len(smooth_df) - 1, int(round(walked_s * fps)))
+                    while k in stopby_triggers or k in wait_triggers:
+                        k += 1
+                    wait_triggers[k] = (lm, hold_s)
                 voice = {"piece": 0, "start": None}
 
                 def _voice_from(offset_seconds: float) -> None:
@@ -1356,7 +1410,7 @@ async def _record_leg(
                         continue
                     sq_dist = (smooth_df["lat"] - lm_lat) ** 2 + (smooth_df["lon"] - lm_lon) ** 2
                     _pip_candidates.append((lm, sq_dist))
-                _taken_indices = set(stopby_triggers.keys())
+                _taken_indices = set(stopby_triggers) | set(wait_triggers)
                 for lm, sq_dist in sorted(_pip_candidates, key=lambda pair: pair[1].min()):
                     for idx in sq_dist.to_numpy().argsort():
                         idx = int(idx)
@@ -1376,7 +1430,7 @@ async def _record_leg(
                 # skipping that stop-by's pause/cut entirely. Passed to the
                 # pip call below as a hard ceiling so it never advances past
                 # whatever comes next.
-                all_trigger_indices = sorted(set(stopby_triggers.keys()) | set(pip_triggers.keys()))
+                all_trigger_indices = sorted(set(stopby_triggers) | set(pip_triggers) | set(wait_triggers))
                 route_lonlat = list(zip(smooth_df["lon"], smooth_df["lat"]))
 
                 # remaining_km's own total (its value at frame 0, before any
@@ -1623,6 +1677,17 @@ async def _record_leg(
                             frame_total=next((k for k in all_trigger_indices if k > index), frame_total),
                             avoid_lonlat=route_lonlat,
                             hold_seconds=view_lm["hide_seconds"] - view_lm["show_seconds"],
+                        )
+                        continue
+
+                    wait_lm, wait_hold = wait_triggers.pop(index, (None, 0.0))
+                    if wait_lm is not None:
+                        # No advance_frame: the walker stands still while the voice talks about the view.
+                        await _play_stopby_photo_pause(
+                            page, _write_frame, _cut_to_new_clip, fps, html_dir, port,
+                            wait_lm, locked_lon, locked_lat, locked_zoom, output_size, index,
+                            pitch=follow_pitch, pip_only=True, avoid_lonlat=route_lonlat,
+                            hold_seconds=wait_hold,
                         )
                         continue
 
