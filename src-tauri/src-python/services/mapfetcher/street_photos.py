@@ -174,6 +174,15 @@ def _mapillary(get, token, lat, lon, bearing, cache_dir: Path) -> Optional[str]:
         _download(get(img["thumb_1024_url"]).content, cache_dir / name, (img.get("creator") or {}).get("username"))
     return name
 
+def clear_of(photos: List[Dict], views: List[Dict], meters: float) -> List[Dict]:
+    """The automatic turn photos that are not within `meters` of a street view the user placed (that corner
+    already has its photo)."""
+    return [
+        p for p in photos
+        if all(_meters(p["lat"], p["lon"], v["lat"], v["lon"]) > meters for v in views)
+    ]
+
+
 def _meters(a_lat: float, a_lon: float, b_lat: float, b_lon: float) -> float:
     k = math.cos(math.radians((a_lat + b_lat) / 2))
     return math.hypot((a_lat - b_lat) * 110540.0, (a_lon - b_lon) * 111320.0 * k)

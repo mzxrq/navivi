@@ -61,3 +61,13 @@ def test_view_wait_cue_stops_the_walker_at_the_card():
     assert _wait_view_plan(df, km, [(10, 12.0)], [early]) == ([(4, 4.0), (10, 4.0)], [(4.0, early, 4.0)], 4.0)
     late = dict(card, show_seconds=11.0, hide_seconds=13.0)
     assert _wait_view_plan(df, km, [(10, 12.0)], [late]) == ([(10, 12.0)], [], 0.0)  # doesn't fit: a plain view
+
+
+def test_a_placed_street_view_replaces_the_auto_turn_photo_near_it():
+    from services.mapfetcher.street_photos import clear_of
+
+    view = {"lat": 34.45, "lon": 135.73}
+    near = {"lat": 34.45 + 30 / 110540, "lon": 135.73}  # 30 m away
+    far = {"lat": 34.45 + 200 / 110540, "lon": 135.73}  # 200 m away
+    assert clear_of([near, far], [view], 50.0) == [far]
+    assert clear_of([near, far], [], 50.0) == [near, far]

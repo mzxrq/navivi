@@ -1268,6 +1268,8 @@ ATTRACTION_MIN_PHOTO_SECONDS = 1.5
 STREET_VIEW_MAX_OFF_ROUTE_M = 80.0
 STREET_VIEW_MIN_SECONDS = 1.2
 STREET_VIEW_MAX_SECONDS = 8.0
+# An automatic turn photo this close to a street view the user placed is left out (that corner has its photo).
+STREET_VIEW_REPLACES_TURN_PHOTO_M = 50.0
 # Card width (px of 1920) for street photos in a leg (turn photos and street view stops); other pip cards are 200.
 STREET_PHOTO_CARD_WIDTH = 440.0
 PHOTO_CREDIT_PREFIX = "ⓘ "
