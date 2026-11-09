@@ -65,5 +65,7 @@
   },
   "stopby_notice_title": "Optional extras",
   "stopby_notice_body": "These are extra sights near the route.\nStop by if you have time and energy.",
+  "closed_notice_title": "Closed",
+  "closed_notice_body": "This place can't be visited at the moment.\nIt is marked with a red × on the map.",
   "duration_sample": "8h 88m"
 }

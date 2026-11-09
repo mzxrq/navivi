@@ -161,7 +161,7 @@ class _CardMixin:
         out.paste(canvas, (pad, pad), canvas)
         return out
 
-    def _stopby_notice_layout(self, w: int, h: int):
+    def _stopby_notice_layout(self, w: int, h: int, kind: str = "stopby"):
         """Fonts, wrapped body lines and every box of the stop-by notice for
         a w x h frame: (scale, title_font, body_font, lines, ribbon box,
         body box). Shared by the drawing and by `stopby_notice_box`."""
@@ -175,7 +175,7 @@ class _CardMixin:
         # As wide as its longest line (so the given line breaks hold), within
         # a sensible range; anything longer still wraps.
         notice = video_text.current_labels()
-        notice_title, notice_body = notice["stopby_notice_title"], notice["stopby_notice_body"]
+        notice_title, notice_body = notice[f"{kind}_notice_title"], notice[f"{kind}_notice_body"]
         longest = max(
             (probe.textlength(p, font=body_font) for p in notice_body.split(chr(10))),
             default=0,
@@ -207,14 +207,14 @@ class _CardMixin:
         body = (body_x0, body_y0, body_x0 + body_w, body_y1)
         return s, title_font, body_font, lines, ribbon, body
 
-    def stopby_notice_box(self, w: int, h: int) -> Tuple[int, int, int, int]:
+    def stopby_notice_box(self, w: int, h: int, kind: str = "stopby") -> Tuple[int, int, int, int]:
         """(x0, y0, x1, y1) the notice covers, so cards can be kept off it."""
-        _, _, _, _, ribbon, body = self._stopby_notice_layout(w, h)
+        _, _, _, _, ribbon, body = self._stopby_notice_layout(w, h, kind)
         return (min(ribbon[0], body[0]), ribbon[1], max(ribbon[2], body[2]), body[3])
 
     def render_stopby_notice(
         self, frame: np.ndarray, alpha: float = 1.0,
-        marker_color: Tuple[int, int, int] = tuning.STOPBY_PIN_COLOR,
+        marker_color: Tuple[int, int, int] = tuning.STOPBY_PIN_COLOR, kind: str = "stopby",
     ) -> np.ndarray:
         """Bottom-left notice for the round stop-by markers: a ribbon with
         tuning.STOPBY_NOTICE_TITLE over a white rounded card with the marker
@@ -224,10 +224,10 @@ class _CardMixin:
             return frame
         h, w = frame.shape[:2]
         # The notice is the same on every frame: drawn (with its blurred shadow) once, then only blended.
-        key = (w, h, tuple(marker_color), video_text.current_labels()["stopby_notice_title"])
+        key = (w, h, tuple(marker_color), kind, video_text.current_labels()[f"{kind}_notice_title"])
         cache = self.__dict__.setdefault("_stopby_notice_cache", {})
         if key not in cache:
-            cache[key] = self._stopby_notice_sprite(w, h, marker_color)
+            cache[key] = self._stopby_notice_sprite(w, h, marker_color, kind)
         (x0, y0), color, cover = cache[key]
         out = frame.copy()
         roi = out[y0:y0 + cover.shape[0], x0:x0 + cover.shape[1]].astype(np.float32)
@@ -235,9 +235,9 @@ class _CardMixin:
         out[y0:y0 + cover.shape[0], x0:x0 + cover.shape[1]] = np.clip(blended + 0.5, 0, 255).astype(np.uint8)
         return out
 
-    def _stopby_notice_sprite(self, w: int, h: int, marker_color: Tuple[int, int, int]):
+    def _stopby_notice_sprite(self, w: int, h: int, marker_color: Tuple[int, int, int], kind: str = "stopby"):
         """((x, y), premultiplied BGR, coverage 0..1) of the notice with its marker, cropped to what it covers."""
-        s, title_font, body_font, lines, ribbon, body = self._stopby_notice_layout(w, h)
+        s, title_font, body_font, lines, ribbon, body = self._stopby_notice_layout(w, h, kind)
         layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
 
         # soft shadow under both cards
@@ -264,8 +264,8 @@ class _CardMixin:
             ty += int(body_font.size * 1.45)
 
         # ribbon: a banded title with a folded tail under its left end
-        notice_title = video_text.current_labels()["stopby_notice_title"]
-        rgb = tuple(reversed(tuning.STOPBY_NOTICE_RIBBON_COLOR))
+        notice_title = video_text.current_labels()[f"{kind}_notice_title"]
+        rgb = tuple(reversed(tuning.CLOSED_PIN_COLOR if kind == "closed" else tuning.STOPBY_NOTICE_RIBBON_COLOR))
         dark = tuple(int(c * 0.6) for c in rgb)
         fold = int(10 * s)
         d.polygon([(ribbon[0], ribbon[3]), (ribbon[0] + fold, ribbon[3]),
@@ -283,7 +283,9 @@ class _CardMixin:
         marks = []
         for bg in (0, 255):
             plate = np.full((y1 - y0, x1 - x0, 3), bg, np.uint8)
-            self.draw_marker(plate, int(cx) - x0, int(cy + icon_d / 2 - 2 * s) - y0, number="・", color=marker_color,
+            self.draw_marker(plate, int(cx) - x0, int(cy + icon_d / 2 - 2 * s) - y0,
+                             number="×" if kind == "closed" else "・",
+                             color=tuning.CLOSED_PIN_COLOR if kind == "closed" else marker_color,
                              is_circle=False, scale=s * 0.7)
             marks.append(plate.astype(np.float32))
         mark_cover = np.clip(1.0 - (marks[1] - marks[0]).mean(axis=2, keepdims=True) / 255.0, 0.0, 1.0)

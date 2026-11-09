@@ -559,6 +559,28 @@ class _CourseOverviewMixin:
         hud["border_color"] = color
         return hud
 
+    def _draw_place_name(self, frame: np.ndarray, ap: Dict) -> None:
+        """A place's name right of its pin (closed places at the end, photo-less places as they are passed)."""
+        sprite = self._course_label_sprite(ap.get("label") or "")
+        if sprite is not None:
+            r = int(self.graphics.marker_radius)
+            self.graphics.blit_sprite(frame, sprite, (0, 0), int(ap["x"]) + r + 6, int(ap["y"]) - sprite.shape[0] // 2)
+
+    def _closed_obstacle_points(self, step: float = 8.0) -> np.ndarray:
+        """Layout obstacles over each closed place's pin and its name (drawn right of the pin at the end)."""
+        closed = getattr(self, "_closed_popups", None) or []
+        points = [self._pin_obstacle_points(closed)] if closed else []
+        r = int(self.graphics.marker_radius)
+        for ap in closed:
+            sprite = self._course_label_sprite(ap.get("label") or "")
+            if sprite is None:
+                continue
+            x0, y0 = float(ap["x"]) + r + 6, float(ap["y"]) - sprite.shape[0] / 2
+            xs = np.arange(x0, x0 + sprite.shape[1] + step, step)
+            ys = np.arange(y0, y0 + sprite.shape[0] + step, step)
+            points.append(np.array([(x, y) for x in xs for y in ys], dtype=float))
+        return np.vstack(points) if points else np.empty((0, 2), dtype=float)
+
     def _course_label_sprite(self, text: str) -> Optional[np.ndarray]:
         """A stop-by's name beside its dot: white text with a dark outline (BGRA)."""
         text = drawable((text or "").strip())

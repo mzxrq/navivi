@@ -50,7 +50,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 
 # Bump when the overview's rendering code changes what it draws, so
 # checkpointed overviews made by older code are re-rendered.
-OVERVIEW_RENDER_VERSION = 12  # v12: the final stop sits on the route's last point (E pin, 3D ending zoom); v11: course: the headline names the stretch being traced ("A → B"); v10: intro cards fade out, static ending zoom aims at the stop; v9: course: stop-bys take no number, travel mode pinned to the stops; v8: course: connected stop-bys pop up with the others at {extras}, stops matched in route order; v7: course walker waits at {go} stops when named, minimum pace, no pins for return stops; v6: course headline docked top left; v5: pins on their cue, cue window, faster last stretch; v4: bottom caption band in the framing, cards clear of top/bottom bands; v3: connected stop-bys stop; ending photo goes fullscreen after the voice
+OVERVIEW_RENDER_VERSION = 18  # v18: closed places get their own banner, no stop when passing one, ending zoom pins numbered as the overview; v16: walk/map: stop-bys and closed places pop up as passed; v15: cards keep off closed places' pins and names; v14: quicker ending zoom (1.0 s); v13: a walk with only {start}/{end} fits between them, closed places come in with the summary without a {closed} cue, "map" style; v12: the final stop sits on the route's last point (E pin, 3D ending zoom); v11: course: the headline names the stretch being traced ("A → B"); v10: intro cards fade out, static ending zoom aims at the stop; v9: course: stop-bys take no number, travel mode pinned to the stops; v8: course: connected stop-bys pop up with the others at {extras}, stops matched in route order; v7: course walker waits at {go} stops when named, minimum pace, no pins for return stops; v6: course headline docked top left; v5: pins on their cue, cue window, faster last stretch; v4: bottom caption band in the framing, cards clear of top/bottom bands; v3: connected stop-bys stop; ending photo goes fullscreen after the voice
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -238,6 +238,7 @@ class _OverviewRenderMixin:
         num_frames = max(_MIN_OVERVIEW_FRAMES, int(duration * fps))
         # the stop-by notice plays at the first stop-by of each video
         self._stopby_notice_shown = False
+        self._notice_kinds_shown = set()
         self._stopby_notice = None
 
         # Cues only: the narration's {start} / {n} / {end} tags (already turned
@@ -266,7 +267,13 @@ class _OverviewRenderMixin:
                 cap_frames = int(round(_MAX_INTRO_WALK_START_SECONDS * fps))
                 walk_start_frames = max(walk_start_frames, min(cue_frames, cap_frames))
             # Long enough to reach the last cued stop (and the {end} cue).
-            num_frames = max(num_frames, animation_frames(audio_cues, walk_start_frames, fps))
+            needed = animation_frames(audio_cues, walk_start_frames, fps)
+            if needed and "end" in audio_cues and not any(str(k).isdigit() for k in audio_cues):
+                # No stop cues (a one-line script): the whole walk fits {start}…{end}, as in the course style,
+                # instead of the route's own pace running on long after the voice.
+                num_frames = max(_MIN_OVERVIEW_FRAMES, needed)
+            else:
+                num_frames = max(num_frames, needed)
             logger.info(
                 "Overview follows its narration cues %s: walk starts at %.1fs and takes %.1fs.",
                 sorted(audio_cues), walk_start_frames / fps, num_frames / fps,
@@ -420,9 +427,13 @@ class _OverviewRenderMixin:
         # Closed places (red ×) never stop or pop up on the walk: they appear together at {closed}, at the end.
         self._closed_popups = []
         if self.config.get("overview_style") != "course":
+            # They also pop up as the walker passes them (below), then come in together again at the end.
             self._closed_popups = [ap for ap in active_popups if ap["data"].get("inaccessible")]
-            active_popups = [ap for ap in active_popups if not ap["data"].get("inaccessible")]
-        self._attach_stopby_groups(active_popups)
+        self._attach_stopby_groups(active_popups, pass_by=self.config.get("overview_style") != "course")
+        if self.config.get("overview_style") == "map":
+            from .map_style import attach_leg_cards
+
+            attach_leg_cards(active_popups, self.config.get("res_route_path"), self.graphics, fps)
 
         # Pins that would be drawn completely on top of each other are
         # nudged just far enough apart to both stay visible — a tight
@@ -528,6 +539,12 @@ class _OverviewRenderMixin:
         self._layout_pin_obstacles = pin_obstacles
         if len(pin_obstacles):
             route_obstacle_arr = np.vstack([route_obstacle_arr, pin_obstacles])
+        # A closed place's name shows at the end: the ending's cards keep off it (its own card may still sit
+        # near it while it pops up on the walk).
+        closed_obstacles = self._closed_obstacle_points()
+        recap_obstacle_arr = (
+            np.vstack([route_obstacle_arr, closed_obstacles]) if len(closed_obstacles) else route_obstacle_arr
+        )
 
         if self.config.get("overview_style") == "course" and not preview_recap_only:
             result = self._render_course_overview(
@@ -1095,7 +1112,7 @@ class _OverviewRenderMixin:
 
         outro_hold_sec = self._render_recap_and_summary(
             video, stop_popup, summary_card, active_popups, w, h, fps,
-            route_obstacle_arr, reserved_boxes, pre_popup_frame,
+            recap_obstacle_arr, reserved_boxes, pre_popup_frame,
         )
         # With narration, the ending lasts as long as its closing line: the
         # summary hold and the last pause stretch or shrink so the video ends
@@ -1133,6 +1150,8 @@ class _OverviewRenderMixin:
                 outro_hold_sec = until_distance
         # The closed places' red × pins (and names) come in at {closed}, over the held summary frame.
         closed_cue = audio_cues.get("closed") if audio_cues and getattr(self, "_closed_popups", None) else None
+        if closed_cue is None and getattr(self, "_closed_popups", None):
+            closed_cue = video.frames_written / fps  # no {closed} in the script: they come in with the summary
         if closed_cue is not None:
             outro_hold_sec = max(outro_hold_sec, closed_cue + tuning.CLOSED_HOLD_SECONDS - video.frames_written / fps)
         closed_frame = None
@@ -1142,11 +1161,7 @@ class _OverviewRenderMixin:
                     closed_frame = self.last_frame.copy()
                     for ap in self._closed_popups:
                         self._draw_pin(closed_frame, ap, len(points))
-                        sprite = self._course_label_sprite(ap.get("label") or "")
-                        if sprite is not None:
-                            r = int(self.graphics.marker_radius)
-                            self.graphics.blit_sprite(closed_frame, sprite, (0, 0), int(ap["x"]) + r + 6,
-                                                      int(ap["y"]) - sprite.shape[0] // 2)
+                        self._draw_place_name(closed_frame, ap)
                 video.write(closed_frame)
             else:
                 video.write(self.last_frame)

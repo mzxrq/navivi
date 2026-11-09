@@ -194,7 +194,7 @@ def _card_bottom_limit(h: float, margin: float) -> float:
 
 class _PopupMixin:
     @staticmethod
-    def _attach_stopby_groups(active_popups: List[Dict]) -> None:
+    def _attach_stopby_groups(active_popups: List[Dict], pass_by: bool = False) -> None:
         """Works out which stop-by waypoints are shown as part of which
         stop, stamping "stopby_group" on each host and "stopby_host" on
         each stop-by it owns.
@@ -233,7 +233,10 @@ class _PopupMixin:
 
         A stop-by with no preceding real waypoint at all (nothing to host
         it) is left ungrouped, and keeps the old pop-on-proximity
-        behaviour — never shown at all would be worse."""
+        behaviour — never shown at all would be worse.
+
+        `pass_by` (walk and map overviews): no batches at all — every unconnected stop-by and closed place
+        pops up on its own as the walker passes it (_is_loose_stopby)."""
         host = None
         # True only for the very next stop-by right after a real waypoint
         # (or at the very start of active_popups) — i.e. "is `ap` the
@@ -248,6 +251,8 @@ class _PopupMixin:
             if data.get("is_skipped"):
                 # Skipped in video export: pops up on its own as the walker
                 # passes (see _is_loose_stopby), never part of a batch.
+                continue
+            if pass_by and (data.get("inaccessible") or (data.get("is_stopby") and not data.get("connect_to_route"))):
                 continue
             if not data.get("is_stopby"):
                 host = ap
@@ -282,8 +287,7 @@ class _PopupMixin:
         can't apply one half of it and miss the other."""
         data = popup.get("data") or {}
         return (
-            bool(data.get("is_stopby"))
-            and not data.get("connect_to_route")
+            (bool(data.get("is_stopby")) and not data.get("connect_to_route") or bool(data.get("inaccessible")))
             and popup.get("stopby_host") is None
         )
 

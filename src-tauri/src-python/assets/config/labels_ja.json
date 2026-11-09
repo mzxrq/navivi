@@ -61,5 +61,7 @@
   },
   "stopby_notice_title": "追加の見どころ",
   "stopby_notice_body": "ルートの近くにある追加の見どころです。\n立ち寄るかどうかは自由。\n時間や体力に合わせて決めてください。",
+  "closed_notice_title": "訪問できない場所",
+  "closed_notice_body": "現在は訪れることができない場所です。\n地図上の赤い×印で示しています。",
   "duration_sample": "8時間88分"
 }

@@ -46,22 +46,26 @@ class _NoticeWriter:
 
 
 class _OverviewAnimationMixin:
-    def _start_stopby_notice(self, fps: int, seconds: float) -> None:
-        """Shows the stop-by notice once per video, from the next frame."""
-        if getattr(self, "_stopby_notice_shown", False):
+    def _start_stopby_notice(self, fps: int, seconds: float, kind: str = "stopby") -> None:
+        """Shows the stop-by notice (or, kind "closed", the closed-place one) once per video, from the next frame."""
+        shown = self.__dict__.setdefault("_notice_kinds_shown", set())
+        if kind in shown:
             return
-        self._stopby_notice_shown = True
+        shown.add(kind)
+        if kind == "stopby":
+            self._stopby_notice_shown = True
         fade = max(1, int(tuning.STOPBY_NOTICE_FADE_SECONDS * fps))
         min_total = math.ceil(tuning.STOPBY_NOTICE_MIN_READ_SECONDS * fps) + 2 * fade
         self._stopby_notice = {
             "i": 0,
             "total": max(min_total, int(seconds * fps)),
             "fade": fade,
+            "kind": kind,
         }
 
     def _stopby_notice_reserved(self, w: int, h: int) -> List[Tuple[int, int, int, int]]:
         notice = getattr(self, "_stopby_notice", None)
-        return [self.graphics.stopby_notice_box(w, h)] if notice else []
+        return [self.graphics.stopby_notice_box(w, h, notice.get("kind", "stopby"))] if notice else []
 
     def _apply_stopby_notice(self, frame: np.ndarray) -> np.ndarray:
         notice = getattr(self, "_stopby_notice", None)
@@ -73,7 +77,7 @@ class _OverviewAnimationMixin:
         if notice["i"] >= total:
             self._stopby_notice = None
         return self.graphics.render_stopby_notice(
-            frame, alpha=alpha, marker_color=self._STOPBY_PIN_COLOR
+            frame, alpha=alpha, marker_color=self._STOPBY_PIN_COLOR, kind=notice.get("kind", "stopby"),
         )
 
     def _play_stopby_batch(
@@ -706,7 +710,9 @@ class _OverviewAnimationMixin:
                 triggered_popup["data"]["triggered"] = True
                 last_trigger_frame = current_frame
                 route["catch_up"] = True
-                if triggered_popup["data"].get("is_stopby") and not triggered_popup.get("stopby_group"):
+                if triggered_popup["data"].get("inaccessible"):
+                    self._start_stopby_notice(fps, tuning.STOPBY_NOTICE_SECONDS, kind="closed")
+                elif triggered_popup["data"].get("is_stopby") and not triggered_popup.get("stopby_group"):
                     self._start_stopby_notice(fps, tuning.STOPBY_NOTICE_SECONDS)
                 if triggered_popup.get("cue_frame") is not None:
                     logger.info(
@@ -760,6 +766,9 @@ class _OverviewAnimationMixin:
                 for wp in active_popups:
                     if wp["data"].get("arrived") or wp["index"] == 0:
                         self._draw_pin(frame, wp, len(points), scale=self._pin_pop_scale(wp, self._pop_now, fps))
+                        # A passed stop-by / closed place with no photo has no card: its name pops up instead.
+                        if self._is_loose_stopby(wp) and not wp["data"].get("popup_image"):
+                            self._draw_place_name(frame, wp)
 
             # [NOTE] [Animation] Only the very last iteration's pre-popup frame is ever read
             # (see the recap's use of it, below) — smooth_path's length is

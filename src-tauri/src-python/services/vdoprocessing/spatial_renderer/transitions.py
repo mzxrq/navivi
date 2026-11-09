@@ -290,10 +290,19 @@ class _TransitionMixin:
         # intermediate waypoints as "S"/green and "E"/red.
         total_wp = len(job_waypoints)
         total_points = total_wp + 2
+        # A project whose list ALSO holds its start (and end) as the first (last) waypoint: those are S/E
+        # themselves, so the numbers start after them, as in the overview (they were one too high).
+        from services.vdoprocessing.route_inputs import same_place
+
+        start_point = (self._get_job_config() or {}).get("start_point") or {}
+        holds_ends = bool(job_waypoints) and bool(start_point) and same_place(job_waypoints[0], start_point)
+        offset = 0 if holds_ends else 1
+        if holds_ends:
+            total_points = total_wp
         order = 0
         for pos, jw in enumerate(job_waypoints):
             is_stopby = bool(jw.get("isStopBy", False) or jw.get("skipAssetGeneration"))
-            if not is_stopby:
+            if not is_stopby and not (holds_ends and pos == 0):
                 order += 1
             # A loop route's job_config waypoints list ends with a
             # synthetic "(Return)" entry at the SAME coordinates as the
@@ -328,7 +337,8 @@ class _TransitionMixin:
             # the video, rather than falling back to the DEFAULT
             # (not-yet-visited) marker_color — visibly wrong whenever a
             # project has customized the two to different colors.
-            wp = {"index": pos + 1, "order": order, "data": {"is_stopby": is_stopby, "arrived": True}}
+            wp = {"index": pos + offset, "order": order, "data": {"is_stopby": is_stopby, "arrived": True,
+                                                                "inaccessible": bool(jw.get("inaccessible"))}}
             label, color, split_color = self._pin_label_and_color(wp, total_points)
             self.graphics.draw_marker(
                 frame, px, py, number=label, color=color, split_color=split_color,

@@ -325,13 +325,13 @@ MODE_LINE_COLORS: Dict[str, Tuple[int, int, int]] = {
 
 # --- End-of-video "zoom to start point" highlight ---------------------------
 # How long the ending's close-up is held/zoomed before the photo (also paces the GL zoom).
-ENDING_HIGHLIGHT_WAIT_SECONDS = 0.9
+ENDING_HIGHLIGHT_WAIT_SECONDS = 0.5
 # How long the ending holds the start point's photo card before the video ends.
 ENDING_HIGHLIGHT_PIP_HOLD_SECONDS = 1.5
 # On the GL ending the card pops in once the zoom has settled, within that hold.
 ENDING_HIGHLIGHT_POP_SECONDS = 0.6
 # Push-in on the wide map before the cut to the close-up: duration and scale.
-BIG_MAP_ZOOM_LEAD_SECONDS = 0.8
+BIG_MAP_ZOOM_LEAD_SECONDS = 0.5
 BIG_MAP_ZOOM_TARGET = 2.6
 # GL ending (settings.enable_gl_ending_zoom): one continuous re-rendered deck.gl zoom from the wide map in.
 # Maximum zoom-in in log2 steps (7 = street names legible); choose_route_focus_view backs off from it when
