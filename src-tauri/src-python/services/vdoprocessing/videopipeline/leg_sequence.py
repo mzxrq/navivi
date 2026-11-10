@@ -388,11 +388,11 @@ def build_leg_sequence(
             # {view} … {/view} in each piece's narration: when the leg's street view cards pop in and out (route2vdo).
             from services.mapfetcher.street_photos import view_cue_spans
 
-            street_view_cues = [
+            street_view_cues, turn_cues = ([
                 span
                 for k, target in enumerate(piece_targets) if use_cues and target < len(waypoints)
-                for span in view_cue_spans(cue_store.cue_times_for(waypoint_cue_key(waypoints[target], target)), k)
-            ]
+                for span in view_cue_spans(cue_store.cue_times_for(waypoint_cue_key(waypoints[target], target)), k, kind)
+            ] for kind in ("view", "turn"))
 
             lats_arr, lons_arr = leg_item["lats"], leg_item["lons"]
             seg_dist = (
@@ -484,6 +484,7 @@ def build_leg_sequence(
                     "segment_duration": total_time,
                     "start_cue_seconds": start_cue_seconds,
                     "street_view_cues": street_view_cues,
+                    "turn_cues": turn_cues,  # {turn} … {/turn}: the leg's automatic turn photos
                     # Arrived early: hold on the arrived map until the voice is
                     # done, then the fullscreen photo transition.
                     "arrival_wait_seconds": arrival_wait_seconds,

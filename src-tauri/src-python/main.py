@@ -284,6 +284,9 @@ if __name__ == "__main__":
                 result = test_residential_video(
                     job_config_arg, route_dir_arg, force=force_arg, leg_index=leg_index_arg
                 )
+            elif mode_arg == "leg":
+                # [NOTE] [Animation] One walking leg made again (argv[3]: the NN of its 02_waypoint_NN_* clips), every other leg worked out but not rendered.
+                result = test_residential_video(job_config_arg, route_dir_arg, force=force_arg, leg_file=int(sys.argv[3]))
             elif mode_arg == "tts":
                 # [NOTE] [TTS] Generates narration audio for ONE waypoint (index from argv[3], default 0).
                 # None (not output_dir_arg, which is assets/video) so test_tts

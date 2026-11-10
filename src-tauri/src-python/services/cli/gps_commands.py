@@ -140,8 +140,12 @@ def test_residential_video(
     speed_kmh: Optional[float] = None,
     force: bool = False,
     leg_index: Optional[int] = None,
+    leg_file: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Runs the per-waypoint leg-by-leg render only, to sanity-check the
+    """`leg_file`: render only the leg whose clips are 02_waypoint_<NN>_* (the timeline's "Make again"), with every
+    other leg still worked out so it matches a full render.
+
+    Runs the per-waypoint leg-by-leg render only, to sanity-check the
     residential animation without paying for the overview, TTS, or subtitle
     stages. Always goes through render_route_video (render_mode=
     "residential", so the overview animation itself is never rendered) and
@@ -182,6 +186,7 @@ def test_residential_video(
         force=force,
         render_mode="residential",
         leg_index=leg_index,
+        leg_file=leg_file,
     )
     _tracker.clear()
 

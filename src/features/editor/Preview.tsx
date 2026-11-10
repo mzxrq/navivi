@@ -297,7 +297,7 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
     const seg = p.seg;
     const local = Math.max(0, time - p.start);
     // Dissolving in from the clip before, as the export does: its last frame fades out over this
-    // clip's opening, and this clip's sound fades in.
+    // clip's opening.
     const index = placed.indexOf(p);
     const fade = fades[index] ?? 0;
     const fading = fade > 0 && local < fade;
@@ -331,7 +331,7 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
       voice.src = audioSrc;
       loaded.current.voice = audioSrc;
     }
-    setLevel(voice, seg.muted ? 0 : Math.max(0, seg.volume) * fadeIn);
+    setLevel(voice, seg.muted ? 0 : Math.max(0, seg.volume)); // as the export: the picture dissolves, the sound does not fade
     if (voiceActive) {
       if (Math.abs(voice.currentTime - wantVoice) > (isPlaying ? 0.35 : 0.03)) voice.currentTime = wantVoice;
       if (isPlaying) voice.play().catch(() => undefined);
@@ -348,7 +348,7 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
         extra.src = extraSrc;
         loaded.current.extra = extraSrc;
       }
-      extra.volume = Math.min(1, Math.max(0, seg.extraVolume ?? DEFAULT_EXTRA_VOLUME)) * fadeIn;
+      extra.volume = Math.min(1, Math.max(0, seg.extraVolume ?? DEFAULT_EXTRA_VOLUME));
       if (Math.abs(extra.currentTime - wantVideo) > (isPlaying ? 0.35 : 0.03)) extra.currentTime = wantVideo;
       if (isPlaying) extra.play().catch(() => undefined);
       else extra.pause();

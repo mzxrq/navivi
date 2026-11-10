@@ -4,7 +4,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 import { emptyTimeline, type Segment, type TimelineData } from "../../src/features/editor/model";
-import { lastJson, narrationOf, onlyNarration, refreshRouteClip, refreshStopMedia, regenModes, regenTargetOf, routeClipModes, runRegen, stopIndexOf } from "../../src/services/stopRegen";
+import { isBusyClip, lastJson, legOf, narrationOf, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, regenTargetOf, routeClipModes, runRegen, stopIndexOf } from "../../src/services/stopRegen";
 
 beforeEach(() => invoke.mockReset());
 
@@ -157,5 +157,46 @@ describe("one narration from a timeline clip", () => {
     expect(regenModes("voice", 3, onlyNarration(both, "attraction"))).toEqual(["attraction-tts 3 --force", "subtitle-all"]);
     expect(regenModes("subtitles", 3, onlyNarration(both, "attraction"))).toEqual(["subtitle-all --force"]);
     expect(onlyNarration(both, null)).toEqual(both);
+  });
+});
+
+describe("walking clip made again", () => {
+  const io = {
+    probe: vi.fn(async () => 14),
+    readText: vi.fn(async (p: string) =>
+      p.endsWith(".timing.json") ? '{"audio_offset_seconds": 2.0}' : "1\n00:00:01,000 --> 00:00:02,000\nまもなく\n"),
+  };
+  const legs = (): TimelineData => ({
+    ...emptyTimeline(),
+    segments: [
+      seg({ id: "leg", video: "assets/video/route/02_waypoint_05_Temple.mp4", videoDuration: 12, trimOut: 12, audioOffset: 2.875,
+        audio: "assets/audio/02_waypoint_06_Temple.wav", audioDuration: 5, subtitleFile: "assets/subtitles/02_waypoint_06_Temple.srt" }),
+      seg({ id: "other", video: "assets/video/route/02_waypoint_06_Hill.mp4", videoDuration: 8, trimOut: 8 }),
+    ],
+  });
+
+  it("finds the leg number from the clip", () => {
+    expect(legOf({ video: "assets/video/route/02_waypoint_05_Temple_cont1.mp4" })).toBe(5);
+    expect(legOf({ video: "assets/video/attraction/04_attraction_05_Temple.mp4" })).toBeNull();
+  });
+
+  it("takes the leg's new length and voice start, and moves its cues", async () => {
+    const out = await refreshLeg(legs(), 5, io);
+    expect(out?.segments[0]).toMatchObject({ videoDuration: 14, trimOut: 14, audioOffset: 2 });
+    expect(out?.segments[1].videoDuration).toBe(8);
+    expect(io.readText).toHaveBeenCalledWith("assets/video/route/02_waypoint_05_Temple.timing.json");
+    expect(out?.subtitles).toEqual([expect.objectContaining({ segmentId: "leg", start: 3, end: 4 })]);
+  });
+});
+
+describe("isBusyClip", () => {
+  const leg = { video: "assets/video/route/02_waypoint_10_Temple.mp4", audio: "assets/audio/02_waypoint_11_Temple.wav" };
+  const place = { video: "assets/video/attraction/04_attraction_10_Temple.mp4" };
+  it("spins only the clips the job remakes", () => {
+    expect(isBusyClip(leg, { index: 10, kind: "walk", leg: 10 })).toBe(true);
+    expect(isBusyClip(place, { index: 10, kind: "walk", leg: 10 })).toBe(false);
+    expect(isBusyClip(leg, { index: 10, kind: "photo" })).toBe(false);
+    expect(isBusyClip(place, { index: 10, kind: "photo" })).toBe(true);
+    expect(isBusyClip(leg, { index: 10, kind: "voice" })).toBe(true);
   });
 });

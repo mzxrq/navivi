@@ -71,6 +71,7 @@ def render_route_video(
     force: bool = False,
     render_mode: str = "both",
     leg_index: Optional[int] = None,
+    leg_file: Optional[int] = None,
 ) -> list[str]:
     """Generates the visual map animation using synced audio timing.
 
@@ -514,6 +515,9 @@ def render_route_video(
         use_pydeck_pedestrian=use_pydeck_pedestrian,
     )
 
+    if leg_file is not None:
+        # Every leg is worked out (neighbours: street views, the walk going on), only this one is rendered.
+        animator_config["only_leg_file"] = int(leg_file)
     animator = RouteAnimator(animator_config)
 
     summary = dict(cleaned_route.get("summary", {}))

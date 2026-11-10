@@ -80,13 +80,14 @@ def _segment_plan(df_raw, leg_dist_km, landmarks, total_seconds):
     return plan
 
 
-def _wait_view_plan(df_raw, leg_dist_km, plan, landmarks):
+def _wait_view_plan(df_raw, leg_dist_km, plan, landmarks, start_cue_seconds=None):
     """Splits `plan` ([(last raw index, seconds)], one segment per narration piece) so the walker reaches each
     {view wait} street view when the voice gets to its {view}, stands still until {/view}, then walks on: the
     walk loses that hold, so the piece keeps its length. A cue that comes before the walker could get there
     (e.g. at the start of the script) walks there at the piece's own pace and waits from then on.
     Returns (plan, [(walk seconds at the spot, card, hold seconds)], held seconds). A wait that doesn't fit its
-    piece (spot out of order, or too late) stays a plain {view}."""
+    piece (spot out of order, or too late) stays a plain {view}. Cue times are voice seconds; the first piece's
+    walk only starts at its {start} cue (`start_cue_seconds`), so they are counted from there."""
     waits = sorted(
         (lm for lm in landmarks or [] if lm.get("wait") and lm.get("show_seconds") is not None),
         key=lambda lm: (lm["piece"], lm["show_seconds"]),
@@ -96,8 +97,9 @@ def _wait_view_plan(df_raw, leg_dist_km, plan, landmarks):
     out, spots, held, walked, start_idx = [], [], 0.0, 0.0, 0
     for piece, (end_idx, seconds) in enumerate(plan):
         idx, used = start_idx, 0.0  # used: this piece's voice seconds already spent walking or waiting
+        lead = float(start_cue_seconds or 0.0) if piece == 0 else 0.0
         for lm in (w for w in waits if w["piece"] == piece):
-            show, hide = float(lm["show_seconds"]), float(lm["hide_seconds"])
+            show, hide = float(lm["show_seconds"]) - lead, float(lm["hide_seconds"]) - lead
             seg = df_raw.iloc[idx + 1 : end_idx]
             if seg.empty or hide > seconds - 0.5:
                 continue
@@ -138,7 +140,7 @@ def render_residential_leg_pydeck(
     landmarks: Optional[List[Dict]] = None,
     arrival_hold_seconds: float = 2.0,
     route_chain: Optional[List[str]] = None,
-    topdown_transition_seconds: float = 1.6,
+    topdown_transition_seconds: float = tuning.LEG_ZOOM_SECONDS,
     topdown_zoom_delta: float = 1.0,
     dest_popup_image: Optional[str] = None,
     dest_popup_freeze_seconds: Optional[float] = None,
@@ -160,6 +162,7 @@ def render_residential_leg_pydeck(
     opening_photo: bool = True,
     opening_view: Optional[Dict] = None,
     end_view_path: Optional[str] = None,
+    prior_trail: Optional[List[List[float]]] = None,
 ) -> List[str]:
     """Renders one leg as a straight-down, locked-camera video with a live
     turn-by-turn HUD (destination banner + time/distance card) -- the
@@ -333,7 +336,7 @@ def render_residential_leg_pydeck(
     )
     wait_spots = []
     if target_duration_seconds is not None:
-        waited_plan, wait_spots, held = _wait_view_plan(df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], landmarks)
+        waited_plan, wait_spots, held = _wait_view_plan(df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], landmarks, start_cue_seconds)
         if wait_spots:
             segment_plan, leg_duration = waited_plan, leg_duration - held
     total_frames = max(10, int(leg_duration * fps))
@@ -358,87 +361,6 @@ def render_residential_leg_pydeck(
         quantize(leg_segment_colors(df_raw[["lat", "lon"]].values.tolist(), df_raw["ele"].tolist()) or [])
         if "ele" in df_raw.columns else []
     ) or None
-    # This leg's own grey guide line -- from this leg's start waypoint to
-    # its destination only. Neighboring legs' routes are deliberately never
-    # drawn here (they used to be, as static blue/green "context" lines,
-    # but on an out-and-back route they frequently retrace the same street
-    # as this leg and just painted over/confused this leg's own guide line
-    # with an irrelevant one) -- each leg's clip shows only its own path.
-    base_layers = [
-        pdk.Layer(
-            "GeoJsonLayer", id="route-preview",
-            data=(
-                _route_gradient_feature(route_preview_path, [c[:3] + [upcoming_color[3] if len(upcoming_color) > 3 else 200] for c in segment_colors])
-                if segment_colors else _route_linestring_feature(route_preview_path, line_color=upcoming_color)
-            ),
-            stroked=True, filled=False, get_line_color="properties.line_color",
-            # Exactly the walked trail's own thickness (see _record_leg's
-            # 'walker-trail' layer) -- the guide line is the SAME road, just
-            # not yet travelled, so a thinner stroke made the trail look like
-            # it was widening as it advanced rather than filling the line in.
-            line_width_scale=1, line_width_min_pixels=line_thickness,
-        ),
-    ]
-    route_pts = list(zip(df_raw["lat"], df_raw["lon"]))  # place-name pills sit where they hide the least of it
-    base_layers.extend(_landmark_layers(landmarks or [], id_prefix="leg-landmark", white_dot=True, avoid=route_pts))
-    # The start pin is static (this leg's starting point never moves) so it
-    # goes straight into base_layers and is visible for the whole clip, same
-    # as the destination pin below.
-    start_lat, start_lon = df_raw.iloc[0]["lat"], df_raw.iloc[0]["lon"]
-    base_layers.append(
-        pdk.Layer(
-            "IconLayer", id="leg-start-pin",
-            data=[{
-                "lon": start_lon, "lat": start_lat,
-                "icon": {
-                    "url": _leg_pin_url(start_pin, _START_PIN_URL), "width": _TEARDROP_PIN_W,
-                    "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
-                },
-            }],
-            get_icon="icon", get_position="[lon, lat]",
-            get_size=60, size_units="'pixels'", size_scale=1, pickable=False,
-        )
-    )
-    # The departure's own place name, in the same pill every other label
-    # uses. route_chain is this leg's places in travel order, so its FIRST
-    # entry is the waypoint this pin marks (the chain is omitted on a leg
-    # that has no names at all, in which case the pin just goes unlabelled).
-    start_label = (route_chain[0] if route_chain else "") or ""
-    base_layers.extend(
-        _label_pill_layer(
-            [{"lon": start_lon, "lat": start_lat, "text": start_label}],
-            "leg-start-label",
-            size_px=34,
-            pixel_offset_y=8, avoid=route_pts, clear_above=64, clear_side=26,
-        )
-    )
-    # Destination pin + name pill, shown for the whole leg (stop-by-cut
-    # pieces included) so the viewer sees where the route is headed.
-    dest_lat, dest_lon = df_raw.iloc[-1]["lat"], df_raw.iloc[-1]["lon"]
-    if dest_pin is not False:  # False = a return stop: name pill only
-        base_layers.append(
-            pdk.Layer(
-                "IconLayer", id="leg-dest-pin",
-                data=[{
-                    "lon": dest_lon, "lat": dest_lat,
-                    "icon": {
-                        "url": _leg_pin_url(dest_pin, _DEST_PIN_URL), "width": _TEARDROP_PIN_W,
-                        "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
-                    },
-                }],
-                get_icon="icon", get_position="[lon, lat]",
-                get_size=60, size_units="'pixels'", size_scale=1, pickable=False,
-            )
-        )
-    base_layers.extend(
-        _label_pill_layer(
-            [{"lon": dest_lon, "lat": dest_lat, "text": dest_label or ""}],
-            "leg-dest-label",
-            size_px=34,
-            pixel_offset_y=8, avoid=route_pts, clear_above=64, clear_side=26,
-        )
-    )
-
     # The whole-leg "locked" camera: fits the leg's entire path in frame
     # (not a close street-level follow) and, once the intro's zoom-in
     # finishes, stays fixed there for the rest of the leg's walking
@@ -473,6 +395,104 @@ def render_residential_leg_pydeck(
     )
     # Lock max zoom to 17.5 to prevent extreme zoom-in for very short segments
     locked_zoom = min(locked_zoom, 17.5)
+    if prior_trail and opening_view:
+        # The walk goes on from the leg before: keep its zoom where this leg still fits, so the camera only slides.
+        locked_zoom = min(locked_zoom, float(opening_view["zoom"]))
+
+    # The real map scale in this framing (deck.gl: 512 px tiles), so name tags are placed off the line as drawn.
+    label_mpp = 40075016.686 * math.cos(math.radians(locked_lat)) / (512 * 2 ** locked_zoom)
+    label_avoid = list(zip(df_raw["lat"], df_raw["lon"])) + [(p[0], p[1]) for p in prior_trail or []]
+
+    # This leg's own grey guide line -- from this leg's start waypoint to
+    # its destination only. Neighboring legs' routes are deliberately never
+    # drawn here (they used to be, as static blue/green "context" lines,
+    # but on an out-and-back route they frequently retrace the same street
+    # as this leg and just painted over/confused this leg's own guide line
+    # with an irrelevant one) -- each leg's clip shows only its own path.
+    base_layers = [
+        pdk.Layer(
+            "GeoJsonLayer", id="route-preview",
+            data=(
+                _route_gradient_feature(route_preview_path, [c[:3] + [upcoming_color[3] if len(upcoming_color) > 3 else 200] for c in segment_colors])
+                if segment_colors else _route_linestring_feature(route_preview_path, line_color=upcoming_color)
+            ),
+            stroked=True, filled=False, get_line_color="properties.line_color",
+            # Exactly the walked trail's own thickness (see _record_leg's
+            # 'walker-trail' layer) -- the guide line is the SAME road, just
+            # not yet travelled, so a thinner stroke made the trail look like
+            # it was widening as it advanced rather than filling the line in.
+            line_width_scale=1, line_width_min_pixels=line_thickness,
+        ),
+    ]
+    if prior_trail and len(prior_trail) >= 2:
+        # The leg walked just before (joined at a stop with nothing to tell): already walked, so the walk reads as one.
+        base_layers.insert(0, pdk.Layer(
+            "GeoJsonLayer", id="prior-trail",
+            data=_route_linestring_feature([[p[1], p[0]] for p in prior_trail], line_color=walker_color),
+            stroked=True, filled=False, get_line_color="properties.line_color",
+            line_width_scale=1, line_width_min_pixels=line_thickness,
+        ))
+    route_pts = label_avoid  # place-name pills sit where they hide the least of it
+    base_layers.extend(_landmark_layers(landmarks or [], id_prefix="leg-landmark", white_dot=True, avoid=route_pts,
+                                        mpp=label_mpp))
+    # The start pin is static (this leg's starting point never moves) so it
+    # goes straight into base_layers and is visible for the whole clip, same
+    # as the destination pin below.
+    start_lat, start_lon = df_raw.iloc[0]["lat"], df_raw.iloc[0]["lon"]
+    base_layers.append(
+        pdk.Layer(
+            "IconLayer", id="leg-start-pin",
+            data=[{
+                "lon": start_lon, "lat": start_lat,
+                "icon": {
+                    "url": _leg_pin_url(start_pin, _START_PIN_URL), "width": _TEARDROP_PIN_W,
+                    "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
+                },
+            }],
+            get_icon="icon", get_position="[lon, lat]",
+            get_size=60, size_units="'pixels'", size_scale=1, pickable=False,
+        )
+    )
+    # The departure's own place name, in the same pill every other label
+    # uses. route_chain is this leg's places in travel order, so its FIRST
+    # entry is the waypoint this pin marks (the chain is omitted on a leg
+    # that has no names at all, in which case the pin just goes unlabelled).
+    start_label = (route_chain[0] if route_chain else "") or ""
+    base_layers.extend(
+        _label_pill_layer(
+            [{"lon": start_lon, "lat": start_lat, "text": start_label}],
+            "leg-start-label",
+            size_px=34,
+            pixel_offset_y=8, avoid=route_pts, clear_above=64, clear_side=26, mpp=label_mpp,
+        )
+    )
+    # Destination pin + name pill, shown for the whole leg (stop-by-cut
+    # pieces included) so the viewer sees where the route is headed.
+    dest_lat, dest_lon = df_raw.iloc[-1]["lat"], df_raw.iloc[-1]["lon"]
+    if dest_pin is not False:  # False = a return stop: name pill only
+        base_layers.append(
+            pdk.Layer(
+                "IconLayer", id="leg-dest-pin",
+                data=[{
+                    "lon": dest_lon, "lat": dest_lat,
+                    "icon": {
+                        "url": _leg_pin_url(dest_pin, _DEST_PIN_URL), "width": _TEARDROP_PIN_W,
+                        "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
+                    },
+                }],
+                get_icon="icon", get_position="[lon, lat]",
+                get_size=60, size_units="'pixels'", size_scale=1, pickable=False,
+            )
+        )
+    base_layers.extend(
+        _label_pill_layer(
+            [{"lon": dest_lon, "lat": dest_lat, "text": dest_label or ""}],
+            "leg-dest-label",
+            size_px=34,
+            pixel_offset_y=8, avoid=route_pts, clear_above=64, clear_side=26, mpp=label_mpp,
+        )
+    )
+
 
     view_state = pdk.ViewState(
         longitude=locked_lon, latitude=locked_lat,
@@ -504,7 +524,7 @@ def render_residential_leg_pydeck(
             arrival_photo_hold_seconds, arrival_wait_seconds, dest_image_display,
             hud_card_png=hud_card_png, theme=theme, bottom_reserve_px=bottom_reserve_px,
             segment_colors=segment_colors, opening_photo=opening_photo,
-            opening_view=opening_view, end_view_path=end_view_path, wait_spots=wait_spots,
+            opening_view=opening_view, end_view_path=end_view_path, wait_spots=wait_spots, prior_trail=prior_trail,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -516,7 +536,7 @@ async def _record_leg(
     df_raw, smooth_df, remaining_km, total_frames, dest_label,
     travel_speed_kmh, arrive_threshold_m, line_thickness, walker_color,
     follow_zoom, follow_pitch, mode_hud, arrival_hold_seconds=2.0, route_chain=None,
-    topdown_transition_seconds=1.6, topdown_zoom_delta=6.0, dest_lat=None, dest_lon=None,
+    topdown_transition_seconds=tuning.LEG_ZOOM_SECONDS, topdown_zoom_delta=6.0, dest_lat=None, dest_lon=None,
     total_leg_km=None, leg_dist_km=None,
     locked_lon=None, locked_lat=None, locked_zoom=None,
     dest_popup_image=None, dest_popup_freeze_seconds=None, landmarks=None,
@@ -528,6 +548,7 @@ async def _record_leg(
     segment_colors: Optional[List[List[int]]] = None,
     opening_photo: bool = True,
     opening_view: Optional[Dict] = None,
+    prior_trail: Optional[List[List[float]]] = None,
     end_view_path: Optional[str] = None,
     wait_spots: Optional[List] = None,
 ):
@@ -1236,7 +1257,8 @@ async def _record_leg(
                     # departure has none.
                     # opening_photo False (a leg to or from a return stop): no fullscreen photo, the map opens it.
                     if not opening_photo or (not dest_popup_image and not start_popup_image):
-                        for _ in range(max(1, int(0.3 * fps))):
+                        # From the previous leg's own last frame: one frame, no establishing hold.
+                        for _ in range(1 if opening_view else max(1, int(0.3 * fps))):
                             await _write_frame(warm_png)
                     elif start_popup_image:
                         await _play_leg_photo_card(
@@ -1446,6 +1468,7 @@ async def _record_leg(
                 # whatever comes next.
                 all_trigger_indices = sorted(set(stopby_triggers) | set(pip_triggers) | set(wait_triggers))
                 route_lonlat = list(zip(smooth_df["lon"], smooth_df["lat"]))
+                route_lonlat += [(p[1], p[0]) for p in prior_trail or []]  # cards keep off the line already walked too
 
                 # remaining_km's own total (its value at frame 0, before any
                 # distance has been walked) -- the SMOOTH path's cumulative

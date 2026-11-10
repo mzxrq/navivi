@@ -101,6 +101,12 @@ class _TransitionMixin:
             video.write(blurred)
         return blurred
 
+    def _ending_zoom_follows(self, stop_popup) -> bool:
+        """The summary is followed by the zoom to the start point and its photo (not the course style)."""
+        return bool(
+            stop_popup and self.config.get("enable_ending_highlight", True) and self.config.get("overview_style") != "course"
+        )
+
     def _render_recap_and_summary(
         self,
         video: VideoExporter,
@@ -159,7 +165,8 @@ class _TransitionMixin:
             total_freeze = float(
                 stop_popup["data"].get("freeze_seconds", self._DEFAULT_FREEZE_SECONDS)
             )
-            hold_frames = max(0, int(total_freeze * fps))
+            # With the zoom next, the summary hold (ENDING_SUMMARY_HOLD_SECONDS) is the only wait.
+            hold_frames = 0 if self._ending_zoom_follows(stop_popup) else max(0, int(total_freeze * fps))
 
             if all_recap_popups:
                 laid_out = self._layout_recap_cards(

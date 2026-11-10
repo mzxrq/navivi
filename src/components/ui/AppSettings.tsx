@@ -52,6 +52,7 @@ import {
   Trash2,
   Volume2,
   X,
+  Search,
 } from "./icons";
 import { Slider } from "./Slider";
 import { StepButtons } from "./StepButtons";
@@ -774,6 +775,12 @@ function PronunciationEditor({
   const [listening, setListening] = useState<{ idx: number; state: "voicing" | "playing" } | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
   const press = useRef(0); // a take that arrives after Stop or another press is dropped
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  // A blank row (just added) stays in view while searching.
+  const shown = entries
+    .map((entry, idx) => ({ entry, idx }))
+    .filter(({ entry }) => !q || !entry.word.trim() || [entry.word, entry.reading].some((s) => s.toLowerCase().includes(q)));
   useEffect(() => () => (press.current++, audio.current?.pause()), []);
 
   // Every press is a new take in the project's voice, spelled as a narration line spells the word.
@@ -804,6 +811,20 @@ function PronunciationEditor({
 
   return (
     <>
+      {entries.length > 0 && (
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && query && (e.stopPropagation(), setQuery(""))}
+            placeholder={t`Search words or readings`}
+            aria-label={t`Search words or readings`}
+            className={`${inputClass} w-full pl-8`}
+          />
+        </div>
+      )}
       <div className="rounded-xl border border-zinc-200 dark:border-white/10 overflow-hidden">
         {entries.length > 0 ? (
           <>
@@ -817,7 +838,12 @@ function PronunciationEditor({
               <span className="w-16" />
             </div>
             <div className="divide-y divide-zinc-100 dark:divide-white/5">
-              {entries.map((entry, idx) => (
+              {shown.length === 0 && (
+                <p className="py-6 text-center text-[12px] text-zinc-400">
+                  <Trans>No words match "{query}".</Trans>
+                </p>
+              )}
+              {shown.map(({ entry, idx }) => (
                 <div
                   key={idx}
                   className="group flex items-center gap-2 px-2 py-1.5"

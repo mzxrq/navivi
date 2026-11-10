@@ -24,7 +24,7 @@ const getThinkingSteps = () => [
   t`Polishing voiceover tone...`,
 ];
 
-export type CueTag = "start" | "arrive" | "end" | "n" | "go" | "next" | "view" | "view wait" | "/view";
+export type CueTag = "start" | "arrive" | "end" | "n" | "go" | "next" | "view" | "view wait" | "/view" | "turn" | "turn wait" | "/turn";
 
 const getCueHints = (): Record<CueTag, string> => ({
   start: t`Insert a cue: the walk starts moving at this point`,
@@ -36,6 +36,9 @@ const getCueHints = (): Record<CueTag, string> => ({
   view: t`Insert a cue: the next street view photo pops up here`,
   "view wait": t`Insert a cue: the walker stops at the next street view and its photo pops up here, until {/view}`,
   "/view": t`Insert a cue: the street view photo goes away here (without it: at the end of the sentence)`,
+  turn: t`Insert a cue: the next automatic turn photo pops up here`,
+  "turn wait": t`Insert a cue: the walker stops at the next turn photo and it pops up here, until {/turn}`,
+  "/turn": t`Insert a cue: the turn photo goes away here (without it: at the end of the sentence)`,
 });
 
 /** The text with {tag} put at the caret (or over the selection), plus where the caret goes afterwards. */

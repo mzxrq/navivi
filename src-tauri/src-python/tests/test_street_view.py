@@ -61,6 +61,8 @@ def test_view_wait_cue_stops_the_walker_at_the_card():
     assert _wait_view_plan(df, km, [(10, 12.0)], [early]) == ([(4, 4.0), (10, 4.0)], [(4.0, early, 4.0)], 4.0)
     late = dict(card, show_seconds=11.0, hide_seconds=13.0)
     assert _wait_view_plan(df, km, [(10, 12.0)], [late]) == ([(10, 12.0)], [], 0.0)  # doesn't fit: a plain view
+    # A {start} cue 8 s in: the walk starts there, so voice 11-13 s is walk 3-5 s, the same as `card`.
+    assert _wait_view_plan(df, km, [(10, 12.0)], [late], start_cue_seconds=8.0) == ([(4, 3.0), (10, 7.0)], [(3.0, late, 2.0)], 2.0)
 
 
 def test_a_placed_street_view_replaces_the_auto_turn_photo_near_it():
@@ -87,3 +89,35 @@ def test_a_street_view_midway_along_a_long_straight_stretch_is_on_the_leg(tmp_pa
     leg = [[35.0, 135.0], [35.0 + 400 / 110540, 135.0]]
     sv = {"id": "v", "lat": 35.0 + 200 / 110540, "lng": 135.0, "image": "a.jpg"}
     assert len(street_view_landmarks([sv], [leg], tmp_path)[0]) == 1
+
+
+def test_turn_cues_time_the_automatic_turn_photos_like_view_cues_time_street_views():
+    from services.localization.cues import strip_cues
+    from services.mapfetcher.street_photos import attach_cue_spans, view_cue_spans
+
+    clean, cues = strip_cues("角を{turn wait}右へ。{/turn}道なりに{view}郵便局。{turn}次の角です。")
+    tags = [c.tag for c in cues]
+    assert {"turn1", "turnwait1", "turnend1", "turn2", "turnend2", "view1", "viewend1"} <= set(tags)
+    assert "{" not in clean
+    times = {c.tag: float(c.char_index) for c in cues}
+    spans = view_cue_spans(times, 0, "turn")
+    assert len(spans) == 2 and spans[0][3] is True  # {turn wait}: the walker stops at the first
+    cards = attach_cue_spans([{"lat": 0, "lon": 0}, {"lat": 1, "lon": 1}, {"lat": 2, "lon": 2}], spans)
+    assert cards[0]["wait"] and "show_seconds" in cards[1] and "show_seconds" not in cards[2]  # 3rd: at its spot
+
+
+def test_a_named_view_cue_pops_the_street_view_with_that_name():
+    from services.localization.cues import strip_cues
+    from services.mapfetcher.street_photos import attach_cue_spans, view_cue_spans
+
+    clean, cues = strip_cues("この先は{view}坂道。{view wait:白壁の町}白壁の町です。")
+    assert "{" not in clean
+    assert [c.tag for c in cues if "name" in c.tag] == ["viewname2:白壁の町"]
+
+    times = {"view1": 1.0, "viewend1": 3.0, "view2": 4.0, "viewwait2": 4.0, "viewname2:白壁の町": 4.0, "viewend2": 7.0}
+    spans = view_cue_spans(times, 0)
+    assert spans == [(0, 1.0, 3.0), (0, 4.0, 7.0, True, "白壁の町")]
+    cards = [{"label": "白壁の町並み"}, {"label": "高札場"}]  # walk order: the named one comes first
+    attach_cue_spans(cards, spans)
+    assert cards[0]["show_seconds"] == 4.0 and cards[0]["wait"]
+    assert cards[1]["show_seconds"] == 1.0 and "wait" not in cards[1]

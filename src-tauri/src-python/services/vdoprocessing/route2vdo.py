@@ -23,7 +23,7 @@ from services.logger.progress import tracker
 from services import runtime_paths, tuning, video_text
 from services.mapbox_token import resolve_mapbox_token
 from services.mapfetcher.maplanguage import resolve_map_style
-from services.mapfetcher.street_photos import clear_of, resolve_mapillary_token, street_view_landmarks, turn_photos
+from services.mapfetcher.street_photos import attach_cue_spans, clear_of, resolve_mapillary_token, street_view_landmarks, turn_photos
 from services.projectfiles import meta_dir, write_json_atomic
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.pydeckrecorder import record_headless_video
@@ -62,7 +62,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # v7: leg card numbers are the overview card's own per-leg numbers;
 # v8: stop-bys are framed too, and the summary card sits lower;
 # v9: the 3D leg HUD card sits as low as the 2D one).
-LEG_RENDER_VERSION = 16  # v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
+LEG_RENDER_VERSION = 22  # v22: {view wait} times count from the {start} cue; v21: name tags placed with the real camera scale; v20: cards keep off the kept walked line; v19: a leg continuing the walk slides at the zoom of the leg before; v18: quicker opening/closing zoom (LEG_ZOOM_SECONDS); v17: a leg after a stop with no narration continues the walk; v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
 # Bumped when the heatmap legs' elevation profile card changes (only those legs re-render; v1: the card).
 LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
@@ -729,10 +729,10 @@ class RouteAnimator:
             if (leg_mode == "walking" and mapillary_token and self.config.get("res_route_path")
                     and self.config.get("street_photos_at_turns", tuning.STREET_PHOTOS_AT_TURNS)):
                 photo_dir = meta_dir(Path(self.config["res_route_path"]).parent) / "streetview"
-                landmarks += clear_of(
+                landmarks += attach_cue_spans(clear_of(
                     turn_photos([list(p) for p in leg_latlon], photo_dir, mapillary_token),
                     street_views[i], tuning.STREET_VIEW_REPLACES_TURN_PHOTO_M,
-                )
+                ), res_data.get("turn_cues") or [])
             landmarks += street_views[i]
 
             # Every connectToRoute landmark in THIS leg, in the same order
@@ -898,6 +898,13 @@ class RouteAnimator:
                     leg_kwargs["opening_view"] = json.loads(Path(prev_end_view).read_text(encoding="utf-8"))
                 except (OSError, ValueError):
                     pass
+            if start_quiet and i > 0:
+                # The walk goes on through a stop with nothing to tell: the leg before stays drawn as walked,
+                # and the camera glides into this leg's framing quickly.
+                prev = res_sequence[i - 1]
+                if prev.get("lats") is not None and prev.get("lons") is not None:
+                    leg_kwargs["prior_trail"] = [[float(a), float(b)] for a, b in zip(prev["lats"], prev["lons"])]
+                leg_kwargs["topdown_transition_seconds"] = tuning.LEG_CONTINUE_GLIDE_SECONDS
             prev_end_view = leg_kwargs.get("end_view_path")
             # Marks a join at a stop with nothing to tell: the timeline cuts there (same frame), no dissolve.
             no_fade = self.out_dir / f"{leg_glob_prefix}nofade"
@@ -909,6 +916,8 @@ class RouteAnimator:
             # only reused when it matches what they were rendered from: a
             # bare existence check kept legs rendered with an old walk
             # timing (e.g. before the arrival cue moved) forever.
+            if self.config.get("only_leg_file") is not None and leg_file_num != self.config["only_leg_file"]:
+                continue  # "Make again" for one leg: the others were only needed for what this one takes from them
             leg_fingerprint = _leg_fingerprint(leg_latlon, dest_label, leg_kwargs)
             fingerprint_path = self.out_dir / f"{leg_glob_prefix}inputs.json"
             existing_leg_files = (

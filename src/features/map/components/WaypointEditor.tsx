@@ -27,7 +27,7 @@ import {
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { useUI } from "../../../hooks/useUI";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { ScriptInput } from "../../../components/ui/ScriptInput";
+import { ScriptInput, type CueTag } from "../../../components/ui/ScriptInput";
 import { Switch } from "../../../components/ui/Switch";
 import { Segmented } from "../../../components/ui/Segmented";
 import { MAX_VIDEOS, WaypointVideos } from "./WaypointVideos";
@@ -55,6 +55,16 @@ import { downloadPhotos, findPlacePhotos } from "../../../services/placePhotos";
 import { MAX_PHOTOS_PER_STOP, creditLine, photoSource, shortCredit, sourceHost, videoCredit, withCredit, withFoundPhotos } from "../../../utils/photoCredits";
 
 const MAX_IMAGES = MAX_PHOTOS_PER_STOP;
+
+// The arriving script's cue buttons: {view} with street views, {turn} with automatic turn photos.
+export function legCues(streetViews: boolean, turnPhotos: boolean): CueTag[] | undefined {
+  if (!streetViews && !turnPhotos) return undefined;
+  return [
+    "start", "arrive", "end",
+    ...(streetViews ? (["view", "view wait", "/view"] as CueTag[]) : []),
+    ...(turnPhotos ? (["turn", "turn wait", "/turn"] as CueTag[]) : []),
+  ];
+}
 
 function useCameraMotions() {
   return [
@@ -637,7 +647,7 @@ export function WaypointEditor({
                           aiEnabled={!!settings.ai_features_enabled || (routeDirections && section.type === "arriving")}
                           promptOptional={routeDirections && section.type === "arriving"}
                           // Over the photos, a {next} picks when the next one comes in; the walk's cues mean nothing there.
-                          cues={section.type === "attraction" ? ((wp.images?.length ?? 0) > 1 ? ["next"] : []) : waypoints.some((w) => w.isStreetView) ? ["start", "arrive", "end", "view", "view wait", "/view"] : undefined}
+                          cues={section.type === "attraction" ? ((wp.images?.length ?? 0) > 1 ? ["next"] : []) : legCues(waypoints.some((w) => w.isStreetView), !!settings.street_photos_at_turns)}
                         />
                       </section>
                     ))}
@@ -873,6 +883,11 @@ ${t`Open the page this photo came from`}`}
                   <p>
                     <code className="text-zinc-700 dark:text-zinc-300">{"{view wait}"}</code>{" "}
                     <Trans>in place of the opening cue also stops the walker at the street view until the card goes.</Trans>
+                  </p>
+                  <p>
+                    <code className="text-zinc-700 dark:text-zinc-300">{"{view:name}"}</code>{" / "}
+                    <code className="text-zinc-700 dark:text-zinc-300">{"{view wait:name}"}</code>{" "}
+                    <Trans>pick the street view with that name instead of the next one passed.</Trans>
                   </p>
                 </div>
               ) : (

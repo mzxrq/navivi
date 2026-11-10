@@ -24,7 +24,7 @@ _CLOSED_DOT_URL = "data:image/svg+xml;charset=utf-8," + urllib.parse.quote(
 
 def _landmark_layers(
     landmarks: List[Dict], id_prefix: str = "stopby", white_dot: bool = False,
-    avoid: Optional[List[Tuple[float, float]]] = None,
+    avoid: Optional[List[Tuple[float, float]]] = None, mpp: Optional[float] = None,
 ) -> List[pdk.Layer]:
     """landmarks: [{"lat", "lon", ("label")}, ...] -- small unnumbered brown
     dots with a plain label beside them, matching the reference video's
@@ -71,7 +71,7 @@ def _landmark_layers(
             f"{id_prefix}-labels",
             size_px=26,
             pixel_offset_y=10,
-            avoid=avoid, clear_above=10, clear_side=12,
+            avoid=avoid, clear_above=10, clear_side=12, mpp=mpp,
         )
     )
     return layers
@@ -258,6 +258,7 @@ def label_offset(
 def _label_pill_layer(
     entries: List[Dict], layer_id: str, size_px: int = 34, pixel_offset_y: int = 0,
     avoid: Optional[List[Tuple[float, float]]] = None, clear_above: int = 0, clear_side: int = 0,
+    mpp: Optional[float] = None,
 ) -> List[pdk.Layer]:
     """One IconLayer of place-name pills. `entries`: [{"lat", "lon",
     "text"}, ...]. Without `avoid` each pill hangs just BELOW its own point
@@ -269,7 +270,8 @@ def _label_pill_layer(
     `avoid`: the route [(lat, lon)]; each pill then goes below, above
     (`clear_above` px over the point, past the pin) or beside it
     (`clear_side` px), wherever it hides the least of the route line."""
-    mpp = _fit_meters_per_px(avoid) if avoid and len(avoid) > 1 else None
+    # `mpp`: the camera's real metres per pixel when the caller knows it (else estimated from the path).
+    mpp = (mpp or _fit_meters_per_px(avoid)) if avoid and len(avoid) > 1 else None
     data = []
     for e in entries:
         text = str(e.get("text") or "").strip()

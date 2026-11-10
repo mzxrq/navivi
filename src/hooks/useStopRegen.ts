@@ -6,21 +6,22 @@ import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
 import { refreshMedia } from "../features/editor/player";
 import { probeDuration, toAbsoluteProjectPath } from "../services/fileSystem";
-import { RegenKind, RouteClip, StopNarration, onlyNarration, refreshRouteClip, refreshStopMedia, regenModes, routeClipModes, runRegen } from "../services/stopRegen";
+import { RegenKind, RouteClip, StopNarration, legModes, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, routeClipModes, runRegen } from "../services/stopRegen";
 
-type Job = { index: number | RouteClip; kind: RegenKind | "video"; run: () => Promise<void> };
+// `leg`: a walking clip job's NN (02_waypoint_NN_*); `index` is then the stop it is listed under.
+type Job = { index: number | RouteClip; kind: RegenKind | "video" | "walk"; leg?: number; run: () => Promise<void> };
 
 // One queue for the whole app: the sidecar runs one stage at a time (a new call kills the running one), so
 // every "make again" from the stop editor or the timeline waits its turn here.
 let current: Job | null = null;
 const pending: Job[] = [];
 const listeners = new Set<() => void>();
-type JobInfo = Pick<Job, "index" | "kind">;
+export type JobInfo = Pick<Job, "index" | "kind" | "leg">;
 let snapshot = { busy: null as JobInfo | null, waiting: [] as JobInfo[] };
 const notify = () => {
   snapshot = {
-    busy: current && { index: current.index, kind: current.kind },
-    waiting: pending.map(({ index, kind }) => ({ index, kind })),
+    busy: current && { index: current.index, kind: current.kind, leg: current.leg },
+    waiting: pending.map(({ index, kind, leg }) => ({ index, kind, leg })),
   };
   listeners.forEach((l) => l());
 };
@@ -36,7 +37,7 @@ async function drain() {
 
 /** Adds a job unless the same one is already running or waiting; returns whether it has to wait. */
 export function enqueue(job: Job): boolean | null {
-  const same = (j: Job | null) => !!j && j.index === job.index && j.kind === job.kind;
+  const same = (j: Job | null) => !!j && j.index === job.index && j.kind === job.kind && j.leg === job.leg;
   if (same(current) || pending.some(same)) return null;
   const waits = !!current || pending.length > 0;
   pending.push(job);
@@ -93,8 +94,8 @@ export function useStopRegen() {
     queue(index, kind, () => runStop(dir, index, kind, stop, pieces));
   };
 
-  const queue = (index: number | RouteClip, kind: RegenKind | "video", run: () => Promise<void>) => {
-    const waits = enqueue({ index, kind, run });
+  const queue = (index: number | RouteClip, kind: Job["kind"], run: () => Promise<void>, leg?: number) => {
+    const waits = enqueue({ index, kind, leg, run });
     if (waits) showToast(t`Added to the queue. It starts when the one before it is done.`, "info");
   };
 
@@ -150,5 +151,29 @@ export function useStopRegen() {
     }
   };
 
-  return { busy, waiting, regenerate, regenerateClip, stopInfo };
+  // A walking clip (02_waypoint_NN_*): `stop` is the stop it is listed under in the queue.
+  const regenerateLeg = (leg: number, stop: number) => {
+    const dir = metadata.directory_path;
+    if (!dir || isRendering) return;
+    queue(stop, "walk", async () => {
+      showToast(t`Making the walking clip again. This can take a few minutes.`, "info");
+      try {
+        await saveProject();
+        await runRegen(`${dir}/job_config.json`, legModes(leg));
+        refreshMedia();
+        const next = await refreshLeg(liveTimeline.current, leg, {
+          probe: async (rel, mediaKind) => probeDuration(convertFileSrc(await toAbsoluteProjectPath(rel, dir)), mediaKind, 0),
+          readText: async (rel) => readTextFile(await toAbsoluteProjectPath(rel, dir)),
+        });
+        if (next) setTimeline(next);
+        showToast(t`The walking clip is ready.`, "success");
+      } catch (err: any) {
+        const message = String(err?.message ?? err);
+        if (/process was cancelled/i.test(message)) showToast(t`Stopped before it finished.`, "info");
+        else showToast(t`Could not make that again: ${message}`, "error");
+      }
+    }, leg);
+  };
+
+  return { busy, waiting, regenerate, regenerateClip, regenerateLeg, stopInfo };
 }

@@ -10,7 +10,7 @@ import { Copy, FileText, Film, LinkIcon, Maximize, Mic, Music, Plus, RotateCcw, 
 import { useStopRegen } from "../../hooks/useStopRegen";
 import { RegenQueueCard } from "./RegenQueueCard";
 import { VoicePiecesDialog } from "./VoicePiecesDialog";
-import { type RegenKind, narrationOf, onlyNarration, routeClipOf, stopIndexOf } from "../../services/stopRegen";
+import { type RegenKind, legOf, narrationOf, onlyNarration, routeClipOf, stopIndexOf } from "../../services/stopRegen";
 import { Tip } from "../../components/ui/Tip";
 import { openContextMenu, separator } from "../../components/ui/menuItems";
 import { probeDuration, toAbsoluteProjectPath, toRelativeProjectPath } from "../../services/fileSystem";
@@ -53,9 +53,9 @@ const toolButton =
 export function EditorView() {
   const { timeline, setTimeline, metadata, autoLoadTimeline, waypoints } = useWorkspace();
   const { showToast, isBackgroundBusy, isRendering } = useUI();
-  const { busy: regenBusy, waiting: regenWaiting, regenerate, regenerateClip, stopInfo } = useStopRegen();
+  const { busy: regenBusy, waiting: regenWaiting, regenerate, regenerateClip, regenerateLeg, stopInfo } = useStopRegen();
   const regenLabel = ({ index, kind }: { index: number | "intro" | "overview"; kind: string }) => {
-    const what = { voice: t`Voice`, subtitles: t`Subtitles`, photo: t`Photo clip`, video: t`Video` }[kind] ?? kind;
+    const what = { voice: t`Voice`, subtitles: t`Subtitles`, photo: t`Photo clip`, video: t`Video`, walk: t`Walking clip` }[kind] ?? kind;
     const where = typeof index === "number" ? waypoints[index]?.name ?? "" : index === "intro" ? t`Intro` : t`Overview`;
     return `${where} · ${what}`;
   };
@@ -318,7 +318,10 @@ export function EditorView() {
     const stop = info && onlyNarration(info, narration);
     const remake = (kind: RegenKind) => () => void regenerate(stopIndex!, kind, narration);
     const clip = routeClipOf(seg);
+    const leg = legOf(seg);
+    const remakeLeg = () => regenerateLeg(leg!, stopIndex ?? leg! - 1);
     openContextMenu(e, [
+      leg !== null && { label: t`Make the walking clip again`, icon: Film, disabled: isRendering || !dir, onSelect: remakeLeg },
       !!clip && {
         label: clip === "intro" ? t`Make the intro again` : t`Make the overview again`,
         icon: RotateCcw,
@@ -351,9 +354,8 @@ export function EditorView() {
           {
             label: t`Choose sentences to voice again...`,
             icon: FileText,
-            // One narration file per clip; English only (Japanese stop narration is voiced whole, audio_step._english_only).
-            disabled: !narration || !seg.audio || (!stop.hasArrivalVoice && !stop.hasAttractionVoice)
-              || timeline.subtitles.some((c) => c.segmentId === seg.id && /[぀-ヿ㐀-鿿]/.test(c.text)),
+            // One narration file per clip.
+            disabled: !narration || !seg.audio || (!stop.hasArrivalVoice && !stop.hasAttractionVoice),
             onSelect: () =>
               setPiecesFor({
                 file: stem(seg.audio!),
@@ -369,6 +371,13 @@ export function EditorView() {
             disabled: (!stop.hasArrivalVoice && !stop.hasAttractionVoice) || !stop.hasPhotos,
             onSelect: () => (remake("voice")(), remake("photo")()),
           },
+          // Voice first: the walk follows the voice's length.
+          ...(leg === null ? [] : [{
+            label: t`Voice and walking clip`,
+            icon: RotateCcw,
+            disabled: !stop.hasArrivalVoice && !stop.hasAttractionVoice,
+            onSelect: () => (remake("voice")(), remakeLeg()),
+          }]),
         ],
       },
       !!stop && separator,
@@ -519,7 +528,7 @@ export function EditorView() {
           onTextMenu={textMenu}
           onLaneMenu={laneMenu}
           onAddText={addTextAt}
-          busyStop={regenBusy?.index ?? null}
+          busyJob={regenBusy}
         />
       </div>
 

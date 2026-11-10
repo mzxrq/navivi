@@ -334,14 +334,16 @@ MODE_LINE_COLORS: Dict[str, Tuple[int, int, int]] = {
 }
 
 # --- End-of-video "zoom to start point" highlight ---------------------------
+# How long the summary map holds before the ending zoom (the photo after it takes the rest of the voice).
+ENDING_SUMMARY_HOLD_SECONDS = 1.0
 # How long the ending's close-up is held/zoomed before the photo (also paces the GL zoom).
-ENDING_HIGHLIGHT_WAIT_SECONDS = 0.5
+ENDING_HIGHLIGHT_WAIT_SECONDS = 0.35
 # How long the ending holds the start point's photo card before the video ends.
 ENDING_HIGHLIGHT_PIP_HOLD_SECONDS = 1
 # On the GL ending the card pops in once the zoom has settled, within that hold.
 ENDING_HIGHLIGHT_POP_SECONDS = 0.3
 # Push-in on the wide map before the cut to the close-up: duration and scale.
-BIG_MAP_ZOOM_LEAD_SECONDS = 0.5
+BIG_MAP_ZOOM_LEAD_SECONDS = 0.3
 BIG_MAP_ZOOM_TARGET = 2.6
 # GL ending (settings.enable_gl_ending_zoom): one continuous re-rendered deck.gl zoom from the wide map in.
 # Maximum zoom-in in log2 steps (7 = street names legible); choose_route_focus_view backs off from it when
@@ -439,6 +441,10 @@ RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS = 1.0
 # A leg's photo growing from its card to fullscreen, and shrinking back (arrival photos and stop-bys).
 FULLSCREEN_GROW_SECONDS = 0.4
 FULLSCREEN_SHRINK_SECONDS = 0.25
+# A leg after a stop with no narration: the camera glides from the last leg's view into this one's in this long.
+LEG_CONTINUE_GLIDE_SECONDS = 0.5
+# A leg's camera zooming from the wide view into its street-level framing at the start, and back out at the end.
+LEG_ZOOM_SECONDS = 0.6
 # A leg holds on the arrived map this long before the arrival photo pops in.
 RESIDENTIAL_ARRIVAL_FREEZE_SECONDS = 1.0
 # [NOTE] [Transition] Fullscreen photo transition plays as an ordered sequence: confirm (pin selected) -> scale (zoom into photo) -> blur -> fade_out; hold_ratio_of_freeze/min_hold_seconds/min_small_hold_seconds bound how long the fullscreen photo is held relative to its freeze duration before the next stage starts.
@@ -1269,7 +1275,7 @@ OUTRO_ROUTE_FROM_FONT_SIZE = 15
 ATTRACTION_MIN_PHOTO_SECONDS = 1.5
 # Street view waypoints (job_config street_views) as pop-up cards on the leg that passes within this many metres;
 # a {view} cue's card stays at least / at most this long (street_photos.view_cue_spans).
-STREET_VIEW_MAX_OFF_ROUTE_M = 80.0
+STREET_VIEW_MAX_OFF_ROUTE_M = 200.0
 STREET_VIEW_MIN_SECONDS = 1.2
 STREET_VIEW_MAX_SECONDS = 8.0
 # An automatic turn photo this close to a street view the user placed is left out (that corner has its photo).

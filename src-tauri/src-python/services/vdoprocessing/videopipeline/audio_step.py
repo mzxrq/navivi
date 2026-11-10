@@ -439,7 +439,7 @@ async def generate_attraction_audio_for_waypoint(
             "Step 2: [%d] Generating attraction narration for: '%s' (%s)", idx + 1, label,
             "a new take" if retake else _remake_reason(existing_path, same_text, client, force),
         )
-        audio_path = await _speak(client, tts_script, audio_filename, _english_only(project_dir, script), retake, redo_pieces)
+        audio_path = await _speak(client, tts_script, audio_filename, project_dir, retake, redo_pieces)
         try:
             _spoken_text_path(audio_path).write_text(tts_script, encoding="utf-8")
         except OSError:
@@ -531,13 +531,6 @@ def pieces_dir(project_dir, audio_filename: str) -> Path:
     from services.projectfiles import meta_dir
 
     return meta_dir(project_dir) / "voice_pieces" / Path(audio_filename).stem
-
-
-def _english_only(project_dir, script: str):
-    """Stop narration keeps its sentences only in English (the only language whose words come out unreliably)."""
-    from services.localization.localization import is_japanese
-
-    return None if is_japanese(script) else project_dir
 
 
 async def _speak(
@@ -694,7 +687,7 @@ async def generate_waypoint_audio(
             "Step 2: [%d] Generating audio for: '%s' (%s)", idx + 1, label,
             "a new take" if retake else _remake_reason(existing_path, same_text, client, force),
         )
-        audio_path = await _speak(client, tts_script, audio_filename, _english_only(project_dir, script), retake, redo_pieces)
+        audio_path = await _speak(client, tts_script, audio_filename, project_dir, retake, redo_pieces)
         try:
             _spoken_text_path(audio_path).write_text(tts_script, encoding="utf-8")
         except OSError:

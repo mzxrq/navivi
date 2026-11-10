@@ -50,7 +50,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 
 # Bump when the overview's rendering code changes what it draws, so
 # checkpointed overviews made by older code are re-rendered.
-OVERVIEW_RENDER_VERSION = 21  # v21: walk/map frame the route below a top band; v20: top band 150 px; v19: walk cards keep below the top banner band; v18: closed places get their own banner, no stop when passing one, ending zoom pins numbered as the overview; v16: walk/map: stop-bys and closed places pop up as passed; v15: cards keep off closed places' pins and names; v14: quicker ending zoom (1.0 s); v13: a walk with only {start}/{end} fits between them, closed places come in with the summary without a {closed} cue, "map" style; v12: the final stop sits on the route's last point (E pin, 3D ending zoom); v11: course: the headline names the stretch being traced ("A → B"); v10: intro cards fade out, static ending zoom aims at the stop; v9: course: stop-bys take no number, travel mode pinned to the stops; v8: course: connected stop-bys pop up with the others at {extras}, stops matched in route order; v7: course walker waits at {go} stops when named, minimum pace, no pins for return stops; v6: course headline docked top left; v5: pins on their cue, cue window, faster last stretch; v4: bottom caption band in the framing, cards clear of top/bottom bands; v3: connected stop-bys stop; ending photo goes fullscreen after the voice
+OVERVIEW_RENDER_VERSION = 23  # v23: summary held 1 s before the ending zoom; v22: quicker ending zoom (0.65 s); v21: walk/map frame the route below a top band; v20: top band 150 px; v19: walk cards keep below the top banner band; v18: closed places get their own banner, no stop when passing one, ending zoom pins numbered as the overview; v16: walk/map: stop-bys and closed places pop up as passed; v15: cards keep off closed places' pins and names; v14: quicker ending zoom (1.0 s); v13: a walk with only {start}/{end} fits between them, closed places come in with the summary without a {closed} cue, "map" style; v12: the final stop sits on the route's last point (E pin, 3D ending zoom); v11: course: the headline names the stretch being traced ("A → B"); v10: intro cards fade out, static ending zoom aims at the stop; v9: course: stop-bys take no number, travel mode pinned to the stops; v8: course: connected stop-bys pop up with the others at {extras}, stops matched in route order; v7: course walker waits at {go} stops when named, minimum pace, no pins for return stops; v6: course headline docked top left; v5: pins on their cue, cue window, faster last stretch; v4: bottom caption band in the framing, cards clear of top/bottom bands; v3: connected stop-bys stop; ending photo goes fullscreen after the voice
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -1119,7 +1119,11 @@ class _OverviewRenderMixin:
         # with the voice (see overview_timing.fit_ending).
         end_pause_sec = float(self.config.get("pause", 2.0))
         audio_seconds = float(self.config.get("overview_audio_seconds") or 0.0)
-        if audio_seconds and audio_cues:
+        zoom_follows = self._ending_zoom_follows(stop_popup)
+        if zoom_follows:
+            # The photo after the zoom stays up for the rest of the voice, so the summary only holds briefly.
+            outro_hold_sec = tuning.ENDING_SUMMARY_HOLD_SECONDS
+        elif audio_seconds and audio_cues:
             highlight_on = bool(stop_popup and self.config.get("enable_ending_highlight", True))
             featured = start_popup or stop_popup
             # Only the pip hold is timed to the voice: the fullscreen
@@ -1139,10 +1143,9 @@ class _OverviewRenderMixin:
         # Hold the summary until "…キロの旅でした" ({distance}) is spoken, then
         # zoom; the highlight's own hold absorbs any voice left after that.
         distance_cue = audio_cues.get("distance") if audio_cues else None
-        if summary_card is not None and distance_cue is not None:
+        if summary_card is not None and distance_cue is not None and not zoom_follows:
             until_distance = distance_cue - video.frames_written / fps
-            zoom_follows = bool(stop_popup and self.config.get("enable_ending_highlight", True))
-            if until_distance > (0 if zoom_follows else outro_hold_sec):
+            if until_distance > outro_hold_sec:
                 logger.info(
                     "Summary hold %.1fs -> %.1fs to reach the {distance} cue at %.1fs.",
                     outro_hold_sec, until_distance, distance_cue,
@@ -1150,9 +1153,10 @@ class _OverviewRenderMixin:
                 outro_hold_sec = until_distance
         # The closed places' red × pins (and names) come in at {closed}, over the held summary frame.
         closed_cue = audio_cues.get("closed") if audio_cues and getattr(self, "_closed_popups", None) else None
-        if closed_cue is None and getattr(self, "_closed_popups", None):
-            closed_cue = video.frames_written / fps  # no {closed} in the script: they come in with the summary
-        if closed_cue is not None:
+        if getattr(self, "_closed_popups", None) and (closed_cue is None or zoom_follows):
+            # No {closed} in the script, or the zoom comes next: they come in with the summary.
+            closed_cue = video.frames_written / fps
+        if closed_cue is not None and not zoom_follows:
             outro_hold_sec = max(outro_hold_sec, closed_cue + tuning.CLOSED_HOLD_SECONDS - video.frames_written / fps)
         closed_frame = None
         for _ in range(int(outro_hold_sec * fps)):
@@ -1167,7 +1171,7 @@ class _OverviewRenderMixin:
                 video.write(self.last_frame)
 
         hard_ended = False
-        if stop_popup and self.config.get("enable_ending_highlight", True) and self.config.get("overview_style") != "course":
+        if zoom_follows:
             # However fit_ending above actually split the remaining voice
             # (it may have favored the summary hold over this), what's
             # STILL left once that hold has actually been written is what

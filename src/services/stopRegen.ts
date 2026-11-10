@@ -1,5 +1,5 @@
 import { runStage } from "./sidecar";
-import { cuesFromSegmentFile, parseTimedSrt, segmentLength } from "../features/editor/model";
+import { cuesFromSegmentFile, isUnlinked, parseTimedSrt, segmentLength } from "../features/editor/model";
 import type { Segment, TimelineData } from "../features/editor/model";
 
 export type RegenKind = "voice" | "subtitles" | "photo";
@@ -92,6 +92,27 @@ export function refreshRouteClip(timeline: TimelineData, clip: RouteClip, kind: 
   }, io);
 }
 
+/** The NN of a walking clip (02_waypoint_NN_*.mp4, its pieces included); null for other clips. */
+export function legOf(seg: Pick<Segment, "video">): number | null {
+  const m = /^02_waypoint_(\d+)_/.exec(base(seg.video));
+  return m ? Number(m[1]) : null;
+}
+
+// The other legs are only worked out (street views, the walk going on), so this one matches a full render.
+export const legModes = (leg: number) => [`leg ${leg} --force`];
+
+/** After `leg NN`: its clips get their new length and voice start (from <clip>.timing.json); their cues move with the voice. */
+export function refreshLeg(timeline: TimelineData, leg: number, io: RefreshIo) {
+  return refreshMedia(timeline, "photo", { audio: () => false, video: (name) => name.startsWith(`02_waypoint_${pad(leg)}_`), timing: true }, io);
+}
+
+/** Whether a timeline clip is being remade by this queue job: a walking clip job only its leg, a photo clip job only the attraction clip. */
+export function isBusyClip(seg: Pick<Segment, "video" | "audio">, job: { index: number | RouteClip; kind: string; leg?: number }): boolean {
+  if (job.kind === "walk") return legOf(seg) === job.leg;
+  if (job.kind === "photo" && legOf(seg) !== null) return false;
+  return regenTargetOf(seg) === job.index;
+}
+
 export type StopNarration = "arrival" | "attraction";
 
 /** Which of its stop's narrations a timeline clip plays: the walk's arrival one or the place clip's attraction one. */
@@ -122,7 +143,8 @@ export function refreshStopMedia(timeline: TimelineData, index: number, kind: Re
 }
 
 async function refreshMedia(
-  timeline: TimelineData, kind: RegenKind, match: { audio: (name: string) => boolean; video: (name: string) => boolean }, io: RefreshIo,
+  timeline: TimelineData, kind: RegenKind,
+  match: { audio: (name: string) => boolean; video: (name: string) => boolean; timing?: boolean }, io: RefreshIo,
 ): Promise<TimelineData | null> {
   let changed = false;
   const replaced = new Set<string>();
@@ -152,6 +174,21 @@ async function refreshMedia(
       if (length > 0 && Math.abs(length - seg.videoDuration) > 0.01) {
         const untrimmed = seg.trimOut >= seg.videoDuration - 0.01;
         next = { ...next, videoDuration: length, trimOut: untrimmed ? length : Math.min(seg.trimOut, length) };
+      }
+      if (match.timing && seg.audio && !isUnlinked(seg)) {
+        try {
+          const sidecar = seg.video.replace(/(_subtitled|_padded)*\.[^./\\]+$/, ".timing.json");
+          const offset = Math.max(0, Number(JSON.parse(await io.readText(sidecar)).audio_offset_seconds) || 0);
+          if (Math.abs(offset - seg.audioOffset) > 0.01) {
+            next = { ...next, audioOffset: offset };
+            if (seg.subtitleFile) {
+              replaced.add(seg.id);
+              cues.push(...cuesFromSegmentFile(next, parseTimedSrt(await io.readText(seg.subtitleFile))));
+            }
+          }
+        } catch {
+          // no readable timing.json: the voice start stays
+        }
       }
     }
     if (next !== seg) changed = true;
