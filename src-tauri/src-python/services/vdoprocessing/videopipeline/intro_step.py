@@ -101,12 +101,17 @@ def scene_cuts(cue_times: Optional[dict]) -> List[float]:
 
 def photo_cuts(cue_times: Optional[dict], waypoints: list) -> List[tuple]:
     """[(intro seconds, photo path)] for the opening's {photo:X} cues, in order: X is a stop's name (or part of
-    it), its first photo is used. An X matching no stop with a photo is skipped (logged)."""
+    it), its first photo is used; {photo:X#3} uses its 3rd (the first when it has fewer). An X matching no stop
+    with a photo is skipped (logged)."""
     cuts = []
     for key, seconds in sorted((cue_times or {}).items(), key=lambda kv: kv[1]):
         if not str(key).startswith("photo") or ":" not in str(key):
             continue
         name = str(key).split(":", 1)[1].strip()
+        nth = 1
+        head, hash_, number = name.rpartition("#")
+        if hash_ and number.strip().isdigit():  # {photo:X#3}: X's 3rd photo
+            name, nth = head.strip(), max(1, int(number))
         photo = None
         for exact in (True, False):  # the stop called X, else the first whose name contains X
             for wp in waypoints or []:
@@ -114,7 +119,11 @@ def photo_cuts(cue_times: Optional[dict], waypoints: list) -> List[tuple]:
                 images = wp.get("popup_image") if isinstance(wp, dict) else None
                 first = (images[0] if images else None) if isinstance(images, list) else images  # the app saves [] for no photo
                 if name and label and (label == name if exact else name in label) and first:
-                    photo = first
+                    every = [p for p in (wp.get("images") or []) if p] if isinstance(wp.get("images"), list) else []
+                    photo = every[nth - 1] if nth > 1 and len(every) >= nth else first
+                    if nth > len(every) and nth > 1:
+                        logger.warning("Intro: {photo:%s#%d} - that stop has %d photo(s); its first is used.",
+                                       name, nth, len(every))
                     break
             if photo:
                 break

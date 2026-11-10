@@ -11,3 +11,11 @@ def test_a_stop_saved_without_photos_is_skipped_not_a_crash():
     ]
     cuts = photo_cuts({"photo1:Kada Station": 1.0, "photo2:Shrine": 2.0, "photo3:Pier": 3.0}, waypoints)
     assert [p for _, p in cuts] == ["a.jpg", "pier.jpg"]
+
+
+def test_photo_cue_can_pick_a_stops_nth_photo():
+    from services.vdoprocessing.videopipeline.intro_step import photo_cuts
+
+    wps = [{"label": "葛木水分神社", "popup_image": ["a.jpg"], "images": ["a.jpg", "b.jpg", "c.jpg"]}]
+    cuts = photo_cuts({"photo1:葛木水分神社#3": 1.0, "photo2:葛木水分神社": 2.0, "photo3:葛木水分神社#9": 3.0}, wps)
+    assert [p for _, p in cuts] == ["c.jpg", "a.jpg", "a.jpg"]  # #9: only 3 photos, the first instead
