@@ -4,6 +4,7 @@ import { readTextFile } from "@tauri-apps/plugin-fs";
 import { t } from "@lingui/core/macro";
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
+import { refreshMedia } from "../features/editor/player";
 import { probeDuration, toAbsoluteProjectPath } from "../services/fileSystem";
 import { RegenKind, RouteClip, StopNarration, onlyNarration, refreshRouteClip, refreshStopMedia, regenModes, routeClipModes, runRegen } from "../services/stopRegen";
 
@@ -105,6 +106,7 @@ export function useStopRegen() {
     try {
       await saveProject();
       const { skipped } = await runRegen(`${dir}/job_config.json`, regenModes(kind, index, stop, pieces));
+      refreshMedia();
       const next = await refreshStopMedia(liveTimeline.current, index, kind, {
         probe: async (rel, mediaKind) => probeDuration(convertFileSrc(await toAbsoluteProjectPath(rel, dir)), mediaKind, 0),
         readText: async (rel) => readTextFile(await toAbsoluteProjectPath(rel, dir)),
@@ -133,6 +135,7 @@ export function useStopRegen() {
     try {
       await saveProject();
       const { skipped } = await runRegen(`${dir}/job_config.json`, routeClipModes(clip, kind, pieces));
+      refreshMedia();
       const next = await refreshRouteClip(liveTimeline.current, clip, kind, {
         probe: async (rel, mediaKind) => probeDuration(convertFileSrc(await toAbsoluteProjectPath(rel, dir)), mediaKind, 0),
         readText: async (rel) => readTextFile(await toAbsoluteProjectPath(rel, dir)),

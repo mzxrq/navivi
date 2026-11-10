@@ -46,6 +46,7 @@ import { db } from "../services/db";
 import { apiKeySettings, legacyApiKeys, patchedApiKeys, stripApiKeys } from "../utils/apiKeys";
 import { useAppApiKeys } from "./useAppApiKeys";
 import { emptyTimeline, exportOptionsFrom } from "../features/editor/model";
+import { refreshMedia } from "../features/editor/player";
 import { useHistory } from "./useHistory";
 import { useUI } from "./useUI";
 import { UnsavedChanges } from "../components/ui/UnsavedChanges";
@@ -670,6 +671,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const autoLoadTimeline = async (projectDir: string) => {
     const previous = timelineDirRef.current === projectDir ? timelineRef.current : undefined;
     timelineDirRef.current = projectDir;
+    refreshMedia();
     let loaded: TimelineData;
     try {
       loaded = await loadTimelineData(projectDir, previous);

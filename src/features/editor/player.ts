@@ -34,10 +34,16 @@ export const usePlaying = () => useSyncExternalStore(player.subscribe, () => pla
 
 const isAbsolute = (p: string) => /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith("/");
 
+// A re-made clip keeps its file name: this changes with every new render so the webview loads it again.
+let mediaVersion = Date.now();
+export function refreshMedia(): void {
+  mediaVersion = Date.now();
+}
+
 export function mediaUrl(projectDir: string, path: string | undefined): string {
   if (!path) return "";
   const abs = isAbsolute(path) ? path : `${projectDir}/${path}`;
-  return convertFileSrc(abs.replace(/\\/g, "/"));
+  return `${convertFileSrc(abs.replace(/\\/g, "/"))}?v=${mediaVersion}`;
 }
 
 export function formatTime(seconds: number, withTenths = true): string {
