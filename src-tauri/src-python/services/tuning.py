@@ -438,7 +438,7 @@ POPUP_FREEZE_SECONDS_MAX = 1.0
 RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS = 1.0
 # A leg's photo growing from its card to fullscreen, and shrinking back (arrival photos and stop-bys).
 FULLSCREEN_GROW_SECONDS = 0.4
-FULLSCREEN_SHRINK_SECONDS = 0.4
+FULLSCREEN_SHRINK_SECONDS = 0.25
 # A leg holds on the arrived map this long before the arrival photo pops in.
 RESIDENTIAL_ARRIVAL_FREEZE_SECONDS = 1.0
 # [NOTE] [Transition] Fullscreen photo transition plays as an ordered sequence: confirm (pin selected) -> scale (zoom into photo) -> blur -> fade_out; hold_ratio_of_freeze/min_hold_seconds/min_small_hold_seconds bound how long the fullscreen photo is held relative to its freeze duration before the next stage starts.

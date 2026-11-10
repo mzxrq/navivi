@@ -71,3 +71,19 @@ def test_a_placed_street_view_replaces_the_auto_turn_photo_near_it():
     far = {"lat": 34.45 + 200 / 110540, "lon": 135.73}  # 200 m away
     assert clear_of([near, far], [view], 50.0) == [far]
     assert clear_of([near, far], [], 50.0) == [near, far]
+
+
+def test_a_named_street_view_card_shows_its_name_an_automatic_one_does_not():
+    from services.mapfetcher.street_photos import card_title
+
+    assert card_title("高札場") == "高札場"
+    assert card_title("Street view 3") == "" and card_title("ストリートビュー 1") == "" and card_title(None) == ""
+
+
+def test_a_street_view_midway_along_a_long_straight_stretch_is_on_the_leg(tmp_path):
+    from services.mapfetcher.street_photos import street_view_landmarks
+
+    # Two track points 400 m apart; the view sits on the road halfway, 200 m from either point.
+    leg = [[35.0, 135.0], [35.0 + 400 / 110540, 135.0]]
+    sv = {"id": "v", "lat": 35.0 + 200 / 110540, "lng": 135.0, "image": "a.jpg"}
+    assert len(street_view_landmarks([sv], [leg], tmp_path)[0]) == 1

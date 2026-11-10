@@ -62,7 +62,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # v7: leg card numbers are the overview card's own per-leg numbers;
 # v8: stop-bys are framed too, and the summary card sits lower;
 # v9: the 3D leg HUD card sits as low as the 2D one).
-LEG_RENDER_VERSION = 15  # v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
+LEG_RENDER_VERSION = 16  # v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
 # Bumped when the heatmap legs' elevation profile card changes (only those legs re-render; v1: the card).
 LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).

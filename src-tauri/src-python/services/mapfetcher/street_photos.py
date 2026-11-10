@@ -174,6 +174,14 @@ def _mapillary(get, token, lat, lon, bearing, cache_dir: Path) -> Optional[str]:
         _download(get(img["thumb_1024_url"]).content, cache_dir / name, (img.get("creator") or {}).get("username"))
     return name
 
+def card_title(label: Optional[str]) -> str:
+    """A street view's name for its card; "" for the app's automatic "Street view 3" (en/ja; never shown)."""
+    import re
+
+    label = (label or "").strip()
+    return "" if re.fullmatch(r"(Street view|\u30b9\u30c8\u30ea\u30fc\u30c8\u30d3\u30e5\u30fc)\s*\d*", label) else label
+
+
 def clear_of(photos: List[Dict], views: List[Dict], meters: float) -> List[Dict]:
     """The automatic turn photos that are not within `meters` of a street view the user placed (that corner
     already has its photo)."""
@@ -186,6 +194,16 @@ def clear_of(photos: List[Dict], views: List[Dict], meters: float) -> List[Dict]
 def _meters(a_lat: float, a_lon: float, b_lat: float, b_lon: float) -> float:
     k = math.cos(math.radians((a_lat + b_lat) / 2))
     return math.hypot((a_lat - b_lat) * 110540.0, (a_lon - b_lon) * 111320.0 * k)
+
+
+def _meters_to_segment(lat: float, lon: float, a, b) -> float:
+    """Metres from (lat, lon) to the segment a-b (each (lat, lon)), on a local flat projection."""
+    k = math.cos(math.radians(lat))
+    ax, ay = (float(a[1]) - lon) * 111320.0 * k, (float(a[0]) - lat) * 110540.0
+    bx, by = (float(b[1]) - lon) * 111320.0 * k, (float(b[0]) - lat) * 110540.0
+    dx, dy = bx - ax, by - ay
+    t = 0.0 if dx == dy == 0 else max(0.0, min(1.0, -(ax * dx + ay * dy) / (dx * dx + dy * dy)))
+    return math.hypot(ax + t * dx, ay + t * dy)
 
 
 def street_view_landmarks(
@@ -204,8 +222,9 @@ def street_view_landmarks(
             continue
         best = None
         for leg, track in enumerate(legs_latlon):
-            for k, (lat, lon) in enumerate(track):
-                d = _meters(float(sv["lat"]), float(sv["lng"]), float(lat), float(lon))
+            for k in range(len(track)):
+                # To the line between this point and the next (a long straight stretch has its points far apart).
+                d = _meters_to_segment(float(sv["lat"]), float(sv["lng"]), track[k], track[min(k + 1, len(track) - 1)])
                 if best is None or d < best[0]:
                     best = (d, leg, k)
         if best is None or best[0] > tuning.STREET_VIEW_MAX_OFF_ROUTE_M:
@@ -216,6 +235,7 @@ def street_view_landmarks(
         out[best[1]].append({
             "lat": float(sv["lat"]), "lon": float(sv["lng"]), "passing": True, "street_view": True, "_at": best[2],
             "popup_image": str(path if path.is_absolute() else (Path(project_dir) / path).resolve()),
+            **({"label": card_title(sv.get("label"))} if card_title(sv.get("label")) else {}),
         })
     for leg, cards in enumerate(out):
         cards.sort(key=lambda c: c.pop("_at"))

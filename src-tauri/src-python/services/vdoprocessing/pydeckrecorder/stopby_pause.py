@@ -133,7 +133,24 @@ async def _play_stopby_photo_pause(
     card_box = (card_left, card_top, card_w, card_h)
 
     await page.evaluate(
-        """([url, left, top, w, h, ax, ay, mx, my]) => new Promise((resolve) => {
+        """([url, left, top, w, h, ax, ay, mx, my, title]) => new Promise((resolve) => {
+            if (title) {
+                // The place's name on a dark strip along the photo's bottom, as on the overview's cards.
+                const cap = document.createElement('div');
+                cap.id = 'stopby-caption';
+                cap.textContent = title;
+                const ch = Math.round(h * 0.2);
+                Object.assign(cap.style, {
+                    position: 'fixed', zIndex: '9999', left: left + 'px', top: (top + h - ch) + 'px',
+                    width: w + 'px', height: ch + 'px', lineHeight: ch + 'px', opacity: '0',
+                    background: 'rgba(24,26,32,0.86)', color: 'white', textAlign: 'center',
+                    fontWeight: '700', fontSize: Math.round(ch * 0.5) + 'px',
+                    fontFamily: '"Noto Sans JP", sans-serif', borderRadius: '0 0 15px 15px',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', padding: '0 12px',
+                    boxSizing: 'border-box',
+                });
+                document.body.appendChild(cap);
+            }
             const img = document.createElement('img');
             img.id = 'stopby-preview';
             img.src = url;
@@ -165,7 +182,8 @@ async def _play_stopby_photo_pause(
             else { img.onload = resolve; img.onerror = resolve; }
             setTimeout(resolve, 2000);
         })""",
-        [img_url, card_box[0], card_box[1], card_box[2], card_box[3], anchor_x, anchor_y, marker_x, marker_y],
+        [img_url, card_box[0], card_box[1], card_box[2], card_box[3], anchor_x, anchor_y, marker_x, marker_y,
+         str(stopby.get("label") or "") if pip_only and stopby.get("street_view") else ""],
     )
     await _wait_for_paint(page)
 
@@ -195,6 +213,8 @@ async def _play_stopby_photo_pause(
                 """([a]) => {
                     const img = document.getElementById('stopby-preview');
                     if (img) img.style.opacity = a;
+                    const cap = document.getElementById('stopby-caption');
+                    if (cap) cap.style.opacity = a;
                     const line = document.getElementById('stopby-leader-line');
                     if (line) line.setAttribute('opacity', a);
                 }""",
@@ -211,6 +231,7 @@ async def _play_stopby_photo_pause(
             """() => {
                 const svg = document.getElementById('stopby-leader'); if (svg) svg.remove();
                 const img = document.getElementById('stopby-preview'); if (img) img.remove();
+                const cap = document.getElementById('stopby-caption'); if (cap) cap.remove();
             }"""
         )
         if not stopby.get("passing"):  # a street photo has no narration piece of its own
