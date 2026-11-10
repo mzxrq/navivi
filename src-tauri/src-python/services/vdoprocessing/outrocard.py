@@ -1282,17 +1282,14 @@ def _write_scrapbook_clip(
     """Polaroids of the stops (S, 1, 2 … E) drop one by one onto paper, then a round stamp with the title,
     distance and travel time lands in the bottom-right cell; then the logo end card, as after the scroll."""
     width, height = size
-    route = [wp for wp in waypoints if not wp.get("isStopBy") or wp.get("connectToRoute")]
-    stops = [
-        ("S" if i == 0 else "E" if i == len(route) - 1 else str(i), wp)
-        for i, wp in enumerate(route) if _first_image(wp)
-    ][: tuning.OUTRO_MAX_CARDS]
+    stops = [(badge, wp) for badge, wp in _route_badges(waypoints) if _first_image(wp)][: tuning.OUTRO_MAX_CARDS]
     # The title and subtitle across the top: a text-track item the editor can restyle (outro_step), or burned
     # in (burn_text) when the caller wants them in the video. Either way the cards keep below their band.
     k = height / 1080
+    sizes = [(heading or {}).get(f"{w}_size") or d for w, d in zip(("title", "subtitle"), SCRAPBOOK_HEADING_SIZES)]
     head = [(t, f) for t, f in (
-        ((heading or {}).get("title") or "", _load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, int(SCRAPBOOK_HEADING_SIZES[0] * k))),
-        ((heading or {}).get("subtitle") or "", _load_font(_GraphicsEngineBase.FONT_CANDIDATES_REGULAR, int(SCRAPBOOK_HEADING_SIZES[1] * k))),
+        ((heading or {}).get("title") or "", _load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, int(sizes[0] * k))),
+        ((heading or {}).get("subtitle") or "", _load_font(_GraphicsEngineBase.FONT_CANDIDATES_REGULAR, int(sizes[1] * k))),
     ) if t.strip()]
     top = (sum(f.size * 1.3 for _, f in head) + (SCRAPBOOK_HEADING_MARGIN + 16) * k) if head else 0.0
     if not (heading or {}).get("burn_text", True):
@@ -1366,9 +1363,19 @@ def _write_scrapbook_clip(
 
 
 def _route_badges(waypoints: List[Dict[str, Any]]) -> List[Tuple[str, Dict[str, Any]]]:
-    """The route's stops (stop-bys only when connected) as (S / 1 / 2 … / E, waypoint)."""
+    """The route's stops (stop-bys only when connected) as (S / 1 / 2 … / E, waypoint), numbered as the overview
+    pins are (route_inputs.stop_is_numbered): a stop-by shows "・", a closed place "×"."""
+    from services.vdoprocessing.route_inputs import stop_is_numbered
+
     route = [wp for wp in waypoints if not wp.get("isStopBy") or wp.get("connectToRoute")]
-    return [("S" if i == 0 else "E" if i == len(route) - 1 else str(i), wp) for i, wp in enumerate(route)]
+    out, order = [], 0
+    for i, wp in enumerate(route):
+        if 0 < i < len(route) - 1 and stop_is_numbered(wp):
+            order += 1
+        badge = ("S" if i == 0 else "E" if i == len(route) - 1 else "×" if wp.get("inaccessible")
+                 else "・" if wp.get("isStopBy") or wp.get("skipAssetGeneration") else str(order))
+        out.append((badge, wp))
+    return out
 
 
 def _leg_detail_card(

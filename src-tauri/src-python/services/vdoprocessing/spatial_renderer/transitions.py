@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
+from services.vdoprocessing.route_inputs import stop_is_numbered
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
@@ -300,9 +301,10 @@ class _TransitionMixin:
         if holds_ends:
             total_points = total_wp
         order = 0
+        course = (self.config or {}).get("overview_style") == "course"
         for pos, jw in enumerate(job_waypoints):
             is_stopby = bool(jw.get("isStopBy", False) or jw.get("skipAssetGeneration"))
-            if not is_stopby and not (holds_ends and pos == 0):
+            if stop_is_numbered(jw, course) and not (holds_ends and pos == 0):
                 order += 1
             # A loop route's job_config waypoints list ends with a
             # synthetic "(Return)" entry at the SAME coordinates as the

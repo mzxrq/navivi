@@ -261,7 +261,8 @@ def reuse_render_manifest(manifest_path, checkpoint_key, checkpoint_parts, proje
         # The old file is NOT deleted: the new render is written aside and
         # only replaces it once it is complete, so an interrupted run
         # never leaves the project without an overview.
-        overview_stale = True
+        # Only the legs' version or voices: the overview is still what it was.
+        overview_stale = any(k not in ("route.leg_voice", "route.leg_version") for k in route_changed)
     elif cached_paths:
         missing = [p for p in cached_paths if not output_is_valid(p)]
         logger.info(

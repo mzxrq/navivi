@@ -75,6 +75,17 @@ def photo_inputs_hash(obj) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
+def stop_is_numbered(waypoint: dict, course: bool = False) -> bool:
+    """Whether an overview pin takes the next number (overview.py's order): every stop, and a stop-by only when
+    the route runs through it and the walker pauses there (never in the course style); a stop skipped in video
+    export never."""
+    if waypoint.get("skipAssetGeneration"):
+        return False
+    if not waypoint.get("isStopBy"):
+        return True
+    return not course and bool(waypoint.get("connectToRoute")) and waypoint.get("pauseAtWaypoint") is not False
+
+
 def same_place(a: dict, b: dict) -> bool:
     """Two waypoints at the same real-world spot (a return stop and the stop it copies), within
     tuning.LOOP_ROUTE_MATCH_DEGREES (~30 m) - the one rule the legs and the overview both use."""

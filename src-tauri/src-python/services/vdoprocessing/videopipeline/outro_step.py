@@ -29,6 +29,24 @@ def _route_frame_size(video_dir: Path) -> Optional[Tuple[int, int]]:
     return Counter(sizes).most_common(1)[0][0] if sizes else None
 
 
+def _edited_heading_sizes(timeline_path: Path) -> dict:
+    """{"title_size", "subtitle_size"} of the outro text item as the timeline editor left it (the scrapbook keeps
+    that much room above its cards); {} when there is none."""
+    import json
+
+    try:
+        texts = json.loads(timeline_path.read_text(encoding="utf-8")).get("texts") or []
+    except (OSError, ValueError):
+        return {}
+    item = next((x for x in texts if isinstance(x, dict) and x.get("kind") == "outro"), None) or {}
+    out = {}
+    for line in ("title", "subtitle"):
+        size = ((item.get(line) or {}).get("style") or {}).get("font_size")
+        if isinstance(size, (int, float)) and not isinstance(size, bool) and size > 0:
+            out[f"{line}_size"] = float(size)
+    return out
+
+
 def _outro_heading(job_config: JobConfigManager) -> dict:
     """The intro's words with the outro's own look: text styles settings.outro_*_style (never the intro's;
     unset = the defaults), the box behind the title settings.outro_header_height (1080-line px) / outro_header_color."""
@@ -148,6 +166,7 @@ def render_outro_clip(project_config_path: str) -> Optional[str]:
     title = heading["title"]
     # The scroll's title is a text-track item (outro_text_item), so the timeline editor can change it.
     heading["burn_text"] = style not in ("scroll", "scrapbook")
+    heading.update(_edited_heading_sizes(config_path.parent / "timeline.json"))
 
     logger.info("Outro step: building %s outro clip for project '%s'.", style, project_name)
     outro_path = generate_outro_clip(
