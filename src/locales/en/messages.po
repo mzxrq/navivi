@@ -4068,6 +4068,10 @@ msgstr "Open the page this photo came from"
 #~ msgid "Open the photo's page on Wikimedia Commons"
 #~ msgstr "Open the photo's page on Wikimedia Commons"
 
+#: src/features/map/components/OverviewNarration.tsx:186
+msgid "Opening"
+msgstr "Opening"
+
 #: src/features/map/components/OverviewPanel.tsx:44
 msgid "Opening line"
 msgstr "Opening line"

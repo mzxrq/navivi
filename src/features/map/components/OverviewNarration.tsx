@@ -43,8 +43,8 @@ export function OverviewNarration() {
   const style = settings.overview_style ?? "walk"; // chosen in Settings > Video
   const course = style === "course";
   const intro = settings.overview_intro ?? "";
-  // Course: the opening sits in the Course introduction box, the rest below; the file keeps one script.
-  const { opening, body } = course ? splitOpening(text) : { opening: "", body: text };
+  // The opening (before {start}, voiced over the intro) sits in its own box, the rest below; the file keeps one script.
+  const { opening, body } = splitOpening(text);
   const autoIntro = hasText && isAuto && !intro.trim() && opening.trim().length > 0;
 
   const seconds = useMemo(() => (limits ? estimateSeconds(text, limits.chars_per_second) : 0), [text, limits]);
@@ -179,37 +179,36 @@ export function OverviewNarration() {
             />
           </div>
 
-          {course && (
-            <label className="block space-y-1">
-              <span className="flex items-baseline justify-between gap-2 text-[11px]">
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                  <Trans>Course introduction</Trans>
-                </span>
-                {autoIntro && <span className="text-zinc-400">{t`Written automatically`}</span>}
+          <label className="block space-y-1">
+            <span className="flex items-baseline justify-between gap-2 text-[11px]">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                {course ? <Trans>Course introduction</Trans> : <Trans>Opening</Trans>}
               </span>
-              <textarea
-                value={hasText ? opening : intro}
-                onChange={(e) => {
-                  updateSettings({ overview_intro: e.target.value });
-                  if (hasText) updateMetadata({ overview_narration: joinOpening(e.target.value, body) });
-                }}
-                rows={3}
-                placeholder={t`Leave blank and it's written from your stops.`}
-                className="w-full resize-y rounded-md border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900 px-2 py-1.5 text-[13px] leading-relaxed text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-navi"
-              />
-              <span className="block text-[11px] text-zinc-500">
-                <Trans>Spoken over the opening photos, before the map appears. Auto-write starts the script with it.</Trans>
-              </span>
-            </label>
-          )}
+              {autoIntro && <span className="text-zinc-400">{t`Written automatically`}</span>}
+            </span>
+            <textarea
+              value={hasText || !course ? opening : intro}
+              onChange={(e) => {
+                if (course) updateSettings({ overview_intro: e.target.value });
+                if (!course) setText(joinOpening(e.target.value, body));
+                else if (hasText) updateMetadata({ overview_narration: joinOpening(e.target.value, body) });
+              }}
+              rows={3}
+              placeholder={t`Leave blank and it's written from your stops.`}
+              className="w-full resize-y rounded-md border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-900 px-2 py-1.5 text-[13px] leading-relaxed text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-navi"
+            />
+            <span className="block text-[11px] text-zinc-500">
+              <Trans>Spoken over the opening photos, before the map appears. Auto-write starts the script with it.</Trans>
+            </span>
+          </label>
 
           <ScriptInput
             value={body}
-            onChange={(value) => setText(course ? joinOpening(opening, value) : value)}
+            onChange={(value) => setText(joinOpening(opening, value))}
             onGenerate={() => undefined}
             isGenerating={false}
             showLabel={false}
-            cues={course ? ["n", "go", "end"] : ["start", "n", "go", "end"]}
+            cues={["n", "go", "end"]}
           />
 
           {readout && (

@@ -4064,6 +4064,10 @@ msgstr "この写真の出典ページを開く"
 #~ msgid "Open the photo's page on Wikimedia Commons"
 #~ msgstr "Wikimedia Commons の写真のページを開く"
 
+#: src/features/map/components/OverviewNarration.tsx:186
+msgid "Opening"
+msgstr "オープニング"
+
 #: src/features/map/components/OverviewPanel.tsx:44
 msgid "Opening line"
 msgstr "書き出しの一文"

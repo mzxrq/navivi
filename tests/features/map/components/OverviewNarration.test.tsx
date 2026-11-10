@@ -89,13 +89,19 @@ describe("overview narration section", () => {
 
   it("marks a typed script as the user's own and keeps its cue buttons", async () => {
     await show();
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "手書き{1}" } });
-    fireEvent.blur(screen.getByRole("textbox"));
+    const [openingBox, routeBox] = screen.getAllByRole("textbox");
+    fireEvent.change(routeBox, { target: { value: "手書き{1}" } });
+    fireEvent.blur(routeBox);
     expect(workspace.updateMetadata).toHaveBeenCalledWith({
       overview_narration: "手書き{1}",
       overview_narration_is_auto: false,
       overview_narration_source_ids: undefined,
     });
+    // Every style has the opening box: what is typed there goes before {start}.
+    fireEvent.change(openingBox, { target: { value: "ようこそ。" } });
+    expect(workspace.updateMetadata).toHaveBeenLastCalledWith(
+      expect.objectContaining({ overview_narration: expect.stringMatching(/^ようこそ。\{start\}/), overview_narration_is_auto: false }),
+    );
     expect(screen.getByRole("button", { name: /overview stops at the next numbered stop/ }).textContent).toBe("{n}");
     expect(screen.getByRole("button", { name: /description of that stop ends/ }).textContent).toBe("{go}");
   });
