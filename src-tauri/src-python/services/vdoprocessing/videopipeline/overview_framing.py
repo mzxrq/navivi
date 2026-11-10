@@ -117,7 +117,9 @@ def overview_bounding_box(fetcher, route_df: pd.DataFrame, project_config: dict)
         )
     else:
         bbox = _reserve_overview_bands(
-            bbox, OVERVIEW_FRAME_SIZE, 0.0, OVERVIEW_FRAME_SIZE[1] * tuning.OVERVIEW_BOTTOM_BAND_FRACTION
+            bbox, OVERVIEW_FRAME_SIZE,
+            OVERVIEW_FRAME_SIZE[1] * tuning.OVERVIEW_TOP_BAND_FRACTION,
+            OVERVIEW_FRAME_SIZE[1] * tuning.OVERVIEW_BOTTOM_BAND_FRACTION,
         )
     return bbox
 

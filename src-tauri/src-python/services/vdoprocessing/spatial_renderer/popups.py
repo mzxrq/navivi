@@ -761,10 +761,12 @@ class _PopupMixin:
                 )
             return False
 
+        top = max(margin, tuning.OVERVIEW_TOP_CARD_CLEARANCE)  # below the "next stop" banner band
+
         def clamp(bx: float, by: float) -> Tuple[float, float]:
             return (
                 max(margin, min(bx, w - card_w - margin)),
-                max(margin, min(by, _card_bottom_limit(h, margin) - card_h)),
+                max(top, min(by, _card_bottom_limit(h, margin) - card_h)),
             )
 
         def leader_crosses_placed(

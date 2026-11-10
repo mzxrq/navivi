@@ -305,6 +305,8 @@ COURSE_TOP_BAND_FRACTION = 0.10
 COURSE_BOTTOM_BAND_FRACTION = 0.17
 # The "walk" overview keeps the same bottom band clear for its captions (no headline above).
 OVERVIEW_BOTTOM_BAND_FRACTION = 0.17
+# Walk / Route map overviews: the route also keeps clear of this top share (the "next stop" banner).
+OVERVIEW_TOP_BAND_FRACTION = 0.12
 # The stats card sits this much lower than the shared 20 px margin (its image has ~26 px of shadow).
 COURSE_STATS_DROP_PX = 30
 # Course legs: the walker slows (to 40% pace) over this long before each stop; arrival times stay.
@@ -335,9 +337,9 @@ MODE_LINE_COLORS: Dict[str, Tuple[int, int, int]] = {
 # How long the ending's close-up is held/zoomed before the photo (also paces the GL zoom).
 ENDING_HIGHLIGHT_WAIT_SECONDS = 0.5
 # How long the ending holds the start point's photo card before the video ends.
-ENDING_HIGHLIGHT_PIP_HOLD_SECONDS = 1.5
+ENDING_HIGHLIGHT_PIP_HOLD_SECONDS = 1
 # On the GL ending the card pops in once the zoom has settled, within that hold.
-ENDING_HIGHLIGHT_POP_SECONDS = 0.6
+ENDING_HIGHLIGHT_POP_SECONDS = 0.3
 # Push-in on the wide map before the cut to the close-up: duration and scale.
 BIG_MAP_ZOOM_LEAD_SECONDS = 0.5
 BIG_MAP_ZOOM_TARGET = 2.6
@@ -360,9 +362,9 @@ OVERVIEW_POPUP_TRIGGER_TOLERANCE_SECONDS = 0.2
 # Seconds from a stop at which the overview banner switches from "{label} へ" to "まもなく {label}".
 OVERVIEW_BANNER_NEAR_SECONDS = 3.0
 # Px kept free at the top of the overview for the "next stop" banner.
-OVERVIEW_TOP_CARD_CLEARANCE = 60
+OVERVIEW_TOP_CARD_CLEARANCE = 150
 # Share of the frame height kept free at the bottom for the burned-in captions (up to two lines).
-OVERVIEW_BOTTOM_CARD_CLEARANCE = 0.05
+OVERVIEW_BOTTOM_CARD_CLEARANCE = 0.1
 # Ending recap: every photo card fades in at once, over this long.
 RECAP_GROUP_FADE_SECONDS = 0.4
 # Recap leader-line/border colors, cycled around the ring so neighbouring cards differ (BGR, Tableau10-based,

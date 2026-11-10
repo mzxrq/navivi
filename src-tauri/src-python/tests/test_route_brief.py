@@ -297,7 +297,7 @@ class TestBudget:
         budget = plan_budget(project, build_brief(project, cache))
         assert budget["target"] == 60.0 and budget["fits"]
         assert abs(budget["estimated"] - 60.0) < 0.5
-        assert budget["closing"] > 7.0  # the ending can shrink only so far (its zoom is 1.0 s since 2026-11-09)
+        assert budget["closing"] > 6.0  # the ending can shrink only so far (its zoom and pip hold are tuning values)
 
     def test_the_ending_fits_the_closing_line(self):
         from services.vdoprocessing.spatial_renderer.overview_timing import fit_ending
