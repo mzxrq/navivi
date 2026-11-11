@@ -107,22 +107,22 @@ export function ScriptInput({
   };
 
   const extractPronunciation = (text: string): string => {
-    // Note: Half and full width parenthesis match
+    // Half and full width parentheses; 葛城(かつらぎ:LHHH) also gives the word's high/low pattern.
     const regex =
-      /([\u4E00-\u9FAF\u3400-\u4DBF]+)[(（]([\u3040-\u309F\u30A0-\u30FF]*)[)）]/g;
+      /([\u4E00-\u9FAF\u3400-\u4DBF]+)[(（]([\u3040-\u309F\u30A0-\u30FF]*)(?:[:：]([HLhl]+))?[)）]/g;
     let match;
     let hasDictUpdate = false;
     const newDict = [...(settings.pronunciation_dictionary || [])];
 
     while ((match = regex.exec(text)) !== null) {
       const kanji = match[1];
-      const kana = match[2];
+      const entry = { word: kanji, reading: match[2], ...(match[3] ? { pitch: match[3].toUpperCase() } : {}) };
 
-      const idx = newDict.findIndex((entry) => sameWord(entry.word, kanji));
+      const idx = newDict.findIndex((e) => sameWord(e.word, kanji));
       if (idx >= 0) {
-        newDict[idx] = { word: kanji, reading: kana };
+        newDict[idx] = entry;
       } else {
-        newDict.push({ word: kanji, reading: kana });
+        newDict.push(entry);
       }
       hasDictUpdate = true;
     }
@@ -131,7 +131,7 @@ export function ScriptInput({
       updateSettings({ pronunciation_dictionary: newDict });
       setIsDirty(true);
       return text.replace(
-        /([\u4E00-\u9FAF\u3400-\u4DBF]+)[(（][\u3040-\u309F\u30A0-\u30FF]*[)）]/g,
+        /([\u4E00-\u9FAF\u3400-\u4DBF]+)[(（][\u3040-\u309F\u30A0-\u30FF]*(?:[:：][HLhl]+)?[)）]/g,
         "$1",
       );
     }

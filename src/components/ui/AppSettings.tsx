@@ -731,6 +731,21 @@ export function AppSettings() {
                   </p>
                 )}
 
+                {inEditor && dictScope === "project" && (
+                  <Row
+                    title={t`Add place names automatically`}
+                    description={t`Scans the scripts for place names and adds their readings (marked auto). Turning it off removes the auto words.`}
+                  >
+                    <Switch
+                      checked={settings.auto_dictionary !== false}
+                      onChange={(v) =>
+                        updateProject(v ? { auto_dictionary: true } : { auto_dictionary: false, pronunciation_dictionary: dictionary.filter((e) => !e.auto) })
+                      }
+                      label={t`Add place names automatically`}
+                    />
+                  </Row>
+                )}
+
                 {inEditor && dictScope === "project" ? (
                   <PronunciationEditor
                     entries={dictionary}
@@ -757,10 +772,14 @@ export function AppSettings() {
   );
 }
 
+// Sounds (morae) in a kana reading: a small ゃ/ゅ/ょ joins the kana before it (pitch_accent.morae).
+const moraCount = (kana: string) => [...kana.replace(/\s/g, "")].filter((c) => !"ゃゅょぁぃぅぇぉゎャュョァィゥェォヮ".includes(c)).length;
+
 interface DictionaryEntry {
   word: string;
   reading: string;
   auto?: boolean;
+  pitch?: string; // one H/L per mora of the reading
 }
 
 function PronunciationEditor({
@@ -835,6 +854,9 @@ function PronunciationEditor({
               <span className="flex-1">
                 <Trans>Reading (Furigana)</Trans>
               </span>
+              <span className="w-20">
+                <Trans>High/low</Trans>
+              </span>
               <span className="w-16" />
             </div>
             <div className="divide-y divide-zinc-100 dark:divide-white/5">
@@ -854,7 +876,7 @@ function PronunciationEditor({
                     value={entry.word}
                     onChange={(e) => {
                       const next = [...entries];
-                      next[idx] = { word: e.target.value, reading: next[idx].reading };
+                      next[idx] = { word: e.target.value, reading: next[idx].reading, pitch: next[idx].pitch };
                       onChange(next);
                     }}
                     className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
@@ -865,10 +887,29 @@ function PronunciationEditor({
                     value={entry.reading}
                     onChange={(e) => {
                       const next = [...entries];
-                      next[idx] = { word: next[idx].word, reading: e.target.value };
+                      next[idx] = { word: next[idx].word, reading: e.target.value, pitch: next[idx].pitch };
                       onChange(next);
                     }}
                     className={`${inputClass} flex-1 border-transparent dark:border-transparent bg-transparent dark:bg-transparent hover:border-zinc-200 dark:hover:border-white/10`}
+                  />
+                  <input
+                    type="text"
+                    placeholder="LHHH"
+                    value={entry.pitch ?? ""}
+                    onChange={(e) => {
+                      const pitch = e.target.value.toUpperCase().replace(/[^HL]/g, "");
+                      onChange(entries.map((x, i) => (i === idx ? { word: x.word, reading: x.reading, ...(pitch ? { pitch } : {}) } : x)));
+                    }}
+                    title={
+                      entry.pitch && entry.pitch.length !== moraCount(entry.reading)
+                        ? t`The reading has ${moraCount(entry.reading)} sounds; give one H or L for each.`
+                        : t`High/low pattern, one H or L per sound of the reading (かつらぎ: LHHH). The voice is taken again until it matches.`
+                    }
+                    className={`${inputClass} w-20 font-mono bg-transparent dark:bg-transparent ${
+                      entry.pitch && entry.pitch.length !== moraCount(entry.reading)
+                        ? "border-red-400 dark:border-red-500/70 text-red-600 dark:text-red-400"
+                        : "border-transparent dark:border-transparent hover:border-zinc-200 dark:hover:border-white/10"
+                    }`}
                   />
                   {entry.auto && (
                     <button

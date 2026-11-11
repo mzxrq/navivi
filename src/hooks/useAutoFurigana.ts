@@ -18,6 +18,7 @@ export function useAutoFurigana() {
   const generating = waypoints.some((w) => w.generatingScriptType);
   const text = narrationText(waypoints, metadata?.overview_narration);
   const names = JSON.stringify(waypoints.map((w) => w.name));
+  const enabled = settings.auto_dictionary !== false;
 
   useEffect(() => {
     lastScanned.current = null;
@@ -25,7 +26,8 @@ export function useAutoFurigana() {
 
   useEffect(() => {
     const scan = names + text;
-    if (!project || generating || scan === lastScanned.current) return;
+    if (!enabled) lastScanned.current = null;  // scan again when it is turned back on
+    if (!enabled || !project || generating || scan === lastScanned.current) return;
     let stale = false;
     const timer = setTimeout(async () => {
       const reply = text
@@ -49,5 +51,5 @@ export function useAutoFurigana() {
       stale = true;
       clearTimeout(timer);
     };
-  }, [project, generating, text, names, updateSettings]);
+  }, [project, generating, text, names, enabled, updateSettings]);
 }
