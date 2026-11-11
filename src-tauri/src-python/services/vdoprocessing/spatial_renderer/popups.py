@@ -1580,6 +1580,10 @@ class _PopupMixin:
             boxes.append((box[0], box[1], box[0] + card_w, box[1] + card_h))
         return boxes
 
+    def _cards_stay(self) -> bool:
+        """Walk the route (settings.overview_cards_stay, on by default): each stop's card stays up once shown."""
+        return (self.config.get("overview_style") or "walk") == "walk" and bool(self.config.get("overview_cards_stay", True))
+
     def _composite_baked_popups(
         self,
         frame: np.ndarray,
@@ -1611,7 +1615,7 @@ class _PopupMixin:
         top of any pin. `active_popups` is optional only so callers that
         never have leader-lined cards (none currently) don't need to pass
         it; every real caller does."""
-        MAX_CONCURRENT_FLOW_POPUPS = tuning.MAX_CONCURRENT_FLOW_POPUPS
+        MAX_CONCURRENT_FLOW_POPUPS = len(baked_popups) if self._cards_stay() else tuning.MAX_CONCURRENT_FLOW_POPUPS
 
         flowing = [
             bp for bp in baked_popups if not bp["popup"]["data"].get("freeze_frame", False)
@@ -1626,6 +1630,10 @@ class _PopupMixin:
         flowing_visible = flowing[:MAX_CONCURRENT_FLOW_POPUPS]
         for bp in flowing[MAX_CONCURRENT_FLOW_POPUPS:]:
             bp["popup"].pop("beside_box", None)
+        for bp in flowing_visible:
+            if bp["popup"].get("stay_box"):
+                bp["popup"]["beside_box"] = bp["popup"]["stay_box"]  # its spot in the ending summary
+        flowing_visible = [bp for bp in flowing_visible if not bp["popup"].get("stay_box")]
         if flowing_visible:
             # Room for the biggest card drawn (a "map" overview's stop card is OVERVIEW_MAP_CARD_SCALE), not the
             # default size: a spot clear of the route for a small card was covered by the big one.

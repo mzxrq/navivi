@@ -25,6 +25,7 @@ _MIN_TRIGGER_GAP_FLOOR_SECONDS = 0.15  # floor effective_gap_frames shrinks to f
 _DEFAULT_FREEZE_SECONDS = 4.0
 # Longest the overview walker waits at a stop for the voice to reach its cue.
 _MAX_CUE_WAIT_SECONDS = 20.0
+_CARD_STAYS_SECONDS = 3600.0  # "until the end" for a card that stays (walk style)
 # A walk re-timed to meet its cue runs at most this much slower / faster than
 # planned (see _animate_overview_frames' _catch_up).
 _CATCH_UP_RANGE = (0.6, 2.5)  # matches overview_timing.MAX_WALK_SPEEDUP's raised cap
@@ -807,7 +808,7 @@ class _OverviewAnimationMixin:
             # can read "done" here.
             # The last waypoint's own card is kept: clearing it too wiped it
             # the frame after it triggered, so the final stop never showed one.
-            if triggered_popup is None and seq_ptr >= len(sequential_popups):
+            if triggered_popup is None and seq_ptr >= len(sequential_popups) and not self._cards_stay():
                 last_stop = sequential_popups[-1] if sequential_popups else None
                 baked_popups = [b for b in baked_popups if b["popup"] is last_stop]
             frame, baked_popups = self._composite_baked_popups(
@@ -961,6 +962,9 @@ class _OverviewAnimationMixin:
                     ) + wait["n"] / fps  # the card stays up while the walker waits
                     if map_stop:
                         display_seconds = wait["n"] / fps + self._POPUP_FADE_SECONDS  # closes as the walker leaves
+                    if self._cards_stay():
+                        # Walk the route: every stop's card stays up to the end (at its summary spot and size).
+                        display_seconds = _CARD_STAYS_SECONDS
                     # pending_popups here is whatever's LEFT after this one
                     # was just popped off the front — i.e. how many other
                     # already-triggered popups are still queued behind it,
@@ -1012,7 +1016,7 @@ class _OverviewAnimationMixin:
                     min_display_frames = max(
                         1, int(tuning.POPUP_MIN_DISPLAY_SECONDS * fps)
                     )
-                    for bp in baked_popups:
+                    for bp in ([] if self._cards_stay() else baked_popups):
                         if bp["popup"]["data"].get("freeze_frame", False):
                             continue
                         if bp["popup"].get("order", 0) >= new_order:

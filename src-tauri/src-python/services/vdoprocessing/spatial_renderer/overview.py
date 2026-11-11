@@ -50,7 +50,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 
 # Bump when the overview's rendering code changes what it draws, so
 # checkpointed overviews made by older code are re-rendered.
-OVERVIEW_RENDER_VERSION = 23  # v23: summary held 1 s before the ending zoom; v22: quicker ending zoom (0.65 s); v21: walk/map frame the route below a top band; v20: top band 150 px; v19: walk cards keep below the top banner band; v18: closed places get their own banner, no stop when passing one, ending zoom pins numbered as the overview; v16: walk/map: stop-bys and closed places pop up as passed; v15: cards keep off closed places' pins and names; v14: quicker ending zoom (1.0 s); v13: a walk with only {start}/{end} fits between them, closed places come in with the summary without a {closed} cue, "map" style; v12: the final stop sits on the route's last point (E pin, 3D ending zoom); v11: course: the headline names the stretch being traced ("A → B"); v10: intro cards fade out, static ending zoom aims at the stop; v9: course: stop-bys take no number, travel mode pinned to the stops; v8: course: connected stop-bys pop up with the others at {extras}, stops matched in route order; v7: course walker waits at {go} stops when named, minimum pace, no pins for return stops; v6: course headline docked top left; v5: pins on their cue, cue window, faster last stretch; v4: bottom caption band in the framing, cards clear of top/bottom bands; v3: connected stop-bys stop; ending photo goes fullscreen after the voice
+OVERVIEW_RENDER_VERSION = 25  # v25: cards that stay go straight to their ending-summary spot; v24: walk: every stop's card stays up once shown (overview_cards_stay); v23: summary held 1 s before the ending zoom; v22: quicker ending zoom (0.65 s); v21: walk/map frame the route below a top band; v20: top band 150 px; v19: walk cards keep below the top banner band; v18: closed places get their own banner, no stop when passing one, ending zoom pins numbered as the overview; v16: walk/map: stop-bys and closed places pop up as passed; v15: cards keep off closed places' pins and names; v14: quicker ending zoom (1.0 s); v13: a walk with only {start}/{end} fits between them, closed places come in with the summary without a {closed} cue, "map" style; v12: the final stop sits on the route's last point (E pin, 3D ending zoom); v11: course: the headline names the stretch being traced ("A → B"); v10: intro cards fade out, static ending zoom aims at the stop; v9: course: stop-bys take no number, travel mode pinned to the stops; v8: course: connected stop-bys pop up with the others at {extras}, stops matched in route order; v7: course walker waits at {go} stops when named, minimum pace, no pins for return stops; v6: course headline docked top left; v5: pins on their cue, cue window, faster last stretch; v4: bottom caption band in the framing, cards clear of top/bottom bands; v3: connected stop-bys stop; ending photo goes fullscreen after the voice
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -1068,15 +1068,6 @@ class _OverviewRenderMixin:
                     ap["depart_frame"] = int(round(go_pre * fps))
             if ap.get("no_pause") and not ap.get("stopby_group"):
                 ap["depart_frame"] = None  # "Pause at Location" off: no hold until {go}
-        if preview_recap_only:
-            pre_popup_frame = clean_frame
-        else:
-            pre_popup_frame = self._animate_overview_frames(
-                video, current_bg, cap, is_video, w, h, fps,
-                smooth_path, mode_breakpoints, cum_smooth_dist, total_smooth_dist,
-                active_popups, stop_popup, points, route_avoid_points, route_obstacle_arr,
-            )
-
         # Built once, up front, so its exact footprint can be reserved
         # (see reserved_boxes below) before the recap frame lays out its
         # popup cards — otherwise a card could land right where this gets
@@ -1102,6 +1093,25 @@ class _OverviewRenderMixin:
             if summary_card is not None
             else []
         )
+        if self._cards_stay():
+            # Cards that stay up go straight to their place in the ending summary (its layout: no overlaps,
+            # short uncrossed lines), so the summary shows them exactly where the walk left them.
+            self._stay_layout = self._layout_recap_cards(
+                [ap for ap in active_popups if ap["data"].get("popup_image")
+                 and not (self._is_loop_route and ap is stop_popup)],
+                w, h, reserved_boxes=reserved_boxes, route_obstacles=route_obstacle_arr,
+            )
+            for ap in self._stay_layout:
+                ap["stay_box"] = ap["beside_box"]
+        if preview_recap_only:
+            pre_popup_frame = clean_frame
+        else:
+            pre_popup_frame = self._animate_overview_frames(
+                video, current_bg, cap, is_video, w, h, fps,
+                smooth_path, mode_breakpoints, cum_smooth_dist, total_smooth_dist,
+                active_popups, stop_popup, points, route_avoid_points, route_obstacle_arr,
+            )
+
 
         if preview_recap_only:
             # Just render the final recap frame and save it as an image

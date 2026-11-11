@@ -169,11 +169,16 @@ class _TransitionMixin:
             hold_frames = 0 if self._ending_zoom_follows(stop_popup) else max(0, int(total_freeze * fps))
 
             if all_recap_popups:
-                laid_out = self._layout_recap_cards(
-                    all_recap_popups, w, h,
-                    reserved_boxes=reserved_boxes,
-                    route_obstacles=route_obstacle_arr,
-                )
+                laid_out = getattr(self, "_stay_layout", None) if self._cards_stay() else None
+                if laid_out:
+                    for ap in laid_out:
+                        ap["beside_box"] = ap["stay_box"]  # where the walk showed it
+                else:
+                    laid_out = self._layout_recap_cards(
+                        all_recap_popups, w, h,
+                        reserved_boxes=reserved_boxes,
+                        route_obstacles=route_obstacle_arr,
+                    )
                 final_frame = self._render_recap_frame(
                     outro_frame, active_popups, group_popups=laid_out
                 )
@@ -192,7 +197,8 @@ class _TransitionMixin:
             )
 
         if final_frame is not None:
-            source = outro_frame if outro_frame is not None else self.last_frame
+            # Cards that stayed up are already on the last frame: fading from the bare map would blink them.
+            source = self.last_frame if self._cards_stay() or outro_frame is None else outro_frame
             fade_sec = max(
                 tuning.RECAP_GROUP_FADE_SECONDS, float(self.config.get("summary_fade", 0.5))
             )

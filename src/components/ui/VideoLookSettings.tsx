@@ -205,6 +205,9 @@ export function VideoLookSettings({ options, onChange }: Props) {
         <Row title={t`Clean map before the card`} description={t`Seconds the overview shows the bare map first.`}>
           <Fader value={num("overview_intro_clean_hold_seconds")} min={0} max={4} step={0.5} unit=" s" label={t`Clean map before the card`} onChange={set("overview_intro_clean_hold_seconds")} />
         </Row>
+        <Row title={t`Cards stay up`} description={t`Walk the route: each stop's card stays on the map once it pops up, instead of fading as the walker moves on.`}>
+          <Switch checked={on("overview_cards_stay")} onChange={set("overview_cards_stay")} label={t`Cards stay up`} />
+        </Row>
         <Row title={t`Zoom to the start at the end`} description={t`The closing close-up of the first stop.`}>
           <Switch checked={on("enable_ending_highlight")} onChange={set("enable_ending_highlight")} label={t`Zoom to the start at the end`} />
         </Row>

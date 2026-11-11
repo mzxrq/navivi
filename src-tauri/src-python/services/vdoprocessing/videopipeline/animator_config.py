@@ -83,6 +83,7 @@ def build_animator_config(
         # The overview video type (each with its own script); "course" also
         # cycles headline taglines taken from the route (overview_script.course_taglines).
         "overview_style": overview_style(project_config),
+        "overview_cards_stay": settings.get("overview_cards_stay", True),
         **_course_config(project_config, config_path),
         "res_route_path": project_config_path,
         "leg_durations": seg_durations or None,

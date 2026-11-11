@@ -178,6 +178,7 @@ export interface ProjectSettings {
   overview_intro_card_scale?: number;
   overview_intro_clean_hold_seconds?: number;
   enable_ending_highlight?: boolean;
+  overview_cards_stay?: boolean; // "Walk the route": each stop's card stays up once shown (default on)
   enable_outro?: boolean;
   outro_style?: "scroll" | "grid" | "scrapbook";
   outro_route_info?: boolean;
