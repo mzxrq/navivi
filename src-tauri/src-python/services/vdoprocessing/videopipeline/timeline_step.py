@@ -365,7 +365,9 @@ def build_timeline(
 
             voice = Path(project_audio_dir(project_dir)) / FINALE_NARRATION_FILENAME
             voiced = voice.exists() and Path(timing_sidecar_path(str(source_or_name))).exists()
-            audio_path, subtitle_path = (str(voice) if voiced else None), None
+            srt = Path(subtitles_dir) / f"{voice.stem}.srt"
+            audio_path = str(voice) if voiced else None
+            subtitle_path = str(srt) if voiced and srt.exists() else None
         elif kind == "route":
             audio_path, subtitle_path = _leg_audio(source_name)
         elif kind == "overview":

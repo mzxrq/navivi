@@ -36,6 +36,7 @@ from .outro_step import outro_text_item, render_outro_clip
 from .render_step import render_route_video
 from .subtitle_step import (
     build_attraction_subtitles,
+    build_finale_subtitle,
     build_overview_subtitle,
     build_subtitles,
 )
@@ -182,6 +183,7 @@ def run_full_pipeline(
             str(subtitle_dir),
             force=force_regenerate,
         )
+        build_finale_subtitle(JobConfigManager(config_file_path).data, project_dir, str(subtitle_dir))
 
     # --- STEP 2c ---
     # Small waypoint photos get an upscaled copy; JobConfigManager then hands

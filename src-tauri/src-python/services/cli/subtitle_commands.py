@@ -15,6 +15,7 @@ from services.vdoprocessing.videopipeline.helpers import (
 from services.vdoprocessing.videopipeline.audio_step import apply_cued_scripts, existing_audio_data
 from services.vdoprocessing.videopipeline.subtitle_step import (
     build_attraction_subtitles,
+    build_finale_subtitle,
     build_overview_subtitle,
     build_subtitles,
     build_waypoint_subtitle,
@@ -81,6 +82,7 @@ def test_subtitles(
     attraction_paths = build_attraction_subtitles(
         waypoints, audio["attraction_audio_paths"], str(output_dir), force=force
     )
+    build_finale_subtitle(json.loads(config_path.read_text(encoding="utf-8")), config_path.parent, str(output_dir))
     _tracker.clear()
     return {
         "success": True,

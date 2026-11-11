@@ -166,6 +166,18 @@ def build_overview_subtitle(
     return str(subtitle_path)
 
 
+def build_finale_subtitle(project_config: dict, project_dir, output_dir) -> Optional[str]:
+    """The finale narration's .srt (settings.finale_narration, timed against 98_finale_narration.wav); None without one."""
+    from .audio_step import FINALE_NARRATION_FILENAME, finale_script
+    from .helpers import project_audio_dir
+
+    script = finale_script(project_config)
+    if not script:
+        return None
+    audio = Path(project_audio_dir(project_dir)) / FINALE_NARRATION_FILENAME
+    return build_overview_subtitle(project_config, str(audio), output_dir, script=script)
+
+
 def build_subtitles(
     waypoints: list, audio_paths: list, output_subtitle_dir: str, force: bool = False,
 ) -> list:

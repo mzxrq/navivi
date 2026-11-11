@@ -42,11 +42,18 @@ def test_the_finale_plays_its_narration_from_its_timing_sidecar(tmp_path: Path, 
     voice.parent.mkdir(parents=True, exist_ok=True)
     voice.write_bytes(b"x")
     write_audio_offset(str(finale), 1.0)
+    from services.vdoprocessing.videopipeline.helpers import project_subtitle_dir
+
+    srt = Path(project_subtitle_dir(tmp_path)) / "98_finale_narration.srt"
+    srt.parent.mkdir(parents=True, exist_ok=True)
+    srt.write_text("1\n00:00:00,000 --> 00:00:02,000\nThat was the whole route.\n", encoding="utf-8")
 
     path = timeline_step.build_timeline(
         video_paths=[], attraction_videos=[], final_videos=[str(finale), str(outro)], project_dir=str(tmp_path),
     )
-    tracks = json.loads(Path(path).read_text(encoding="utf-8"))["video_tracks"]
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    tracks = data["video_tracks"]
+    assert [(c["start"], c["text"]) for c in data["subtitles"]] == [(1.0, "That was the whole route.")]
     assert tracks[0]["audio_path"] and Path(tracks[0]["audio_path"]).name == FINALE_NARRATION_FILENAME
     assert tracks[0]["audio_offset"] == 1.0
     assert not tracks[0].get("fade_into_next_seconds")  # cuts to the outro
