@@ -57,6 +57,11 @@ def test_photo_card_moves_off_the_route_line():
     assert left > 960 or left + 200 < 960  # beside it, not above or below
     horizontal = [(x, 540) for x in range(0, 1920, 4)]
     assert spot(horizontal) == (960 - 100, 540 - 26 - 112)  # clear above: the old spot is kept
+    # The route bends around the marker so every near spot touches it: a longer leader beats hiding the line.
+    bend = [(x, y) for x in (800, 1120) for y in range(420, 660, 4)]
+    bend += [(x, y) for y in (420, 660) for x in range(800, 1120, 4)]
+    left, top = spot(bend)
+    assert left + 200 < 800 or left > 1120 or top + 112 < 420 or top > 660
 
 
 def test_photo_card_keeps_off_props_with_a_longer_leader():
