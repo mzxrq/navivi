@@ -4,7 +4,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 import { emptyTimeline, type Segment, type TimelineData } from "../../src/features/editor/model";
-import { isBusyClip, lastJson, legOf, narrationOf, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, regenTargetOf, routeClipModes, runRegen, stopIndexOf, withOutroBarnDoor } from "../../src/services/stopRegen";
+import { isBusyClip, lastJson, legOf, narrationOf, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, regenTargetOf, routeClipModes, runRegen, stopIndexOf, withOutroBurnedIn } from "../../src/services/stopRegen";
 
 beforeEach(() => invoke.mockReset());
 
@@ -203,16 +203,17 @@ describe("isBusyClip", () => {
   });
 });
 
-describe("withOutroBarnDoor", () => {
-  it("ends the outro title where the logo doors have closed, at the clip's new length", () => {
+describe("withOutroBurnedIn", () => {
+  it("marks the outro title as drawn into its clip, ending where the end card starts", () => {
     const tl = {
       segments: [{ id: "s", videoDuration: 14.3 }],
       texts: [{ id: "o", segmentId: "s", kind: "outro", start: 0, end: 5, wipe_out: 1 }, { id: "i", segmentId: "s", kind: "intro", start: 0, end: 3 }],
     } as any;
-    const next = withOutroBarnDoor(tl)!;
-    expect(next.texts[0]).toMatchObject({ barn_door: true, wipe_out: 0.8 });
-    expect(next.texts[0].end).toBeCloseTo(11.3);
+    const next = withOutroBurnedIn(tl)!;
+    expect(next.texts[0]).toMatchObject({ burned_in: true });
+    expect(next.texts[0].wipe_out).toBeUndefined();
+    expect(next.texts[0].end).toBeCloseTo(10.5);
     expect(next.texts[1]).toBe(tl.texts[1]);
-    expect(withOutroBarnDoor(next)).toBeNull();
+    expect(withOutroBurnedIn(next)).toBeNull();
   });
 });

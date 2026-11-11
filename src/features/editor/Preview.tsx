@@ -122,7 +122,8 @@ export function ShiftedLayer({ texts, children }: { texts: PlacedText[]; childre
 // Text-track items: centred title + subtitle, animated like the export (introclip.title_events).
 function TextOverlay({ texts }: { texts: PlacedText[] }) {
   const time = usePlayerTime();
-  const active = texts.filter((x) => time >= x.globalStart && time < x.globalEnd);
+  // A burned-in title is already in its clip's picture.
+  const active = texts.filter((x) => !x.burned_in && time >= x.globalStart && time < x.globalEnd);
   if (!active.length) return null;
   const cq = (px: number) => `${(px / 1080) * 100}cqh`;
   return (
@@ -161,14 +162,13 @@ function TextOverlay({ texts }: { texts: PlacedText[] }) {
         );
         const line = "absolute whitespace-nowrap leading-none";
         // wipe_out: an edge sweeping down from the top to the box's bottom over the item's last seconds (export: _wipe_tag).
-        const door = (u: number) => u * u * (3 - 2 * u);
         const wiped = x.wipe_out ? Math.min(1, Math.max(0, (t - (dur - x.wipe_out)) / x.wipe_out)) : 0;
         const reach = x.position === "top" && x.box?.height ? Math.min(1080, x.box.height + (x.box.fade ?? 56)) : 1080;
         return (
           <div
             key={x.id}
             className="absolute inset-0"
-            style={wiped > 0 ? { clipPath: x.barn_door ? `inset(${cq(door(wiped) * 540)} 0)` : `inset(${cq(wiped * reach)} 0 0 0)` } : undefined}
+            style={wiped > 0 ? { clipPath: `inset(${cq(wiped * reach)} 0 0 0)` } : undefined}
           >
             <TextBoxBand item={x} cq={cq} />
             {hasKicker && kf.opacity > 0 && (

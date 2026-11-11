@@ -203,21 +203,21 @@ async function refreshMedia(
   return { ...timeline, segments, subtitles: [...kept, ...cues.filter((c) => c.start < (limits.get(c.segmentId) ?? Infinity))] };
 }
 
-// outrocard's logo doors and the logo's hold after them (tuning.OUTRO_LOGO_FADE_SECONDS / OUTRO_LOGO_HOLD_SECONDS).
-const OUTRO_DOOR_SECONDS = 0.8;
-const OUTRO_LOGO_HOLD_SECONDS = 3.0;
+// outrocard's end card: its doors and the logo's hold (tuning.OUTRO_LOGO_FADE_SECONDS + OUTRO_LOGO_HOLD_SECONDS).
+const OUTRO_END_CARD_SECONDS = 3.8;
 
-/** A scrapbook outro's title after its clip was made again: it stays until the logo doors have closed over it,
- *  at the clip's new length. Null when nothing changes. */
-export function withOutroBarnDoor(timeline: TimelineData): TimelineData | null {
+/** A scrapbook outro's title after its clip was made again: it is drawn into the clip now (under the logo doors),
+ *  so the text track only keeps it for editing, up to where the end card starts. Null when nothing changes. */
+export function withOutroBurnedIn(timeline: TimelineData): TimelineData | null {
   let changed = false;
   const texts = timeline.texts.map((x) => {
     const seg = x.kind === "outro" ? timeline.segments.find((s) => s.id === x.segmentId) : undefined;
     if (!seg) return x;
-    const end = Math.max(x.start + 0.5, seg.videoDuration - OUTRO_LOGO_HOLD_SECONDS);
-    if (x.barn_door && x.wipe_out === OUTRO_DOOR_SECONDS && Math.abs(x.end - end) < 0.01) return x;
+    const end = Math.max(x.start + 0.5, seg.videoDuration - OUTRO_END_CARD_SECONDS);
+    if (x.burned_in && x.wipe_out === undefined && Math.abs(x.end - end) < 0.01) return x;
     changed = true;
-    return { ...x, barn_door: true, wipe_out: OUTRO_DOOR_SECONDS, end };
+    const { wipe_out: _w, ...rest } = x;
+    return { ...rest, burned_in: true, end };
   });
   return changed ? { ...timeline, texts } : null;
 }

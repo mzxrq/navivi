@@ -133,11 +133,6 @@ def _wipe_tag(item: dict, event_start: float, play_w: int) -> str:
     end = float(item["end"])
     t0 = max(0, int(round((end - wipe - event_start) * 1000)))
     t1 = max(t0 + 1, int(round((end - event_start) * 1000)))
-    if item.get("barn_door"):
-        # Closes from the top and bottom edges at once, eased like the outro's logo doors (outrocard._ease).
-        tm = (t0 + t1) // 2
-        return (f"{{\\clip(0,0,{play_w},1080)\\t({t0},{tm},2,\\clip(0,270,{play_w},810))"
-                f"\\t({tm},{t1},0.5,\\clip(0,540,{play_w},540))}}")
     return f"{{\\clip(0,0,{play_w},1080)\\t({t0},{t1},\\clip(0,{reach:.0f},{play_w},1080))}}"
 
 
@@ -231,7 +226,8 @@ def write_caption_ass(
         if box:
             events.append(f"Dialogue: 0,{when},{name},,0,0,0,,{box_event_text(style, box)}")
         events.append(f"Dialogue: 1,{when},{name},,0,0,0,,{text_position_tag(box) if box else ''}{_ass_text(shown)}")
-    for item in sorted(texts or [], key=lambda x: float(x["start"])):
+    # burned_in: already drawn into its clip (the scrapbook outro's title, so the logo doors close over it).
+    for item in sorted((x for x in texts or [] if not x.get("burned_in")), key=lambda x: float(x["start"])):
         events.extend(_text_box_events(item, play_w))
         title, subtitle, kicker = item.get("title") or {}, item.get("subtitle") or {}, item.get("kicker") or {}
         title_text, sub_text = str(title.get("text") or ""), str(subtitle.get("text") or "")

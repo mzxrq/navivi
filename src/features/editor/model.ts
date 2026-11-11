@@ -77,7 +77,7 @@ export interface TextClip {
   margin_h?: number; // px from the left/right edge
   animation?: TextAnimation; // absent = "pop"
   wipe_out?: number; // seconds at its end in which the block (box + lines) wipes away top -> bottom
-  barn_door?: boolean; // the wipe closes from top and bottom at once instead (scrapbook outro)
+  burned_in?: boolean; // already drawn into its clip (scrapbook outro title, under the logo doors): not drawn again
   // What made it: the intro's or outro's title, an attraction's place name, or added by hand.
   kind?: "intro" | "outro" | "place" | "credit";
 }
@@ -488,7 +488,7 @@ export function toManifest(projectName: string, timeline: TimelineData, captionS
       ...(x.box ? { box: x.box } : {}),
       ...(x.animation ? { animation: x.animation } : {}),
       ...(x.wipe_out ? { wipe_out: x.wipe_out } : {}),
-      ...(x.barn_door ? { barn_door: true } : {}),
+      ...(x.burned_in ? { burned_in: true } : {}),
       ...(x.kind ? { kind: x.kind } : {}),
     })),
     burn_subtitles: options.burnSubtitles ?? true,
@@ -665,7 +665,7 @@ export async function timelineFromPipeline(
           ...(x.box && typeof x.box.height === "number" ? { box: x.box } : {}),
           ...(x.animation ? { animation: x.animation } : {}),
           ...(typeof x.wipe_out === "number" ? { wipe_out: x.wipe_out } : {}),
-          ...(x.barn_door === true ? { barn_door: true } : {}),
+          ...(x.burned_in === true ? { burned_in: true } : {}),
           ...(x.kind ? { kind: x.kind } : {}),
         });
     }

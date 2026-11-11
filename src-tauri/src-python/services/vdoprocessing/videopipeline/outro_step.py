@@ -47,6 +47,51 @@ def _edited_heading_sizes(timeline_path: Path) -> dict:
     return out
 
 
+def _timeline_outro_item(timeline_path: Path) -> Optional[dict]:
+    """The outro text item as the timeline editor left it; None when there is none."""
+    import json
+
+    try:
+        texts = json.loads(timeline_path.read_text(encoding="utf-8")).get("texts") or []
+    except (OSError, ValueError):
+        return None
+    return next((x for x in texts if isinstance(x, dict) and x.get("kind") == "outro"), None)
+
+
+def title_layer(item: dict, size: Tuple[int, int]):
+    """The text item drawn by the export's own renderer (write_caption_ass + ffmpeg's subtitles filter) as an RGBA
+    image: rendered on black and on white, its alpha is what the two differ by. None when it can't be drawn."""
+    import subprocess
+    import tempfile
+
+    import numpy as np
+    from PIL import Image
+
+    from services.vdoprocessing.vdoexporter import VideoExporter, write_caption_ass
+
+    still = {k: v for k, v in item.items() if k not in ("wipe_out", "burned_in", "box")}
+    still.update(start=0.0, end=5.0, animation="none")
+    w, h = size
+    ffmpeg = VideoExporter.resolve_ffmpeg()
+    if not ffmpeg:
+        return None
+    with tempfile.TemporaryDirectory(prefix="navivi_title_") as tmp:
+        write_caption_ass([], None, size, Path(tmp) / "t.ass", texts=[still])
+        shots = []
+        for bg in ("black", "white"):
+            # Run inside the temp folder: the filter is given a bare file name (Windows paths break its parser).
+            subprocess.run(
+                [ffmpeg, "-y", *tuning.ffmpeg_log_args(), "-f", "lavfi", "-i", f"color=c={bg}:s={w}x{h}:d=3:r=10",
+                 "-vf", "subtitles=t.ass", "-ss", "2", "-frames:v", "1", f"{bg}.png"],
+                cwd=tmp, check=True, capture_output=True,
+            )
+            shots.append(np.asarray(Image.open(Path(tmp) / f"{bg}.png").convert("RGB"), np.float32))
+    black, white = shots
+    alpha = np.clip(1 - (white - black).mean(axis=2, keepdims=True) / 255.0, 0, 1)
+    rgb = np.clip(black / np.maximum(alpha, 1e-3), 0, 255)
+    return Image.fromarray(np.concatenate([rgb, alpha * 255], axis=2).astype(np.uint8), "RGBA")
+
+
 def _outro_heading(job_config: JobConfigManager) -> dict:
     """The intro's words with the outro's own look: text styles settings.outro_*_style (never the intro's;
     unset = the defaults), the box behind the title settings.outro_header_height (1080-line px) / outro_header_color."""
@@ -109,7 +154,8 @@ def outro_text_item(project_config_path: str) -> Optional[dict]:
             item[which] = {"text": h[which], "style": style}
         item["margin_v"] = SCRAPBOOK_HEADING_MARGIN
         item.pop("kicker", None)
-        item["barn_door"] = True
+        # Drawn into the clip (render_outro_clip), so the logo card's barn door closes over it with the paper.
+        item["burned_in"] = True
         return item
     # The cards scroll the full frame, so the box behind the title is what hides them. It starts as tall as
     # the title block (the old pinned box); settings.outro_header_color / outro_header_height seed it and
@@ -169,11 +215,19 @@ def render_outro_clip(project_config_path: str) -> Optional[str]:
     # The scroll's title is a text-track item (outro_text_item), so the timeline editor can change it.
     heading["burn_text"] = style not in ("scroll", "scrapbook")
     heading.update(_edited_heading_sizes(config_path.parent / "timeline.json"))
+    size = _route_frame_size(Path(video_dir))
+    if style == "scrapbook":
+        # The title as the timeline styles it, drawn into the paper so the logo doors close over it.
+        item = _timeline_outro_item(config_path.parent / "timeline.json") or outro_text_item(str(config_path))
+        try:
+            heading["title_layer"] = title_layer(item, size or (1920, 1080)) if item else None
+        except Exception as exc:
+            logger.warning("Outro step: could not draw the title into the scrapbook (%s).", exc)
 
     logger.info("Outro step: building %s outro clip for project '%s'.", style, project_name)
     outro_path = generate_outro_clip(
         video_dir=str(video_dir), project_name=title, waypoints=waypoints, style=style,
-        size=_route_frame_size(Path(video_dir)), brief=brief, heading=heading,
+        size=size, brief=brief, heading=heading,
         settings=settings,
     )
 

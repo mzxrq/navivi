@@ -1462,6 +1462,9 @@ def _write_scrapbook_clip(
         hd.text((width / 2, y + font.size * 0.65), _truncate_to_width(hd, text, font, width * 0.9), font=font,
                 fill=tuning.OUTRO_SCRAPBOOK_INK, anchor="mm")
         y += font.size * 1.3
+    if (heading or {}).get("title_layer") is not None:
+        layer = heading["title_layer"]
+        base.alpha_composite(layer.resize(size) if layer.size != size else layer)
     if top:
         # A short rule with a dot under the heading (drawn or on the text track) ties it to the cards.
         ink = (*tuning.OUTRO_SCRAPBOOK_STAMP_COLOR, 200)
