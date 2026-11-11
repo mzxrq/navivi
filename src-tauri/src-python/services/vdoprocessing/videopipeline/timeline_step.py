@@ -326,8 +326,9 @@ def build_timeline(
     for wp_idx in attractions_by_idx:
         add_attraction(wp_idx)
 
-    for name, path in trailing_pairs:
-        ordered.append(("route", name, path))
+    for _name, path in trailing_pairs:
+        # The full path, so the finale's timing sidecar (voice start) is found beside it.
+        ordered.append(("route", path, path))
 
     # The overview voice starting on the intro (overview_voice_start seconds in):
     # it is placed at that timeline time, and its captions go on whichever of
@@ -355,7 +356,17 @@ def build_timeline(
     for order, (kind, source_or_name, burned) in enumerate(ordered):
         source_name = Path(source_or_name).name
         is_intro = source_name == tuning.INTRO_OUTPUT_FILENAME
-        if kind == "route":
+        if source_name == tuning.FINALE_OUTPUT_FILENAME:
+            # Its narration (settings.finale_narration), when the clip was made with it (a timing sidecar).
+            from services.vdoprocessing.cliptiming import timing_sidecar_path
+
+            from .audio_step import FINALE_NARRATION_FILENAME
+            from .helpers import project_audio_dir
+
+            voice = Path(project_audio_dir(project_dir)) / FINALE_NARRATION_FILENAME
+            voiced = voice.exists() and Path(timing_sidecar_path(str(source_or_name))).exists()
+            audio_path, subtitle_path = (str(voice) if voiced else None), None
+        elif kind == "route":
             audio_path, subtitle_path = _leg_audio(source_name)
         elif kind == "overview":
             # No per-clip index to look up (there's exactly one overview
@@ -484,7 +495,9 @@ def build_timeline(
             ):
                 tracks[k]["fade_into_next_seconds"] = attraction_fade_seconds
     # The goodbye dissolves into the outro card instead of cutting to it.
-    if len(ordered) > 1 and Path(ordered[-1][2]).name == tuning.OUTRO_OUTPUT_FILENAME:
+    # (The finale, already a pull-back to the whole route, cuts to it.)
+    if (len(ordered) > 1 and Path(ordered[-1][2]).name == tuning.OUTRO_OUTPUT_FILENAME
+            and Path(ordered[-2][2]).name != tuning.FINALE_OUTPUT_FILENAME):
         tracks[-2]["fade_into_next_seconds"] = tuning.ENDING_FADE_SECONDS
 
     # Whole-video cues for the editor/exporter, burned at export (render_timeline).

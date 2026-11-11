@@ -219,6 +219,9 @@ export function VideoLookSettings({ options, onChange }: Props) {
         </Row>
         {on("enable_outro") && (
           <>
+            <Row title={t`Whole route before the outro`} description={t`The last stop's photo shrinks onto its pin and the camera pulls back to show the whole route, then the outro starts.`}>
+              <Switch checked={on("enable_finale")} onChange={set("enable_finale")} label={t`Whole route before the outro`} />
+            </Row>
             <Row title={t`Outro style`}>
               <Segmented<"scroll" | "grid" | "scrapbook">
                 compact

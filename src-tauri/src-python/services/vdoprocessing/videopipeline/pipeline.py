@@ -31,6 +31,7 @@ from .helpers import (
 from .intro_step import intro_text_items, place_overview_voice, render_intro_clip
 from .leg_pieces import compute_leg_narration_splits
 from .narration_step import add_default_cues, add_overview_cues, record_cue_times
+from .finale_step import render_finale_clip
 from .outro_step import outro_text_item, render_outro_clip
 from .render_step import render_route_video
 from .subtitle_step import (
@@ -292,11 +293,13 @@ def run_full_pipeline(
     # attraction_videos, so it needs no such adjustment.
     tracker.stage("Building intro/outro clips...")
     outro_path = render_outro_clip(str(config_file_path))
+    # The last stop's photo shrinks onto its pin and the camera pulls back to the whole route, then the outro.
+    finale_path = render_finale_clip(str(config_file_path)) if outro_path else None
     if intro_path:
         video_paths = [intro_path] + video_paths
         final_videos = [intro_path] + final_videos
     if outro_path:
-        final_videos = final_videos + [outro_path]
+        final_videos = final_videos + ([finale_path] if finale_path else []) + [outro_path]
 
     timeline_path = build_timeline(
         video_paths=video_paths,

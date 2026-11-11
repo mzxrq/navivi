@@ -1211,6 +1211,15 @@ INTRO_TRANSPORT_PATTERN = r"駅|バス停|停留所|桟橋|港|汽船|フェリ�
 # "grid" outro: one held frame, the title over a thumbnail grid of every waypoint photo (outrocard.py).
 OUTRO_DURATION_SECONDS = 5.0
 OUTRO_OUTPUT_FILENAME = "99_outro.mp4"
+# The finale before the outro (videopipeline/finale_step.py, settings.enable_finale): the last stop's photo
+# fullscreen, shrinking onto its pin, then the camera pulling back to the whole route.
+FINALE_OUTPUT_FILENAME = "98_finale.mp4"
+DEFAULT_ENABLE_FINALE = True
+FINALE_PHOTO_SECONDS = 1.0  # the photo fullscreen before it shrinks
+FINALE_ZOOM_SECONDS = 2.5  # the pull-back from the last stop to the whole route
+FINALE_ZOOM_BOOST = 3.5  # how much closer than the whole-route view the pull-back starts (zoom levels)
+FINALE_VOICE_TAIL_SECONDS = 0.8  # the whole route still shown after the finale narration ends
+FINALE_HOLD_SECONDS = 3.0  # the whole route with its summary card, before the outro cuts in
 # {count} is substituted with the number of waypoint cards shown.
 OUTRO_SUBTITLE_TEMPLATE = LABELS_JA["outro_subtitle"]
 OUTRO_BG_COLOR: Tuple[int, int, int] = (19, 28, 46)  # RGB dark navy

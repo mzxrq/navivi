@@ -114,6 +114,7 @@ export function WaypointEditor({
     setActiveWaypointId,
     metadata,
     settings,
+    updateSettings,
     saveProject,
   } = useWorkspace();
   const { showToast, markedWaypointIds, isRendering, setShowAppSettings } = useUI();
@@ -651,6 +652,24 @@ export function WaypointEditor({
                         />
                       </section>
                     ))}
+                    {isDest && settings.enable_finale !== false && settings.enable_outro !== false && (
+                      <section>
+                        <h3 className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-200">
+                          <Trans>Ending narration</Trans>
+                        </h3>
+                        <p className="text-[11px] text-zinc-500 mb-1">
+                          <Trans>Spoken while the camera pulls back from this last stop to the whole route, before the outro.</Trans>
+                        </p>
+                        <ScriptInput
+                          showLabel={false}
+                          value={settings.finale_narration ?? ""}
+                          onChange={(v) => updateSettings({ finale_narration: v || undefined })}
+                          isGenerating={false}
+                          onGenerate={() => {}}
+                          cues={[]}
+                        />
+                      </section>
+                    )}
                   </div>
                 ) : activeTab === "videos" ? (
                   <WaypointVideos wp={wp} />

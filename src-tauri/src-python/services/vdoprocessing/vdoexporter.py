@@ -1007,7 +1007,8 @@ class VideoExporter:
                     duration=float(track["duration"]) if track.get("duration") else None,
                     content_shift=float(track.get("content_shift") or 0.0),
                     end_hold=tuning.ENDING_HOLD_SECONDS
-                    if i == len(tracks) - 2 and Path(tracks[-1]["file_path"]).name == tuning.OUTRO_OUTPUT_FILENAME else 0.0,
+                    if i == len(tracks) - 2 and Path(tracks[-1]["file_path"]).name == tuning.OUTRO_OUTPUT_FILENAME
+                    and Path(track["file_path"]).name != tuning.FINALE_OUTPUT_FILENAME else 0.0,
                     fade_out=tuning.VIDEO_END_FADE_SECONDS if i == len(tracks) - 1 else 0.0,
                 ))
                 report(mux_end * sum(weights[: i + 1]) / sum(weights))

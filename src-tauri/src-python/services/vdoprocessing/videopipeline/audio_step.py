@@ -166,6 +166,12 @@ def overview_tagged_script(project_config: dict, project_dir) -> str:
 
 INTRO_NARRATION_FILENAME = "00_intro_narration.wav"
 OVERVIEW_NARRATION_FILENAME = "00_overview_narration.wav"
+FINALE_NARRATION_FILENAME = "98_finale_narration.wav"  # over the pull-back to the whole route (finale_step)
+
+
+def finale_script(project_config: dict) -> str:
+    """settings.finale_narration: what the voice says over the finale, before the outro."""
+    return str((project_config.get("settings") or {}).get("finale_narration") or "").strip()
 
 
 def overview_pieces(project_config: dict, project_dir) -> Tuple[Optional[str], str]:
@@ -897,6 +903,16 @@ def generate_audio(
                 overview_cue_times = overview_clip.get("cue_times") or {}
                 overview_text = overview_clip.get("text")
                 intro_voice = overview_clip.get("intro")
+
+            if finale_script(project_config):
+                tracker.show("Generating the finale narration audio")
+                try:
+                    await _voice_piece(
+                        finale_script(project_config), FINALE_NARRATION_FILENAME, project_config, client, processor,
+                        output_dir, force, p_dict, project_dir=config_path.parent,
+                    )
+                except Exception as exc:
+                    logger.warning("Finale narration TTS failed (%s). The finale stays silent.", exc)
 
             for idx, wp in enumerate(waypoints):
                 label = wp.get("label", f"Waypoint {idx + 1}") if isinstance(wp, dict) else f"Waypoint {idx + 1}"
