@@ -12,7 +12,9 @@ def test_cards_fit_the_frame_and_leave_the_stamp_its_own_corner(count):
     for cx, cy, _ in cards:
         assert half * 0.6 < cx < w - half * 0.6 and half * 0.6 < cy < h - half * 0.6
         assert abs(cx - sx) > sr or abs(cy - sy) > sr  # no card under the stamp
-    assert sx > w / 2 and sy >= h / 2 - 1  # the last cell: bottom-right
+    assert sy >= cards[-1][1] - card_w * 0.1  # the cell after the last card, in the bottom row
+    # Rows snake: the step from one card to the next is never a jump back across the frame.
+    assert all(abs(a[0] - b[0]) < w / 2 for a, b in zip(cards, cards[1:]))
 
 
 def test_route_badges_and_project_colors():
@@ -51,3 +53,10 @@ def test_a_long_name_never_breaks_inside_its_number():
 
     draw = ImageDraw.Draw(Image.new("RGB", (8, 8)))
     assert _name_lines(draw, "葛城第二十三経塚", B.FONT_CANDIDATES_BOLD, 30, 20, 160)[0] == ["葛城", "第二十三経塚"]
+
+
+def test_seal_takes_two_kanji_from_the_heading():
+    from services.vdoprocessing.outrocard import seal_text
+
+    assert seal_text("\u845b\u57ce\u4fee\u9a13") == "\u4fee\u9a13"
+    assert seal_text("Kyoto walk") == "" and seal_text("") == ""

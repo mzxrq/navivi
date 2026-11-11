@@ -214,6 +214,11 @@ export function VideoLookSettings({ options, onChange }: Props) {
                 ]}
               />
             </Row>
+            {(options.outro_style ?? d.outro_style) === "scrapbook" && (
+              <Row title={t`Photos position`} description={t`Moves the photos up or down below the title: 0% just under it, 100% at the bottom.`}>
+                <Fader value={num("outro_content_position") * 100} min={0} max={100} step={5} unit="%" label={t`Photos position`} onChange={(v) => set("outro_content_position")(v / 100)} />
+              </Row>
+            )}
             <Row title={t`Route facts`} description={t`Distance, time and mode on each card.`}>
               <Switch checked={on("outro_route_info")} onChange={set("outro_route_info")} label={t`Route facts`} />
             </Row>

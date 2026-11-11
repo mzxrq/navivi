@@ -62,12 +62,12 @@ export function stopIndexOf(seg: Pick<Segment, "video" | "audio">): number | nul
   return arrival ? Number(arrival[1]) - 1 : null;
 }
 
-/** The intro or overview clip: not a stop, made again through its own modes. */
-export type RouteClip = "intro" | "overview";
+/** The intro, overview or outro clip: not a stop, made again through its own modes. */
+export type RouteClip = "intro" | "overview" | "outro";
 
 export function routeClipOf(seg: Pick<Segment, "video">): RouteClip | null {
   const name = base(seg.video);
-  return name === "00_intro.mp4" ? "intro" : name.startsWith("01_overview") ? "overview" : null;
+  return name === "00_intro.mp4" ? "intro" : name.startsWith("01_overview") ? "overview" : name === "99_outro.mp4" ? "outro" : null;
 }
 
 /** What a timeline clip is made from: a stop's index, the intro or the overview; null for other clips. */
@@ -79,7 +79,7 @@ export const regenTargetOf = (seg: Pick<Segment, "video" | "audio">) => stopInde
 // `pieces`: only those of its sentences (VoicePiecesDialog).
 export function routeClipModes(clip: RouteClip, kind: "voice" | "video", pieces?: number[]): string[] {
   if (kind === "voice") return [`overview-tts --retake=${clip}${pieces?.length ? `:${pieces.join(",")}` : ""}`, "subtitle-all"];
-  return [clip === "intro" ? "intro" : "overview --force"];
+  return [clip === "overview" ? "overview --force" : clip];
 }
 
 const OVERVIEW_VOICES = ["00_intro_narration", "00_overview_narration"];
@@ -201,4 +201,23 @@ async function refreshMedia(
   // Cues are cut to their clip, so a clip whose narration got longer or shorter is measured again here.
   const limits = new Map(segments.map((s) => [s.id, segmentLength(s)]));
   return { ...timeline, segments, subtitles: [...kept, ...cues.filter((c) => c.start < (limits.get(c.segmentId) ?? Infinity))] };
+}
+
+// outrocard's logo doors and the logo's hold after them (tuning.OUTRO_LOGO_FADE_SECONDS / OUTRO_LOGO_HOLD_SECONDS).
+const OUTRO_DOOR_SECONDS = 0.8;
+const OUTRO_LOGO_HOLD_SECONDS = 3.0;
+
+/** A scrapbook outro's title after its clip was made again: it stays until the logo doors have closed over it,
+ *  at the clip's new length. Null when nothing changes. */
+export function withOutroBarnDoor(timeline: TimelineData): TimelineData | null {
+  let changed = false;
+  const texts = timeline.texts.map((x) => {
+    const seg = x.kind === "outro" ? timeline.segments.find((s) => s.id === x.segmentId) : undefined;
+    if (!seg) return x;
+    const end = Math.max(x.start + 0.5, seg.videoDuration - OUTRO_LOGO_HOLD_SECONDS);
+    if (x.barn_door && x.wipe_out === OUTRO_DOOR_SECONDS && Math.abs(x.end - end) < 0.01) return x;
+    changed = true;
+    return { ...x, barn_door: true, wipe_out: OUTRO_DOOR_SECONDS, end };
+  });
+  return changed ? { ...timeline, texts } : null;
 }

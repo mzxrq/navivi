@@ -133,6 +133,11 @@ def _wipe_tag(item: dict, event_start: float, play_w: int) -> str:
     end = float(item["end"])
     t0 = max(0, int(round((end - wipe - event_start) * 1000)))
     t1 = max(t0 + 1, int(round((end - event_start) * 1000)))
+    if item.get("barn_door"):
+        # Closes from the top and bottom edges at once, eased like the outro's logo doors (outrocard._ease).
+        tm = (t0 + t1) // 2
+        return (f"{{\\clip(0,0,{play_w},1080)\\t({t0},{tm},2,\\clip(0,270,{play_w},810))"
+                f"\\t({tm},{t1},0.5,\\clip(0,540,{play_w},540))}}")
     return f"{{\\clip(0,0,{play_w},1080)\\t({t0},{t1},\\clip(0,{reach:.0f},{play_w},1080))}}"
 
 

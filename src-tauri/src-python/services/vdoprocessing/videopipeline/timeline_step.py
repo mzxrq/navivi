@@ -415,7 +415,11 @@ def build_timeline(
             # previous clip's held last frame; as the last cards go under it, it wipes away top -> bottom.
             if tracks and isinstance(shown.get("box"), dict):
                 shown["box"] = {**shown["box"], "fade_in": tuning.ENDING_FADE_SECONDS}
-            shown["wipe_out"] = min(tuning.OUTRO_TITLE_WIPE_SECONDS, end / 2)
+            if shown.get("barn_door"):  # scrapbook: the logo card's doors close over the title too
+                end = min(length, end + tuning.OUTRO_LOGO_FADE_SECONDS)
+                shown["wipe_out"] = tuning.OUTRO_LOGO_FADE_SECONDS
+            else:
+                shown["wipe_out"] = min(tuning.OUTRO_TITLE_WIPE_SECONDS, end / 2)
             clip_texts.append({"start": 0.0, "end": round(end, 3), **shown})
         # An attraction's place name, when its clip was finalized without it.
         if kind == "attraction":

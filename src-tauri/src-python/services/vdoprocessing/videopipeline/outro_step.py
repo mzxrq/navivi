@@ -58,6 +58,7 @@ def _outro_heading(job_config: JobConfigManager) -> dict:
         heading[f"{line}_style"] = settings.get(f"outro_{line}_style")
     heading["header_height"] = settings.get("outro_header_height")
     heading["header_color"] = settings.get("outro_header_color")
+    heading["content_position"] = settings.get("outro_content_position")  # scrapbook: photos 0 = up under the title .. 1 = down
     return heading
 
 
@@ -108,6 +109,7 @@ def outro_text_item(project_config_path: str) -> Optional[dict]:
             item[which] = {"text": h[which], "style": style}
         item["margin_v"] = SCRAPBOOK_HEADING_MARGIN
         item.pop("kicker", None)
+        item["barn_door"] = True
         return item
     # The cards scroll the full frame, so the box behind the title is what hides them. It starts as tall as
     # the title block (the old pinned box); settings.outro_header_color / outro_header_height seed it and

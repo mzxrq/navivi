@@ -4,7 +4,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 import { emptyTimeline, type Segment, type TimelineData } from "../../src/features/editor/model";
-import { isBusyClip, lastJson, legOf, narrationOf, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, regenTargetOf, routeClipModes, runRegen, stopIndexOf } from "../../src/services/stopRegen";
+import { isBusyClip, lastJson, legOf, narrationOf, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, regenTargetOf, routeClipModes, runRegen, stopIndexOf, withOutroBarnDoor } from "../../src/services/stopRegen";
 
 beforeEach(() => invoke.mockReset());
 
@@ -133,6 +133,8 @@ describe("intro and overview clips", () => {
     expect(regenTargetOf({ video: "assets/video/route/01_overview.mp4", audio: "assets/audio/00_overview_narration.wav" })).toBe("overview");
     expect(routeClipModes("intro", "video")).toEqual(["intro"]);
     expect(routeClipModes("overview", "video")).toEqual(["overview --force"]);
+    expect(routeClipModes("outro", "video")).toEqual(["outro"]);
+    expect(regenTargetOf({ video: "assets/video/99_outro.mp4" })).toBe("outro");
     expect(routeClipModes("intro", "voice")).toEqual(["overview-tts --retake=intro", "subtitle-all"]);
   });
 
@@ -198,5 +200,19 @@ describe("isBusyClip", () => {
     expect(isBusyClip(leg, { index: 10, kind: "photo" })).toBe(false);
     expect(isBusyClip(place, { index: 10, kind: "photo" })).toBe(true);
     expect(isBusyClip(leg, { index: 10, kind: "voice" })).toBe(true);
+  });
+});
+
+describe("withOutroBarnDoor", () => {
+  it("ends the outro title where the logo doors have closed, at the clip's new length", () => {
+    const tl = {
+      segments: [{ id: "s", videoDuration: 14.3 }],
+      texts: [{ id: "o", segmentId: "s", kind: "outro", start: 0, end: 5, wipe_out: 1 }, { id: "i", segmentId: "s", kind: "intro", start: 0, end: 3 }],
+    } as any;
+    const next = withOutroBarnDoor(tl)!;
+    expect(next.texts[0]).toMatchObject({ barn_door: true, wipe_out: 0.8 });
+    expect(next.texts[0].end).toBeCloseTo(11.3);
+    expect(next.texts[1]).toBe(tl.texts[1]);
+    expect(withOutroBarnDoor(next)).toBeNull();
   });
 });

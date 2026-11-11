@@ -4,8 +4,9 @@ import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { ArrowDown, ArrowUp, Loader2, Trash2 } from "../../components/ui/icons";
 import { moveQueued, removeQueued } from "../../hooks/useStopRegen";
+import type { RouteClip } from "../../services/stopRegen";
 
-type Job = { index: number | "intro" | "overview"; kind: string };
+type Job = { index: number | RouteClip; kind: string };
 
 const iconButton =
   "w-6 h-6 rounded-md flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none transition-colors";

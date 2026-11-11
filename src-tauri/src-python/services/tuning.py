@@ -1236,6 +1236,10 @@ DEFAULT_OUTRO_STYLE = "scroll"
 OUTRO_SCRAPBOOK_HOLD_SECONDS = 2.0
 OUTRO_SCRAPBOOK_PAPER_COLOR: Tuple[int, int, int] = (243, 236, 222)
 OUTRO_SCRAPBOOK_STAMP_COLOR: Tuple[int, int, int] = (196, 40, 40)
+OUTRO_SCRAPBOOK_TAPE_COLOR: Tuple[int, int, int, int] = (222, 204, 150, 215)  # translucent masking tape on each card
+OUTRO_SCRAPBOOK_WALK_SECONDS = 0.55  # footprints' walk from one card to the next (shorter with many stops: 6 s in all)
+OUTRO_SCRAPBOOK_FOOTPRINT_COLOR: Tuple[int, int, int, int] = (120, 92, 72, 150)  # soft brown ink, quieter than the stamp
+OUTRO_SCRAPBOOK_VIGNETTE = 0.16  # how much darker the paper's corners are
 # How much of its grid cell a scrapbook card takes (1.0 = touching its neighbours).
 OUTRO_SCRAPBOOK_CARD_FILL = 0.8
 # Card names, and the default color of the title and subtitle (editable in the timeline), RGB.

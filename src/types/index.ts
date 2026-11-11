@@ -181,6 +181,7 @@ export interface ProjectSettings {
   enable_outro?: boolean;
   outro_style?: "scroll" | "grid" | "scrapbook";
   outro_route_info?: boolean;
+  outro_content_position?: number; // scrapbook: where the photos sit below the title, 0 = top .. 1 = bottom
   // The outro's title box: height in 1080-line px and fill colour ("#RRGGBB"; unset = the page background),
   // and its text styles (unset = the intro's).
   outro_header_height?: number;
@@ -214,11 +215,13 @@ export interface ProjectSettings {
   show_render_terminal?: boolean;
   marked_regeneration_waypoints?: string[];
   ai_features_enabled?: boolean;
-  pronunciation_dictionary?: Array<{ word: string; reading: string; auto?: boolean }>; // auto: added by the MeCab scan
+  // auto: added by the MeCab scan; pitch: one H/L per mora of the reading, e.g. "LHHH" (from 葛城(かつらぎ:LHHH))
+  pronunciation_dictionary?: Array<{ word: string; reading: string; auto?: boolean; pitch?: string }>;
   tts?: { engine?: "irodori" | "qwen3" | "kokoro"; voice?: string; kokoro_voice?: string; speed?: number; quality?: "fast" | "balanced" | "best"; caption?: string };
   auto_overview_cues?: boolean;
   auto_narration_cues?: boolean;
   global_pronunciation_dictionary?: Array<{ word: string; reading: string }>;
+  auto_dictionary?: boolean; // false: no auto words (useAutoFurigana); on when unset
   enable_attraction_videos?: boolean;
   photo_clip_engine?: "ai" | "cpu"; // "cpu": attraction photo clips are the 3D photo move only, never ComfyUI
 

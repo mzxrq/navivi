@@ -10,7 +10,7 @@ import { Copy, FileText, Film, LinkIcon, Maximize, Mic, Music, Plus, RotateCcw, 
 import { useStopRegen } from "../../hooks/useStopRegen";
 import { RegenQueueCard } from "./RegenQueueCard";
 import { VoicePiecesDialog } from "./VoicePiecesDialog";
-import { type RegenKind, legOf, narrationOf, onlyNarration, routeClipOf, stopIndexOf } from "../../services/stopRegen";
+import { type RegenKind, type RouteClip, legOf, narrationOf, onlyNarration, routeClipOf, stopIndexOf } from "../../services/stopRegen";
 import { Tip } from "../../components/ui/Tip";
 import { openContextMenu, separator } from "../../components/ui/menuItems";
 import { probeDuration, toAbsoluteProjectPath, toRelativeProjectPath } from "../../services/fileSystem";
@@ -54,9 +54,9 @@ export function EditorView() {
   const { timeline, setTimeline, metadata, autoLoadTimeline, waypoints } = useWorkspace();
   const { showToast, isBackgroundBusy, isRendering } = useUI();
   const { busy: regenBusy, waiting: regenWaiting, regenerate, regenerateClip, regenerateLeg, stopInfo } = useStopRegen();
-  const regenLabel = ({ index, kind }: { index: number | "intro" | "overview"; kind: string }) => {
+  const regenLabel = ({ index, kind }: { index: number | RouteClip; kind: string }) => {
     const what = { voice: t`Voice`, subtitles: t`Subtitles`, photo: t`Photo clip`, video: t`Video`, walk: t`Walking clip` }[kind] ?? kind;
-    const where = typeof index === "number" ? waypoints[index]?.name ?? "" : index === "intro" ? t`Intro` : t`Overview`;
+    const where = typeof index === "number" ? waypoints[index]?.name ?? "" : { intro: t`Intro`, overview: t`Overview`, outro: t`Outro` }[index];
     return `${where} · ${what}`;
   };
   const dir = metadata.directory_path;
@@ -322,7 +322,9 @@ export function EditorView() {
     const remakeLeg = () => regenerateLeg(leg!, stopIndex ?? leg! - 1);
     openContextMenu(e, [
       leg !== null && { label: t`Make the walking clip again`, icon: Film, disabled: isRendering || !dir, onSelect: remakeLeg },
-      !!clip && {
+      // The outro has no narration of its own: only its video.
+      clip === "outro" && { label: t`Make the outro again`, icon: RotateCcw, disabled: isRendering || !dir, onSelect: () => void regenerateClip(clip, "video") },
+      !!clip && clip !== "outro" && {
         label: clip === "intro" ? t`Make the intro again` : t`Make the overview again`,
         icon: RotateCcw,
         disabled: isRendering,

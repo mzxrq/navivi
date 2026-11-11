@@ -6,7 +6,7 @@ import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
 import { refreshMedia } from "../features/editor/player";
 import { probeDuration, toAbsoluteProjectPath } from "../services/fileSystem";
-import { RegenKind, RouteClip, StopNarration, legModes, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, routeClipModes, runRegen } from "../services/stopRegen";
+import { RegenKind, RouteClip, StopNarration, legModes, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, routeClipModes, runRegen, withOutroBarnDoor } from "../services/stopRegen";
 
 // `leg`: a walking clip job's NN (02_waypoint_NN_*); `index` is then the stop it is listed under.
 type Job = { index: number | RouteClip; kind: RegenKind | "video" | "walk"; leg?: number; run: () => Promise<void> };
@@ -137,10 +137,11 @@ export function useStopRegen() {
       await saveProject();
       const { skipped } = await runRegen(`${dir}/job_config.json`, routeClipModes(clip, kind, pieces));
       refreshMedia();
-      const next = await refreshRouteClip(liveTimeline.current, clip, kind, {
+      const refreshed = await refreshRouteClip(liveTimeline.current, clip, kind, {
         probe: async (rel, mediaKind) => probeDuration(convertFileSrc(await toAbsoluteProjectPath(rel, dir)), mediaKind, 0),
         readText: async (rel) => readTextFile(await toAbsoluteProjectPath(rel, dir)),
       });
+      const next = clip === "outro" && settings.outro_style === "scrapbook" ? withOutroBarnDoor(refreshed ?? liveTimeline.current) ?? refreshed : refreshed;
       if (next) setTimeline(next);
       if (skipped) showToast(t`Nothing was made: ${skipped}`, "warning");
       else showToast(kind === "voice" ? t`The narration is ready. If its length changed, make the clip again so it fits.` : t`The clip is ready.`, "success");

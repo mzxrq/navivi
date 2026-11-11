@@ -49,7 +49,7 @@ msgid "Rose"
 msgstr "Rose"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:1138
+#: src/components/ui/AppSettings.tsx:1179
 msgid "Starting..."
 msgstr "Starting..."
 
@@ -200,7 +200,7 @@ msgid "{0} subtitles selected"
 msgstr "{0} subtitles selected"
 
 #. placeholder {0}: waiting.length
-#: src/features/editor/RegenQueueCard.tsx:32
+#: src/features/editor/RegenQueueCard.tsx:33
 msgid "{0} waiting"
 msgstr "{0} waiting"
 
@@ -363,7 +363,7 @@ msgstr "1 stop has no narration and will be silent"
 msgid "1 voice"
 msgstr "1 voice"
 
-#: src/features/editor/RegenQueueCard.tsx:32
+#: src/features/editor/RegenQueueCard.tsx:33
 msgid "1 waiting"
 msgstr "1 waiting"
 
@@ -519,8 +519,8 @@ msgstr "Accent color"
 msgid "Accept and export"
 msgstr "Accept and export"
 
-#: src/components/ui/AppSettings.tsx:1242
-#: src/components/ui/AppSettings.tsx:1246
+#: src/components/ui/AppSettings.tsx:1283
+#: src/components/ui/AppSettings.tsx:1287
 msgid "Active model"
 msgstr "Active model"
 
@@ -541,7 +541,7 @@ msgstr "Add a Mapbox key in Settings to see a map here."
 msgid "Add a video first, then import subtitles"
 msgstr "Add a video first, then import subtitles"
 
-#: src/features/editor/Preview.tsx:456
+#: src/features/editor/Preview.tsx:461
 msgid "Add a video to start"
 msgstr "Add a video to start"
 
@@ -570,9 +570,9 @@ msgstr "Add at least two stops to draw a path between them."
 msgid "Add English voices"
 msgstr "Add English voices"
 
-#: src/features/editor/EditorView.tsx:421
-#: src/features/editor/EditorView.tsx:458
-#: src/features/editor/EditorView.tsx:460
+#: src/features/editor/EditorView.tsx:422
+#: src/features/editor/EditorView.tsx:459
+#: src/features/editor/EditorView.tsx:461
 msgid "Add music"
 msgstr "Add music"
 
@@ -583,6 +583,11 @@ msgstr "Add new points after this one"
 #: src/features/map/components/WaypointEditor.tsx:862
 msgid "Add photo"
 msgstr "Add photo"
+
+#: src/components/ui/AppSettings.tsx:736
+#: src/components/ui/AppSettings.tsx:744
+msgid "Add place names automatically"
+msgstr "Add place names automatically"
 
 #: src/features/map/components/MapArea.tsx:376
 msgid "Add point here"
@@ -620,7 +625,7 @@ msgstr "Add stops yourself"
 msgid "Add street view here"
 msgstr "Add street view here"
 
-#: src/features/editor/EditorView.tsx:425
+#: src/features/editor/EditorView.tsx:426
 msgid "Add subtitle here"
 msgstr "Add subtitle here"
 
@@ -628,12 +633,12 @@ msgstr "Add subtitle here"
 msgid "Add the number of places ({count} か所)"
 msgstr "Add the number of places ({count} か所)"
 
-#: src/features/editor/EditorView.tsx:462
-#: src/features/editor/EditorView.tsx:464
+#: src/features/editor/EditorView.tsx:463
+#: src/features/editor/EditorView.tsx:465
 msgid "Add title"
 msgstr "Add title"
 
-#: src/features/editor/EditorView.tsx:420
+#: src/features/editor/EditorView.tsx:421
 msgid "Add title here"
 msgstr "Add title here"
 
@@ -649,9 +654,9 @@ msgstr "Add up to 3 images that will pop up during the narration at this stop"
 msgid "Add via point here"
 msgstr "Add via point here"
 
-#: src/features/editor/EditorView.tsx:419
-#: src/features/editor/EditorView.tsx:454
-#: src/features/editor/EditorView.tsx:456
+#: src/features/editor/EditorView.tsx:420
+#: src/features/editor/EditorView.tsx:455
+#: src/features/editor/EditorView.tsx:457
 #: src/features/map/components/WaypointVideos.tsx:108
 msgid "Add video"
 msgstr "Add video"
@@ -660,11 +665,11 @@ msgstr "Add video"
 msgid "Add voice"
 msgstr "Add voice"
 
-#: src/components/ui/AppSettings.tsx:942
+#: src/components/ui/AppSettings.tsx:983
 msgid "Add word"
 msgstr "Add word"
 
-#: src/components/ui/AppSettings.tsx:928
+#: src/components/ui/AppSettings.tsx:969
 msgid "Add words below or extract them from narration scripts."
 msgstr "Add words below or extract them from narration scripts."
 
@@ -913,7 +918,7 @@ msgstr "Attraction videos"
 msgid "Audio"
 msgstr "Audio"
 
-#: src/components/ui/AppSettings.tsx:882
+#: src/components/ui/AppSettings.tsx:923
 msgid "auto"
 msgstr "auto"
 
@@ -922,11 +927,11 @@ msgstr "auto"
 msgid "Auto"
 msgstr "Auto"
 
-#: src/features/editor/EditorView.tsx:471
+#: src/features/editor/EditorView.tsx:472
 msgid "Auto edit"
 msgstr "Auto edit"
 
-#: src/features/editor/EditorView.tsx:473
+#: src/features/editor/EditorView.tsx:474
 msgid "Auto edit: order clips, add fades and subtitles"
 msgstr "Auto edit: order clips, add fades and subtitles"
 
@@ -942,7 +947,7 @@ msgstr "Auto-Detect (Recommended)"
 #~ msgid "Auto-Director proposal"
 #~ msgstr "Auto-Director proposal"
 
-#: src/components/ui/AppSettings.tsx:974
+#: src/components/ui/AppSettings.tsx:1015
 msgid "Auto-fill readings"
 msgstr "Auto-fill readings"
 
@@ -987,8 +992,8 @@ msgstr "Auto-Write sends the prompt, the place name, its location facts and the 
 msgid "Back"
 msgstr "Back"
 
-#: src/features/editor/Preview.tsx:464
-#: src/features/editor/Preview.tsx:466
+#: src/features/editor/Preview.tsx:469
+#: src/features/editor/Preview.tsx:471
 msgid "Back to start"
 msgstr "Back to start"
 
@@ -1169,8 +1174,8 @@ msgstr "Cancel"
 msgid "Cancel"
 msgstr "Cancel"
 
-#: src/components/ui/AppSettings.tsx:1336
-#: src/components/ui/AppSettings.tsx:1338
+#: src/components/ui/AppSettings.tsx:1377
+#: src/components/ui/AppSettings.tsx:1379
 msgid "Cancel download"
 msgstr "Cancel download"
 
@@ -1250,7 +1255,7 @@ msgstr "Choose a file…"
 msgid "Choose a leg"
 msgstr "Choose a leg"
 
-#: src/components/ui/AppSettings.tsx:1248
+#: src/components/ui/AppSettings.tsx:1289
 #: src/components/ui/ComponentsChecklist.tsx:260
 msgid "Choose a model"
 msgstr "Choose a model"
@@ -1268,20 +1273,20 @@ msgstr "Choose file…"
 msgid "Choose folder…"
 msgstr "Choose folder…"
 
-#: src/features/editor/EditorView.tsx:338
+#: src/features/editor/EditorView.tsx:340
 msgid "Choose sentences of the intro to voice again"
 msgstr "Choose sentences of the intro to voice again"
 
-#: src/features/editor/EditorView.tsx:338
+#: src/features/editor/EditorView.tsx:340
 msgid "Choose sentences of the overview to voice again"
 msgstr "Choose sentences of the overview to voice again"
 
-#: src/features/editor/EditorView.tsx:363
+#: src/features/editor/EditorView.tsx:364
 msgid "Choose sentences of this narration to voice again"
 msgstr "Choose sentences of this narration to voice again"
 
-#: src/features/editor/EditorView.tsx:332
-#: src/features/editor/EditorView.tsx:355
+#: src/features/editor/EditorView.tsx:334
+#: src/features/editor/EditorView.tsx:357
 msgid "Choose sentences to voice again..."
 msgstr "Choose sentences to voice again..."
 
@@ -1302,8 +1307,8 @@ msgstr "Cinematic"
 msgid "Clean map before the card"
 msgstr "Clean map before the card"
 
-#: src/components/ui/AppSettings.tsx:1336
-#: src/components/ui/AppSettings.tsx:1338
+#: src/components/ui/AppSettings.tsx:1377
+#: src/components/ui/AppSettings.tsx:1379
 #: src/components/ui/NewProject.tsx:317
 #: src/components/ui/ReviewStep.tsx:182
 #: src/components/ui/StatusBar.tsx:402
@@ -1333,7 +1338,7 @@ msgstr "Clear path"
 msgid "Clear route"
 msgstr "Clear route"
 
-#: src/features/editor/RegenQueueCard.tsx:67
+#: src/features/editor/RegenQueueCard.tsx:68
 msgid "Clear the queue"
 msgstr "Clear the queue"
 
@@ -1620,8 +1625,8 @@ msgid "Could not look for photos: {0}"
 msgstr "Could not look for photos: {0}"
 
 #: src/hooks/useStopRegen.ts:122
-#: src/hooks/useStopRegen.ts:150
-#: src/hooks/useStopRegen.ts:173
+#: src/hooks/useStopRegen.ts:151
+#: src/hooks/useStopRegen.ts:174
 msgid "Could not make that again: {message}"
 msgstr "Could not make that again: {message}"
 
@@ -1678,7 +1683,7 @@ msgid "Could not save this version"
 msgstr "Could not save this version"
 
 #. placeholder {0}: res.error
-#: src/components/ui/AppSettings.tsx:802
+#: src/components/ui/AppSettings.tsx:821
 msgid "Could not voice that word: {0}"
 msgstr "Could not voice that word: {0}"
 
@@ -1775,7 +1780,7 @@ msgstr "Customize in Timeline"
 msgid "Cut"
 msgstr "Cut"
 
-#: src/features/editor/EditorView.tsx:401
+#: src/features/editor/EditorView.tsx:402
 msgid "Cut to next clip"
 msgstr "Cut to next clip"
 
@@ -1833,7 +1838,7 @@ msgid "Delete {0}"
 msgstr "Delete {0}"
 
 #. placeholder {0}: ids.length
-#: src/features/editor/EditorView.tsx:411
+#: src/features/editor/EditorView.tsx:412
 #: src/features/editor/Inspector.tsx:273
 msgid "Delete {0} subtitles"
 msgstr "Delete {0} subtitles"
@@ -1856,7 +1861,7 @@ msgstr "Delete point"
 msgid "Delete stop"
 msgstr "Delete stop"
 
-#: src/features/editor/EditorView.tsx:411
+#: src/features/editor/EditorView.tsx:412
 msgid "Delete subtitle"
 msgstr "Delete subtitle"
 
@@ -1868,7 +1873,7 @@ msgstr "Delete this saved version?"
 msgid "Delete this stop?"
 msgstr "Delete this stop?"
 
-#: src/features/editor/EditorView.tsx:416
+#: src/features/editor/EditorView.tsx:417
 msgid "Delete title"
 msgstr "Delete title"
 
@@ -1985,7 +1990,7 @@ msgstr "Distance, climb, walking time and via points between neighbouring stops"
 #~ msgid "Distance, mode and via points between neighbouring stops"
 #~ msgstr "Distance, mode and via points between neighbouring stops"
 
-#: src/components/ui/VideoLookSettings.tsx:217
+#: src/components/ui/VideoLookSettings.tsx:222
 msgid "Distance, time and mode on each card."
 msgstr "Distance, time and mode on each card."
 
@@ -2061,7 +2066,7 @@ msgstr "Double-click to type coordinates"
 msgid "Downhill"
 msgstr "Downhill"
 
-#: src/components/ui/AppSettings.tsx:1355
+#: src/components/ui/AppSettings.tsx:1396
 msgid "Download"
 msgstr "Download"
 
@@ -2119,7 +2124,7 @@ msgid "Drop photos or GPS files to plot route"
 msgstr "Drop photos or GPS files to plot route"
 
 #: src/components/view/ProjectManager.tsx:232
-#: src/features/editor/EditorView.tsx:385
+#: src/features/editor/EditorView.tsx:386
 #: src/features/editor/Inspector.tsx:577
 #: src/features/map/hooks/useStopMenus.ts:258
 msgid "Duplicate"
@@ -2274,7 +2279,7 @@ msgstr "Estimating…"
 msgid "Every caption with its start and end time in the video"
 msgstr "Every caption with its start and end time in the video"
 
-#: src/components/ui/AppSettings.tsx:1010
+#: src/components/ui/AppSettings.tsx:1051
 msgid "Every subtitle starts from this look"
 msgstr "Every subtitle starts from this look"
 
@@ -2300,7 +2305,7 @@ msgid "Expand Review"
 msgstr "Expand Review"
 
 #: src/components/ui/RenderOverlay.tsx:1049
-#: src/features/editor/EditorView.tsx:495
+#: src/features/editor/EditorView.tsx:496
 #: src/features/editor/ExportDialog.tsx:113
 msgid "Export"
 msgstr "Export"
@@ -2356,7 +2361,7 @@ msgstr "Fade"
 msgid "Fade into next"
 msgstr "Fade into next"
 
-#: src/features/editor/EditorView.tsx:401
+#: src/features/editor/EditorView.tsx:402
 msgid "Fade into next clip"
 msgstr "Fade into next clip"
 
@@ -2536,8 +2541,8 @@ msgstr "Finding the places in the document..."
 msgid "Finished"
 msgstr "Finished"
 
-#: src/features/editor/EditorView.tsx:480
-#: src/features/editor/EditorView.tsx:482
+#: src/features/editor/EditorView.tsx:481
+#: src/features/editor/EditorView.tsx:483
 msgid "Fit to window"
 msgstr "Fit to window"
 
@@ -2604,8 +2609,8 @@ msgstr "Free fonts from Google Fonts, installed for your Windows account"
 msgid "Free photos with credits. This sends the place names and positions to Wikimedia."
 msgstr "Free photos with credits. This sends the place names and positions to Wikimedia."
 
-#: src/features/editor/EditorView.tsx:436
-#: src/features/editor/EditorView.tsx:445
+#: src/features/editor/EditorView.tsx:437
+#: src/features/editor/EditorView.tsx:446
 msgid "From a file…"
 msgstr "From a file…"
 
@@ -2613,8 +2618,8 @@ msgstr "From a file…"
 msgid "From an itinerary"
 msgstr "From an itinerary"
 
-#: src/features/editor/EditorView.tsx:435
-#: src/features/editor/EditorView.tsx:444
+#: src/features/editor/EditorView.tsx:436
+#: src/features/editor/EditorView.tsx:445
 msgid "From narration"
 msgstr "From narration"
 
@@ -2722,7 +2727,7 @@ msgstr "Get more fonts"
 msgid "Get name from coordinate"
 msgstr "Get name from coordinate"
 
-#: src/components/ui/AppSettings.tsx:1236
+#: src/components/ui/AppSettings.tsx:1277
 #: src/components/ui/ComponentsChecklist.tsx:249
 msgid "Get Ollama"
 msgstr "Get Ollama"
@@ -2822,6 +2827,14 @@ msgstr "High-spec Mode"
 msgid "High-spec system detected: {gpuRenderer} ({logicalCores} CPU threads)"
 msgstr "High-spec system detected: {gpuRenderer} ({logicalCores} CPU threads)"
 
+#: src/components/ui/AppSettings.tsx:858
+msgid "High/low"
+msgstr "High/low"
+
+#: src/components/ui/AppSettings.tsx:906
+msgid "High/low pattern, one H or L per sound of the reading (かつらぎ: LHHH). The voice is taken again until it matches."
+msgstr "High/low pattern, one H or L per sound of the reading (かつらぎ: LHHH). The voice is taken again until it matches."
+
 #: src/components/ui/StatusBar.tsx:276
 msgid "History"
 msgstr "History"
@@ -2833,6 +2846,10 @@ msgstr "How far behind the traveler the street-level camera sits."
 #: src/components/ui/VideoLookSettings.tsx:141
 msgid "How much faster the overview plays than the paced route."
 msgstr "How much faster the overview plays than the paced route."
+
+#: src/components/ui/VideoLookSettings.tsx:218
+#~ msgid "How much of the page below the title the photos use. Smaller makes the cards smaller."
+#~ msgstr "How much of the page below the title the photos use. Smaller makes the cards smaller."
 
 #: src/components/ui/AppSettings.tsx:379
 msgid "How solid the elevation profile and the uphill/downhill key on the map are."
@@ -3073,8 +3090,8 @@ msgstr "Japanese"
 msgid "Keep all"
 msgstr "Keep all"
 
-#: src/components/ui/AppSettings.tsx:911
-#: src/components/ui/AppSettings.tsx:912
+#: src/components/ui/AppSettings.tsx:952
+#: src/components/ui/AppSettings.tsx:953
 msgid "Keep as written"
 msgstr "Keep as written"
 
@@ -3233,7 +3250,7 @@ msgstr "Line color: route color"
 msgid "Line Thickness"
 msgstr "Line Thickness"
 
-#: src/features/editor/EditorView.tsx:393
+#: src/features/editor/EditorView.tsx:394
 msgid "Link narration to clip"
 msgstr "Link narration to clip"
 
@@ -3247,8 +3264,8 @@ msgstr "Linked to clip"
 msgid "Listen"
 msgstr "Listen"
 
-#: src/components/ui/AppSettings.tsx:889
-#: src/components/ui/AppSettings.tsx:890
+#: src/components/ui/AppSettings.tsx:930
+#: src/components/ui/AppSettings.tsx:931
 msgid "Listen (a new take each time)"
 msgstr "Listen (a new take each time)"
 
@@ -3381,7 +3398,7 @@ msgstr "Make a language version"
 msgid "Make a language version..."
 msgstr "Make a language version..."
 
-#: src/features/editor/EditorView.tsx:349
+#: src/features/editor/EditorView.tsx:351
 #: src/features/map/components/WaypointEditor.tsx:176
 msgid "Make again for this stop"
 msgstr "Make again for this stop"
@@ -3395,11 +3412,15 @@ msgstr "Make every point smooth, or every point a corner"
 msgid "Make everything again"
 msgstr "Make everything again"
 
-#: src/features/editor/EditorView.tsx:326
+#: src/features/editor/EditorView.tsx:328
 msgid "Make the intro again"
 msgstr "Make the intro again"
 
 #: src/features/editor/EditorView.tsx:326
+msgid "Make the outro again"
+msgstr "Make the outro again"
+
+#: src/features/editor/EditorView.tsx:328
 msgid "Make the overview again"
 msgstr "Make the overview again"
 
@@ -3426,7 +3447,7 @@ msgstr "Make this stop's files again"
 msgid "Makes the file much larger. Without them the other person renders the clips again."
 msgstr "Makes the file much larger. Without them the other person renders the clips again."
 
-#: src/features/editor/RegenQueueCard.tsx:24
+#: src/features/editor/RegenQueueCard.tsx:25
 msgid "Making it again"
 msgstr "Making it again"
 
@@ -3458,7 +3479,7 @@ msgstr "Making the photo clip for this stop. This can take a few minutes."
 msgid "Making the subtitles for this stop."
 msgstr "Making the subtitles for this stop."
 
-#: src/hooks/useStopRegen.ts:159
+#: src/hooks/useStopRegen.ts:160
 msgid "Making the walking clip again. This can take a few minutes."
 msgstr "Making the walking clip again. This can take a few minutes."
 
@@ -3612,8 +3633,8 @@ msgstr "More than 3 GB with a graphics card. The most natural, and it clones a v
 #~ msgid "More video options…"
 #~ msgstr "More video options…"
 
-#: src/features/editor/RegenQueueCard.tsx:41
-#: src/features/editor/RegenQueueCard.tsx:41
+#: src/features/editor/RegenQueueCard.tsx:42
+#: src/features/editor/RegenQueueCard.tsx:42
 msgid "Move down"
 msgstr "Move down"
 
@@ -3621,10 +3642,14 @@ msgstr "Move down"
 msgid "Move the photos (slow zoom and pan)"
 msgstr "Move the photos (slow zoom and pan)"
 
-#: src/features/editor/RegenQueueCard.tsx:38
-#: src/features/editor/RegenQueueCard.tsx:38
+#: src/features/editor/RegenQueueCard.tsx:39
+#: src/features/editor/RegenQueueCard.tsx:39
 msgid "Move up"
 msgstr "Move up"
+
+#: src/components/ui/VideoLookSettings.tsx:218
+msgid "Moves the photos up or down below the title: 0% just under it, 100% at the bottom."
+msgstr "Moves the photos up or down below the title: 0% just under it, 100% at the bottom."
 
 #: src/components/ui/ComponentsChecklist.tsx:279
 msgid "Moving attraction videos"
@@ -3651,7 +3676,7 @@ msgstr "Music volume"
 msgid "Mute"
 msgstr "Mute"
 
-#: src/features/editor/EditorView.tsx:387
+#: src/features/editor/EditorView.tsx:388
 #: src/features/editor/Inspector.tsx:552
 msgid "Mute narration"
 msgstr "Mute narration"
@@ -3668,16 +3693,16 @@ msgstr "Name your project to continue"
 msgid "Name, position, route mode, scripts and media counts for each stop"
 msgstr "Name, position, route mode, scripts and media counts for each stop"
 
-#: src/components/ui/AppSettings.tsx:1240
+#: src/components/ui/AppSettings.tsx:1281
 #: src/features/assistant/AssistantChat.tsx:20
-#: src/features/editor/EditorView.tsx:330
+#: src/features/editor/EditorView.tsx:332
 #: src/features/editor/ExportDialog.tsx:86
 #: src/features/editor/Inspector.tsx:531
 #: src/features/map/components/WaypointEditor.tsx:587
 msgid "Narration"
 msgstr "Narration"
 
-#: src/features/editor/EditorView.tsx:344
+#: src/features/editor/EditorView.tsx:346
 msgid "Narration and video"
 msgstr "Narration and video"
 
@@ -3755,7 +3780,7 @@ msgstr "New Project"
 msgid "New Project Name"
 msgstr "New Project Name"
 
-#: src/features/editor/EditorView.tsx:430
+#: src/features/editor/EditorView.tsx:431
 #: src/features/editor/TimelinePane.tsx:312
 msgid "New subtitle"
 msgstr "New subtitle"
@@ -3772,7 +3797,7 @@ msgstr "no bold"
 msgid "No clips yet"
 msgstr "No clips yet"
 
-#: src/components/ui/AppSettings.tsx:925
+#: src/components/ui/AppSettings.tsx:966
 msgid "No entries yet."
 msgstr "No entries yet."
 
@@ -3784,7 +3809,7 @@ msgstr "No fonts match."
 msgid "No free photos of this place were found."
 msgstr "No free photos of this place were found."
 
-#: src/components/ui/AppSettings.tsx:1226
+#: src/components/ui/AppSettings.tsx:1267
 msgid "No local models found. To write scripts on this PC, install Ollama and keep it running, then download a model below. Or pick an online provider above, which needs nothing installed."
 msgstr "No local models found. To write scripts on this PC, install Ollama and keep it running, then download a model below. Or pick an online provider above, which needs nothing installed."
 
@@ -3792,7 +3817,7 @@ msgstr "No local models found. To write scripts on this PC, install Ollama and k
 #~ msgid "No locations found in document"
 #~ msgstr "No locations found in document"
 
-#: src/components/ui/AppSettings.tsx:1255
+#: src/components/ui/AppSettings.tsx:1296
 msgid "No models installed"
 msgstr "No models installed"
 
@@ -3873,7 +3898,7 @@ msgstr "No subtitles yet. Use Subtitles in the toolbar."
 msgid "No tracks yet. Put music files in the folder (use Open music folder), or choose a file from anywhere. An optional library.json can add titles, tags and credits."
 msgstr "No tracks yet. Put music files in the folder (use Open music folder), or choose a file from anywhere. An optional library.json can add titles, tags and credits."
 
-#: src/components/ui/AppSettings.tsx:843
+#: src/components/ui/AppSettings.tsx:865
 msgid "No words match \"{query}\"."
 msgstr "No words match \"{query}\"."
 
@@ -3949,7 +3974,7 @@ msgstr "Nothing to review yet."
 #~ msgstr "Nothing waiting"
 
 #: src/hooks/useStopRegen.ts:116
-#: src/hooks/useStopRegen.ts:145
+#: src/hooks/useStopRegen.ts:146
 msgid "Nothing was made: {skipped}"
 msgstr "Nothing was made: {skipped}"
 
@@ -4166,6 +4191,7 @@ msgid "Output"
 msgstr "Output"
 
 #: src/components/ui/VideoLookSettings.tsx:199
+#: src/features/editor/EditorView.tsx:59
 msgid "Outro"
 msgstr "Outro"
 
@@ -4232,8 +4258,8 @@ msgid "Paste your key. It is kept in this PC's credential store, never in the pr
 msgstr "Paste your key. It is kept in this PC's credential store, never in the project or in shared files."
 
 #: src/features/editor/MusicPicker.tsx:148
-#: src/features/editor/Preview.tsx:470
 #: src/features/editor/Preview.tsx:475
+#: src/features/editor/Preview.tsx:480
 msgid "Pause"
 msgstr "Pause"
 
@@ -4252,12 +4278,17 @@ msgstr "Pause on the stop map"
 msgid "Percent"
 msgstr "Percent"
 
+#: src/components/ui/VideoLookSettings.tsx:218
+#: src/components/ui/VideoLookSettings.tsx:219
+#~ msgid "Photo area height"
+#~ msgstr "Photo area height"
+
 #: src/features/map/components/WaypointEditor.tsx:935
 msgid "Photo card"
 msgstr "Photo card"
 
 #: src/features/editor/EditorView.tsx:58
-#: src/features/editor/EditorView.tsx:368
+#: src/features/editor/EditorView.tsx:369
 #: src/features/map/components/WaypointEditor.tsx:179
 msgid "Photo clip"
 msgstr "Photo clip"
@@ -4299,6 +4330,11 @@ msgstr "Photos at stops"
 #: src/components/ui/VideoLookSettings.tsx:165
 msgid "Photos grow to fill the frame when the traveler arrives."
 msgstr "Photos grow to fill the frame when the traveler arrives."
+
+#: src/components/ui/VideoLookSettings.tsx:218
+#: src/components/ui/VideoLookSettings.tsx:219
+msgid "Photos position"
+msgstr "Photos position"
 
 #: src/features/map/components/OverviewPanel.tsx:172
 msgid "Photos with the title. The overview voice starts here."
@@ -4356,8 +4392,8 @@ msgid "Place cues in the overview narration"
 msgstr "Place cues in the overview narration"
 
 #: src/features/editor/MusicPicker.tsx:148
-#: src/features/editor/Preview.tsx:470
 #: src/features/editor/Preview.tsx:475
+#: src/features/editor/Preview.tsx:480
 msgid "Play"
 msgstr "Play"
 
@@ -4560,7 +4596,7 @@ msgstr "Qwen3-TTS setup"
 msgid "Reading"
 msgstr "Reading"
 
-#: src/components/ui/AppSettings.tsx:864
+#: src/components/ui/AppSettings.tsx:886
 msgid "Reading (e.g. かだ)"
 msgstr "Reading (e.g. かだ)"
 
@@ -4568,7 +4604,7 @@ msgstr "Reading (e.g. かだ)"
 msgid "Reading (e.g. さんだんべき)"
 msgstr "Reading (e.g. さんだんべき)"
 
-#: src/components/ui/AppSettings.tsx:836
+#: src/components/ui/AppSettings.tsx:855
 msgid "Reading (Furigana)"
 msgstr "Reading (Furigana)"
 
@@ -4576,7 +4612,7 @@ msgstr "Reading (Furigana)"
 #~ msgid "Reading guessed automatically from the scripts. Edit it to keep your own."
 #~ msgstr "Reading guessed automatically from the scripts. Edit it to keep your own."
 
-#: src/components/ui/AppSettings.tsx:879
+#: src/components/ui/AppSettings.tsx:920
 msgid "Reading guessed automatically. Click to keep it as yours: the voice is then always given this reading instead of guessing from the kanji."
 msgstr "Reading guessed automatically. Click to keep it as yours: the voice is then always given this reading instead of guessing from the kanji."
 
@@ -4597,7 +4633,7 @@ msgstr "Reading..."
 msgid "Readings of place names for the voice."
 msgstr "Readings of place names for the voice."
 
-#: src/components/ui/AppSettings.tsx:1347
+#: src/components/ui/AppSettings.tsx:1388
 #: src/components/ui/ComponentsChecklist.tsx:148
 msgid "Ready"
 msgstr "Ready"
@@ -4611,7 +4647,7 @@ msgstr "Ready to build"
 msgid "Recent"
 msgstr "Recent"
 
-#: src/components/ui/AppSettings.tsx:1292
+#: src/components/ui/AppSettings.tsx:1333
 msgid "Recommended models"
 msgstr "Recommended models"
 
@@ -4670,13 +4706,13 @@ msgstr "Refresh the model list"
 msgid "Reload Application"
 msgstr "Reload Application"
 
-#: src/components/ui/AppSettings.tsx:911
-#: src/components/ui/AppSettings.tsx:912
+#: src/components/ui/AppSettings.tsx:952
+#: src/components/ui/AppSettings.tsx:953
 #: src/components/ui/OnlineAiSettings.tsx:226
 #: src/components/ui/ReviewStep.tsx:111
 #: src/components/view/ProjectManager.tsx:649
 #: src/features/assistant/AssistantChat.tsx:179
-#: src/features/editor/EditorView.tsx:403
+#: src/features/editor/EditorView.tsx:404
 #: src/features/editor/Inspector.tsx:580
 msgid "Remove"
 msgstr "Remove"
@@ -4694,8 +4730,8 @@ msgstr "Remove all {count} via points"
 msgid "Remove from List"
 msgstr "Remove from List"
 
-#: src/features/editor/RegenQueueCard.tsx:44
-#: src/features/editor/RegenQueueCard.tsx:44
+#: src/features/editor/RegenQueueCard.tsx:45
+#: src/features/editor/RegenQueueCard.tsx:45
 msgid "Remove from queue"
 msgstr "Remove from queue"
 
@@ -4705,7 +4741,7 @@ msgstr "Remove from queue"
 msgid "Remove Image"
 msgstr "Remove Image"
 
-#: src/features/editor/EditorView.tsx:421
+#: src/features/editor/EditorView.tsx:422
 #: src/features/editor/Inspector.tsx:699
 msgid "Remove music"
 msgstr "Remove music"
@@ -4825,7 +4861,7 @@ msgstr "Reset the look"
 #~ msgid "Reset to default"
 #~ msgstr "Reset to default"
 
-#: src/features/editor/EditorView.tsx:398
+#: src/features/editor/EditorView.tsx:399
 #: src/features/editor/Inspector.tsx:527
 msgid "Reset trim"
 msgstr "Reset trim"
@@ -4909,8 +4945,8 @@ msgstr "Route color"
 #~ msgid "Route colour"
 #~ msgstr "Route colour"
 
-#: src/components/ui/VideoLookSettings.tsx:217
-#: src/components/ui/VideoLookSettings.tsx:218
+#: src/components/ui/VideoLookSettings.tsx:222
+#: src/components/ui/VideoLookSettings.tsx:223
 msgid "Route facts"
 msgstr "Route facts"
 
@@ -5085,6 +5121,10 @@ msgstr "Saved with the project"
 msgid "Scan script for all Kanji and add to Dictionary"
 msgstr "Scan script for all Kanji and add to Dictionary"
 
+#: src/components/ui/AppSettings.tsx:737
+msgid "Scans the scripts for place names and adds their readings (marked auto). Turning it off removes the auto words."
+msgstr "Scans the scripts for place names and adds their readings (marked auto). Turning it off removes the auto words."
+
 #: src/components/ui/VideoLookSettings.tsx:213
 msgid "Scrapbook"
 msgstr "Scrapbook"
@@ -5113,8 +5153,8 @@ msgstr "Search fonts"
 msgid "Search for the right place"
 msgstr "Search for the right place"
 
-#: src/components/ui/AppSettings.tsx:822
-#: src/components/ui/AppSettings.tsx:823
+#: src/components/ui/AppSettings.tsx:841
+#: src/components/ui/AppSettings.tsx:842
 msgid "Search words or readings"
 msgstr "Search words or readings"
 
@@ -5547,8 +5587,8 @@ msgstr "Stitching clips, narration and subtitles."
 msgid "Stitching Videos & Finalizing Export..."
 msgstr "Stitching Videos & Finalizing Export..."
 
-#: src/components/ui/AppSettings.tsx:889
-#: src/components/ui/AppSettings.tsx:890
+#: src/components/ui/AppSettings.tsx:930
+#: src/components/ui/AppSettings.tsx:931
 #: src/components/ui/RenderOverlay.tsx:398
 #: src/features/editor/VoicePiecesDialog.tsx:112
 #: src/features/editor/VoicePiecesDialog.tsx:113
@@ -5576,7 +5616,7 @@ msgstr "Stop By"
 msgid "Stop export"
 msgstr "Stop export"
 
-#: src/features/editor/RegenQueueCard.tsx:59
+#: src/features/editor/RegenQueueCard.tsx:60
 msgid "Stop this one"
 msgstr "Stop this one"
 
@@ -5596,8 +5636,8 @@ msgid "Stop-by pin"
 msgstr "Stop-by pin"
 
 #: src/hooks/useStopRegen.ts:121
-#: src/hooks/useStopRegen.ts:149
-#: src/hooks/useStopRegen.ts:172
+#: src/hooks/useStopRegen.ts:150
+#: src/hooks/useStopRegen.ts:173
 msgid "Stopped before it finished."
 msgstr "Stopped before it finished."
 
@@ -5664,14 +5704,14 @@ msgstr "Subtitle (optional)"
 msgid "Subtitle lines in the timeline"
 msgstr "Subtitle lines in the timeline"
 
-#: src/components/ui/AppSettings.tsx:1010
+#: src/components/ui/AppSettings.tsx:1051
 #: src/components/ui/ExportCsvDialog.tsx:78
 #: src/components/ui/PipelineLogPanel.tsx:50
 #: src/features/editor/EditorView.tsx:58
 #: src/features/editor/EditorView.tsx:190
-#: src/features/editor/EditorView.tsx:367
-#: src/features/editor/EditorView.tsx:466
-#: src/features/editor/EditorView.tsx:468
+#: src/features/editor/EditorView.tsx:368
+#: src/features/editor/EditorView.tsx:467
+#: src/features/editor/EditorView.tsx:469
 #: src/features/editor/ExportDialog.tsx:87
 #: src/features/editor/Inspector.tsx:680
 #: src/features/map/components/GenerateDialog.tsx:56
@@ -5777,7 +5817,7 @@ msgstr "The assistant, Auto-Write script buttons and overview narration, in ever
 msgid "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
 msgstr "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
 
-#: src/hooks/useStopRegen.ts:146
+#: src/hooks/useStopRegen.ts:147
 msgid "The clip is ready."
 msgstr "The clip is ready."
 
@@ -5830,7 +5870,7 @@ msgstr "The map needs a Mapbox token"
 msgid "The map overlays and cards in the video, not the app."
 msgstr "The map overlays and cards in the video, not the app."
 
-#: src/components/ui/AppSettings.tsx:1243
+#: src/components/ui/AppSettings.tsx:1284
 msgid "The model that writes narration scripts and answers in the assistant chat. Only downloaded models are shown."
 msgstr "The model that writes narration scripts and answers in the assistant chat. Only downloaded models are shown."
 
@@ -5842,7 +5882,7 @@ msgstr "The model the assistant and Auto-Write use."
 #~ msgid "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
 #~ msgstr "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
 
-#: src/hooks/useStopRegen.ts:146
+#: src/hooks/useStopRegen.ts:147
 msgid "The narration is ready. If its length changed, make the clip again so it fits."
 msgstr "The narration is ready. If its length changed, make the clip again so it fits."
 
@@ -5877,6 +5917,11 @@ msgstr "The photo clip is ready."
 #: src/components/ui/VideoLookSettings.tsx:200
 msgid "The places-visited clip at the end of the video."
 msgstr "The places-visited clip at the end of the video."
+
+#. placeholder {0}: moraCount(entry.reading)
+#: src/components/ui/AppSettings.tsx:905
+msgid "The reading has {0} sounds; give one H or L for each."
+msgstr "The reading has {0} sounds; give one H or L for each."
 
 #: src/components/ui/RenderOverlay.tsx:815
 msgid "The redo failed"
@@ -5934,7 +5979,7 @@ msgstr "The voice reads every narration in this project. Changing the voice or t
 msgid "The walk reaches the stop by the time its name is spoken. Cues you type yourself always win."
 msgstr "The walk reaches the stop by the time its name is spoken. Cues you type yourself always win."
 
-#: src/hooks/useStopRegen.ts:169
+#: src/hooks/useStopRegen.ts:170
 msgid "The walking clip is ready."
 msgstr "The walking clip is ready."
 
@@ -5966,13 +6011,13 @@ msgstr "This copy"
 #~ msgid "This downloads about 30 GB and can take an hour or more. Stay on this tab; a stopped download continues where it left off."
 #~ msgstr "This downloads about 30 GB and can take an hour or more. Stay on this tab; a stopped download continues where it left off."
 
-#: src/components/ui/AppSettings.tsx:1281
+#: src/components/ui/AppSettings.tsx:1322
 msgid "This model cannot read photos. Scripts for stops with photos are written from the place name and location facts only. A vision model such as Gemma 4 can use the photos."
 msgstr "This model cannot read photos. Scripts for stops with photos are written from the place name and location facts only. A vision model such as Gemma 4 can use the photos."
 
 #. placeholder {0}: fit.sizeGb.toFixed(0)
 #. placeholder {1}: fit.ramGb.toFixed(0)
-#: src/components/ui/AppSettings.tsx:1266
+#: src/components/ui/AppSettings.tsx:1307
 msgid "This model is about {0} GB and this PC has {1} GB of memory, so it loads slowly and writes only a word or two a second. A 3-4B model is much faster here."
 msgstr "This model is about {0} GB and this PC has {1} GB of memory, so it loads slowly and writes only a word or two a second. A 3-4B model is much faster here."
 
@@ -6251,7 +6296,7 @@ msgstr "Undo"
 msgid "Unknown Location"
 msgstr "Unknown Location"
 
-#: src/features/editor/EditorView.tsx:393
+#: src/features/editor/EditorView.tsx:394
 msgid "Unlink narration"
 msgstr "Unlink narration"
 
@@ -6264,7 +6309,7 @@ msgstr "Unlinked: drag it anywhere"
 msgid "Unlock"
 msgstr "Unlock"
 
-#: src/features/editor/EditorView.tsx:387
+#: src/features/editor/EditorView.tsx:388
 msgid "Unmute narration"
 msgstr "Unmute narration"
 
@@ -6389,7 +6434,7 @@ msgstr "Via point {0} of {count}"
 #: src/components/ui/ComponentsChecklist.tsx:276
 #: src/features/editor/EditorView.tsx:58
 #: src/features/editor/EditorView.tsx:94
-#: src/features/editor/EditorView.tsx:342
+#: src/features/editor/EditorView.tsx:344
 msgid "Video"
 msgstr "Video"
 
@@ -6422,7 +6467,7 @@ msgstr "Visited pin"
 #: src/components/ui/VoiceSettings.tsx:309
 #: src/components/ui/VoiceSettings.tsx:411
 #: src/features/editor/EditorView.tsx:58
-#: src/features/editor/EditorView.tsx:353
+#: src/features/editor/EditorView.tsx:355
 #: src/features/map/components/WaypointEditor.tsx:177
 msgid "Voice"
 msgstr "Voice"
@@ -6440,12 +6485,12 @@ msgstr "Voice {0} sentences again"
 msgid "Voice 1 sentence again"
 msgstr "Voice 1 sentence again"
 
-#: src/features/editor/EditorView.tsx:370
+#: src/features/editor/EditorView.tsx:371
 #: src/features/map/components/WaypointEditor.tsx:181
 msgid "Voice and photo clip"
 msgstr "Voice and photo clip"
 
-#: src/features/editor/EditorView.tsx:377
+#: src/features/editor/EditorView.tsx:378
 msgid "Voice and walking clip"
 msgstr "Voice and walking clip"
 
@@ -6636,11 +6681,11 @@ msgstr "Word"
 msgid "Word (e.g. 三段壁)"
 msgstr "Word (e.g. 三段壁)"
 
-#: src/components/ui/AppSettings.tsx:853
+#: src/components/ui/AppSettings.tsx:875
 msgid "Word (e.g. 加太)"
 msgstr "Word (e.g. 加太)"
 
-#: src/components/ui/AppSettings.tsx:833
+#: src/components/ui/AppSettings.tsx:852
 msgid "Word / Kanji"
 msgstr "Word / Kanji"
 
@@ -6731,13 +6776,13 @@ msgstr "Your Project Name Here"
 msgid "Your trip"
 msgstr "Your trip"
 
-#: src/features/editor/EditorView.tsx:484
-#: src/features/editor/EditorView.tsx:486
+#: src/features/editor/EditorView.tsx:485
+#: src/features/editor/EditorView.tsx:487
 msgid "Zoom in"
 msgstr "Zoom in"
 
-#: src/features/editor/EditorView.tsx:476
-#: src/features/editor/EditorView.tsx:478
+#: src/features/editor/EditorView.tsx:477
+#: src/features/editor/EditorView.tsx:479
 msgid "Zoom out"
 msgstr "Zoom out"
 

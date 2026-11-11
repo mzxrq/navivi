@@ -1161,10 +1161,10 @@ def _pipe_frames(frames, output_path: Path, fps: int, size: Tuple[int, int]) -> 
     return True
 
 
-def scrapbook_layout(count: int, size: Tuple[int, int], top: float = 0.0):
+def scrapbook_layout(count: int, size: Tuple[int, int], top: float = 0.0, position: float = 0.5):
     """(card width, [(cx, cy, degrees)] per card, (cx, cy, radius) of the stamp): a loose grid below `top`
-    (px kept for the heading) with the bottom-right cell kept for the stamp, columns chosen so the cards
-    come out as big as possible."""
+    (px kept for the heading), rows snaking left-right-left with the cell after the last card kept for the stamp, columns chosen so the cards
+    come out as big as possible. `position`: where the cards sit in the room left below `top`, 0 = top, 1 = bottom."""
     width, height = size
     rng = random.Random(7)
     best = None
@@ -1176,9 +1176,12 @@ def scrapbook_layout(count: int, size: Tuple[int, int], top: float = 0.0):
         if best is None or card_w > best[0]:
             best = (card_w, cols, rows, cell_w, cell_h)
     card_w, cols, rows, cell_w, cell_h = best
-    x0, y0 = width * 0.015, top + (height - top) * 0.02
-    cells = [(c, r) for r in range(rows) for c in range(cols)]
-    stamp_cell = cells.pop()  # bottom-right
+    # Rows only as far apart as the cards need; the block sits at `position` in the room that leaves.
+    cell_h = min(cell_h, card_w * _POLAROID_RATIO * 1.22)
+    x0, y0 = width * 0.015, top + (height - top - rows * cell_h) * min(max(position, 0.0), 1.0)
+    # Every other row runs right to left, so the route line snakes from row to row instead of crossing back.
+    cells = [(c if r % 2 == 0 else cols - 1 - c, r) for r in range(rows) for c in range(cols)]
+    stamp_cell = cells[count] if count < len(cells) else cells[-1]  # right after the last stop
     cards = []
     for c, r in cells[:count]:
         jx, jy = rng.uniform(-0.05, 0.05) * cell_w, rng.uniform(-0.04, 0.04) * cell_h
@@ -1220,7 +1223,14 @@ def _polaroid(path: str, badge: str, name: str, card_w: int, badge_color=tuning.
     draw.text((left + r, cy), badge, font=_load_font(bold, int(r * 1.15)), fill="white", anchor="mm")
     for k, line in enumerate(lines):
         draw.text((left + 2 * r + gap, cy + (k - (len(lines) - 1) / 2) * line_h), line, font=font, fill=_INK, anchor="lm")
-    return _with_shadow(card, max(4, card_w // 30))
+    blur = max(4, card_w // 30)
+    out = _with_shadow(card, blur)
+    # A strip of masking tape across the top edge holds it to the page.
+    rng = random.Random(f"{badge}{name}")
+    tape = Image.new("RGBA", (int(card_w * 0.36), max(6, int(card_w * 0.11))), tuning.OUTRO_SCRAPBOOK_TAPE_COLOR)
+    tape = tape.rotate(rng.uniform(-7, 7), resample=Image.BICUBIC, expand=True)
+    out.alpha_composite(tape, (int((out.width - tape.width) / 2 + rng.uniform(-0.1, 0.1) * card_w), max(0, blur * 3 - tape.height // 2)))
+    return out
 
 
 def _with_shadow(img: Image.Image, blur: int) -> Image.Image:
@@ -1259,6 +1269,129 @@ def _stamp(radius: int, lines: List[str]) -> Image.Image:
     return img
 
 
+def _foot(length: float, color) -> Image.Image:
+    """One right footprint, toes up, like the 👣 icon: the front of the foot leaning out, the heel apart below it.
+    Drawn at 4x and shrunk, so its edges stay smooth."""
+    w, h = max(6, int(length * 0.46)), max(10, int(length))
+    big = Image.new("RGBA", (w * 4, h * 4), (0, 0, 0, 0))
+    d = ImageDraw.Draw(big)
+    W, H = w * 4, h * 4
+    d.ellipse([W * 0.08, 0, W, H * 0.62], fill=color)
+    d.ellipse([W * 0.12, H * 0.68, W * 0.78, H - 1], fill=color)
+    return big.resize((w, h), Image.LANCZOS)
+
+
+def _footsteps(a, b, bend: float, color, foot: float, step: float, trim: float = 0.0) -> List[Tuple[Image.Image, int, int]]:
+    """(image, left, top) of each footprint walking from a to b along a gentle curve (the bend is a share of its
+    length, sideways), in walking order, left and right in turn, each turned the way it walks; none in the last `trim` px."""
+    (x1, y1), (x2, y2) = a, b
+    qx, qy = (x1 + x2) / 2 - (y2 - y1) * bend, (y1 + y2) / 2 + (x2 - x1) * bend
+    n = max(8, int(math.hypot(x2 - x1, y2 - y1) / 3))
+    pts = [((1 - t) ** 2 * x1 + 2 * (1 - t) * t * qx + t * t * x2, (1 - t) ** 2 * y1 + 2 * (1 - t) * t * qy + t * t * y2)
+           for t in (i / n for i in range(n + 1))]
+    total = sum(math.dist(p, q) for p, q in zip(pts, pts[1:]))
+    right = _foot(foot, color)
+    left = ImageOps.mirror(right)
+    s, next_at, side, out = 0.0, step / 2, 1, []
+    for p, q in zip(pts, pts[1:]):
+        seg = math.dist(p, q)
+        while seg and next_at <= s + seg and next_at < total - trim:
+            u = (next_at - s) / seg
+            dx, dy = (q[0] - p[0]) / seg, (q[1] - p[1]) / seg
+            # Left and right feet sit either side of the path, toes along it.
+            x, y = p[0] + dx * u * seg - dy * side * foot * 0.28, p[1] + dy * u * seg + dx * side * foot * 0.28
+            im = (right if side > 0 else left).rotate(-math.degrees(math.atan2(dy, dx)) - 90, resample=Image.BICUBIC, expand=True)
+            out.append((im, int(x - im.width / 2), int(y - im.height / 2)))
+            next_at += step
+            side = -side
+        s += seg
+    return out
+
+
+def _seal(size: int, text: str) -> Image.Image:
+    """A worn red square seal (hanko) with up to two characters stacked in pale ink, turned a little."""
+    big = size * 2
+    img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle([6, 6, big - 6, big - 6], radius=big // 12, fill=(*tuning.OUTRO_SCRAPBOOK_STAMP_COLOR, 235))
+    chars = list(text[:2])
+    font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, int(big * (0.38 if len(chars) > 1 else 0.62)))
+    for i, ch in enumerate(chars):
+        d.text((big / 2, big * ((0.3 + 0.4 * i) if len(chars) > 1 else 0.5)), ch, font=font, fill=(250, 240, 228, 255), anchor="mm")
+    alpha = np.asarray(img.getchannel("A"), np.float32)
+    wear = np.random.default_rng(len(text)).random(alpha.shape)
+    img.putalpha(Image.fromarray((alpha * np.where(wear < 0.12, 0.45, 1.0)).astype(np.uint8)))
+    return img.resize((size, size), Image.LANCZOS).rotate(8, resample=Image.BICUBIC, expand=True)
+
+
+def seal_text(title: str) -> str:
+    """The seal's characters: the last two of the heading's first line when they are kanji, else none (no seal)."""
+    tail = (title or "").strip()[-2:]
+    return tail if len(tail) == 2 and all(0x4E00 <= ord(c) <= 0x9FFF for c in tail) else ""
+
+
+def _heading_decor(width: int, top: float, k: float, lines: List[Tuple[str, Any, float]]) -> Image.Image:
+    """What sits behind and around the scrapbook's heading: soft mountain ridges fading out above the cards, a red
+    sun, a small torii on the ridge, a pine sprig, and a red seal beside the heading's biggest line (seal_text).
+    `lines`: (text, font, centre y) of each heading line. Drawn at 2x and shrunk, so the edges stay smooth."""
+    z = 2
+    h = int(top + 30 * k)
+    img = Image.new("RGBA", (width * z, h * z), (0, 0, 0, 0))
+    ink = (150, 118, 96)
+    xs = np.arange(0, width * z + 1, 6, dtype=np.float32)
+
+    def ridge(base_y, peaks):
+        y = np.full_like(xs, base_y * z)
+        for cx, ph, pw in peaks:
+            y -= ph * k * z * np.exp(-(((xs - cx * width * z) / (pw * width * z)) ** 2))
+        return y
+
+    fade = np.clip((np.arange(h * z)[:, None] - top * 0.55 * z) / ((h - top * 0.55) * z), 0, 1)  # 0 high up .. 1 at the cards
+    for base_y, peaks, a in (
+        (top * 0.95, ((0.12, 120, 0.09), (0.3, 80, 0.07), (0.72, 140, 0.1), (0.9, 95, 0.07)), 46),
+        (top * 1.0, ((0.05, 60, 0.06), (0.22, 95, 0.08), (0.55, 55, 0.1), (0.84, 110, 0.08)), 70),
+    ):
+        ys = ridge(base_y, peaks)
+        layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        ImageDraw.Draw(layer).polygon(list(zip(xs, ys)) + [(width * z, h * z), (0, h * z)], fill=(*ink, a))
+        ImageDraw.Draw(layer).line(list(zip(xs, ys)), fill=(*ink, a + 50), width=int(2 * k * z))
+        # Fades out downward, so the cards sit on clean paper.
+        mask = np.asarray(layer.getchannel("A"), np.float32) * (1 - fade) ** 1.5
+        layer.putalpha(Image.fromarray(mask.astype(np.uint8)))
+        img.alpha_composite(layer)
+        front = ys
+    d = ImageDraw.Draw(img)
+    # Sun, upper left.
+    r = 46 * k * z
+    sx, sy = width * z * 0.2, top * 0.35 * z
+    d.ellipse([sx - r, sy - r, sx + r, sy + r], outline=(*tuning.OUTRO_SCRAPBOOK_STAMP_COLOR, 150), width=int(3 * k * z))
+    # A small torii standing on the front ridge.
+    tx = width * z * 0.3
+    ty = float(np.interp(tx, xs, front))
+    tw, th, lw = 60 * k * z, 70 * k * z, int(5 * k * z)
+    col = (*ink, 170)
+    d.line([(tx - tw, ty - th), (tx + tw, ty - th)], fill=col, width=lw + 2)
+    d.line([(tx - tw * 0.8, ty - th * 0.75), (tx + tw * 0.8, ty - th * 0.75)], fill=col, width=lw)
+    d.line([(tx - tw * 0.55, ty - th), (tx - tw * 0.6, ty)], fill=col, width=lw)
+    d.line([(tx + tw * 0.55, ty - th), (tx + tw * 0.6, ty)], fill=col, width=lw)
+    # A pine sprig, upper right.
+    px, py, n = width * z * 0.8, top * 0.3 * z, 7
+    d.line([(px - 80 * k * z, py + 60 * k * z), (px + 70 * k * z, py - 40 * k * z)], fill=col, width=int(3 * k * z))
+    for i in range(n):
+        cx, cy = px - 70 * k * z + i * 21 * k * z, py + 53 * k * z - i * 14 * k * z
+        for ang in range(-150, -29, 30):
+            a = math.radians(ang)
+            d.line([(cx, cy), (cx + 24 * k * z * math.cos(a), cy + 24 * k * z * math.sin(a))], fill=col, width=int(2 * k * z))
+    img = img.resize((width, h), Image.LANCZOS)
+    if lines and seal_text(lines[0][0]):
+        text, font, cy = max(lines, key=lambda line: line[1].size)
+        probe = ImageDraw.Draw(img)
+        seal = _seal(int(font.size * 1.05), seal_text(lines[0][0]))
+        x = width / 2 + probe.textlength(text, font=font) / 2 + 28 * k
+        img.alpha_composite(seal, (int(min(x, width - seal.width - 8)), int(max(0, cy - seal.height / 2))))
+    return img
+
+
 def _ease(t: float) -> float:
     t = min(max(t, 0.0), 1.0)
     return t * t * (3 - 2 * t)
@@ -1279,7 +1412,7 @@ def _write_scrapbook_clip(
     output_path: Path, fps: int, size: Tuple[int, int], colors: Optional[Dict[str, Any]] = None,
     heading: Optional[Dict[str, Any]] = None,
 ) -> bool:
-    """Polaroids of the stops (S, 1, 2 … E) drop one by one onto paper, then a round stamp with the title,
+    """Footprints walk the route across the paper and each stop's polaroid (S, 1, 2 … E) pops up as they reach it, then a round stamp with the title,
     distance and travel time lands in the bottom-right cell; then the logo end card, as after the scroll."""
     width, height = size
     stops = [(badge, wp) for badge, wp in _route_badges(waypoints) if _first_image(wp)][: tuning.OUTRO_MAX_CARDS]
@@ -1292,9 +1425,14 @@ def _write_scrapbook_clip(
         ((heading or {}).get("subtitle") or "", _load_font(_GraphicsEngineBase.FONT_CANDIDATES_REGULAR, int(sizes[1] * k))),
     ) if t.strip()]
     top = (sum(f.size * 1.3 for _, f in head) + (SCRAPBOOK_HEADING_MARGIN + 16) * k) if head else 0.0
+    decor_lines, y = [], SCRAPBOOK_HEADING_MARGIN * k
+    for text, font in head:
+        decor_lines.append((text, font, y + font.size * 0.65))
+        y += font.size * 1.3
     if not (heading or {}).get("burn_text", True):
         head = []
-    card_w, spots, (sx, sy, sr) = scrapbook_layout(len(stops), size, top)
+    position = (heading or {}).get("content_position")
+    card_w, spots, (sx, sy, sr) = scrapbook_layout(len(stops), size, top, float(position) if isinstance(position, (int, float)) else 0.5)
     cards = []
     for (badge, wp), (cx, cy, angle) in zip(stops, spots):
         card = _polaroid(
@@ -1309,36 +1447,89 @@ def _write_scrapbook_clip(
     stamp = _stamp(int(sr), lines)
 
     noise = np.random.default_rng(1).normal(0, 5, (height, width, 1))
-    paper = np.clip(np.asarray(tuning.OUTRO_SCRAPBOOK_PAPER_COLOR, np.float32) + noise, 0, 255).astype(np.uint8)
+    # Darker toward the corners, like a lit page.
+    yy, xx = np.mgrid[0:height, 0:width].astype(np.float32)
+    shade = 1 - tuning.OUTRO_SCRAPBOOK_VIGNETTE * (((xx - width / 2) / (width / 2)) ** 2 + ((yy - height / 2) / (height / 2)) ** 2) / 2
+    paper = np.asarray(tuning.OUTRO_SCRAPBOOK_PAPER_COLOR, np.float32) + noise
+    paper = np.clip(paper * shade[..., None], 0, 255).astype(np.uint8)
     paper_bg = Image.fromarray(paper)
-    settled = paper_bg.convert("RGBA")
-    hd = ImageDraw.Draw(settled)
+    base = paper_bg.convert("RGBA")
+    if top:
+        base.alpha_composite(_heading_decor(width, top, k, decor_lines))
+    hd = ImageDraw.Draw(base)
     y = SCRAPBOOK_HEADING_MARGIN * k
     for text, font in head:
         hd.text((width / 2, y + font.size * 0.65), _truncate_to_width(hd, text, font, width * 0.9), font=font,
                 fill=tuning.OUTRO_SCRAPBOOK_INK, anchor="mm")
         y += font.size * 1.3
-    gap = min(0.4, 4.0 / max(1, len(cards)))
-    drop, start = 0.35, 0.3
-    stamp_at = start + len(cards) * gap + drop
+    if top:
+        # A short rule with a dot under the heading (drawn or on the text track) ties it to the cards.
+        ink = (*tuning.OUTRO_SCRAPBOOK_STAMP_COLOR, 200)
+        rule_y = SCRAPBOOK_HEADING_MARGIN * k + sum(f.size * 1.3 for f in (_load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, int(s * k)) for s in sizes)) + 8 * k
+        rule_y = min(rule_y, top - 4 * k)
+        half, dot = 110 * k, 5 * k
+        hd.line([(width / 2 - half, rule_y), (width / 2 - 3 * dot, rule_y)], fill=ink, width=max(2, int(2 * k)))
+        hd.line([(width / 2 + 3 * dot, rule_y), (width / 2 + half, rule_y)], fill=ink, width=max(2, int(2 * k)))
+        hd.ellipse([width / 2 - dot, rule_y - dot, width / 2 + dot, rule_y + dot], fill=ink)
+    # The journey: footprints walk from each card's spot to the next, and the card pops up when they get there;
+    # after the last one they walk on to the stamp.
+    trail = Image.new("RGBA", size, (0, 0, 0, 0))
+    feet = dict(foot=26 * k, step=30 * k)
+    pile = Image.new("RGBA", size, (0, 0, 0, 0))
+    pop, start = 0.35, 0.3
+    walk = min(tuning.OUTRO_SCRAPBOOK_WALK_SECONDS, 6.0 / max(1, len(cards)))
+    pop_at, marks = [], []  # when each card pops; (time, footprint) as the walk reaches it
+    t = start
+    for i in range(len(cards) + 1):
+        if i:
+            to, trim = (cards[i][1:3], 0.0) if i < len(cards) else ((sx, sy), sr * 1.05)
+            steps = _footsteps(cards[i - 1][1:3], to, 0.16 if i % 2 else -0.16, tuning.OUTRO_SCRAPBOOK_FOOTPRINT_COLOR, trim=trim, **feet)
+            leg_start = t + pop * 0.5
+            marks += [(leg_start + walk * (j + 1) / len(steps), mark) for j, mark in enumerate(steps)]
+            t = leg_start + walk
+        if i < len(cards):
+            pop_at.append(t)
+    stamp_at = t
     end = stamp_at + 0.25 + tuning.OUTRO_SCRAPBOOK_HOLD_SECONDS
+
+    def compose() -> Image.Image:
+        out = base.copy()
+        out.alpha_composite(trail)
+        out.alpha_composite(pile)
+        return out
+
+    def springy(e: float) -> float:
+        """0 -> 1, overshooting a little before it settles (ease-out back)."""
+        e -= 1
+        return 1 + 2.7 * e ** 3 + 1.7 * e ** 2
+
+    settled = compose()
 
     def frames():
         nonlocal settled
-        landed = 0
+        landed = walked = 0
         last = None
         for f in range(int(round(end * fps))):
             t = f / fps
-            while landed < len(cards) and t >= start + landed * gap + drop:
+            changed = False
+            while walked < len(marks) and t >= marks[walked][0]:
+                im, x, y = marks[walked][1]
+                trail.alpha_composite(im, (max(0, x), max(0, y)))
+                walked += 1
+                changed = True
+            while landed < len(cards) and t >= pop_at[landed] + pop:
                 card, cx, cy, angle = cards[landed]
-                _place(settled, card, cx, cy, 1.0, 1.0, angle)
+                _place(pile, card, cx, cy, 1.0, 1.0, angle)
                 landed += 1
+                changed = True
+            if changed:
+                settled = compose()
             img = settled.copy()
             for i in range(landed, len(cards)):
-                e = _ease((t - start - i * gap) / drop)
-                if e > 0:
+                u = (t - pop_at[i]) / pop
+                if u > 0:
                     card, cx, cy, angle = cards[i]
-                    _place(img, card, cx, cy - card_w * 0.2 * (1 - e), 1.25 - 0.25 * e, e, angle + 8 * (1 - e))
+                    _place(img, card, cx, cy, 0.4 + 0.6 * springy(min(u, 1.0)), min(1.0, u * 2.5), angle)
             u = (t - stamp_at) / 0.25
             if u > 0:
                 e = min(u, 1.0)

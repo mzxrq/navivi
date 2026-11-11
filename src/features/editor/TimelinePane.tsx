@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Info, Loader2, Music, Subtitles, Type, UnlinkIcon, Video, Volume2, VolumeX } from "../../components/ui/icons";
-import { isBusyClip } from "../../services/stopRegen";
+import { type RouteClip, isBusyClip } from "../../services/stopRegen";
 import {
   anchorCue,
   isUnlinked,
@@ -42,7 +42,7 @@ interface PaneProps {
   onLaneMenu: (e: React.MouseEvent, time: number, lane: Lane) => void;
   onAddText: (time: number) => void;
   /** The stop being made again ("Make again for this stop"): its clips show a spinner. */
-  busyJob?: { index: number | "intro" | "overview"; kind: string; leg?: number } | null;
+  busyJob?: { index: number | RouteClip; kind: string; leg?: number } | null;
 }
 
 const LABEL_W = 36;
