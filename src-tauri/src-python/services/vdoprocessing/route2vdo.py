@@ -62,7 +62,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # v7: leg card numbers are the overview card's own per-leg numbers;
 # v8: stop-bys are framed too, and the summary card sits lower;
 # v9: the 3D leg HUD card sits as low as the 2D one).
-LEG_RENDER_VERSION = 23  # v23: photo cards keep off the route before keeping the leader short; v22: {view wait} times count from the {start} cue; v21: name tags placed with the real camera scale; v20: cards keep off the kept walked line; v19: a leg continuing the walk slides at the zoom of the leg before; v18: quicker opening/closing zoom (LEG_ZOOM_SECONDS); v17: a leg after a stop with no narration continues the walk; v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
+LEG_RENDER_VERSION = 24  # v24: at a stop with no attraction script the photo card rides along the slide (setting quiet_stop_transition); v23: photo cards keep off the route before keeping the leader short; v22: {view wait} times count from the {start} cue; v21: name tags placed with the real camera scale; v20: cards keep off the kept walked line; v19: a leg continuing the walk slides at the zoom of the leg before; v18: quicker opening/closing zoom (LEG_ZOOM_SECONDS); v17: a leg after a stop with no narration continues the walk; v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
 # Bumped when the heatmap legs' elevation profile card changes (only those legs re-render; v1: the card).
 LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
@@ -891,14 +891,18 @@ class RouteAnimator:
             # Legs joined at a return stop: this leg's last frame is the next one's first.
             next_leg = res_sequence[i + 1] if i + 1 < len(res_sequence) else {}
             # So are legs joined at a stop with nothing to tell (no attraction clip between them).
-            if (res_data.get("dest_is_return") and next_leg.get("start_is_return")) or dest_quiet:
+            # "zoom": legs at such a stop open and close like any other (no slide, no carried card).
+            slide = self.config.get("quiet_stop_transition", "slide") != "zoom"
+            if (res_data.get("dest_is_return") and next_leg.get("start_is_return")) or (dest_quiet and slide):
                 leg_kwargs["end_view_path"] = str(self.out_dir / f"{leg_glob_prefix}endview.json")
-            if (res_data.get("start_is_return") or start_quiet) and prev_end_view:
+            if dest_quiet and slide and dest_popup_image:
+                leg_kwargs["hold_end_card"] = True
+            if (res_data.get("start_is_return") or (start_quiet and slide)) and prev_end_view:
                 try:
                     leg_kwargs["opening_view"] = json.loads(Path(prev_end_view).read_text(encoding="utf-8"))
                 except (OSError, ValueError):
                     pass
-            if start_quiet and i > 0:
+            if start_quiet and slide and i > 0:
                 # The walk goes on through a stop with nothing to tell: the leg before stays drawn as walked,
                 # and the camera glides into this leg's framing quickly.
                 prev = res_sequence[i - 1]
@@ -908,7 +912,7 @@ class RouteAnimator:
             prev_end_view = leg_kwargs.get("end_view_path")
             # Marks a join at a stop with nothing to tell: the timeline cuts there (same frame), no dissolve.
             no_fade = self.out_dir / f"{leg_glob_prefix}nofade"
-            if dest_quiet:
+            if dest_quiet and slide:
                 no_fade.touch()
             else:
                 no_fade.unlink(missing_ok=True)
@@ -1000,6 +1004,8 @@ class RouteAnimator:
             if leg_paths:
                 keep = {Path(p).resolve() for p in leg_paths}
                 keep |= {Path(p).with_suffix(".timing.json").resolve() for p in leg_paths}
+                if leg_kwargs.get("end_view_path"):
+                    keep.add(Path(leg_kwargs["end_view_path"]).resolve())  # just written for the next leg: not stale
                 for old in stale_leg_files:
                     if old.resolve() not in keep:
                         old.unlink(missing_ok=True)

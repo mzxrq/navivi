@@ -181,6 +181,7 @@ export interface ProjectSettings {
   enable_outro?: boolean;
   outro_style?: "scroll" | "grid" | "scrapbook";
   outro_route_info?: boolean;
+  quiet_stop_transition?: "slide" | "zoom"; // a stop with no attraction script: slide on with its photo, or zoom out and in
   outro_content_position?: number; // scrapbook: where the photos sit below the title, 0 = top .. 1 = bottom
   // The outro's title box: height in 1080-line px and fill colour ("#RRGGBB"; unset = the page background),
   // and its text styles (unset = the intro's).

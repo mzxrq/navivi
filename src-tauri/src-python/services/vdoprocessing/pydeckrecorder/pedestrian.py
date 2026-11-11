@@ -20,7 +20,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import pandas as pd
 import pydeck as pdk
@@ -163,6 +163,7 @@ def render_residential_leg_pydeck(
     opening_view: Optional[Dict] = None,
     end_view_path: Optional[str] = None,
     prior_trail: Optional[List[List[float]]] = None,
+    hold_end_card: bool = False,
 ) -> List[str]:
     """Renders one leg as a straight-down, locked-camera video with a live
     turn-by-turn HUD (destination banner + time/distance card) -- the
@@ -525,6 +526,7 @@ def render_residential_leg_pydeck(
             hud_card_png=hud_card_png, theme=theme, bottom_reserve_px=bottom_reserve_px,
             segment_colors=segment_colors, opening_photo=opening_photo,
             opening_view=opening_view, end_view_path=end_view_path, wait_spots=wait_spots, prior_trail=prior_trail,
+            hold_end_card=hold_end_card,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -551,8 +553,11 @@ async def _record_leg(
     prior_trail: Optional[List[List[float]]] = None,
     end_view_path: Optional[str] = None,
     wait_spots: Optional[List] = None,
+    hold_end_card: bool = False,
 ):
-    """`wait_spots`: [(walk seconds, card, hold seconds)] for {view wait} street views (see _wait_view_plan)."""
+    """`wait_spots`: [(walk seconds, card, hold seconds)] for {view wait} street views (see _wait_view_plan).
+    `hold_end_card`: the arrival photo card (pip) stays up at the end instead of fading: the next leg slides on with it
+    (its box goes into the end view file, `opening_view["card"]` of that leg)."""
     from playwright.async_api import async_playwright
     wait_spots = wait_spots or []
 
@@ -563,6 +568,8 @@ async def _record_leg(
     sink = await FrameSink.open(output_path, fps)
     proc_ref, produced_paths, frame_state = sink.proc_ref, sink.produced_paths, sink.frame_state
     _write_frame, _finalize_clip, _cut_to_new_clip = sink.write, sink.finalize, sink.cut
+
+    end_card: Dict[str, Any] = {}  # the card left up at the end (hold_end_card)
 
     async def _play_leg_photo_card(
         image_path, freeze_seconds_raw, card_key: str, marker_px=None, grow: bool = False,
@@ -761,6 +768,10 @@ async def _record_leg(
                 # map, the frame the next leg opens on (`opening_view`).
                 for _ in range(max(1, int(max(0.5, small_hold_s) * fps))):
                     await _write_frame(hold_small_png)
+                if hold_end_card:
+                    end_card.update(image=image_path, box=list(card_box), anchor=[anchor_x, anchor_y],
+                                    marker=[marker_px[0], leader_target_y])
+                    return True
                 fade_frames = max(1, int(0.4 * fps))
                 for i in range(fade_frames):
                     await page.evaluate(
@@ -1256,6 +1267,58 @@ async def _record_leg(
                     # onto the start pin); the destination photo only when the
                     # departure has none.
                     # opening_photo False (a leg to or from a return stop): no fullscreen photo, the map opens it.
+                    # The previous leg ended with its photo card still up (hold_end_card): it rides along the slide.
+                    carried = (opening_view or {}).get("card")
+                    if not (carried and os.path.exists(str(carried.get("image") or ""))):
+                        carried = None
+                    if carried:
+                        shutil.copy2(carried["image"], os.path.join(html_dir, "leg_photo_card_carried" + (os.path.splitext(carried["image"])[1] or ".jpg")))
+                        await page.evaluate(
+                            """([url, [left, top, w, h], [x1, y1], [x2, y2]]) => new Promise((resolve) => {
+                                const img = document.createElement('img');
+                                img.id = 'leg-carried-card';
+                                img.src = url;
+                                Object.assign(img.style, {
+                                    position: 'fixed', zIndex: '9998', left: left + 'px', top: top + 'px',
+                                    width: w + 'px', height: h + 'px', objectFit: 'cover', borderRadius: '15px',
+                                    boxShadow: '0 15px 35px rgba(0,0,0,0.4)',
+                                });
+                                document.body.appendChild(img);
+                                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                                svg.id = 'leg-carried-leader';
+                                Object.assign(svg.style, { position: 'fixed', inset: '0', width: '100vw', height: '100vh', zIndex: '9997', pointerEvents: 'none' });
+                                const line = document.createElementNS(svg.namespaceURI, 'line');
+                                line.id = 'leg-carried-line';
+                                Object.entries({ x1, y1, x2, y2, stroke: 'white', 'stroke-width': '3' }).forEach(([k, v]) => line.setAttribute(k, v));
+                                svg.appendChild(line);
+                                document.body.appendChild(svg);
+                                if (img.decode) { img.decode().then(resolve).catch(resolve); }
+                                else { img.onload = resolve; img.onerror = resolve; }
+                                setTimeout(resolve, 2000);
+                            })""",
+                            [f"http://127.0.0.1:{port}/leg_photo_card_carried" + (os.path.splitext(carried["image"])[1] or ".jpg"),
+                             carried["box"], carried["anchor"], carried["marker"]],
+                        )
+                        await _wait_for_paint(page)
+                        warm_png = await page.screenshot(**_FRAME_SHOT)
+
+                    async def _move_carried(lon, lat, zoom, pitch) -> None:
+                        # The card keeps its place beside its pin while the map slides under it.
+                        x0, y0 = _project_lonlat_to_px(*carried["lonlat"], from_view["lon"], from_view["lat"], from_view["zoom"], output_size, pitch=from_view["pitch"])
+                        x1, y1 = _project_lonlat_to_px(*carried["lonlat"], lon, lat, zoom, output_size, pitch=pitch)
+                        await page.evaluate(
+                            """([dx, dy, [left, top], [ax, ay], [mx, my]]) => {
+                                const img = document.getElementById('leg-carried-card');
+                                if (img) { img.style.left = (left + dx) + 'px'; img.style.top = (top + dy) + 'px'; }
+                                const line = document.getElementById('leg-carried-line');
+                                if (line) {
+                                    line.setAttribute('x1', ax + dx); line.setAttribute('y1', ay + dy);
+                                    line.setAttribute('x2', mx + dx); line.setAttribute('y2', my + dy);
+                                }
+                            }""",
+                            [x1 - x0, y1 - y0, carried["box"][:2], carried["anchor"], carried["marker"]],
+                        )
+
                     if not opening_photo or (not dest_popup_image and not start_popup_image):
                         # From the previous leg's own last frame: one frame, no establishing hold.
                         for _ in range(1 if opening_view else max(1, int(0.3 * fps))):
@@ -1315,9 +1378,31 @@ async def _record_leg(
                         """
                         await page.evaluate(js)
                         await _set_hud_card(rem_m0, rem_min0)
+                        if carried:
+                            await _move_carried(lon, lat, zoom, pitch)
                         await page.wait_for_timeout(50)
                         png_bytes = await page.screenshot(**_FRAME_SHOT)
                         await _write_frame(png_bytes)
+                    if carried:
+                        # Slid into place: a short beat, then the card fades and the walk starts.
+                        hold_png = await page.screenshot(**_FRAME_SHOT)
+                        for _ in range(int(tuning.LEG_CARRIED_CARD_HOLD_SECONDS * fps)):
+                            await _write_frame(hold_png)
+                        fade_frames = max(1, int(0.4 * fps))
+                        for i in range(fade_frames):
+                            await page.evaluate(
+                                """(alpha) => {
+                                    for (const id of ['leg-carried-card', 'leg-carried-leader']) {
+                                        const el = document.getElementById(id);
+                                        if (el) el.style.opacity = alpha;
+                                    }
+                                }""",
+                                1.0 - (i + 1) / fade_frames,
+                            )
+                            await _write_frame(await page.screenshot(**_FRAME_SHOT))
+                        await page.evaluate(
+                            "() => ['leg-carried-card', 'leg-carried-leader'].forEach((id) => document.getElementById(id)?.remove())"
+                        )
 
                 # Connected stop-by photo pauses (see render_residential_leg_
                 # pydeck's `landmarks` docstring): a merged-in stop-by with
@@ -1851,6 +1936,7 @@ async def _record_leg(
                         # The camera this clip ends on: the next leg opens on it, so the cut can't be seen.
                         write_json_atomic(Path(end_view_path), {
                             "lon": locked_lon, "lat": locked_lat, "zoom": locked_zoom, "pitch": follow_pitch,
+                            **({"card": {**end_card, "lonlat": [dest_lon, dest_lat]}} if end_card else {}),
                         })
 
                     # Outro: the reverse of the intro above -- eases the

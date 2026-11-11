@@ -156,6 +156,20 @@ export function VideoLookSettings({ options, onChange }: Props) {
         <Row title={t`Camera tilt`}>
           <Fader value={num("res_follow_pitch")} min={0} max={60} step={5} unit="°" label={t`Camera tilt`} onChange={set("res_follow_pitch")} />
         </Row>
+        <Row
+          title={t`At a stop with no attraction script`}
+          description={t`Slide: the camera slides on into the next leg with the stop's photo still up. Zoom: the next leg opens zoomed out and zooms in.`}
+        >
+          <Segmented<"slide" | "zoom">
+            compact
+            value={options.quiet_stop_transition ?? d.quiet_stop_transition}
+            onChange={set("quiet_stop_transition")}
+            options={[
+              { id: "slide", label: t`Slide` },
+              { id: "zoom", label: t`Zoom out and in` },
+            ]}
+          />
+        </Row>
         <Row title={t`Turn smoothing`} description={t`Lower turns the camera more gently.`}>
           <Fader value={num("bearing_smoothing")} min={0.05} max={0.5} step={0.05} label={t`Turn smoothing`} onChange={set("bearing_smoothing")} />
         </Row>

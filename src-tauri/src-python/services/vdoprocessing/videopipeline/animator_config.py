@@ -55,6 +55,8 @@ def build_animator_config(
         # runs on extra frames added at export (VideoExporter._crossfade_pair),
         # so it starts the moment the photo is fullscreen.
         "arrival_photo_hold_seconds": 0.0,
+        # At a stop with no attraction script: "slide" (the walk goes on, its photo card rides along) or "zoom".
+        "quiet_stop_transition": settings.get("quiet_stop_transition", "slide"),
         # A connected stop-by's fullscreen photo does the same (no hold, no
         # blur-out) when an attraction video follows it.
         "dissolve_into_attraction": (

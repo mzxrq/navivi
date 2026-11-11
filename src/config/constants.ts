@@ -79,6 +79,7 @@ export const videoLookDefaults = {
     enable_outro: true,
     outro_style: "scroll" as "scroll" | "grid" | "scrapbook",
     outro_route_info: true,
+    quiet_stop_transition: "slide" as "slide" | "zoom",
     outro_content_position: 0.5,
     start_pin_color: [19, 136, 3] as Rgb,
     end_pin_color: [217, 15, 81] as Rgb,
