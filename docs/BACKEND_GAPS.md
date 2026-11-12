@@ -151,15 +151,10 @@ They look like groundwork for a trash view and a cache cleaner; keep them or bui
 
 Checked by searching for imports across `src-tauri`, `src`, `e2e`, `setup`. Delete only after reading the file once more and running the tests.
 
-| File | Finding |
-|---|---|
-| `vdoprocessing/framesink.py` | nothing mentions it **(checked)** |
-| `vdoprocessing/local_pan_generator.py` | imported only by `tests/test_local_pan_without_torch.py`; production code only mentions it in comments **(checked)** |
-| `services/model/` (`classic_pan`, `depth_parallax_pan`, `zoom_out_pan`, `outpaint_pan`, `outpaint_sd15`, `outpaint_test`) | nothing imports the package; they reference each other and `local_pan_generator.py` **(checked)** |
-| `localization/llmscript.py` | only tests import it |
-| `tts/tts.py` | no importers (duplicate subtitle classes) |
-| `use_leg_storyboard` flag | raises `NotImplementedError` (`route2vdo.py:783`) |
-| `hooks/useTransition.ts` | no importer found (not checked carefully) |
+None left as of the 2026-11-12 audit (branch `chore/python-audit`): the files listed here before were deleted
+(`framesink.py`, `llmscript.py`, `tts/tts.py`, `useTransition.ts`, the `use_leg_storyboard` flag), `services/model/`
+is no longer in git, `local_pan_generator.py` is used again (jump cuts, LTXV), and the legacy 3D vehicle renderer
+(`use_3d_res`) was removed.
 
 ---
 

@@ -6,6 +6,7 @@ Handles downloading map tiles and fetching map images for route visualization.
 """
 
 # [I/O] Import libraries for map tile downloading and fetching
+import re
 import time
 from pathlib import Path
 import contextily as cx  # type: ignore
@@ -176,6 +177,20 @@ class TileDownloader:
                 time.sleep(self.TILE_FETCH_WAIT_SECONDS)
             raise
 
+    def _fetch_stepping_down(self, w, s, e, n, zoom: int, what: str):
+        """(img, extent) at `zoom`, or the next zoom down that the provider has. A refused key (401/403) fails at
+        once, since every zoom would; otherwise the last error is named (key blanked) instead of a bare failure."""
+        last = None
+        while zoom > 0:
+            try:
+                return self._bounds2img_safe(w, s, e, n, zoom)
+            except Exception as exc:
+                last = re.sub(r"access_token=[^&\s']+", "access_token=...", f"{type(exc).__name__}: {exc}")[:300]
+                if re.search(r"\b40[13] Client Error|Unauthorized|Forbidden", last):  # not a tile x/y that is 401
+                    raise RuntimeError(f"The map provider refused the key ({last}). Check the Mapbox key in Settings.") from None
+                zoom -= 1
+        raise RuntimeError(f"Failed to download {what} ({last or 'no zoom level left'}).")
+
     # [Map/Util] Ensure an output path has a .png extension (cx.bounds2img output is saved as PNG)
     @staticmethod
     def _force_png_path(output_filename: str) -> str:
@@ -302,17 +317,7 @@ class TileDownloader:
                 tilesize_512_quirk=tilesize_512_quirk,
             ),
         )
-        img, extent = None, None
-        # [HACK] [Map] Swallows any fetch failure (rate-limit, unavailable zoom, network error alike) and just steps down a zoom level until one succeeds — masks the real cause of a failure that isn't zoom-related.
-        while zoom > 0:
-            try:
-                img, extent = self._bounds2img_safe(w, s, e, n, zoom)
-                break
-            except Exception:
-                zoom -= 1
-
-        if img is None or extent is None:
-            raise RuntimeError("Failed to download overview map tiles.")
+        img, extent = self._fetch_stepping_down(w, s, e, n, zoom, "overview map tiles")
 
         final_path = self._force_png_path(output_filename)
         # Tiles come in whole-tile chunks, so the mosaic is routinely much
@@ -596,16 +601,7 @@ class TileDownloader:
         output_filename: str,
         output_size: Tuple[int, int],
     ) -> Tuple[float, float, float, float]:
-        img, extent = None, None
-        while zoom > 0:
-            try:
-                img, extent = self._bounds2img_safe(w, s, e, n, zoom)
-                break
-            except Exception:
-                zoom -= 1
-
-        if img is None or extent is None:
-            raise RuntimeError("Failed to download map tiles for chunk.")
+        img, extent = self._fetch_stepping_down(w, s, e, n, zoom, "map tiles for chunk")
 
         final_path = self._force_png_path(output_filename)
         # Centred on the box asked for, as the overview is: centred on the mosaic, a pin near an edge was cut off.
