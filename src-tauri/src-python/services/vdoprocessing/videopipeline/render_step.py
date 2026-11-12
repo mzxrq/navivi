@@ -14,7 +14,7 @@ import numpy as np
 
 from services.gpsparser.gpscalculator import GPSMath
 from services.logger.progress import tracker
-from services.projectfiles import ROUTE_CACHE, meta_file
+from services.projectfiles import ROUTE_CACHE, meta_file, write_json_atomic
 from services.mapfetcher.mapfetcher import MapFetcher
 from services.vdoprocessing.route2vdo import RouteAnimator
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
@@ -596,11 +596,10 @@ def render_route_video(
     if is_full_pipeline_render:
         try:
             Path(output_video_dir).mkdir(parents=True, exist_ok=True)
-            with open(manifest_path, "w", encoding="utf-8") as f:
-                json.dump(
-                    {"output_paths": output_paths, "input_hash": checkpoint_key, "input_parts": checkpoint_parts},
-                    f, ensure_ascii=False, indent=2,
-                )
+            write_json_atomic(
+                manifest_path,
+                {"output_paths": output_paths, "input_hash": checkpoint_key, "input_parts": checkpoint_parts},
+            )
         except OSError as e:
             logger.warning("Step 4: Failed to write render manifest: %s", e)
 

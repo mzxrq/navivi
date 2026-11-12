@@ -15,7 +15,6 @@ from services.vdoprocessing.videopipeline.narration_step import (
     leg_walk_plan,
     record_cue_times,
 )
-from services.vdoprocessing.videopipeline.subtitle_step import shift_srt
 
 ARRIVING = "淡嶋神社に近づいてきました。参道を進んでいきます。"
 ATTRACTION = "ここは人形供養で知られる神社です。境内には人形が並びます。"
@@ -157,14 +156,10 @@ class TestWalkPlan:
         assert leg_walk_plan(CueStore(tmp_path), {"id": "b"}, 1, 0.0) is None
 
 
-def test_subtitles_and_export_delay_by_the_clip_opening(tmp_path):
+def test_a_padded_or_subtitled_copy_finds_the_clip_opening(tmp_path):
     clip = tmp_path / "02_waypoint_01_x.mp4"
     write_audio_offset(str(clip), 6.6)
-    # A padded/subtitled copy finds the original render's sidecar.
     assert read_audio_offset(str(tmp_path / "02_waypoint_01_x_padded_subtitled.mp4")) == 6.6
-    srt = tmp_path / "a.srt"
-    srt.write_text("1\n00:00:01,500 --> 00:00:59,900\nこんにちは\n", encoding="utf-8")
-    assert "00:00:08,100 --> 00:01:06,500" in open(shift_srt(str(srt), 6.6), encoding="utf-8").read()
 
 
 def test_cues_at_the_start_of_a_sentence_are_found():

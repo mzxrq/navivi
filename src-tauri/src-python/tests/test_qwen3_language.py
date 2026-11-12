@@ -52,3 +52,19 @@ def test_english_clips_cut_the_old_way_are_remade(tmp_path, monkeypatch):
     assert not audio_step._voice_matches(old, None)
     audio_step._write_voice_note(old, None)
     assert audio_step._voice_matches(old, None)
+
+
+def test_a_new_high_low_pattern_remakes_only_the_lines_with_that_word(tmp_path, monkeypatch):
+    from services.tts import pitch_accent
+
+    monkeypatch.setattr(audio_step, "_client_fingerprint", lambda client: dict(QWEN))
+    monkeypatch.setattr(pitch_accent, "_patterns", {"カツラギ": "LHHH"})
+    with_word = _clip(tmp_path, "カツラギへ歩きます。", QWEN)
+    audio_step._write_voice_note(with_word, None)
+    assert audio_step._voice_matches(with_word, None)
+    other = tmp_path / "other"
+    other.mkdir()
+    without = _clip(other, "西へ歩きます。", QWEN)
+    monkeypatch.setattr(pitch_accent, "_patterns", {"カツラギ": "HLLL"})
+    assert not audio_step._voice_matches(with_word, None)
+    assert audio_step._voice_matches(without, None)

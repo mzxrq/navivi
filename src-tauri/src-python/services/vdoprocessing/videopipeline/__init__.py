@@ -7,7 +7,7 @@
 - intro_step.py: post-Step-3 — title intro from a random attraction clip (render_intro_clip)
 - render_step.py: Step 4 — map animation render (render_route_video)
 - outro_step.py: post-Step-4 — end-of-video "places visited" outro, scrolling cards or grid (render_outro_clip)
-- subtitle_step.py: Step 5 — burn subtitles (burn_subtitles)
+- subtitle_step.py: Step 2b — .srt files from the narration (burned once, at export)
 - timeline_step.py: Step 6 — assemble timeline.json (build_timeline)
 - pipeline.py: orchestration entry points (run_full_pipeline, render_from_timeline)
 """
@@ -19,7 +19,6 @@ from .intro_step import render_intro_clip
 from .outro_step import render_outro_clip
 from .pipeline import render_from_timeline, run_full_pipeline
 from .render_step import render_route_video
-from .subtitle_step import burn_subtitles
 from .timeline_step import build_timeline
 
 __all__ = [
@@ -29,7 +28,6 @@ __all__ = [
     "render_attraction_videos",
     "render_intro_clip",
     "render_outro_clip",
-    "burn_subtitles",
     "build_timeline",
     "run_full_pipeline",
     "render_from_timeline",
