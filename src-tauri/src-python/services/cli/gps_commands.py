@@ -151,11 +151,7 @@ def test_residential_video(
     "residential", so the overview animation itself is never rendered) and
     lets RouteAnimator.render() pick the engine from job_config.json's
     settings itself (use_pydeck_pedestrian, defaulting to the GeoJsonLayer
-    chase camera; use_3d_res for the older vehicle-scenegraph renderer;
-    else the flat 2D SpatialRenderer) — this used to special-case
-    use_3d_res here and call record_headless_video directly, which bypassed
-    that selection (and use_pydeck_pedestrian) entirely, so a project with
-    use_3d_res set always got the vehicle pipeline no matter what.
+    chase camera, else the flat 2D SpatialRenderer).
     `fps`/`speed_kmh` are accepted for backwards compatibility with
     existing callers but no longer used — render_route_video derives both
     from job_config.json itself (settings.fps, per-leg mode speeds).

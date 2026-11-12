@@ -136,9 +136,7 @@ c97 452 180 821 184 820 12 -6 1529 -1669 1529 -1677 0 -16 459 -2425 476
 # Per-mode HUD chrome: the reference video swaps both the banner's leading
 # icon/suffix and the distance card's icon/time-label depending on how this
 # leg is being traveled (walking vs. a ferry crossing was the confirmed
-# case; driving/airplane are extrapolated the same way from
-# pydeckrecorder.recorder's own _VEHICLE_PROFILES mode set, so this dict's
-# keys intentionally match that one). "en_route_suffix" is appended to the
+# case; driving/airplane are extrapolated the same way). "en_route_suffix" is appended to the
 # non-arriving banner text for modes where the traveler is a passenger
 # rather than on foot (e.g. "〜へ 乗船中" for a ferry) -- walking has none.
 _JA = tuning.LABELS_JA

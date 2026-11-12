@@ -17,7 +17,7 @@ def start_local_server(directory, assets_dir=None):
     Playwright.
 
     `directory` (usually the render's own project/config folder) is served
-    at '/'. `assets_dir` (the app's bundled .glb models etc., usually a
+    at '/'. `assets_dir` (the app's bundled assets, usually a
     different tree than `directory` — e.g. the project lives under the
     user's Documents while the app's assets live under its own install/
     source dir) is served at '/assets/'. Python's http.server refuses to

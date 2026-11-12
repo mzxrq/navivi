@@ -6,11 +6,5 @@
 - routedata.py: project/route loading and pydeck HTML generation
 - legresolve.py: current routeMode/place-name resolution per cached leg
 - popupsequence.py: final-destination-only PIP/fullscreen photo reveal
-- coinprop.py: in-world "Mario coin" waypoint prop + collect animation
-- renderer.py: per-leg Playwright/deck.gl frame renderer
-- recorder.py: top-level orchestrator (record_headless_video)
+- recorder.py: route-line GeoJSON features shared by the leg and overview renderers
 """
-
-from .recorder import record_headless_video
-
-__all__ = ["record_headless_video"]

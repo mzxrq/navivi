@@ -279,7 +279,7 @@ if __name__ == "__main__":
                 # [NOTE] [Map] Fetches only the overview's background map image (same bbox/padding/crop as the real render, no video) - a seconds-long way to check framing. Optional argv[3] is the output png path.
                 result = test_overview_map(job_config_arg, sys.argv[3] if len(sys.argv) > 3 else None)
             elif mode_arg == "residential":
-                # [NOTE] [Animation] Renders the per-waypoint leg-by-leg clips (2D or 3D per settings.use_3d_res) — no overview map. Optional argv[3] renders just that ONE leg (0-indexed) instead of every leg.
+                # [NOTE] [Animation] Renders the per-waypoint leg-by-leg clips (the pydeck chase camera, or 2D with settings.use_pydeck_pedestrian false) — no overview map. Optional argv[3] renders just that ONE leg (0-indexed) instead of every leg.
                 leg_index_arg = int(sys.argv[3]) if len(sys.argv) > 3 else None
                 result = test_residential_video(
                     job_config_arg, route_dir_arg, force=force_arg, leg_index=leg_index_arg

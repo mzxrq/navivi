@@ -109,7 +109,7 @@ Not exposed by any screen (so they stay at their defaults). Use as a menu when b
 - **Pace:** `mode_speeds_kmh`, `animation_speeds_kmh`, `overview_speed_multiplier`, `overview_target_seconds`, `overview_chars_per_second`, `overview_cue_wait_seconds`, `max_early_arrival_seconds`, `post_arrival_hold_seconds`, `res_duration`, `res_target_avg_seconds`, `res_max_segment_seconds`, `duration`, `speed_kmh`
 - **Cards and HUD:** `summary_card_style`, `summary_card_labels`, `theme` (HUD light/dark), `card_border_color`, `card_border_thickness`, `map_font_size`, `clip_summary_hold`, `show_segment_summary`, `outro_style`, `outro_route_info`
 - **Pins:** `arrived_marker_color`, `start_pin_color`, `end_pin_color`, `drawn_pin_color`, `stopby_pin_color`, `mode_line_colors`, `history_color`, `marker_filename`
-- **Camera and engines:** `camera_follow_distance_m`, `bearing_smoothing`, `use_pydeck_overview`, `use_pydeck_pedestrian`, `enable_gl_ending_zoom`, `overview_background`, `use_3d_res`, `merge_stopby_waypoints`, `overview_describe_stops`, `min_free_ram_gb`
+- **Camera and engines:** `camera_follow_distance_m`, `bearing_smoothing`, `use_pydeck_overview`, `use_pydeck_pedestrian`, `enable_gl_ending_zoom`, `overview_background`, `merge_stopby_waypoints`, `overview_describe_stops`, `min_free_ram_gb`
 - **Popups:** `fullscreen_transition`, `trigger_radius_padding`, `hide_route_on_popup`, `enable_fullscreen_popups`, `hide_upcoming_pins_on_popup`
 - **Voice and text:** `tts.caption`, `auto_overview_cues`, `auto_narration_cues`, `upscale_popup_images`, `intro_title_style`, `intro_subtitle_style`, `intro_kicker_style`, legacy `subtitle_font` / `subtitle_font_size` / `subtitle_color` / `subtitle_outline_color` / `subtitle_bold` (still read, although a type comment says they are not)
 - **Per stop:** `freeze_seconds`, `overviewHighlight`
@@ -160,7 +160,6 @@ Checked by searching for imports across `src-tauri`, `src`, `e2e`, `setup`. Dele
 | `tts/tts.py` | no importers (duplicate subtitle classes) |
 | `use_leg_storyboard` flag | raises `NotImplementedError` (`route2vdo.py:783`) |
 | `hooks/useTransition.ts` | no importer found (not checked carefully) |
-| legacy 3D vehicle renderer (`use_3d_res`, `coinprop.py`, `renderer.py`) | no UI; **not dead**: `recorder.py` is still imported by `pedestrian.py` |
 
 ---
 

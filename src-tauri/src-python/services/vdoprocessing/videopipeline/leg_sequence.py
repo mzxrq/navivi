@@ -98,7 +98,6 @@ def build_leg_sequence(
     routing_cache,
     seg_durations,
     settings,
-    use_3d_res,
     waypoints,
     wp_indices,
 ):
@@ -110,18 +109,6 @@ def build_leg_sequence(
         # RouteAnimator.render already treats as "nothing to render" for
         # the residential side.
         logger.info("Step 4: render_mode=overview — skipping residential sequence.")
-    elif use_3d_res:
-        logger.info(
-            "Step 4: 3D residential rendering is enabled. Bypassing 2D map fetch."
-        )
-        for seq_idx in range(max(0, len(wp_indices) - 1)):
-            has_audio = seq_idx < len(audio_durations) and audio_durations[seq_idx] > 0
-            total_time = (
-                audio_durations[seq_idx]
-                if has_audio
-                else (seg_durations[seq_idx] if seq_idx < len(seg_durations) else 10.0)
-            )
-            res_sequence.append({"segment_duration": total_time})
     else:
         logger.info("Step 4: Generating residential leg sequence (lat/lon per leg)...")
         # Stop-by leg-merging is toggleable per project (default: merge —

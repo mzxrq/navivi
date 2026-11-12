@@ -118,10 +118,8 @@ async def _capture_static_deck(
                     await page.wait_for_load_state("load", timeout=5000)
                 except Exception:
                     pass
-                # Basemap tiles stream in after load — same real-time
-                # margin render_leg_animation gives its 3D models before
-                # the first frame, so tiles aren't still mid-fade-in when
-                # the shot is taken.
+                # Basemap tiles stream in after load: a real-time margin so
+                # tiles aren't still mid-fade-in when the shot is taken.
                 await page.wait_for_timeout(2500)
                 await page.screenshot(path=output_path)
             finally:

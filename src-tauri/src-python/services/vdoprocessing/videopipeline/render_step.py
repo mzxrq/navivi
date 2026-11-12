@@ -205,12 +205,8 @@ def render_route_video(
     # use_pydeck_pedestrian (the GeoJsonLayer chase camera, top-down ->
     # follow) is now the DEFAULT residential engine — see route2vdo.py's
     # RouteAnimator.render, which picks it unless a project explicitly sets
-    # it false. use_3d_res (the older vehicle-scenegraph renderer) is opt-in
-    # and only actually used when pydeck-pedestrian is explicitly disabled
-    # (both flags gate the res_sequence build below the same way they gate
-    # RouteAnimator.render's own engine choice, so the two stay in sync).
+    # it false (then the flat 2D SpatialRenderer draws the legs).
     use_pydeck_pedestrian = bool(settings.get("use_pydeck_pedestrian", True))
-    use_3d_res = bool(settings.get("use_3d_res", False)) and not use_pydeck_pedestrian
     subtitle_lang = settings.get("subtitle_language", "en")
 
     audio_durations = audio_durations or []
@@ -446,7 +442,6 @@ def render_route_video(
         routing_cache=routing_cache,
         seg_durations=seg_durations,
         settings=settings,
-        use_3d_res=use_3d_res,
         waypoints=waypoints,
         wp_indices=wp_indices,
     )
@@ -511,7 +506,6 @@ def render_route_video(
         route_marker=route_marker,
         seg_durations=seg_durations,
         settings=settings,
-        use_3d_res=use_3d_res,
         use_pydeck_pedestrian=use_pydeck_pedestrian,
     )
 
@@ -531,22 +525,6 @@ def render_route_video(
         summary["total_duration_seconds"] = sum(mode_duration.values())
     if leg_stats:
         summary["leg_stats"] = leg_stats
-
-    # Only a fallback for the use_3d_res branch above -- the far more common
-    # pydeck/2D branch already filtered res_sequence down to just leg_index
-    # at its own process_residential_sequence(leg_index=...) call, well
-    # before any per-leg map tile fetch ever ran, so res_sequence there is
-    # already length <= 1 and does NOT need (or want) re-slicing here.
-    if leg_index is not None and use_3d_res and res_sequence:
-        if not (0 <= leg_index < len(res_sequence)):
-            raise ValueError(
-                f"leg_index {leg_index} out of range — this route has {len(res_sequence)} leg(s) (0-{len(res_sequence) - 1})."
-            )
-        logger.info(
-            "Step 4: leg_index=%d given — rendering only that one leg of %d.",
-            leg_index, len(res_sequence),
-        )
-        res_sequence = [res_sequence[leg_index]]
 
     output_paths = animator.render(
         img_path=map_output_path,
