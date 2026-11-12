@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Pause, Play, SkipBack } from "../../components/ui/icons";
 import { Tip } from "../../components/ui/Tip";
@@ -120,10 +120,15 @@ export function ShiftedLayer({ texts, children }: { texts: PlacedText[]; childre
 }
 
 // Text-track items: centred title + subtitle, animated like the export (introclip.title_events).
-function TextOverlay({ texts }: { texts: PlacedText[] }) {
+function TextOverlay({ texts, covers }: { texts: PlacedText[]; covers: Map<string, string> }) {
   const time = usePlayerTime();
-  // A burned-in title is already in its clip's picture.
-  const active = texts.filter((x) => !x.burned_in && time >= x.globalStart && time < x.globalEnd);
+  const [missing, setMissing] = useState<ReadonlySet<string>>(new Set());
+  // A burned-in title is in its clip's picture; it is drawn live only over the clip's title-free band (outrocard cover).
+  const cover = (x: PlacedText) => (x.burned_in ? covers.get(x.segmentId) : undefined);
+  const active = texts.filter((x) => {
+    const c = cover(x);
+    return (!x.burned_in || (c && !missing.has(c))) && time >= x.globalStart && time < x.globalEnd;
+  });
   if (!active.length) return null;
   const cq = (px: number) => `${(px / 1080) * 100}cqh`;
   return (
@@ -170,6 +175,14 @@ function TextOverlay({ texts }: { texts: PlacedText[] }) {
             className="absolute inset-0"
             style={wiped > 0 ? { clipPath: `inset(${cq(wiped * reach)} 0 0 0)` } : undefined}
           >
+            {cover(x) && (
+              <img
+                src={cover(x)}
+                alt=""
+                className="absolute top-0 left-0 w-full"
+                onError={() => setMissing((s) => new Set(s).add(cover(x)!))}
+              />
+            )}
             <TextBoxBand item={x} cq={cq} />
             {hasKicker && kf.opacity > 0 && (
               <span
@@ -276,6 +289,10 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
   const cues = useMemo(() => placedCues(timeline, placed), [timeline, placed]);
   const texts = useMemo(() => placedTexts(timeline, placed), [timeline, placed]);
   const fades = useMemo(() => fadeIns(placed), [placed]);
+  const covers = useMemo(
+    () => new Map(timeline.segments.filter((s) => s.video).map((s) => [s.id, mediaUrl(projectDir, s.video.replace(/\.mp4$/i, ".title_bg.png"))])),
+    [timeline.segments, projectDir],
+  );
 
   const stateRef = useRef({ placed, total, timeline, projectDir, fades });
   stateRef.current = { placed, total, timeline, projectDir, fades };
@@ -462,7 +479,7 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
             </div>
           )}
           <SubtitleOverlay cues={cues} show />
-          <TextOverlay texts={texts} />
+          <TextOverlay texts={texts} covers={covers} />
         </div>
       </div>
       <div className="flex items-center justify-center gap-2 h-10 shrink-0">

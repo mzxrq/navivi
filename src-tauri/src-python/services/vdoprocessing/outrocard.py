@@ -1330,6 +1330,19 @@ def seal_text(title: str) -> str:
     return tail if len(tail) == 2 and all(0x4E00 <= ord(c) <= 0x9FFF for c in tail) else ""
 
 
+def decor_spots(width: int, k: float, lines: List[Tuple[str, Any, float]]) -> Tuple[float, float, float]:
+    """x of the sun, the torii and the pine sprig's centre: at 20 / 30 / 80% of the width, pushed outward (to the
+    frame's edge at most) when a long heading (English) would reach them; the seal widens the heading's right side."""
+    probe = ImageDraw.Draw(Image.new("L", (1, 1)))
+    half = max((probe.textlength(t, font=f) / 2 for t, f, _ in lines), default=0.0)
+    seal_w = max(f.size for _, f, _ in lines) * 1.1 + 28 * k if lines and seal_text(lines[0][0]) else 0.0
+    gap, mid, tw, r = 40 * k, width / 2, 60 * k, 46 * k
+    tx = max(tw + 8 * k, min(width * 0.3, mid - half - gap - tw))
+    sx = max(r + 8 * k, min(width * 0.2, tx - tw - r * 0.6))
+    px = min(width - 80 * k, max(width * 0.8, mid + half + seal_w + gap + 80 * k))
+    return sx, tx, px
+
+
 def _heading_decor(width: int, top: float, k: float, lines: List[Tuple[str, Any, float]]) -> Image.Image:
     """What sits behind and around the scrapbook's heading: soft mountain ridges fading out above the cards, a red
     sun, a small torii on the ridge, a pine sprig, and a red seal beside the heading's biggest line (seal_text).
@@ -1361,21 +1374,21 @@ def _heading_decor(width: int, top: float, k: float, lines: List[Tuple[str, Any,
         img.alpha_composite(layer)
         front = ys
     d = ImageDraw.Draw(img)
-    # Sun, upper left.
+    sx, tx, px = (v * z for v in decor_spots(width, k, lines))
+    tw, th, lw = 60 * k * z, 70 * k * z, int(5 * k * z)
+    # Sun, upper left, left of the torii.
     r = 46 * k * z
-    sx, sy = width * z * 0.2, top * 0.35 * z
+    sy = top * 0.35 * z
     d.ellipse([sx - r, sy - r, sx + r, sy + r], outline=(*tuning.OUTRO_SCRAPBOOK_STAMP_COLOR, 150), width=int(3 * k * z))
     # A small torii standing on the front ridge.
-    tx = width * z * 0.3
     ty = float(np.interp(tx, xs, front))
-    tw, th, lw = 60 * k * z, 70 * k * z, int(5 * k * z)
     col = (*ink, 170)
     d.line([(tx - tw, ty - th), (tx + tw, ty - th)], fill=col, width=lw + 2)
     d.line([(tx - tw * 0.8, ty - th * 0.75), (tx + tw * 0.8, ty - th * 0.75)], fill=col, width=lw)
     d.line([(tx - tw * 0.55, ty - th), (tx - tw * 0.6, ty)], fill=col, width=lw)
     d.line([(tx + tw * 0.55, ty - th), (tx + tw * 0.6, ty)], fill=col, width=lw)
     # A pine sprig, upper right.
-    px, py, n = width * z * 0.8, top * 0.3 * z, 7
+    py, n = top * 0.3 * z, 7
     d.line([(px - 80 * k * z, py + 60 * k * z), (px + 70 * k * z, py - 40 * k * z)], fill=col, width=int(3 * k * z))
     for i in range(n):
         cx, cy = px - 70 * k * z + i * 21 * k * z, py + 53 * k * z - i * 14 * k * z
@@ -1410,7 +1423,7 @@ def _place(canvas: Image.Image, img: Image.Image, cx: float, cy: float, scale: f
 def _write_scrapbook_clip(
     title: str, waypoints: List[Dict[str, Any]], brief: Optional[Dict[str, Any]],
     output_path: Path, fps: int, size: Tuple[int, int], colors: Optional[Dict[str, Any]] = None,
-    heading: Optional[Dict[str, Any]] = None,
+    heading: Optional[Dict[str, Any]] = None, cover_path: Optional[Path] = None,
 ) -> bool:
     """Footprints walk the route across the paper and each stop's polaroid (S, 1, 2 … E) pops up as they reach it, then a round stamp with the title,
     distance and travel time lands in the bottom-right cell; then the logo end card, as after the scroll."""
@@ -1462,9 +1475,6 @@ def _write_scrapbook_clip(
         hd.text((width / 2, y + font.size * 0.65), _truncate_to_width(hd, text, font, width * 0.9), font=font,
                 fill=tuning.OUTRO_SCRAPBOOK_INK, anchor="mm")
         y += font.size * 1.3
-    if (heading or {}).get("title_layer") is not None:
-        layer = heading["title_layer"]
-        base.alpha_composite(layer.resize(size) if layer.size != size else layer)
     if top:
         # A short rule with a dot under the heading (drawn or on the text track) ties it to the cards.
         ink = (*tuning.OUTRO_SCRAPBOOK_STAMP_COLOR, 200)
@@ -1474,6 +1484,11 @@ def _write_scrapbook_clip(
         hd.line([(width / 2 - half, rule_y), (width / 2 - 3 * dot, rule_y)], fill=ink, width=max(2, int(2 * k)))
         hd.line([(width / 2 + 3 * dot, rule_y), (width / 2 + half, rule_y)], fill=ink, width=max(2, int(2 * k)))
         hd.ellipse([width / 2 - dot, rule_y - dot, width / 2 + dot, rule_y + dot], fill=ink)
+    # The heading band without the title: the editor's preview covers the burned title with it and draws the live one.
+    cover = base.crop((0, 0, width, int(math.ceil(top)))).convert("RGB") if top else None
+    if (heading or {}).get("title_layer") is not None:
+        layer = heading["title_layer"]
+        base.alpha_composite(layer.resize(size) if layer.size != size else layer)
     # The journey: footprints walk from each card's spot to the next, and the card pops up when they get there;
     # after the last one they walk on to the stamp.
     trail = Image.new("RGBA", size, (0, 0, 0, 0))
@@ -1553,7 +1568,12 @@ def _write_scrapbook_clip(
             for _ in range(int(round(tuning.OUTRO_LOGO_HOLD_SECONDS * fps))):
                 yield end_card
 
-    return _pipe_frames(frames(), output_path, fps, size)
+    ok = _pipe_frames(frames(), output_path, fps, size)
+    if ok and cover is not None and cover_path is not None:
+        partial = cover_path.with_name(f".{cover_path.name}.partial")
+        cover.save(partial, format="PNG")
+        replace_into(partial, cover_path)
+    return ok
 
 
 def _route_badges(waypoints: List[Dict[str, Any]]) -> List[Tuple[str, Dict[str, Any]]]:
@@ -1689,6 +1709,7 @@ def generate_outro_clip(
             if not _write_scrapbook_clip(
                 (heading or {}).get("subtitle") or project_name or "", waypoints, brief, partial_path, tuning.INTRO_FPS,
                 size or (1920, 1080), _project_colors(settings), heading,
+                cover_path=video_dir_path / f"{Path(output_filename).stem}.title_bg.png",
             ):
                 return None
             replace_into(partial_path, output_path)

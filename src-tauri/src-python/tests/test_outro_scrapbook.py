@@ -60,3 +60,29 @@ def test_seal_takes_two_kanji_from_the_heading():
 
     assert seal_text("\u845b\u57ce\u4fee\u9a13") == "\u4fee\u9a13"
     assert seal_text("Kyoto walk") == "" and seal_text("") == ""
+
+
+def test_scrapbook_saves_its_title_free_heading_band(tmp_path, monkeypatch):
+    from PIL import Image
+
+    from services.vdoprocessing import outrocard
+
+    monkeypatch.setattr(outrocard, "_pipe_frames", lambda *a, **k: True)
+    cover = tmp_path / "99_outro.title_bg.png"
+    heading = {"title": "Trip", "subtitle": "Day one", "burn_text": False}
+    assert outrocard._write_scrapbook_clip("Trip", [], None, tmp_path / "o.mp4", 10, (640, 360), None, heading, cover_path=cover)
+    band = Image.open(cover)
+    assert band.width == 640 and 0 < band.height < 360
+
+
+def test_a_long_heading_pushes_the_torii_and_pine_outward():
+    from PIL import ImageDraw, Image
+
+    from services.vdoprocessing.outrocard import _GraphicsEngineBase, _load_font, decor_spots
+
+    font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, 56)
+    assert decor_spots(1920, 1.0, [("葛城の道", font, 100)]) == (1920 * 0.2, 1920 * 0.3, 1920 * 0.8)
+    text = "Katsuragi no Michi along the old pilgrim road"
+    sx, tx, px = decor_spots(1920, 1.0, [(text, font, 100)])
+    half = ImageDraw.Draw(Image.new("L", (1, 1))).textlength(text, font=font) / 2
+    assert sx < tx and tx + 60 < 960 - half and px - 80 > 960 + half
