@@ -5,9 +5,18 @@ integration-level and out of scope here — exercised via the `outro` CLI
 mode instead.
 """
 
+import pytest
 from PIL import Image, ImageDraw
 
 from services.vdoprocessing import outrocard
+
+
+@pytest.fixture(autouse=True)
+def _one_logo(tmp_path_factory, monkeypatch):
+    """The app's logos (assets/image/logo) are not in git: every machine gets the same one here."""
+    logo_dir = tmp_path_factory.mktemp("logo")
+    Image.new("RGBA", (200, 80), (30, 60, 120, 255)).save(logo_dir / "logo.png")
+    monkeypatch.setattr(outrocard, "LOGO_DIR", logo_dir)
 
 
 def _font(size=14):

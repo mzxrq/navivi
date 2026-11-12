@@ -86,22 +86,3 @@ def apply_upscaled_images(data: Dict[str, Any], project_dir) -> Dict[str, str]:
                 wp[key] = swap(value)
     return reverse
 
-
-def restore_original_images(data: Dict[str, Any], reverse: Dict[str, str]) -> Dict[str, Any]:
-    """A copy of `data` with the photo paths apply_upscaled_images swapped put back."""
-    if not reverse:
-        return data
-    out = dict(data)
-    waypoints = []
-    for wp in data.get("waypoints") or []:
-        if isinstance(wp, dict):
-            wp = dict(wp)
-            for key in IMAGE_KEYS:
-                value = wp.get(key)
-                if isinstance(value, list):
-                    wp[key] = [reverse.get(v, v) if isinstance(v, str) else v for v in value]
-                elif isinstance(value, str):
-                    wp[key] = reverse.get(value, value)
-        waypoints.append(wp)
-    out["waypoints"] = waypoints
-    return out

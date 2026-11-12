@@ -13,7 +13,7 @@ each pipeline step's test_* command lives next to its own concerns:
   (which runs every isolated stage above as one combined project test)
 """
 
-from .helpers import _output_dir_from_config, _video_safe_label, _load_tts_waypoints
+from .helpers import _output_dir_from_config, _load_tts_waypoints
 from .gps_commands import test_gps, test_overview_map, test_overview_video, test_residential_video
 from .tts_commands import (
     test_tts,
@@ -34,7 +34,6 @@ from .script_commands import test_overview_script
 
 __all__ = [
     "_output_dir_from_config",
-    "_video_safe_label",
     "_load_tts_waypoints",
     "test_gps",
     "test_overview_map",

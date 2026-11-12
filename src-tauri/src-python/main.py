@@ -363,12 +363,14 @@ if __name__ == "__main__":
                 # [NOTE] [Script] Turn-by-turn arriving scripts + opening lines for every stop, from the route alone; returned, never written.
                 from services.cli.script_commands import leg_scripts
                 result = leg_scripts(job_config_arg)
+            elif mode_arg == "overview":
+                result = test_overview_video(job_config_arg, route_dir_arg, force=force_arg)
             elif mode_arg == "all":
                 # [NOTE] [Core] Runs every isolated stage above in the pipeline's order and settings (TTS, subtitles, attractions, overview+residential, intro/outro, concat) — NOT the same as full_pipeline (no timeline.json, no audio in the concat).
                 result = test_all(job_config_arg, output_dir_arg, force=force_arg)
             else:
-                # [NOTE] [Core] Default when no mode (or an unrecognized one) is given — just the overview map animation.
-                result = test_overview_video(job_config_arg, route_dir_arg, force=force_arg)
+                # A typo must not start a long overview render over the finished clip.
+                raise ValueError(f"Unknown mode '{mode_arg}'. Run main.py with no arguments for the list.")
 
         _tracker.clear()
         if sys.stderr.isatty():

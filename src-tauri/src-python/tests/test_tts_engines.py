@@ -469,3 +469,13 @@ class TestQwen3ServerLogic:
         ends_properly[int(rate * 1.7):] = 0  # the voice stops, then a short silence, like a finished line
         assert server.tail_ratio(cut_off, rate) > server.TAIL_OK
         assert server.tail_ratio(ends_properly, rate) < server.TAIL_OK
+
+
+def test_a_voice_action_names_a_missing_field_and_keeps_other_errors_as_they_are(monkeypatch):
+    assert voice_commands.run_voice_action("tts_voice_delete", {}) == {"success": False, "error": "Missing field: id"}
+
+    def broken(_payload):
+        return {}["engine_key"]
+
+    monkeypatch.setitem(voice_commands._HANDLERS, "tts_engines", broken)
+    assert voice_commands.run_voice_action("tts_engines", {})["error"] == "KeyError: 'engine_key'"
