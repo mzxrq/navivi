@@ -550,13 +550,16 @@ async def _speak(
 ) -> str:
     """Voices a narration file, reusing its kept sentences (voice_pieces.py) when `project_dir` is given.
     `retake`: a new take past every cache; with `redo_pieces`, only those sentences, the rest keep their audio."""
-    from services.tts import voice_pieces
+    from services.tts import pitch_accent, voice_pieces
 
     folder = pieces_dir(project_dir, audio_filename) if project_dir is not None else None
     saved = tuple(getattr(client, k, d) for k, d in (
         ("bypass_cache", False), ("pieces_dir", None), ("pieces_voice", None), ("redo_texts", frozenset()),
     ))
-    client.pieces_dir, client.pieces_voice = folder, _client_fingerprint(client)
+    voice = _client_fingerprint(client)
+    wanted = pitch_accent.wanted(tts_script)
+    # Kept sentences were chosen for their high/low patterns: new patterns, new takes (the rest come from the line cache).
+    client.pieces_dir, client.pieces_voice = folder, {**voice, "pitch": [list(w) for w in wanted]} if voice and wanted else voice
     if retake and redo_pieces and folder is not None:
         client.redo_texts = frozenset(voice_pieces.texts(folder, redo_pieces))
     else:
