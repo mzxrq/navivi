@@ -313,7 +313,7 @@ def merge_pronunciation(shared: Optional[list], project: Optional[list]) -> list
     merged = {}
     for entry in list(shared or []) + list(project or []):
         if isinstance(entry, dict) and entry.get("word") and entry.get("reading"):
-            merged[entry["word"]] = {"word": entry["word"], "reading": entry["reading"], **({"auto": True} if entry.get("auto") else {})}
+            merged[entry["word"]] = {"word": entry["word"], "reading": entry["reading"], **({"auto": True} if entry.get("auto") else {}), **({"pitch": entry["pitch"]} if entry.get("pitch") else {})}
     return list(merged.values())
 
 
@@ -380,7 +380,7 @@ def _replace_words(text: str, word: str, spoken: str) -> str:
 
 def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
     from services.localization.localization import is_japanese
-    from services.tts import name_check
+    from services.tts import name_check, pitch_accent
 
     if not text or not dictionary:
         return text
@@ -396,6 +396,7 @@ def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
             name_check.remember_kanji(entry["word"], entry["reading"], spoken)
             continue
         name_check.remember(spoken, entry["word"])
+        pitch_accent.remember(spoken, entry.get("pitch"))
         text = _replace_words(text, entry["word"], spoken)
     return text
 

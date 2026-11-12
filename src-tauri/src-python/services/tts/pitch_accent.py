@@ -1,6 +1,7 @@
 """High/low pattern of one word in a voice take, to keep the take whose intonation matches the one asked for.
 
-A pattern is one letter per mora of the word's reading: H (high) or L (low), e.g. かつらぎ "LHHH". The word is
+A pattern is one letter per mora of the word's reading: H (high) or L (low), e.g. かつらぎ "LHHH"; a Latin reading
+(an English line) has one per syllable, e.g. Katsuragi (ka-tsu-ra-gi) "LHLL". The word is
 found in the take by its share of the sentence's kana over the voiced stretch (sentence takes are short, so this
 is close enough), the pitch is measured per mora, and the pattern read off it is compared with the one asked for.
 """
@@ -8,7 +9,7 @@ is close enough), the pitch is measured per mora, and the pattern read off it is
 from __future__ import annotations
 
 import re
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -17,16 +18,64 @@ F0_MIN, F0_MAX = 70.0, 450.0
 HOP_SECONDS = 0.01
 # A step between two morae smaller than this (semitones) reads as level.
 LEVEL_SEMITONES = 0.6
+_patterns: Dict[str, str] = {}  # a dictionary word as the voice is sent it (kana) -> its pattern
+_SPOKEN = re.compile(r"^(?:[ぁ-ヿ]+|[A-Za-z' -]+)$")
 
 
-def morae(kana: str) -> List[str]:
-    """かつらぎ -> [か, つ, ら, ぎ]; a small ゃ/ゅ/ょ joins the kana before it, っ ん ー are morae of their own."""
+def remember(spoken: str, pattern: Optional[str]) -> None:
+    if pattern and _SPOKEN.match(spoken or "") and valid_pattern(pattern, spoken):
+        _patterns[spoken] = pattern.upper()
+
+
+def wanted(text: str) -> List[Tuple[str, str]]:
+    return sorted((w, p) for w, p in _patterns.items() if w in text)
+
+
+def sentence_kana(text: str) -> str:
+    """The line as kana only (kanji words read out, punctuation and Latin dropped), to place a word among its morae;
+    an English line keeps its words."""
+    from services.localization.japanese_words import spoken_kana
+    from services.localization.localization import is_japanese
+
+    if not is_japanese(text):
+        return " ".join(re.findall(r"[A-Za-z']+", text))
+    return re.sub(r"[^ぁ-ヿ]", "", spoken_kana(text))
+
+
+def score_take(audio: bytes, kana: str, words: List[Tuple[str, str]]) -> float:
+    """The worst score among every occurrence of the wanted words in one take (1 = all follow their pattern)."""
+    import io
+
+    scores = []
+    for word, pattern in words:
+        n = 0
+        while (r := check_take(io.BytesIO(audio), kana, word, pattern, n)) is not None:
+            scores.append(r["score"])
+            n += 1
+    return min(scores, default=1.0)
+
+
+def syllables(word: str) -> List[str]:
+    """katsuragi -> [ka, tsu, ra, gi]: one per vowel group (Kobe is ko-be; a reading is spelled as it is said)."""
+    w = word.lower()
+    parts = re.findall(r"(?:[^aeiouy]|y(?=[aeiou]))*(?:[aeiou]|y(?![aeiou]))+", w)  # y before a vowel is a consonant (koyasan, kyoto)
+    if not parts:
+        return [w]
+    parts[-1] += w[len("".join(parts)):]
+    return parts
+
+
+def morae(text: str) -> List[str]:
+    """かつらぎ -> [か, つ, ら, ぎ]; a small ゃ/ゅ/ょ joins the kana before it, っ ん ー are morae of their own.
+    Latin words count by syllable; anything else (spaces, punctuation, kanji) is left out."""
     out: List[str] = []
-    for ch in kana:
-        if ch in SMALL_KANA and out:
-            out[-1] += ch
-        elif not ch.isspace():
-            out.append(ch)
+    for tok in re.findall(r"[A-Za-z']+|[ぁ-ヿ]", text):
+        if tok[0].isascii():
+            out += syllables(tok)
+        elif tok in SMALL_KANA and out:
+            out[-1] += tok
+        else:
+            out.append(tok)
     return out
 
 
@@ -110,7 +159,7 @@ def check_take(wav_path, sentence_kana: str, word_kana: str, pattern: str, occur
     """{"score", "heard", "pitches"} for the word in one take; None when the word is not in the sentence."""
     import soundfile as sf
 
-    samples, rate = sf.read(str(wav_path), always_2d=True)
+    samples, rate = sf.read(wav_path if hasattr(wav_path, "read") else str(wav_path), always_2d=True)
     f0 = f0_track(samples.mean(axis=1), rate)
     frames = word_frames(f0, sentence_kana, word_kana, occurrence)
     if frames is None:

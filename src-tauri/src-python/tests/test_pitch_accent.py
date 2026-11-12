@@ -28,6 +28,33 @@ def test_the_pattern_is_read_off_the_pitch():
     assert pa.score(pitches, "HLLL") == 0.0  # a wrong rise fails the word
 
 
+def test_a_take_scores_by_its_worst_word():
+    import io
+
+    import soundfile as sf
+
+    samples, rate = _voice([180, 240, 240, 235, 250, 180, 180, 180])
+    buf = io.BytesIO()
+    sf.write(buf, samples, rate, format="WAV")
+    pa.remember("カツラキ", "lhhh")
+    pa.remember("カツラ", "LH")  # wrong length: ignored
+    words = pa.wanted("ここはカツラキ。")
+    assert words == [("カツラキ", "LHHH")]
+    assert pa.score_take(buf.getvalue(), "カツラキカツラキ", words) == 0.0  # the 2nd one falls: HLLL
+    assert pa.score_take(buf.getvalue(), "カツラキソノホカ", words) == 1.0
+
+
+def test_an_english_line_counts_syllables():
+    assert pa.morae("Katsuragi") == ["ka", "tsu", "ra", "gi"]
+    assert pa.morae("Mount Koyasan, then") == ["mount", "ko", "ya", "san", "then"]
+    assert pa.valid_pattern("LHLL", "Katsuragi")
+    assert pa.sentence_kana("We reach Katsuragi, 1 km on.") == "We reach Katsuragi km on"
+    samples, rate = _voice([180, 240, 180, 180])
+    f0 = pa.f0_track(samples, rate)
+    pitches = pa.measured_pattern(f0, pa.word_frames(f0, "Katsuragi", "Katsuragi"), 4)
+    assert pa.score(pitches, "LHLL") == 1.0
+
+
 def test_the_word_is_found_past_a_pause():
     a, rate = _voice([200, 200, 200, 200])
     b, _ = _voice([250, 180, 180, 180])  # the 2nd word after a pause: HLLL

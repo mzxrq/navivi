@@ -772,8 +772,11 @@ export function AppSettings() {
   );
 }
 
-// Sounds (morae) in a kana reading: a small ゃ/ゅ/ょ joins the kana before it (pitch_accent.morae).
-const moraCount = (kana: string) => [...kana.replace(/\s/g, "")].filter((c) => !"ゃゅょぁぃぅぇぉゎャュョァィゥェォヮ".includes(c)).length;
+// Sounds in a reading, as pitch_accent.morae counts them: kana morae (a small ゃ/ゅ/ょ joins the kana before it)
+// plus one per vowel group of a Latin word (y before a vowel is a consonant).
+const moraCount = (reading: string) =>
+  [...reading.replace(/[^ぁ-ヿ]/g, "")].filter((c) => !"ゃゅょぁぃぅぇぉゎャュョァィゥェォヮ".includes(c)).length +
+  (reading.toLowerCase().match(/[a-z']+/g) ?? []).reduce((n, w) => n + Math.max(1, (w.match(/(?:[aeiou]|y(?![aeiou]))+/g) ?? []).length), 0);
 
 interface DictionaryEntry {
   word: string;

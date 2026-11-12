@@ -724,7 +724,7 @@ class IrodoriTTSClient:
                 audio = await self.call_api(text)
                 ratio = cut_off_ratio(audio)
                 if ratio <= tuning.TTS_CUTOFF_RATIO:
-                    return [await self._with_names_heard(text, audio)]
+                    return [await self._with_pitch_matched(text, await self._with_names_heard(text, audio))]
                 logger.warning("TTS take %d ends mid-word (%.2f): %s", attempt + 1, ratio, text)
                 if best is None or ratio < best[0]:
                     best = (ratio, audio)
@@ -776,6 +776,40 @@ class IrodoriTTSClient:
                     best = (len(missing), take)
         finally:
             self.bypass_cache = bypass
+        return best[1]
+
+    async def _with_pitch_matched(self, text: str, audio: bytes) -> bytes:
+        """`audio`, or the retake whose dictionary words best follow their high/low patterns (pitch_accent.py)."""
+        from services.tts import pitch_accent
+
+        wanted = pitch_accent.wanted(text)
+        if not wanted:
+            return audio
+        settled = lambda take: phrase_cache.cache_key({"pitch_checked": text, "wanted": wanted, "take": hashlib.sha256(take).hexdigest()}, None)  # noqa: E731
+        cached = self._cached_line(settled(audio))
+        if cached is not None:
+            return cached
+        kana = await asyncio.to_thread(pitch_accent.sentence_kana, text)
+        best = (await asyncio.to_thread(pitch_accent.score_take, audio, kana, wanted), audio)
+        takes, bypass = [audio], self.bypass_cache
+        try:
+            for attempt in range(tuning.TTS_PITCH_RETAKES):
+                if best[0] >= 1:
+                    break
+                logger.warning("TTS retake %d for high/low (%.2f): %s", attempt + 1, best[0], text)
+                self.bypass_cache = True
+                take = await self.call_api(text)
+                takes.append(take)
+                if cut_off_ratio(take) > tuning.TTS_CUTOFF_RATIO:
+                    continue
+                s = await asyncio.to_thread(pitch_accent.score_take, take, kana, wanted)
+                if s > best[0]:
+                    best = (s, take)
+        finally:
+            self.bypass_cache = bypass
+        # Every take seen maps to the kept one: the line cache now holds the last retake, not the first take.
+        for take in takes:
+            phrase_cache.put(settled(take), best[1])
         return best[1]
 
     def _remove_stray_bursts(self, path: Path) -> None:

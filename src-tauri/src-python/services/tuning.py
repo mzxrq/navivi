@@ -1372,6 +1372,8 @@ TTS_NAME_CHECK = True
 # character counts (up to ~5 s off); falls back to the estimate.
 ALIGN_CUES_TO_VOICE = True
 TTS_NAME_RETAKES = 2
+# A line with a dictionary word that has a high/low pattern is retaken (up to this many times) until the word's pitch matches it.
+TTS_PITCH_RETAKES = 3
 # Kanji-first: send dictionary words in kanji and rely on the name check. Off: Whisper can write the right kanji
 # for a misread take (慈眼院 said じがんいん), so every dictionary word is spelled out (ジゲン院).
 TTS_KANJI_FIRST = False
