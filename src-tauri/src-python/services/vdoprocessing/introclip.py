@@ -615,9 +615,9 @@ def generate_intro_clip(
                 subtitle_style=DEFAULT_SUBTITLE_STYLE.merged(subtitle_style)
                 .with_installed_font(DEFAULT_SUBTITLE_STYLE.font_family),
             )
-            # [HACK] [Subtitle] Absolute, forward-slashed, colon-escaped path — libass's
-            # subtitles filter needs this exact escaping.
-            escaped_title_path = str(title_path.resolve()).replace("\\", "/").replace(":", r"\:")
+            from services.vdoprocessing.vdoexporter import filter_path
+
+            escaped_title_path = filter_path(title_path)
             base = f"subtitles=filename='{escaped_title_path}':force_style='{_TITLE_STYLE.to_force_style()}'"
 
         if not _finish_intro(combined_path, total_sec, base, video_dir_path, run_id, output_path):
