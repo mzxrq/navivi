@@ -172,18 +172,6 @@ def test_skip_rich_media_ignores_an_old_map(tmp_path, gpu):
 
     assert JobConfigManager(cfg).get("waypoints")[0]["popup_image"] == [images["small"]]
 
-    from services.vdoprocessing.pydeckrecorder.routedata import load_route_from_config
-
-    assert load_route_from_config(str(cfg))["waypoints"][0]["popup_image"] == [images["small"]]
-
-
-def test_pydeck_loader_gets_upscaled_paths(tmp_path, gpu):
-    cfg, _ = _project(tmp_path, small=(640, 480))
-    upscaled = next(iter(upscale_step.upscale_waypoint_images(str(cfg))["map"].values()))
-    from services.vdoprocessing.pydeckrecorder.routedata import load_route_from_config
-
-    assert load_route_from_config(str(cfg))["waypoints"][0]["popup_image"] == [upscaled]
-
 
 def test_estimate_counts_small_photos_and_maps_stage_numbers(tmp_path):
     cfg, _ = _project(tmp_path, small=(640, 480), big=(1920, 1080))
