@@ -5,11 +5,15 @@ import json
 import pytest
 
 from services import tuning
-from services.localization.sentence_split import SENTENCE_END, split_sentences
+from services.localization.sentence_split import SENTENCE_END
 from services.localization.subtitle import SubtitleBuilder, TextSegmenter
 from services.tts import kokoro_server
 from services.tts.errors import TTSNotReady
 from services.tts.ttsengine import KokoroTTSClient, make_tts_client, split_text_for_tts, tts_config_from_settings
+
+
+def split_sentences(text):
+    return [s for s in SENTENCE_END.split(text) if s]
 
 
 def test_a_period_ends_a_sentence_but_an_abbreviation_or_decimal_point_does_not():

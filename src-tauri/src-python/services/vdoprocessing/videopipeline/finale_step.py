@@ -104,7 +104,7 @@ def _summary_card(config_path: Path, settings: dict):
         return None
 
 
-def render_finale_clip(project_config_path: str) -> Optional[str]:
+def render_finale_clip(project_config_path: str, force: bool = False) -> Optional[str]:
     """98_finale.mp4, or None (never raises) when it is switched off, there is no track or photo, or it fails."""
     config_path = Path(project_config_path)
     try:
@@ -142,6 +142,16 @@ def render_finale_clip(project_config_path: str) -> Optional[str]:
         hold_seconds = tuning.FINALE_HOLD_SECONDS
         if voice:
             hold_seconds = max(hold_seconds, voice_start + voice[1] + tuning.FINALE_VOICE_TAIL_SECONDS - before_hold)
+
+        from . import clip_cache
+
+        out = Path(video_dir) / tuning.FINALE_OUTPUT_FILENAME
+        key = clip_cache.fingerprint(
+            {"settings": settings, "stops": stops, "size": size, "voice": voice and voice[1]},
+            [gps_data_dir(project_dir) / "gpsdata.csv", photo_path, voice and voice[0], __file__, tuning.__file__],
+        )
+        if not force and clip_cache.reusable(project_dir, out, key):
+            return str(out)
 
         lats, lons = [p[0] for p in route], [p[1] for p in route]
         pad_lat, pad_lon = (max(lats) - min(lats)) * 0.12 + 1e-4, (max(lons) - min(lons)) * 0.12 + 1e-4
@@ -219,7 +229,6 @@ def render_finale_clip(project_config_path: str) -> Optional[str]:
 
         from services.vdoprocessing.outrocard import _pipe_frames
 
-        out = Path(video_dir) / tuning.FINALE_OUTPUT_FILENAME
         part = out.with_name(out.stem + ".part.mp4")
         if not _pipe_frames(generate(), part, fps, size):
             return None
@@ -230,6 +239,7 @@ def render_finale_clip(project_config_path: str) -> Optional[str]:
             write_audio_offset(str(out), voice_start)  # the timeline plays the narration from here
         else:
             Path(timing_sidecar_path(str(out))).unlink(missing_ok=True)
+        clip_cache.remember(project_dir, out, key)
         logger.info("Finale clip generated: %s", out)
         return str(out)
     except Exception:

@@ -57,3 +57,42 @@ def test_the_finale_plays_its_narration_from_its_timing_sidecar(tmp_path: Path, 
     assert tracks[0]["audio_path"] and Path(tracks[0]["audio_path"]).name == FINALE_NARRATION_FILENAME
     assert tracks[0]["audio_offset"] == 1.0
     assert not tracks[0].get("fade_into_next_seconds")  # cuts to the outro
+
+
+def test_an_unchanged_finale_is_reused_not_captured_again(tmp_path: Path, monkeypatch):
+    import json
+
+    import numpy as np
+    from PIL import Image
+
+    from services.mapfetcher import pydeck_overview
+    from services.projectfiles import gps_data_dir
+    from services.vdoprocessing import outrocard
+    from services.vdoprocessing.videopipeline.finale_step import render_finale_clip
+
+    captures = []
+
+    def capture(*args, **kwargs):
+        captures.append(1)
+        return [(np.zeros((1080, 1920, 3), np.uint8), (135.0, 34.0, 136.0, 35.0))] * 2
+
+    def pipe(frames, part, fps, size):
+        Path(part).parent.mkdir(parents=True, exist_ok=True)
+        Path(part).write_bytes(b"mp4")
+        return True
+
+    monkeypatch.setattr(pydeck_overview, "capture_pydeck_zoom_sequence", capture)
+    monkeypatch.setattr(outrocard, "_pipe_frames", pipe)
+    Image.new("RGB", (64, 48)).save(tmp_path / "end.jpg")
+    d = gps_data_dir(tmp_path)
+    d.mkdir(parents=True)
+    (d / "gpsdata.csv").write_text("latitude,longitude\n34.1,135.2\n34.2,135.3\n", encoding="utf-8")
+    cfg = tmp_path / "job_config.json"
+    stops = [{"lat": 34.1, "lng": 135.2}, {"lat": 34.2, "lng": 135.3, "popup_image": str(tmp_path / "end.jpg")}]
+    cfg.write_text(json.dumps({"settings": {}, "waypoints": stops}), encoding="utf-8")
+
+    first = render_finale_clip(str(cfg))
+    assert first and render_finale_clip(str(cfg)) == first
+    assert len(captures) == 1
+    render_finale_clip(str(cfg), force=True)
+    assert len(captures) == 2

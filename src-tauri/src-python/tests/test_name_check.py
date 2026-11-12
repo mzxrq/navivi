@@ -91,3 +91,24 @@ def test_a_settled_take_is_not_checked_or_retaken_again(client, monkeypatch):
     monkeypatch.setattr(name_check, "transcribe", lambda audio: pytest.fail("checked again"))
     assert asyncio.run(client._with_names_heard("サルサカ峠へ。", GOOD)) == OTHER
     assert len(client.calls) == retakes
+
+
+def test_a_high_low_retake_keeps_the_spelling_that_fixed_a_name(tmp_path, monkeypatch):
+    from services.tts import pitch_accent
+
+    monkeypatch.setenv("NAVIVI_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setattr(KokoroTTSClient, "_names_spelled", {})
+    name_check.remember_kanji("三輪神社", "みわじんじゃ", "ミワ神社")
+    monkeypatch.setattr(pitch_accent, "_patterns", {"ミワ": "LH"})
+    monkeypatch.setattr(pitch_accent, "score_take", lambda audio, kana, words: 0.0)  # never matches: every retake is made
+    c = make_tts_client({"tts": {"engine": "kokoro"}}, tmp_path / "out")
+    sent = []
+
+    async def call_api(self, text):
+        sent.append(text)
+        return GOOD if len(sent) == 1 else OTHER
+
+    monkeypatch.setattr(KokoroTTSClient, "call_api", call_api)
+    monkeypatch.setattr(name_check, "transcribe", lambda audio: "三輪神社へ。" if audio == OTHER else "みら神社へ。")
+    asyncio.run(c._speak_chunk("三輪神社へ。ミワ。"))
+    assert sent[1:] == ["ミワ神社へ。ミワ。"] * (1 + tuning.TTS_PITCH_RETAKES)

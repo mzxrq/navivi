@@ -296,7 +296,7 @@ def run_full_pipeline(
     tracker.stage("Building intro/outro clips...")
     outro_path = render_outro_clip(str(config_file_path))
     # The last stop's photo shrinks onto its pin and the camera pulls back to the whole route, then the outro.
-    finale_path = render_finale_clip(str(config_file_path)) if outro_path else None
+    finale_path = render_finale_clip(str(config_file_path), force=force_regenerate) if outro_path else None
     if intro_path:
         video_paths = [intro_path] + video_paths
         final_videos = [intro_path] + final_videos

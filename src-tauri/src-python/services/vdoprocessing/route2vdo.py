@@ -265,10 +265,6 @@ def restore_leg(variant_dir: Path, inputs_name: str, leg_parts: Dict[str, str], 
     return [out_dir / p.name for p in clips]
 
 
-def _stored_fingerprint(path: Path) -> Optional[str]:
-    return _stored_leg_inputs(path).get("fingerprint")
-
-
 class RouteAnimator:
     """Orchestrates the animation pipeline by bridging configurations with Renderers."""
 

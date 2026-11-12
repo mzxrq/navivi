@@ -12,7 +12,3 @@ ABBREVIATIONS = ("Mt", "St", "Sta", "Dr", "Mr", "Mrs", "Ms", "Jr", "Sr", "No", "
 _NOT_ABBREVIATION = "".join(r"(?<!\b%s\.)" % a for a in ABBREVIATIONS)
 
 SENTENCE_END = re.compile(r"(?<=[。！？!?\n])|" + _NOT_ABBREVIATION + r"(?<=[A-Za-z0-9)\"'”’]\.)(?=\s)")
-
-
-def split_sentences(text: str) -> list:
-    return [s for s in SENTENCE_END.split(text or "") if s]

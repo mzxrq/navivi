@@ -694,6 +694,8 @@ class IrodoriTTSClient:
     pieces_dir: Optional[Path] = None
     pieces_voice: Optional[dict] = None
     redo_texts: frozenset = frozenset()
+    # A line -> the spelling whose retake fixed a misread place name in it (name_check), for later retakes of that line.
+    _names_spelled: Dict[str, str] = {}
 
     def _cached_line(self, key: str) -> Optional[bytes]:
         return None if self.bypass_cache else phrase_cache.get(key)
@@ -758,6 +760,7 @@ class IrodoriTTSClient:
         return best
 
     async def _best_heard_take(self, text: str, audio: bytes, name_check: Any) -> bytes:
+        original = text
         missing = await asyncio.to_thread(name_check.misheard_names, audio, text)
         best = (len(missing), audio)
         bypass = self.bypass_cache
@@ -774,6 +777,7 @@ class IrodoriTTSClient:
                 missing = await asyncio.to_thread(name_check.misheard_names, take, text)
                 if len(missing) < best[0]:
                     best = (len(missing), take)
+                    self._names_spelled[original] = text
         finally:
             self.bypass_cache = bypass
         return best[1]
@@ -789,7 +793,8 @@ class IrodoriTTSClient:
         cached = self._cached_line(settled(audio))
         if cached is not None:
             return cached
-        kana = await asyncio.to_thread(pitch_accent.sentence_kana, text)
+        spoken = self._names_spelled.get(text, text)  # a retake keeps the spelling that fixed a misread name
+        kana = await asyncio.to_thread(pitch_accent.sentence_kana, spoken)
         best = (await asyncio.to_thread(pitch_accent.score_take, audio, kana, wanted), audio)
         takes, bypass = [audio], self.bypass_cache
         try:
@@ -798,7 +803,7 @@ class IrodoriTTSClient:
                     break
                 logger.warning("TTS retake %d for high/low (%.2f): %s", attempt + 1, best[0], text)
                 self.bypass_cache = True
-                take = await self.call_api(text)
+                take = await self.call_api(spoken)
                 takes.append(take)
                 if cut_off_ratio(take) > tuning.TTS_CUTOFF_RATIO:
                     continue
@@ -807,8 +812,8 @@ class IrodoriTTSClient:
                     best = (s, take)
         finally:
             self.bypass_cache = bypass
-        # Every take seen maps to the kept one: the line cache now holds the last retake, not the first take.
-        for take in takes:
+        # The first take and the last retake (what the line cache now holds) both map to the kept one.
+        for take in {takes[0], takes[-1]}:
             phrase_cache.put(settled(take), best[1])
         return best[1]
 

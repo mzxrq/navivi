@@ -368,18 +368,7 @@ export const saveProjectData = async (
     ...(streetViews.length ? { street_views: streetViews } : {}),
   };
 
-  // Written aside and renamed over: a crash mid-write must not leave the project's one file half written.
-  await writeTextFile(`${jsonPath}.tmp`, JSON.stringify(jobConfig, null, 2));
-  // Windows refuses the rename while an antivirus scan or OneDrive sync holds either file for a moment.
-  for (let attempt = 1; ; attempt++) {
-    try {
-      await rename(`${jsonPath}.tmp`, jsonPath);
-      break;
-    } catch (err) {
-      if (attempt === 5) throw err;
-      await new Promise((r) => setTimeout(r, 200));
-    }
-  }
+  await writeFileSafely(jsonPath, JSON.stringify(jobConfig, null, 2));
 
   const manifest = buildAssetManifest(projId, processedWaypoints as any, settings);
   const metaDir = await join(projectDir, fileSystem.metaFolder);
@@ -735,6 +724,21 @@ export async function toAbsoluteProjectPath(filePath: string | undefined, projec
   return filePath;
 }
 
+// Written aside and renamed over: a crash mid-write must not leave a project file half written.
+export async function writeFileSafely(path: string, text: string) {
+  await writeTextFile(`${path}.tmp`, text);
+  // Windows refuses the rename while an antivirus scan or OneDrive sync holds either file for a moment.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await rename(`${path}.tmp`, path);
+      return;
+    } catch (err) {
+      if (attempt === 5) throw err;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
+}
+
 export async function saveTimelineManifest(
   projectDir: string,
   projectName: string,
@@ -746,7 +750,7 @@ export async function saveTimelineManifest(
     const manifestPath = await join(projectDir, "timeline.json");
     // An empty timeline (editor never opened) must not wipe what the pipeline wrote.
     if (timeline.segments.length === 0 && (await exists(manifestPath))) return true;
-    await writeTextFile(manifestPath, JSON.stringify(toManifest(projectName, timeline, captionStyle, exportOptions), null, 2));
+    await writeFileSafely(manifestPath, JSON.stringify(toManifest(projectName, timeline, captionStyle, exportOptions), null, 2));
     return true;
   } catch (error) {
     console.error("Failed to save timeline.json:", error);

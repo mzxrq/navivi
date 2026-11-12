@@ -113,14 +113,6 @@ def _cover_fit(sw: int, sh: int, out_aspect: float):
     return fit_w, fit_h
 
 
-def _crop_rect(cx: float, cy: float, half_w: float, half_h: float, sw: int, sh: int):
-    half_w = min(half_w, sw / 2)
-    half_h = min(half_h, sh / 2)
-    cx = min(max(cx, half_w), sw - half_w)
-    cy = min(max(cy, half_h), sh - half_h)
-    return int(cx - half_w), int(cy - half_h), int(cx + half_w), int(cy + half_h)
-
-
 def _render_zoom_in(
     image_bgr: np.ndarray, raw_output_path: str, duration_sec: float,
     zoom: Tuple[float, float] = (tuning.INTRO_ZOOM_START, tuning.INTRO_ZOOM_END),

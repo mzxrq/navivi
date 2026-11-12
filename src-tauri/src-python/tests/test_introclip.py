@@ -43,31 +43,6 @@ class TestCoverFit:
         assert fit_h == 720
 
 
-class TestCropRect:
-    def test_centered_crop_within_bounds(self):
-        x0, y0, x1, y1 = introclip._crop_rect(
-            cx=50, cy=50, half_w=20, half_h=20, sw=100, sh=100
-        )
-        assert (x0, y0, x1, y1) == (30, 30, 70, 70)
-
-    def test_crop_clamped_when_center_near_edge(self):
-        # Center near the left edge — crop must not go negative.
-        x0, y0, x1, y1 = introclip._crop_rect(
-            cx=5, cy=50, half_w=20, half_h=20, sw=100, sh=100
-        )
-        assert x0 == 0
-        assert x1 == 40
-
-    def test_half_dims_larger_than_image_get_clamped(self):
-        x0, y0, x1, y1 = introclip._crop_rect(
-            cx=50, cy=50, half_w=1000, half_h=1000, sw=100, sh=100
-        )
-        assert x0 == 0
-        assert y0 == 0
-        assert x1 == 100
-        assert y1 == 100
-
-
 class TestFormatAssTimestamp:
     def test_zero(self):
         assert introclip._format_ass_timestamp(0.0) == "0:00:00.00"
