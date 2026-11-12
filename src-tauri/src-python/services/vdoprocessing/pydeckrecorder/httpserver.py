@@ -39,7 +39,11 @@ def start_local_server(directory, assets_dir=None):
             if assets_root and (path == "/assets" or path.startswith("/assets/")):
                 rel = urllib.parse.unquote(path[len("/assets/"):] if path.startswith("/assets/") else "")
                 rel = rel.split("?", 1)[0].split("#", 1)[0]
-                return os.path.join(assets_root, *rel.split("/")) if rel else assets_root
+                full = os.path.normpath(os.path.join(assets_root, *rel.split("/")))
+                # super().translate_path drops '..'; this branch must too, or /assets/../../ reads any file.
+                if os.path.commonpath([full, os.path.normpath(assets_root)]) != os.path.normpath(assets_root):
+                    return os.path.join(assets_root, "__outside__")
+                return full
             return super().translate_path(path)
 
         def log_message(self, format, *args):
