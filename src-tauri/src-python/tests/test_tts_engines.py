@@ -249,7 +249,9 @@ class TestQwen3Client:
 
     def test_the_server_is_told_its_device_and_vram_cap(self, client, monkeypatch):
         monkeypatch.setenv("NAVIVI_TTS_DEVICE", "cpu")
-        assert client._server_env() == {"QWEN3_DEVICE": "cpu", "QWEN3_VRAM_FRACTION": str(tuning.QWEN3_VRAM_FRACTION)}
+        assert client._server_env() == {
+            "QWEN3_DEVICE": "cpu", "QWEN3_VRAM_FRACTION": str(tuning.QWEN3_VRAM_FRACTION), "QWEN3_MAX_ATTEMPTS": str(tuning.QWEN3_MAX_ATTEMPTS),
+        }
         monkeypatch.setenv("NAVIVI_TTS_DEVICE", "auto")
         assert client._server_env()["QWEN3_DEVICE"] == "cuda"
 
@@ -414,7 +416,7 @@ class TestQwen3ServerScript:
 
     def test_it_ends_lines_with_a_full_stop_and_retries(self):
         source = self.source()
-        assert "ADD_FULL_STOP = True" in source and "MAX_ATTEMPTS = 3" in source
+        assert "ADD_FULL_STOP = True" in source and _load_qwen3_server().MAX_ATTEMPTS == tuning.QWEN3_MAX_ATTEMPTS
 
 
 def _load_qwen3_server():

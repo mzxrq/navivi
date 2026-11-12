@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 MODEL_ID = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
 LANGUAGE = "Japanese"  # when a request names none
 LOAD_WAIT_SECONDS = 300  # how long a request waits for the model before giving up
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = int(os.environ.get("QWEN3_MAX_ATTEMPTS") or 3)  # tuning.QWEN3_MAX_ATTEMPTS
 TAIL_SECONDS = 0.08  # the end of the clip that is checked
 TAIL_OK = 0.15  # its energy against the whole clip's: measured 0.00-0.12 for lines that end properly, 0.19-0.31 for cut-off ones
 END_PAUSE_SECONDS = 0.25  # silence after every line so a clip never ends on a click

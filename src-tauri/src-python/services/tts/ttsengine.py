@@ -1081,7 +1081,14 @@ class Qwen3TTSClient(_VenvEngineClient):
         return path
 
     def _server_env(self) -> Dict[str, str]:
-        return {"QWEN3_DEVICE": qwen3_device(), "QWEN3_VRAM_FRACTION": str(tuning.QWEN3_VRAM_FRACTION)}
+        env = {
+            "QWEN3_DEVICE": qwen3_device(),
+            "QWEN3_VRAM_FRACTION": str(tuning.QWEN3_VRAM_FRACTION),
+            "QWEN3_MAX_ATTEMPTS": str(tuning.QWEN3_MAX_ATTEMPTS),
+        }
+        if tuning.QWEN3_CPU_THREADS:
+            env["QWEN3_THREADS"] = str(tuning.QWEN3_CPU_THREADS)
+        return env
 
     async def call_api(self, text: str) -> bytes:
         reference = self._reference()

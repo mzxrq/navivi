@@ -1348,8 +1348,8 @@ VIDEO_END_FADE_SECONDS = 1.0
 # --- TTS narration (Irodori-TTS) --------------------------------------------
 # Fallback defaults for ttsengine.TTSConfig; settings.tts overrides.
 TTS_MODEL = "irodori-tts"
-# "cpu", "cuda" or "auto"; NAVIVI_TTS_DEVICE overrides (read when the server starts). CPU on purpose: GPU TTS
-# drove the card to ~7.8 GB and hard-shut the PC (HYPERVISOR_ERROR) more than once, even with short chunks.
+# "cpu", "cuda" or "auto"; NAVIVI_TTS_DEVICE overrides (read when the server starts). GPU TTS once drove the card
+# to ~7.8 GB and hard-shut the PC (HYPERVISOR_ERROR); "cpu" is the safe fallback.
 TTS_DEVICE = "cuda"
 # Longest text per TTS request: about 15 s of speech (~4.4 characters a second).
 TTS_MAX_CHUNK_CHARS = 60
@@ -1476,9 +1476,14 @@ QWEN3_PORT = 8090
 QWEN3_SPELL_OUT_KANJI = True
 QWEN3_MODEL = "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
 # "cuda" or "cpu" (NAVIVI_TTS_DEVICE overrides). On cuda: bfloat16, capped to VRAM_FRACTION, CPU fallback, and
-# each request waits out a hot GPU. This PC has hard-crashed during GPU work.
-QWEN3_DEVICE = "cpu"
+# each request waits out a hot GPU. This PC has hard-crashed during GPU work. cuda needs the GPU torch build in
+# bin/Qwen3-TTS (main.py tts_install_qwen3 swaps it in); with the CPU build the server stays on the CPU.
+QWEN3_DEVICE = "cuda"
 QWEN3_VRAM_FRACTION = 0.4
+# Takes per line when one ends while still loud (Qwen3 sometimes cuts the last syllable); the quietest ending is kept.
+QWEN3_MAX_ATTEMPTS = 3
+# CPU threads when on the CPU; None = half the cores.
+QWEN3_CPU_THREADS = None
 QWEN3_COST = {"request": 5.0, "char": 0.85, "startup": 40.0}
 
 # [NOTE] [Legs] A Mapillary street photo pops up as a small card at each turn of a walking leg (settings.street_photos_at_turns).
