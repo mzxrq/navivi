@@ -135,6 +135,10 @@ def measured_cue_times(
     estimate = cue_times(cues, clean, duration, pauses)
     if not cues or not enabled or not tuning.ALIGN_CUES_TO_VOICE or not audio_path:
         return estimate
+    from services.localization.localization import is_japanese
+
+    if not is_japanese(clean):
+        return estimate  # the recogniser is a Japanese model: an English take never matches, it only costs time
     try:
         segments = _segments(Path(audio_path))
         measured = align_cue_times(clean, cues, segments) if segments else None
