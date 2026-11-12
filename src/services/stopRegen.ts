@@ -113,6 +113,12 @@ export function isBusyClip(seg: Pick<Segment, "video" | "audio">, job: { index: 
   return regenTargetOf(seg) === job.index;
 }
 
+const letters = (s: string) => s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+/** Whether a narration file (02_waypoint_NN_<label> / 04_attraction_NN_<label>, label = the stop's name) was made for
+ *  this stop: after a stop is added or removed, an old timeline's file numbers point at its neighbour. */
+export const fileIsStop = (file: string, wp: { name?: string } | undefined) =>
+  !!wp?.name && letters(file.replace(/^0[24]_(?:waypoint|attraction)_\d+_?/, "")) === letters(wp.name);
+
 export type StopNarration = "arrival" | "attraction";
 
 /** Which of its stop's narrations a timeline clip plays: the walk's arrival one or the place clip's attraction one. */

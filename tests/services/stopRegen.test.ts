@@ -4,7 +4,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 import { emptyTimeline, type Segment, type TimelineData } from "../../src/features/editor/model";
-import { isBusyClip, lastJson, legOf, narrationOf, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, regenTargetOf, routeClipModes, runRegen, stopIndexOf, withOutroBurnedIn } from "../../src/services/stopRegen";
+import { fileIsStop, isBusyClip, lastJson, legOf, narrationOf, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, regenTargetOf, routeClipModes, runRegen, stopIndexOf, withOutroBurnedIn } from "../../src/services/stopRegen";
 
 beforeEach(() => invoke.mockReset());
 
@@ -215,5 +215,14 @@ describe("withOutroBurnedIn", () => {
     expect(next.texts[0].end).toBeCloseTo(10.5);
     expect(next.texts[1]).toBe(tl.texts[1]);
     expect(withOutroBurnedIn(next)).toBeNull();
+  });
+});
+
+describe("fileIsStop", () => {
+  it("matches a narration file to the stop it was made for, not to the stop that now has its number", () => {
+    expect(fileIsStop("04_attraction_02_Nakamura_Residence", { name: "Nakamura Residence" })).toBe(true);
+    expect(fileIsStop("02_waypoint_04_Nakamura_Residence", { name: "Nagara Museum of Postal Service" })).toBe(false);
+    expect(fileIsStop("02_waypoint_03_葛城一言主神社", { name: "葛城 一言主神社" })).toBe(true);
+    expect(fileIsStop("04_attraction_11_JR_Tamade_Station", undefined)).toBe(false);
   });
 });

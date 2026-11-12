@@ -9,8 +9,8 @@ import { useUI } from "../../hooks/useUI";
 import { Copy, FileText, Film, LinkIcon, Maximize, Mic, Music, Plus, RotateCcw, Sparkles, Subtitles, Trash2, Type, UnlinkIcon, Video, VolumeX, ZoomIn, ZoomOut } from "../../components/ui/icons";
 import { useStopRegen } from "../../hooks/useStopRegen";
 import { RegenQueueCard } from "./RegenQueueCard";
-import { VoicePiecesDialog } from "./VoicePiecesDialog";
-import { type RegenKind, type RouteClip, legOf, narrationOf, onlyNarration, routeClipOf, stopIndexOf } from "../../services/stopRegen";
+import { VoicePiecesDialog, type PiecesSource } from "./VoicePiecesDialog";
+import { type RegenKind, type RouteClip, fileIsStop, isBusyClip, legOf, narrationOf, onlyNarration, routeClipOf, stopIndexOf } from "../../services/stopRegen";
 import { Tip } from "../../components/ui/Tip";
 import { openContextMenu, separator } from "../../components/ui/menuItems";
 import { probeDuration, toAbsoluteProjectPath, toRelativeProjectPath } from "../../services/fileSystem";
@@ -67,7 +67,7 @@ export function EditorView() {
   const [exportOpen, setExportOpen] = useState(false);
   const [musicOpen, setMusicOpen] = useState(false);
   // The narration file whose sentences are being picked, and what voices the picked ones again.
-  const [piecesFor, setPiecesFor] = useState<{ file: string; title: string; redo: (pieces: number[]) => void } | null>(null);
+  const [piecesFor, setPiecesFor] = useState<{ title: string; sources: PiecesSource[] } | null>(null);
   const view = draft ?? timeline;
   const { placed, total } = useMemo(() => layout(view), [view]);
 
@@ -311,11 +311,46 @@ export function EditorView() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // The narration file whose sentences a clip plays, for VoicePiecesDialog; null for a clip with no narration.
+  // `redo` only when the file is still this stop's: after a stop is added or removed, an old timeline's file numbers
+  // point at the neighbouring stop (its name in the file name tells).
+  const sentencesOf = (seg: Segment): { file: string; title: string; redo?: (pieces: number[]) => void } | null => {
+    const clip = routeClipOf(seg);
+    if (clip === "intro" || clip === "overview")
+      return {
+        file: clip === "intro" ? "00_intro_narration" : "00_overview_narration",
+        title: clip === "intro" ? t`Choose sentences of the intro to voice again` : t`Choose sentences of the overview to voice again`,
+        redo: (pieces: number[]) => regenerateClip(clip, "voice", pieces),
+      };
+    const stopIndex = stopIndexOf(seg);
+    const narration = narrationOf(seg);
+    const info = stopIndex === null ? null : stopInfo(stopIndex);
+    const stop = info && onlyNarration(info, narration);
+    if (!narration || !seg.audio) return null;
+    const file = stem(seg.audio);
+    const ok = !!stop && (stop.hasArrivalVoice || stop.hasAttractionVoice) && fileIsStop(file, waypoints[stopIndex!]);
+    return {
+      file,
+      title: t`Choose sentences of this narration to voice again`,
+      redo: ok ? (pieces: number[]) => void regenerate(stopIndex!, "voice", narration, pieces) : undefined,
+    };
+  };
+
+  // Narration files the running "Make again" job is voicing now.
+  const voicingFiles = () => {
+    const out = new Set<string>();
+    if (regenBusy?.kind === "voice") for (const p of placed) if (p.seg.audio && isBusyClip(p.seg, regenBusy)) out.add(sentencesOf(p.seg)?.file ?? "");
+    return out;
+  };
+
+  const openSentences = (s: ReturnType<typeof sentencesOf>) => s && setPiecesFor({ title: s.title, sources: [{ file: s.file, redo: s.redo }] });
+
   const segmentMenu = (e: React.MouseEvent, seg: Segment) => {
     const stopIndex = stopIndexOf(seg);
     const narration = narrationOf(seg);
     const info = stopIndex === null ? null : stopInfo(stopIndex);
     const stop = info && onlyNarration(info, narration);
+    const sentences = sentencesOf(seg);
     const remake = (kind: RegenKind) => () => void regenerate(stopIndex!, kind, narration);
     const clip = routeClipOf(seg);
     const leg = legOf(seg);
@@ -330,17 +365,7 @@ export function EditorView() {
         disabled: isRendering,
         submenu: [
           { label: t`Narration`, icon: Mic, onSelect: () => void regenerateClip(clip, "voice") },
-          {
-            label: t`Choose sentences to voice again...`,
-            icon: FileText,
-            disabled: !dir,
-            onSelect: () =>
-              setPiecesFor({
-                file: clip === "intro" ? "00_intro_narration" : "00_overview_narration",
-                title: clip === "intro" ? t`Choose sentences of the intro to voice again` : t`Choose sentences of the overview to voice again`,
-                redo: (pieces) => regenerateClip(clip, "voice", pieces),
-              }),
-          },
+          { label: t`Choose sentences to voice again...`, icon: FileText, disabled: !dir, onSelect: () => openSentences(sentences) },
           { label: t`Video`, icon: Film, onSelect: () => void regenerateClip(clip, "video") },
           // Voice first: the video follows the voice's length.
           { label: t`Narration and video`, icon: RotateCcw, onSelect: () => (regenerateClip(clip, "voice"), regenerateClip(clip, "video")) },
@@ -353,18 +378,8 @@ export function EditorView() {
         disabled: isRendering,
         submenu: [
           { label: t`Voice`, icon: Mic, disabled: !stop.hasArrivalVoice && !stop.hasAttractionVoice, onSelect: remake("voice") },
-          {
-            label: t`Choose sentences to voice again...`,
-            icon: FileText,
-            // One narration file per clip.
-            disabled: !narration || !seg.audio || (!stop.hasArrivalVoice && !stop.hasAttractionVoice),
-            onSelect: () =>
-              setPiecesFor({
-                file: stem(seg.audio!),
-                title: t`Choose sentences of this narration to voice again`,
-                redo: (pieces) => void regenerate(stopIndex!, "voice", narration, pieces),
-              }),
-          },
+          // One narration file per clip.
+          { label: t`Choose sentences to voice again...`, icon: FileText, disabled: !sentences?.redo, onSelect: () => openSentences(sentences) },
           { label: t`Subtitles`, icon: Subtitles, disabled: !stop.hasArrivalVoice && !stop.hasAttractionVoice, onSelect: remake("subtitles") },
           { label: t`Photo clip`, icon: Film, disabled: !stop.hasPhotos, onSelect: remake("photo") },
           {
@@ -418,6 +433,22 @@ export function EditorView() {
 
   const laneMenu = (e: React.MouseEvent, time: number, lane: Lane) => {
     if (lane === "video") openContextMenu(e, [{ label: t`Add video`, icon: Video, onSelect: addVideos }]);
+    else if (lane === "voice") {
+      // Every narration's sentences in one list, in timeline order (a file played by two clips once).
+      const sources = new Map<string, PiecesSource>();
+      for (const p of placed) {
+        const s = p.seg.audio ? sentencesOf(p.seg) : null;
+        if (s && !sources.has(s.file)) sources.set(s.file, { file: s.file, label: p.seg.label, redo: s.redo });
+      }
+      openContextMenu(e, [
+        {
+          label: t`All narration sentences...`,
+          icon: FileText,
+          disabled: isRendering || !dir || !sources.size,
+          onSelect: () => setPiecesFor({ title: t`All narration sentences`, sources: [...sources.values()] }),
+        },
+      ]);
+    }
     else if (lane === "text") openContextMenu(e, [{ label: t`Add title here`, icon: Plus, onSelect: () => addTextAt(time) }]);
     else if (lane === "music") openContextMenu(e, [{ label: t`Add music`, icon: Music, onSelect: addMusic }, timeline.music && { label: t`Remove music`, icon: Trash2, danger: true, onSelect: () => commit({ ...timeline, music: null }) }]);
     else
@@ -536,7 +567,7 @@ export function EditorView() {
 
       {musicOpen && <MusicPicker onPick={useLibraryTrack} onChooseFile={addMusicFile} onClose={() => setMusicOpen(false)} />}
       {piecesFor && dir && (
-        <VoicePiecesDialog dir={dir} file={piecesFor.file} title={piecesFor.title} onRedo={piecesFor.redo} onClose={() => setPiecesFor(null)} />
+        <VoicePiecesDialog dir={dir} title={piecesFor.title} sources={piecesFor.sources} busy={voicingFiles()} onClose={() => setPiecesFor(null)} />
       )}
       {exportOpen && <ExportDialog timeline={timeline} projectDir={dir} projectName={metadata.project_name} onClose={() => setExportOpen(false)} />}
     </div>

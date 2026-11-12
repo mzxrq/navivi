@@ -25,7 +25,7 @@ export type Selection = { type: "segment" | "text"; id: string } | { type: "cue"
 
 export const selectedCueIds = (s: Selection): string[] => (s?.type === "cue" ? (s.ids ?? [s.id]) : []);
 export const cueSelection = (ids: string[]): Selection => (ids.length ? { type: "cue", id: ids[0], ids } : null);
-export type Lane = "video" | "text" | "subtitle" | "music";
+export type Lane = "video" | "voice" | "text" | "subtitle" | "music";
 
 interface PaneProps {
   timeline: TimelineData;
@@ -443,7 +443,12 @@ export function TimelinePane(props: PaneProps) {
         </div>
 
         <div className="relative flex border-b border-zinc-200/70 dark:border-white/5" style={{ height: LANE.voice }} data-row>
-          <div className={laneLabel} style={{ width: LABEL_W }}>
+          <div
+            className={`${laneLabel} cursor-context-menu hover:text-zinc-600 dark:hover:text-zinc-300`}
+            style={{ width: LABEL_W }}
+            title={t`Right-click: every narration's sentences`}
+            onContextMenu={(e) => props.onLaneMenu(e, 0, "voice")}
+          >
             <Volume2 className="w-3.5 h-3.5" />
           </div>
           <div className="relative flex-1" data-lane="voice">
