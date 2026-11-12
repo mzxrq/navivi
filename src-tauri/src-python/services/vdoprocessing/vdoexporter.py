@@ -43,6 +43,7 @@ import cv2
 import numpy as np
 
 from services import runtime_paths, tuning
+from services.ffconcat import concat_entry
 from services.projectfiles import replace_into
 from services.localization.subtitle import SubtitleStyle
 from services.localization.caption_box import box_event_text, build_box, text_position_tag
@@ -1042,8 +1043,7 @@ class VideoExporter:
 
             # 2. Write Absolute Paths
             with open(concat_txt, "w", encoding="utf-8") as f:
-                for clip_path in muxed_paths:
-                    f.write(f"file 'file:{clip_path.resolve().as_posix()}'\n")
+                f.writelines(concat_entry(str(clip_path)) for clip_path in muxed_paths)
 
             # 3. Execute the seamless stitch
             result = subprocess.run(

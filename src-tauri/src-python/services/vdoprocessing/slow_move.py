@@ -235,10 +235,9 @@ def _extend_with_reverse(video_path: str, gap: float, output_path: str) -> Optio
             covered += piece
             turn += 1
         listing = work / "list.txt"
-        listing.write_text(
-            "".join("file '{}'\n".format(str(p).replace("\\", "/").replace("'", "'\\''")) for p in pieces),
-            encoding="utf-8",
-        )
+        from services.ffconcat import concat_entry
+
+        listing.write_text("".join(concat_entry(str(p)) for p in pieces), encoding="utf-8")
         run = subprocess.run(
             [ffmpeg, "-y", *tuning.ffmpeg_log_args(), "-f", "concat", "-safe", "0", "-i", str(listing),
              "-t", f"{current + gap:.3f}", "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18",
