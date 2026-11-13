@@ -231,27 +231,10 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
   const musicRef = useRef<HTMLAudioElement>(null);
   const extraRef = useRef<HTMLAudioElement>(null);
   const loaded = useRef({ voice: "", music: "", extra: "" });
-  // Narration goes through a gain node once it's set above 100%: an <audio> element can't
-  // play louder, the export can.
-  const audioCtx = useRef<AudioContext | null>(null);
-  const gains = useRef(new WeakMap<HTMLAudioElement, GainNode>());
+  // Capped at 100% here; the export plays a louder clip louder. (A Web Audio gain for >100% silenced the
+  // shared narration element in the app window, every clip after the first loud one, 2026-11-13.)
   const setLevel = (el: HTMLAudioElement, level: number) => {
-    let gain = gains.current.get(el);
-    if (!gain && level > 1) {
-      try {
-        audioCtx.current ??= new AudioContext();
-        gain = audioCtx.current.createGain();
-        audioCtx.current.createMediaElementSource(el).connect(gain).connect(audioCtx.current.destination);
-        gains.current.set(el, gain);
-      } catch {
-        // Falls back to the element's own volume, capped at 100%.
-      }
-    }
-    if (gain) {
-      el.volume = 1;
-      gain.gain.value = level;
-      if (audioCtx.current?.state === "suspended") audioCtx.current.resume().catch(() => undefined);
-    } else el.volume = Math.min(1, level);
+    el.volume = Math.min(1, level);
   };
   // Unlinked narration plays at its own timeline time, one element per clip, alongside the rest.
   const freeVoices = useRef(new Map<string, HTMLAudioElement>());
@@ -443,7 +426,6 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
         el.removeAttribute("src");
       }
       voices.clear();
-      audioCtx.current?.close().catch(() => undefined);
     };
   }, []);
 

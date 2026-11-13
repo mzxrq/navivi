@@ -548,6 +548,13 @@ export function Inspector(p: InspectorProps) {
             <Row label={t`Volume`}>
               <Slider label={t`Volume`} format={percent} value={seg.volume} min={0} max={1.5} step={0.05} onCommit={(v) => patchSegment({ volume: v })} />
             </Row>
+            <button
+              type="button"
+              className={iconButton}
+              onClick={() => commit({ ...timeline, segments: timeline.segments.map((s) => (s.audio ? { ...s, volume: seg.volume } : s)) })}
+            >
+              <Trans>Apply this volume to all clips</Trans>
+            </button>
             <Row label={t`Mute`}>
               <Switch checked={seg.muted} onChange={(v) => patchSegment({ muted: v })} label={t`Mute narration`} />
             </Row>
@@ -561,6 +568,15 @@ export function Inspector(p: InspectorProps) {
             <Row label={t`Volume`}>
               <Slider label={t`Original sound volume`} format={percent} value={seg.extraVolume ?? DEFAULT_EXTRA_VOLUME} min={0} max={1} step={0.05} onCommit={(v) => patchSegment({ extraVolume: v })} />
             </Row>
+            <button
+              type="button"
+              className={iconButton}
+              onClick={() =>
+                commit({ ...timeline, segments: timeline.segments.map((s) => (s.extraAudio ? { ...s, extraVolume: seg.extraVolume ?? DEFAULT_EXTRA_VOLUME } : s)) })
+              }
+            >
+              <Trans>Apply this volume to all videos</Trans>
+            </button>
             <p className="text-[11px] text-zinc-400">
               <Trans>The sound of your own video, mixed under the narration.</Trans>
             </p>
