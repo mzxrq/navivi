@@ -95,8 +95,9 @@ class TestCallApi:
         return c
 
     def test_a_repeated_line_is_synthesized_once(self, client):
-        assert asyncio.run(client.call_api("お疲れ様です")) == "AUDIO-お疲れ様です".encode("utf-8")
-        assert asyncio.run(client.call_api("お疲れ様です")) == "AUDIO-お疲れ様です".encode("utf-8")
+        sent = f"AUDIO-{tuning.TTS_IRODORI_LEAD_IN}お疲れ様です".encode("utf-8")  # the lead-in goes before every Irodori line
+        assert asyncio.run(client.call_api("お疲れ様です")) == sent
+        assert asyncio.run(client.call_api("お疲れ様です")) == sent
         assert len(client.sent) == 1
 
     def test_another_line_or_voice_file_is_not_a_hit(self, client, voice_lib):

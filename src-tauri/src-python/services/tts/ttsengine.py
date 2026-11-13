@@ -669,7 +669,7 @@ class IrodoriTTSClient:
         accept it yet — httpx.ConnectTimeout is a SEPARATE exception class
         from ConnectError, not a subclass, so both need to be caught here),
         starts/waits for it as a subprocess and retries once it's healthy."""
-        payload = self.config.to_payload(text)
+        payload = self.config.to_payload(tuning.TTS_IRODORI_LEAD_IN + text)
 
         # A line spoken before (in this or any project) is not synthesized again; ~40 s each on a CPU.
         key = phrase_cache.cache_key(payload, self._voice_sha256())

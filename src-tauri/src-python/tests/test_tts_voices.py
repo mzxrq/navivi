@@ -98,7 +98,8 @@ class _Client:
         self.config = TTSConfig(voice=voice, speed=speed, caption=caption)
 
 
-def test_legacy_clip_counts_as_old_default(lib, tmp_path):
+def test_legacy_clip_counts_as_old_default(lib, tmp_path, monkeypatch):
+    monkeypatch.setattr(tuning, "TTS_IRODORI_LEAD_IN", "")
     clip = _wav(tmp_path / "clip.wav")
     voices.add_voice(str(_wav(tmp_path / "t.wav")), tuning.TTS_VOICE)
     assert audio_step._voice_matches(clip, _Client(tuning.TTS_VOICE, tuning.TTS_SPEED))

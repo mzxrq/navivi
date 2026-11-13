@@ -88,10 +88,18 @@ class TestFingerprint:
         assert not voices.fingerprints_match(irodori, kokoro)
         assert not voices.fingerprints_match(kokoro, irodori)
 
-    def test_a_clip_made_before_engines_existed_counts_as_irodori(self, voice_lib):
+    def test_a_clip_made_before_engines_existed_counts_as_irodori(self, voice_lib, monkeypatch):
+        monkeypatch.setattr(tuning, "TTS_IRODORI_LEAD_IN", "")
         legacy = {"voice": "alice", "sha256": voices._sha256(voice_lib / "alice.wav"), "speed": 1.0, "caption": None}
         assert voices.fingerprints_match(legacy, voices.voice_fingerprint("alice", 1.0, None))
         assert not voices.fingerprints_match(legacy, voices.voice_fingerprint("alice", 1.0, None, engine="kokoro"))
+
+    def test_an_irodori_clip_without_the_lead_in_is_remade_and_the_lead_in_is_sent(self, voice_lib, monkeypatch):
+        monkeypatch.setattr(tuning, "TTS_IRODORI_LEAD_IN", "……")
+        old = {"voice": "alice", "sha256": voices._sha256(voice_lib / "alice.wav"), "speed": 1.0, "caption": None}
+        now = voices.voice_fingerprint("alice", 1.0, None)
+        assert not voices.fingerprints_match(old, now) and voices.fingerprints_match(now, now)
+        assert voices.voice_fingerprint("af_heart", 1.0, None, engine="kokoro").get("lead_in") is None
 
     def test_kokoro_voice_and_speed_changes_are_noticed(self):
         a = voices.voice_fingerprint("jf_tebukuro", 1.0, None, engine="kokoro")

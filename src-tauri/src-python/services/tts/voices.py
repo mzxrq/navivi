@@ -212,6 +212,8 @@ def voice_fingerprint(voice: str, speed: float, caption: Optional[str] = None, e
         "voice": voice, "sha256": _sha256(path) if path else None,
         "speed": float(speed), "caption": (caption or None) if engine == "irodori" else None,  # the style caption is Irodori's
     }
+    if engine == "irodori" and tuning.TTS_IRODORI_LEAD_IN:
+        fingerprint["lead_in"] = tuning.TTS_IRODORI_LEAD_IN
     return fingerprint if engine == "irodori" else {**fingerprint, "engine": engine}
 
 
@@ -228,5 +230,7 @@ def fingerprints_match(stored: Dict[str, Any], current: Dict[str, Any]) -> bool:
         return False
     if (stored.get("caption") or None) != (current.get("caption") or None):
         return False
+    if (stored.get("lead_in") or "") != (current.get("lead_in") or ""):
+        return False  # spoken with another lead-in: its first word differs
     a, b = stored.get("sha256"), current.get("sha256")
     return a is None or b is None or a == b
