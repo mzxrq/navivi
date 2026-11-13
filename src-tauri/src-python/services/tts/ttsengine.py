@@ -30,10 +30,10 @@ from typing import Any, ClassVar, Dict, Final, List, Optional, Tuple
 
 from services import runtime_paths, tuning
 from services.ffconcat import concat_entry
-from services.tts import phrase_cache
+from services.tts import japanese_names, phrase_cache
 from services.tts.errors import TTSNotReady
 from services.gpu_cooldown import wait_for_gpu_cooldown
-from services.tts.artifacts import cut_off_ratio, remove_stray_bursts, trim_edge_silence
+from services.tts.artifacts import cut_off_ratio, remove_stray_bursts, shorten_word_gaps, trim_edge_silence
 from services.localization.sentence_split import SENTENCE_END
 from services.logger.logger import setup_logger
 from services.projectfiles import replace_into, write_atomic
@@ -855,6 +855,8 @@ class IrodoriTTSClient:
         takes = [
             trim_edge_silence(t, tuning.TTS_EDGE_SILENCE_KEEP_SECONDS, tuning.TTS_EDGE_SILENCE_DB) for t in takes
         ]
+        if self._ENGINE == "kokoro" and tuning.kokoro_language(self.config.voice) != "j" and tuning.TTS_WORD_GAP_SECONDS:
+            takes = [shorten_word_gaps(t, *tuning.TTS_WORD_GAP_SECONDS, tuning.TTS_EDGE_SILENCE_DB) for t in takes]
         if len(takes) == 1:
             write_atomic(file_path, takes[0])
             self._remove_stray_bursts(file_path)
@@ -991,8 +993,11 @@ class KokoroTTSClient(_VenvEngineClient):
 
     async def call_api(self, text: str) -> bytes:
         self.require_voice(self.config.voice)
+        if tuning.kokoro_language(self.config.voice) != "j":
+            text = japanese_names.mark(text)
         payload = {"input": text, "voice": self.config.voice, "speed": self.config.speed}
-        key = phrase_cache.cache_key({"engine": "kokoro", **payload}, None)
+        named = {"ja_names": japanese_names.RULE_VERSION} if "](ja:" in text else {}  # /sounds/ are in the text itself
+        key = phrase_cache.cache_key({"engine": "kokoro", **payload, **named}, None)
         cached = self._cached_line(key)
         if cached is not None:
             logger.info("TTS line served from the cache (%d characters).", len(text))

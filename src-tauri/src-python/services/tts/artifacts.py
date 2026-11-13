@@ -96,6 +96,53 @@ def trim_edge_silence(wav: bytes, keep_seconds: float, threshold_db: float) -> b
     return out.getvalue()
 
 
+def shorten_word_gaps(wav: bytes, min_seconds: float, max_seconds: float, keep_seconds: float, threshold_db: float) -> bytes:
+    """A take with every silence inside it of `min_seconds` … `max_seconds` cut down to `keep_seconds`: Kokoro's English
+    voice hesitates before an unfamiliar word ("stroll along | the Katsuragi no Michi", 0.12-0.23 s), while its comma
+    pauses are ~0.45 s and stay. The take unchanged when it can't be read or has no such gap."""
+    import io
+
+    try:
+        with wave.open(io.BytesIO(wav), "rb") as w:
+            params = w.getparams()
+            if params.sampwidth != 2:
+                return wav
+            raw = w.readframes(params.nframes)
+    except (wave.Error, EOFError):
+        return wav
+    frames = np.frombuffer(raw, dtype=np.int16).reshape(-1, params.nchannels)
+    hop = max(1, int(params.framerate * 0.01))
+    n = len(frames) // hop
+    if n < 3:
+        return wav
+    peaks = np.abs(frames[: n * hop]).reshape(n, -1).max(axis=1)
+    quiet = peaks <= 32768 * 10 ** (threshold_db / 20)
+    cuts, i = [], 0
+    while i < n:
+        if not quiet[i]:
+            i += 1
+            continue
+        j = i
+        while j < n and quiet[j]:
+            j += 1
+        if i > 0 and j < n and min_seconds <= (j - i) * hop / params.framerate <= max_seconds:
+            half = int(params.framerate * keep_seconds / 2)
+            cuts.append((i * hop + half, j * hop - half))
+        i = j
+    if not cuts:
+        return wav
+    keep, at = [], 0
+    for a, b in cuts:
+        keep.append(frames[at:a])
+        at = b
+    keep.append(frames[at:])
+    out = io.BytesIO()
+    with wave.open(out, "wb") as w:
+        w.setparams(params)
+        w.writeframes(np.concatenate(keep).tobytes())
+    return out.getvalue()
+
+
 def cut_off_ratio(wav: bytes) -> float:
     """How loud a take's last 80 ms is against its speech level (90th percentile of 20 ms windows),
     trailing digital silence (the server's end pad) ignored. Measured: <=0.12 for lines that end

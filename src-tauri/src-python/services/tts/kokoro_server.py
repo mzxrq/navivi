@@ -12,6 +12,7 @@ import argparse
 import io
 import json
 import os
+import re
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -54,11 +55,36 @@ def pipeline_for(voice: str):
     return _pipelines[code]
 
 
+JA_NAME = re.compile(r"\[([^\]]+)\]\(ja:([^\)]+)\)")  # [Kuhonji](ja:くほんじ), from japanese_names.mark
+# misaki's kana table, made sayable by the English voices: English sh/j/ch/r, and the palatal symbols Kokoro has no token for as consonant + y.
+SOFTEN = str.maketrans({"ɕ": "ʃ", "ʥ": "ʤ", "ʨ": "ʧ", "r": "ɹ", "g": "ɡ", "ɯ": "u", "ᶄ": "kj", "ᶃ": "ɡj", "K": "kw", "G": "ɡw",
+                        "ƫ": "tj", "ᶁ": "dj", "ᶀ": "bj", "ᶈ": "pj", "ᶆ": "mj", "ᶉ": "ɹj"})
+
+
+def japanese_sounds(reading: str) -> str:
+    """Phonemes for a kana reading, mora by mora from misaki's table (its G2P read きっしょう as ki-ʔ-shi-yō and こうさつば as kōsaʔba).
+    っ is left out and こう/くう become long vowels, a long "o" before "n" (Kuhonji was heard as Kuhanji). Checked 2026-11-12 with
+    Whisper on 12 place names. "" when the reading has no kana. japanese_names.RULE_VERSION goes up when this changes."""
+    from misaki.ja import M2P, JAG2P
+
+    kata = "".join(chr(ord(c) + 0x60) if "ぁ" <= c <= "ゖ" else c for c in reading)
+    words = ("".join(M2P[m] for m in JAG2P.pron2moras(part) if M2P[m] != "ʔ") for part in kata.split())
+    sounds = " ".join(w for w in words if w).translate(SOFTEN)
+    return sounds.replace("ou", "oː").replace("uu", "uː").replace("oɴ", "oːn")
+
+
+def with_japanese_names(text: str, voice: str) -> str:
+    if language_of(voice) == "j":
+        return JA_NAME.sub(lambda m: m[2], text)
+    return JA_NAME.sub(lambda m: f"[{m[1]}](/{s}/)" if (s := japanese_sounds(m[2])) else m[1], text)
+
+
 def synthesize(text: str, voice: str, speed: float) -> bytes:
     import numpy as np
     import soundfile as sf
 
     with _synth_lock:
+        text = with_japanese_names(text, voice)
         chunks = [np.asarray(audio, dtype=np.float32) for _, _, audio in pipeline_for(voice)(text, voice=voice, speed=speed)]
     if not chunks:
         raise ValueError("Kokoro returned no audio for this text.")

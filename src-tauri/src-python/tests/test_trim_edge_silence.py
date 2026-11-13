@@ -34,3 +34,14 @@ def test_unreadable_or_silent_takes_are_left_alone():
     assert trim_edge_silence(b"not a wav", 0.05, -45.0) == b"not a wav"
     silent = _wav(np.zeros(RATE))
     assert trim_edge_silence(silent, 0.05, -45.0) == silent
+
+
+def test_a_hesitation_inside_a_take_is_shortened_and_a_comma_pause_stays():
+    from services.tts.artifacts import shorten_word_gaps
+
+    tone = (8000 * np.sin(np.arange(int(RATE * 0.5)) / 3)).astype(np.int16)
+    gap = lambda s: np.zeros(int(RATE * s), dtype=np.int16)  # noqa: E731
+    take = _wav(np.concatenate([gap(0.2), tone, gap(0.15), tone, gap(0.45), tone, gap(0.2)]))
+    out = shorten_word_gaps(take, 0.1, 0.3, 0.04, -45.0)
+    assert abs(_seconds(take) - _seconds(out) - 0.11) < 0.02  # only the 0.15 s gap lost ~0.11 s; edges and 0.45 s kept
+    assert shorten_word_gaps(b"not a wav", 0.1, 0.3, 0.04, -45.0) == b"not a wav"

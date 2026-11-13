@@ -1389,6 +1389,9 @@ TTS_SENTENCE_GAP_MAX_SECONDS = 0.35
 # pads every take, which made the pauses ~0.6 s (2026-11-09: 25.6 s of a 94 s overview was silence).
 TTS_EDGE_SILENCE_DB = -45.0
 TTS_EDGE_SILENCE_KEEP_SECONDS = 0.05
+# Kokoro English: a silence of (min, max) seconds inside a sentence is cut to the 3rd value. It hesitates before a
+# Japanese name ("stroll along | the Katsuragi no Michi", 0.12-0.23 s); comma pauses (~0.45 s) stay. None: off.
+TTS_WORD_GAP_SECONDS = (0.1, 0.3, 0.04)
 TTS_VOICE = "jvs004"  # Irodori's only bundled voice preset as of writing
 # Playback speed sent to Irodori (1.0 = natural); validated against MIN/MAX before the request.
 TTS_SPEED = 1

@@ -380,7 +380,7 @@ def _replace_words(text: str, word: str, spoken: str) -> str:
 
 def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
     from services.localization.localization import is_japanese
-    from services.tts import name_check, pitch_accent
+    from services.tts import japanese_names, name_check, pitch_accent
 
     if not text or not dictionary:
         return text
@@ -389,9 +389,16 @@ def apply_pronunciation_dictionary(text: str, dictionary: list) -> str:
     # Typed entries can carry stray spaces ("Kisshousouji "), which glue or miss the word.
     entries = [{**e, "word": (e.get("word") or "").strip(), "reading": (e.get("reading") or "").strip()} for e in dictionary if isinstance(e, dict)]
     for entry in sorted(entries, key=lambda e: len(e["word"]), reverse=True):
+        if japanese_names.is_sounds(entry["reading"]):
+            japanese_names.remember(entry["word"], entry["reading"])  # only the fast English voice can say /phonemes/
+            continue
         spoken = _spoken_form(entry)
-        if not spoken or (english and is_japanese(spoken)):
-            continue  # a kana reading would turn an English line Japanese (Qwen then reads all of it as Japanese)
+        if not spoken:
+            continue
+        if english and is_japanese(spoken):
+            # a kana reading would turn an English line Japanese (Qwen then reads all of it as Japanese); the fast voice can use it
+            japanese_names.remember(entry["word"], entry["reading"])
+            continue
         if _kanji_first(entry):
             name_check.remember_kanji(entry["word"], entry["reading"], spoken)
             continue
