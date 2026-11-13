@@ -10,7 +10,6 @@ from services import tuning
 from services.config.job_config import JobConfigManager
 from services.config.sub_course import sub_course_name, write_sub_config
 from services.config.upscaled_images import upscale_enabled
-from services.localization.subtitle import caption_layout
 from services.logger.progress import tracker
 from services.projectfiles import write_json_atomic
 
@@ -51,11 +50,10 @@ def render_sub_course(main_config_path: str, force: bool, attractions_on: bool, 
         subtitles, attraction_subtitles = [], []
         if not fast_render:
             apply_cued_scripts(waypoints, sub_dir)
-            layout = caption_layout(settings)
             subtitle_dir = str(project_subtitle_dir(sub_dir))
-            subtitles = build_subtitles(waypoints, audio.get("audio_paths", []), subtitle_dir, force=force, layout=layout)
+            subtitles = build_subtitles(waypoints, audio.get("audio_paths", []), subtitle_dir, force=force)
             attraction_subtitles = build_attraction_subtitles(
-                waypoints, audio.get("attraction_audio_paths", []), subtitle_dir, force=force, layout=layout,
+                waypoints, audio.get("attraction_audio_paths", []), subtitle_dir, force=force,
             )
         if upscale_enabled(settings):
             upscale_waypoint_images(str(sub_path), force=force)

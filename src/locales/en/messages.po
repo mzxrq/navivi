@@ -82,7 +82,7 @@ msgid "(Empty script)"
 msgstr "(Empty script)"
 
 #. placeholder {0}: wp.name
-#: src/features/map/hooks/useStopMenus.ts:264
+#: src/features/map/hooks/useStopMenus.ts:284
 msgid "{0} (copy)"
 msgstr "{0} (copy)"
 
@@ -112,7 +112,7 @@ msgid "{0} is ready"
 msgstr "{0} is ready"
 
 #. placeholder {0}: km.toFixed(1)
-#: src/features/map/components/LegStats.tsx:8
+#: src/features/map/components/LegStats.tsx:9
 msgid "{0} km"
 msgstr "{0} km"
 
@@ -132,7 +132,7 @@ msgid "{0} lines, not burned in"
 msgstr "{0} lines, not burned in"
 
 #. placeholder {0}: Math.round(km * 1000)
-#: src/features/map/components/LegStats.tsx:8
+#: src/features/map/components/LegStats.tsx:9
 msgid "{0} m"
 msgstr "{0} m"
 
@@ -239,12 +239,12 @@ msgstr "{count} stops found. They will be added after the stops already in this 
 msgid "{failed} photos could not be converted and were skipped."
 msgstr "{failed} photos could not be converted and were skipped."
 
-#: src/features/map/components/LegStats.tsx:14
+#: src/features/map/components/LegStats.tsx:15
 #: src/services/renderEstimate.ts:23
 msgid "{h} h"
 msgstr "{h} h"
 
-#: src/features/map/components/LegStats.tsx:14
+#: src/features/map/components/LegStats.tsx:15
 msgid "{h} h {m} min"
 msgstr "{h} h {m} min"
 
@@ -252,7 +252,7 @@ msgstr "{h} h {m} min"
 msgid "{h} h {rest} min"
 msgstr "{h} h {rest} min"
 
-#: src/features/map/components/WaypointItem.tsx:220
+#: src/features/map/components/WaypointItem.tsx:222
 msgid "{imageCount} photos"
 msgstr "{imageCount} photos"
 
@@ -260,7 +260,7 @@ msgstr "{imageCount} photos"
 msgid "{legs} legs"
 msgstr "{legs} legs"
 
-#: src/features/map/components/LegStats.tsx:13
+#: src/features/map/components/LegStats.tsx:14
 #: src/services/renderEstimate.ts:20
 msgid "{m} min"
 msgstr "{m} min"
@@ -285,11 +285,11 @@ msgstr "{skipped} files were skipped: only photos, GPX files and documents can b
 msgid "{skipped} photos without a location were skipped."
 msgstr "{skipped} photos without a location were skipped."
 
-#: src/features/map/components/Sidebar.tsx:163
+#: src/features/map/components/Sidebar.tsx:171
 msgid "{stopCount} stops"
 msgstr "{stopCount} stops"
 
-#: src/features/map/components/Sidebar.tsx:159
+#: src/features/map/components/Sidebar.tsx:167
 msgid "{stopCount} stops · {stopByCount} stop-by"
 msgstr "{stopCount} stops · {stopByCount} stop-by"
 
@@ -309,7 +309,7 @@ msgstr "{totalClips} clips"
 msgid "{unnamedRemaining} more steps"
 msgstr "{unnamedRemaining} more steps"
 
-#: src/features/map/components/WaypointItem.tsx:402
+#: src/features/map/components/WaypointItem.tsx:404
 msgid "{viaCount} via"
 msgstr "{viaCount} via"
 
@@ -414,7 +414,7 @@ msgstr "A fast draft takes about half the time per line and sounds a little roug
 msgid "A few built-in voices, Japanese and English, a few seconds per line. A little flatter, and it cannot clone a voice. By {0}, {1}."
 msgstr "A few built-in voices, Japanese and English, a few seconds per line. A little flatter, and it cannot clone a voice. By {0}, {1}."
 
-#: src/features/map/components/WaypointEditor.tsx:517
+#: src/features/map/components/WaypointEditor.tsx:519
 msgid "A place that can't be visited any more"
 msgstr "A place that can't be visited any more"
 
@@ -426,7 +426,7 @@ msgstr "A relaxed walking video that follows the GPX track I attach, with Englis
 msgid "A short description of the way the natural voice speaks, written in Japanese. Leave it empty for no style. Changing it regenerates the narration the next time you generate."
 msgstr "A short description of the way the natural voice speaks, written in Japanese. Leave it empty for no style. Changing it regenerates the narration the next time you generate."
 
-#: src/features/map/components/WaypointEditor.tsx:894
+#: src/features/map/components/WaypointEditor.tsx:896
 msgid "A street view is a photo card in the walk that passes it, to show the way. Only its first photo is used."
 msgstr "A street view is a photo card in the walk that passes it, to show the way. Only its first photo is used."
 
@@ -561,11 +561,11 @@ msgstr "Add a voice"
 msgid "Add an outro"
 msgstr "Add an outro"
 
-#: src/features/map/hooks/useStopMenus.ts:335
+#: src/features/map/hooks/useStopMenus.ts:355
 msgid "Add as destination"
 msgstr "Add as destination"
 
-#: src/features/map/hooks/useStopMenus.ts:334
+#: src/features/map/hooks/useStopMenus.ts:354
 msgid "Add as start"
 msgstr "Add as start"
 
@@ -583,11 +583,11 @@ msgstr "Add English voices"
 msgid "Add music"
 msgstr "Add music"
 
-#: src/features/map/components/MapArea.tsx:1201
+#: src/features/map/components/MapArea.tsx:1194
 msgid "Add new points after this one"
 msgstr "Add new points after this one"
 
-#: src/features/map/components/WaypointEditor.tsx:880
+#: src/features/map/components/WaypointEditor.tsx:882
 msgid "Add photo"
 msgstr "Add photo"
 
@@ -596,7 +596,7 @@ msgstr "Add photo"
 msgid "Add place names automatically"
 msgstr "Add place names automatically"
 
-#: src/features/map/components/MapArea.tsx:376
+#: src/features/map/components/MapArea.tsx:378
 msgid "Add point here"
 msgstr "Add point here"
 
@@ -604,7 +604,7 @@ msgstr "Add point here"
 msgid "Add points"
 msgstr "Add points"
 
-#: src/features/map/hooks/useStopMenus.ts:256
+#: src/features/map/hooks/useStopMenus.ts:276
 msgid "Add return stop"
 msgstr "Add return stop"
 
@@ -616,19 +616,24 @@ msgstr "Add some stops first; there is nothing to describe yet."
 msgid "Add stop"
 msgstr "Add stop"
 
-#: src/features/map/hooks/useStopMenus.ts:330
+#: src/features/map/hooks/useStopMenus.ts:350
 msgid "Add stop here"
 msgstr "Add stop here"
 
-#: src/features/map/hooks/useStopMenus.ts:331
+#: src/features/map/hooks/useStopMenus.ts:351
 msgid "Add stop-by here"
 msgstr "Add stop-by here"
+
+#: src/features/map/components/SubCourseSection.tsx:53
+#: src/features/map/components/SubCourseSection.tsx:59
+msgid "Add stops to the sub course"
+msgstr "Add stops to the sub course"
 
 #: src/components/ui/NewProject.tsx:194
 msgid "Add stops yourself"
 msgstr "Add stops yourself"
 
-#: src/features/map/hooks/useStopMenus.ts:332
+#: src/features/map/hooks/useStopMenus.ts:352
 msgid "Add street view here"
 msgstr "Add street view here"
 
@@ -653,11 +658,11 @@ msgstr "Add title here"
 #~ msgid "Add to project"
 #~ msgstr "Add to project"
 
-#: src/features/map/components/WaypointEditor.tsx:679
+#: src/features/map/components/WaypointEditor.tsx:681
 msgid "Add up to 3 images that will pop up during the narration at this stop"
 msgstr "Add up to 3 images that will pop up during the narration at this stop"
 
-#: src/features/map/components/MapArea.tsx:391
+#: src/features/map/components/MapArea.tsx:393
 msgid "Add via point here"
 msgstr "Add via point here"
 
@@ -681,7 +686,7 @@ msgid "Add words below or extract them from narration scripts."
 msgstr "Add words below or extract them from narration scripts."
 
 #. placeholder {0}: PROVIDERS[engine.provider].label
-#: src/features/map/components/WaypointEditor.tsx:349
+#: src/features/map/components/WaypointEditor.tsx:351
 msgid "Add your {0} API key in Settings > AI models"
 msgstr "Add your {0} API key in Settings > AI models"
 
@@ -690,7 +695,7 @@ msgid "Add your own token in Settings. A free Mapbox account is enough, and the 
 msgstr "Add your own token in Settings. A free Mapbox account is enough, and the token stays on this PC."
 
 #. placeholder {0}: saved.length
-#: src/features/map/components/WaypointEditor.tsx:260
+#: src/features/map/components/WaypointEditor.tsx:262
 msgid "Added {0} photos from Wikimedia Commons. Check that they show the right place."
 msgstr "Added {0} photos from Wikimedia Commons. Check that they show the right place."
 
@@ -699,7 +704,7 @@ msgstr "Added {0} photos from Wikimedia Commons. Check that they show the right 
 msgid "Added {0} stops to the project."
 msgstr "Added {0} stops to the project."
 
-#: src/hooks/useStopRegen.ts:99
+#: src/hooks/useStopRegen.ts:102
 msgid "Added to the queue. It starts when the one before it is done."
 msgstr "Added to the queue. It starts when the one before it is done."
 
@@ -715,16 +720,16 @@ msgstr "Address"
 #~ msgid "Adds a brief pause in the generated video at this waypoint before continuing the journey"
 #~ msgstr "Adds a brief pause in the generated video at this waypoint before continuing the journey"
 
-#: src/features/map/components/WaypointItem.tsx:394
+#: src/features/map/components/WaypointItem.tsx:396
 msgid "Adjust"
 msgstr "Adjust"
 
-#: src/features/map/hooks/useStopMenus.ts:170
-#: src/features/map/hooks/useStopMenus.ts:307
+#: src/features/map/hooks/useStopMenus.ts:172
+#: src/features/map/hooks/useStopMenus.ts:327
 msgid "Adjust route"
 msgstr "Adjust route"
 
-#: src/features/map/components/WaypointItem.tsx:383
+#: src/features/map/components/WaypointItem.tsx:385
 msgid "Adjust Route (Add via points to nudge)"
 msgstr "Adjust Route (Add via points to nudge)"
 
@@ -812,12 +817,12 @@ msgstr "An unknown error occurred during rendering."
 #~ msgstr "Anchor {0}"
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1242
+#: src/features/map/components/MapArea.tsx:1235
 msgid "Anchor {0} · corner · double-click to smooth"
 msgstr "Anchor {0} · corner · double-click to smooth"
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1242
+#: src/features/map/components/MapArea.tsx:1235
 msgid "Anchor {0} · smooth · double-click for a corner"
 msgstr "Anchor {0} · smooth · double-click for a corner"
 
@@ -895,7 +900,7 @@ msgstr "Apply to all titles like this"
 msgid "Are you sure you want to remove <0>{0}</0> from your recent list? The original files will remain on your computer."
 msgstr "Are you sure you want to remove <0>{0}</0> from your recent list? The original files will remain on your computer."
 
-#: src/features/map/components/WaypointEditor.tsx:424
+#: src/features/map/components/WaypointEditor.tsx:426
 msgid "Arriving Script"
 msgstr "Arriving Script"
 
@@ -933,7 +938,7 @@ msgstr "Attach an itinerary (PDF, Word, text), a GPX track or photos. Paste a we
 msgid "Attach files"
 msgstr "Attach files"
 
-#: src/features/map/components/WaypointEditor.tsx:434
+#: src/features/map/components/WaypointEditor.tsx:436
 msgid "Attraction Script"
 msgstr "Attraction Script"
 
@@ -1126,11 +1131,11 @@ msgstr "Box opacity"
 msgid "Box padding"
 msgstr "Box padding"
 
-#: src/features/map/components/WaypointEditor.tsx:959
+#: src/features/map/components/WaypointEditor.tsx:961
 msgid "Boxed"
 msgstr "Boxed"
 
-#: src/features/map/components/WaypointEditor.tsx:953
+#: src/features/map/components/WaypointEditor.tsx:955
 msgid "Boxed keeps the photo in a card with its caption; full photo fills the frame."
 msgstr "Boxed keeps the photo in a card with its caption; full photo fills the frame."
 
@@ -1155,8 +1160,8 @@ msgstr "Burn subtitles into the video"
 msgid "Calm"
 msgstr "Calm"
 
-#: src/features/map/components/WaypointEditor.tsx:702
-#: src/features/map/components/WaypointEditor.tsx:839
+#: src/features/map/components/WaypointEditor.tsx:704
+#: src/features/map/components/WaypointEditor.tsx:841
 msgid "Camera Angle"
 msgstr "Camera Angle"
 
@@ -1197,8 +1202,8 @@ msgstr "Cancel"
 #: src/features/editor/VoicePiecesDialog.tsx:119
 #: src/features/map/components/GenerateDialog.tsx:124
 #: src/features/map/components/OverviewNarration.tsx:301
-#: src/features/map/components/Sidebar.tsx:254
-#: src/features/map/components/WaypointEditor.tsx:1033
+#: src/features/map/components/Sidebar.tsx:263
+#: src/features/map/components/WaypointEditor.tsx:1035
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -1229,7 +1234,7 @@ msgstr "Cannot close window. Check Tauri capabilities"
 msgid "Cannot edit settings directly in .nvv archive. Please open project first."
 msgstr "Cannot edit settings directly in .nvv archive. Please open project first."
 
-#: src/features/map/components/Sidebar.tsx:99
+#: src/features/map/components/Sidebar.tsx:101
 msgid "Cannot generate: Please add at least one waypoint."
 msgstr "Cannot generate: Please add at least one waypoint."
 
@@ -1327,7 +1332,7 @@ msgstr "Choose sentences to voice again..."
 msgid "Choose your preferred language for the application"
 msgstr "Choose your preferred language for the application"
 
-#: src/features/map/components/WaypointEditor.tsx:1004
+#: src/features/map/components/WaypointEditor.tsx:1006
 msgid "Choose…"
 msgstr "Choose…"
 
@@ -1347,7 +1352,7 @@ msgstr "Clean map before the card"
 #: src/components/ui/StatusBar.tsx:402
 #: src/components/ui/VoiceSettings.tsx:589
 #: src/features/map/components/DrawBar.tsx:414
-#: src/features/map/components/Sidebar.tsx:264
+#: src/features/map/components/Sidebar.tsx:273
 msgid "Clear"
 msgstr "Clear"
 
@@ -1367,7 +1372,7 @@ msgstr "Clear cache"
 msgid "Clear path"
 msgstr "Clear path"
 
-#: src/features/map/components/Sidebar.tsx:276
+#: src/features/map/components/Sidebar.tsx:285
 msgid "Clear route"
 msgstr "Clear route"
 
@@ -1375,7 +1380,7 @@ msgstr "Clear route"
 msgid "Clear the queue"
 msgstr "Clear the queue"
 
-#: src/features/map/hooks/useStopMenus.ts:194
+#: src/features/map/hooks/useStopMenus.ts:196
 msgid "Clear via points ({viaCount})"
 msgstr "Clear via points ({viaCount})"
 
@@ -1391,7 +1396,7 @@ msgstr "Click a point to remove it."
 msgid "Click for details"
 msgstr "Click for details"
 
-#: src/features/map/components/Sidebar.tsx:186
+#: src/features/map/components/Sidebar.tsx:194
 msgid "Click the map or drop a GPS file to start building your route"
 msgstr "Click the map or drop a GPS file to start building your route"
 
@@ -1407,17 +1412,17 @@ msgstr "Click the map to add points. Drag a point to move it; click one to inser
 msgid "Click the map to add:"
 msgstr "Click the map to add:"
 
-#: src/features/map/components/MapArea.tsx:872
+#: src/features/map/components/MapArea.tsx:868
 msgid "Click the map to nudge the route. Drag a via point to move it, or right-click it for options."
 msgstr "Click the map to nudge the route. Drag a via point to move it, or right-click it for options."
 
 #. placeholder {0}: Math.round(stats.ascentM)
-#: src/features/map/components/LegStats.tsx:42
+#: src/features/map/components/LegStats.tsx:41
 msgid "Climb: {0} m"
 msgstr "Climb: {0} m"
 
 #. placeholder {0}: Math.round(stats.ascentM)
-#: src/features/map/components/LegStats.tsx:41
+#: src/features/map/components/LegStats.tsx:40
 msgid "Climb: {0} m (estimated from map terrain)"
 msgstr "Climb: {0} m (estimated from map terrain)"
 
@@ -1464,14 +1469,14 @@ msgstr "Clones a voice from a recording in about a third of the natural voice's 
 #: src/features/map/components/MapLayers/LayerManager.tsx:76
 #: src/features/map/components/MapLayers/RouteStyling.tsx:95
 #: src/features/map/components/MapLayers/RouteStyling.tsx:96
-#: src/features/map/components/WaypointEditor.tsx:572
-#: src/features/map/components/WaypointEditor.tsx:573
+#: src/features/map/components/WaypointEditor.tsx:574
+#: src/features/map/components/WaypointEditor.tsx:575
 msgid "Close"
 msgstr "Close"
 
-#: src/features/map/components/WaypointEditor.tsx:510
-#: src/features/map/components/WaypointItem.tsx:210
-#: src/features/map/hooks/useStopMenus.ts:240
+#: src/features/map/components/WaypointEditor.tsx:512
+#: src/features/map/components/WaypointItem.tsx:212
+#: src/features/map/hooks/useStopMenus.ts:252
 msgid "Closed"
 msgstr "Closed"
 
@@ -1479,8 +1484,8 @@ msgstr "Closed"
 msgid "Closing line"
 msgstr "Closing line"
 
-#: src/features/map/components/WaypointEditor.tsx:563
-#: src/features/map/components/WaypointEditor.tsx:564
+#: src/features/map/components/WaypointEditor.tsx:565
+#: src/features/map/components/WaypointEditor.tsx:566
 msgid "Collapse"
 msgstr "Collapse"
 
@@ -1529,7 +1534,7 @@ msgstr "Compass on stop maps"
 msgid "Confirm"
 msgstr "Confirm"
 
-#: src/features/map/components/WaypointEditor.tsx:537
+#: src/features/map/components/WaypointEditor.tsx:539
 msgid "Connected to route"
 msgstr "Connected to route"
 
@@ -1549,7 +1554,7 @@ msgstr "Converting 1 iPhone photo..."
 msgid "Converting GPS file format..."
 msgstr "Converting GPS file format..."
 
-#: src/features/map/components/WaypointEditor.tsx:221
+#: src/features/map/components/WaypointEditor.tsx:223
 msgid "Converting iPhone photos..."
 msgstr "Converting iPhone photos..."
 
@@ -1584,7 +1589,7 @@ msgstr "Copies size, box and distance from the edges; each keeps its own corner.
 msgid "Copy"
 msgstr "Copy"
 
-#: src/features/map/hooks/useStopMenus.ts:338
+#: src/features/map/hooks/useStopMenus.ts:358
 msgid "Copy coordinates"
 msgstr "Copy coordinates"
 
@@ -1607,7 +1612,7 @@ msgid "Copy Message"
 msgstr "Copy Message"
 
 #: src/features/map/components/DrawBar.tsx:325
-#: src/features/map/hooks/useStopMenus.ts:155
+#: src/features/map/hooks/useStopMenus.ts:157
 msgid "Copy path from"
 msgstr "Copy path from"
 
@@ -1638,7 +1643,7 @@ msgstr "Could not add the music: {0}"
 msgid "Could not add the video: {0}"
 msgstr "Could not add the video: {0}"
 
-#: src/features/map/components/WaypointEditor.tsx:227
+#: src/features/map/components/WaypointEditor.tsx:229
 #: src/hooks/useFileActions.ts:60
 msgid "Could not convert the iPhone photos."
 msgstr "Could not convert the iPhone photos."
@@ -1653,13 +1658,13 @@ msgid "Could not load audio for {0}"
 msgstr "Could not load audio for {0}"
 
 #. placeholder {0}: e?.message ?? e
-#: src/features/map/components/WaypointEditor.tsx:262
+#: src/features/map/components/WaypointEditor.tsx:264
 msgid "Could not look for photos: {0}"
 msgstr "Could not look for photos: {0}"
 
-#: src/hooks/useStopRegen.ts:122
-#: src/hooks/useStopRegen.ts:151
-#: src/hooks/useStopRegen.ts:174
+#: src/hooks/useStopRegen.ts:125
+#: src/hooks/useStopRegen.ts:154
+#: src/hooks/useStopRegen.ts:177
 msgid "Could not make that again: {message}"
 msgstr "Could not make that again: {message}"
 
@@ -1720,7 +1725,7 @@ msgstr "Could not save this version"
 msgid "Could not voice that word: {0}"
 msgstr "Could not voice that word: {0}"
 
-#: src/features/map/components/WaypointEditor.tsx:206
+#: src/features/map/components/WaypointEditor.tsx:208
 msgid "Couldn't look up a place name for this location."
 msgstr "Couldn't look up a place name for this location."
 
@@ -1767,17 +1772,17 @@ msgstr "Created \"{name}\" from your GPX file. Write the stop scripts with the s
 msgid "Created {0} stops from the document."
 msgstr "Created {0} stops from the document."
 
-#: src/features/map/components/WaypointEditor.tsx:804
-#: src/features/map/components/WaypointEditor.tsx:805
+#: src/features/map/components/WaypointEditor.tsx:806
+#: src/features/map/components/WaypointEditor.tsx:807
 msgid "Credit bottom left"
 msgstr "Credit bottom left"
 
-#: src/features/map/components/WaypointEditor.tsx:804
-#: src/features/map/components/WaypointEditor.tsx:805
+#: src/features/map/components/WaypointEditor.tsx:806
+#: src/features/map/components/WaypointEditor.tsx:807
 msgid "Credit bottom right"
 msgstr "Credit bottom right"
 
-#: src/features/map/components/WaypointEditor.tsx:790
+#: src/features/map/components/WaypointEditor.tsx:792
 msgid "Credit corner"
 msgstr "Credit corner"
 
@@ -1799,9 +1804,9 @@ msgid "Custom Color"
 msgstr "Custom Color"
 
 #: src/components/ui/AppSettings.tsx:486
-#: src/features/map/components/MapArea.tsx:1026
-#: src/features/map/components/MapArea.tsx:1088
-#: src/features/map/components/WaypointEditor.tsx:976
+#: src/features/map/components/MapArea.tsx:1019
+#: src/features/map/components/MapArea.tsx:1081
+#: src/features/map/components/WaypointEditor.tsx:978
 msgid "Custom Marker"
 msgstr "Custom Marker"
 
@@ -1840,7 +1845,7 @@ msgid "Default marker for all waypoints. Can be overridden per-stop."
 msgstr "Default marker for all waypoints. Can be overridden per-stop."
 
 #: src/components/ui/AppSettings.tsx:459
-#: src/features/map/components/WaypointEditor.tsx:988
+#: src/features/map/components/WaypointEditor.tsx:990
 msgid "Default pin"
 msgstr "Default pin"
 
@@ -1861,7 +1866,7 @@ msgstr "Sets the default pathfinding engine when placing waypoints"
 #: src/features/editor/Inspector.tsx:653
 #: src/features/editor/Inspector.tsx:687
 #: src/features/map/components/DrawBar.tsx:411
-#: src/features/map/components/WaypointEditor.tsx:1040
+#: src/features/map/components/WaypointEditor.tsx:1042
 msgid "Delete"
 msgstr "Delete"
 
@@ -1885,12 +1890,12 @@ msgstr "Delete Anchor"
 msgid "Delete and generate"
 msgstr "Delete and generate"
 
-#: src/features/map/components/MapArea.tsx:1220
+#: src/features/map/components/MapArea.tsx:1213
 msgid "Delete point"
 msgstr "Delete point"
 
-#: src/features/map/components/WaypointEditor.tsx:1050
-#: src/features/map/hooks/useStopMenus.ts:280
+#: src/features/map/components/WaypointEditor.tsx:1052
+#: src/features/map/hooks/useStopMenus.ts:300
 msgid "Delete stop"
 msgstr "Delete stop"
 
@@ -1902,7 +1907,7 @@ msgstr "Delete subtitle"
 msgid "Delete this saved version?"
 msgstr "Delete this saved version?"
 
-#: src/features/map/components/WaypointEditor.tsx:1026
+#: src/features/map/components/WaypointEditor.tsx:1028
 msgid "Delete this stop?"
 msgstr "Delete this stop?"
 
@@ -1915,11 +1920,11 @@ msgstr "Delete title"
 msgid "Delete version"
 msgstr "Delete version"
 
-#: src/features/map/components/Sidebar.tsx:110
+#: src/features/map/components/Sidebar.tsx:112
 msgid "Deleted {removed} old files. They will be made again."
 msgstr "Deleted {removed} old files. They will be made again."
 
-#: src/features/map/components/Sidebar.tsx:110
+#: src/features/map/components/Sidebar.tsx:112
 msgid "Deleted 1 old file. It will be made again."
 msgstr "Deleted 1 old file. It will be made again."
 
@@ -1931,8 +1936,8 @@ msgstr "Describe a trip and I will set up the stops and scripts for you. Attach 
 msgid "Describe how the voice should speak"
 msgstr "Describe how the voice should speak"
 
-#: src/features/map/components/WaypointEditor.tsx:966
-#: src/features/map/components/WaypointEditor.tsx:970
+#: src/features/map/components/WaypointEditor.tsx:968
+#: src/features/map/components/WaypointEditor.tsx:972
 msgid "Describe in the overview"
 msgstr "Describe in the overview"
 
@@ -1948,8 +1953,8 @@ msgstr "Describe the video you want: where it goes, how long, and in what tone."
 #~ msgid "Describe your trip"
 #~ msgstr "Describe your trip"
 
-#: src/features/map/components/WaypointEditor.tsx:501
-#: src/features/map/hooks/useStopMenus.ts:242
+#: src/features/map/components/WaypointEditor.tsx:503
+#: src/features/map/hooks/useStopMenus.ts:254
 msgid "Destination"
 msgstr "Destination"
 
@@ -1976,7 +1981,7 @@ msgstr "Detecting..."
 msgid "Dictionaries"
 msgstr "Dictionaries"
 
-#: src/features/map/hooks/useStopMenus.ts:44
+#: src/features/map/hooks/useStopMenus.ts:46
 msgid "Direct"
 msgstr "Direct"
 
@@ -1993,7 +1998,7 @@ msgid "Dismiss"
 msgstr "Dismiss"
 
 #. placeholder {0}: stats.km.toFixed(2)
-#: src/features/map/components/LegStats.tsx:37
+#: src/features/map/components/LegStats.tsx:36
 msgid "Distance along the path: {0} km"
 msgstr "Distance along the path: {0} km"
 
@@ -2043,11 +2048,11 @@ msgstr "Documents"
 msgid "Documents, GPS tracks and photos"
 msgstr "Documents, GPS tracks and photos"
 
-#: src/features/map/components/WaypointEditor.tsx:74
+#: src/features/map/components/WaypointEditor.tsx:75
 msgid "Dolly In"
 msgstr "Dolly In"
 
-#: src/features/map/components/WaypointEditor.tsx:75
+#: src/features/map/components/WaypointEditor.tsx:76
 msgid "Dolly Out"
 msgstr "Dolly Out"
 
@@ -2065,17 +2070,17 @@ msgstr "Don't Save"
 #: src/components/ui/SetupGate.tsx:72
 #: src/features/editor/ExportDialog.tsx:104
 #: src/features/map/components/DrawBar.tsx:382
-#: src/features/map/components/MapArea.tsx:886
-#: src/features/map/components/Sidebar.tsx:283
+#: src/features/map/components/MapArea.tsx:882
+#: src/features/map/components/Sidebar.tsx:292
 msgid "Done"
 msgstr "Done"
 
-#: src/features/map/components/MapArea.tsx:396
-#: src/features/map/components/WaypointItem.tsx:392
+#: src/features/map/components/MapArea.tsx:398
+#: src/features/map/components/WaypointItem.tsx:394
 msgid "Done adjusting"
 msgstr "Done adjusting"
 
-#: src/features/map/components/MapArea.tsx:381
+#: src/features/map/components/MapArea.tsx:383
 msgid "Done drawing"
 msgstr "Done drawing"
 
@@ -2127,7 +2132,7 @@ msgstr "Drag to shape the curve leaving this point"
 msgid "Drag to shift the narration"
 msgstr "Drag to shift the narration"
 
-#: src/features/map/hooks/useStopMenus.ts:45
+#: src/features/map/hooks/useStopMenus.ts:47
 msgid "Draw"
 msgstr "Draw"
 
@@ -2144,7 +2149,7 @@ msgid "Drawn route pin"
 msgstr "Drawn route pin"
 
 #: src/components/ui/NewProject.tsx:181
-#: src/features/map/hooks/useStopMenus.ts:41
+#: src/features/map/hooks/useStopMenus.ts:43
 msgid "Drive"
 msgstr "Drive"
 
@@ -2152,14 +2157,14 @@ msgstr "Drive"
 msgid "Driving"
 msgstr "Driving"
 
-#: src/features/map/components/MapArea.tsx:1274
+#: src/features/map/components/MapArea.tsx:1267
 msgid "Drop photos or GPS files to plot route"
 msgstr "Drop photos or GPS files to plot route"
 
 #: src/components/view/ProjectManager.tsx:232
 #: src/features/editor/EditorView.tsx:401
 #: src/features/editor/Inspector.tsx:593
-#: src/features/map/hooks/useStopMenus.ts:258
+#: src/features/map/hooks/useStopMenus.ts:278
 msgid "Duplicate"
 msgstr "Duplicate"
 
@@ -2171,7 +2176,7 @@ msgstr "Duplicate Project"
 msgid "Duplicate Project Name"
 msgstr "Duplicate Project Name"
 
-#: src/features/map/components/MapArea.tsx:967
+#: src/features/map/components/MapArea.tsx:964
 msgid "E"
 msgstr "E"
 
@@ -2192,25 +2197,25 @@ msgstr "E.g. Tomogashima and Kada area..."
 msgid "E.g. Wakayama, Wakayama City"
 msgstr "E.g. Wakayama, Wakayama City"
 
-#: src/features/map/components/Sidebar.tsx:174
+#: src/features/map/components/Sidebar.tsx:182
 msgid "Edit"
 msgstr "Edit"
 
-#: src/features/map/components/WaypointItem.tsx:352
-#: src/features/map/hooks/useStopMenus.ts:148
+#: src/features/map/components/WaypointItem.tsx:354
+#: src/features/map/hooks/useStopMenus.ts:150
 msgid "Edit path"
 msgstr "Edit path"
 
-#: src/features/map/hooks/useStopMenus.ts:225
+#: src/features/map/hooks/useStopMenus.ts:237
 msgid "Edit stop"
 msgstr "Edit stop"
 
-#: src/features/map/components/WaypointItem.tsx:247
-#: src/features/map/components/WaypointItem.tsx:248
+#: src/features/map/components/WaypointItem.tsx:249
+#: src/features/map/components/WaypointItem.tsx:250
 msgid "Edit Stop"
 msgstr "Edit Stop"
 
-#: src/features/map/components/WaypointItem.tsx:348
+#: src/features/map/components/WaypointItem.tsx:350
 msgid "Edit the drawn path on the map"
 msgstr "Edit the drawn path on the map"
 
@@ -2252,6 +2257,10 @@ msgctxt "a moment on the timeline"
 msgid "End"
 msgstr "End"
 
+#: src/features/map/components/SubCourseSection.tsx:117
+msgid "End at the main destination"
+msgstr "End at the main destination"
+
 #: src/components/ui/VideoLookSettings.tsx:117
 msgid "End pin"
 msgstr "End pin"
@@ -2260,9 +2269,14 @@ msgstr "End pin"
 msgid "Ending card"
 msgstr "Ending card"
 
-#: src/features/map/components/WaypointEditor.tsx:657
+#: src/features/map/components/WaypointEditor.tsx:659
 msgid "Ending narration"
 msgstr "Ending narration"
+
+#. placeholder {0}: dest?.name ?? "?"
+#: src/features/map/components/SubCourseSection.tsx:115
+msgid "Ends at {0}"
+msgstr "Ends at {0}"
 
 #: src/components/ui/voiceOptions.ts:11
 msgid "Energetic"
@@ -2336,8 +2350,8 @@ msgstr "Everything you need is set up."
 msgid "Exit"
 msgstr "Exit"
 
-#: src/features/map/components/WaypointEditor.tsx:563
-#: src/features/map/components/WaypointEditor.tsx:564
+#: src/features/map/components/WaypointEditor.tsx:565
+#: src/features/map/components/WaypointEditor.tsx:566
 msgid "Expand"
 msgstr "Expand"
 
@@ -2423,7 +2437,7 @@ msgstr "Failed"
 msgid "Failed to duplicate project"
 msgstr "Failed to duplicate project"
 
-#: src/features/map/components/WaypointEditor.tsx:397
+#: src/features/map/components/WaypointEditor.tsx:399
 msgid "Failed to generate script"
 msgstr "Failed to generate script"
 
@@ -2530,7 +2544,7 @@ msgstr "Fast render mode"
 
 #: src/components/ui/NewProject.tsx:183
 #: src/components/ui/VideoLookSettings.tsx:62
-#: src/features/map/hooks/useStopMenus.ts:42
+#: src/features/map/hooks/useStopMenus.ts:44
 msgid "Ferry"
 msgstr "Ferry"
 
@@ -2558,11 +2572,11 @@ msgstr "Find photos of each place"
 msgid "Find photos of each place on Wikimedia Commons"
 msgstr "Find photos of each place on Wikimedia Commons"
 
-#: src/features/map/components/WaypointEditor.tsx:689
+#: src/features/map/components/WaypointEditor.tsx:691
 msgid "Find photos online"
 msgstr "Find photos online"
 
-#: src/features/map/components/WaypointEditor.tsx:834
+#: src/features/map/components/WaypointEditor.tsx:836
 msgid "Find source"
 msgstr "Find source"
 
@@ -2588,12 +2602,12 @@ msgid "Fit to window"
 msgstr "Fit to window"
 
 #. placeholder {0}: formatMinutes(stats.flatMinutes)
-#: src/features/map/components/LegStats.tsx:54
+#: src/features/map/components/LegStats.tsx:53
 msgid "flat {0}"
 msgstr "flat {0}"
 
 #: src/components/ui/NewProject.tsx:184
-#: src/features/map/hooks/useStopMenus.ts:43
+#: src/features/map/hooks/useStopMenus.ts:45
 msgid "Fly"
 msgstr "Fly"
 
@@ -2625,7 +2639,7 @@ msgstr "Font"
 #~ msgstr "Found {0} locations. Geocoding..."
 
 #. placeholder {0}: sourceHost(url)
-#: src/features/map/components/WaypointEditor.tsx:277
+#: src/features/map/components/WaypointEditor.tsx:279
 msgid "Found where this photo came from: {0}. Check its license on that page and edit the credit."
 msgstr "Found where this photo came from: {0}. Check its license on that page and edit the credit."
 
@@ -2650,6 +2664,11 @@ msgstr "Free fonts from Google Fonts, installed for your Windows account"
 msgid "Free photos with credits. This sends the place names and positions to Wikimedia."
 msgstr "Free photos with credits. This sends the place names and positions to Wikimedia."
 
+#. placeholder {0}: branch?.name ?? "?"
+#: src/features/map/components/SubCourseSection.tsx:72
+msgid "From {0}"
+msgstr "From {0}"
+
 #: src/features/editor/EditorView.tsx:468
 #: src/features/editor/EditorView.tsx:477
 msgid "From a file…"
@@ -2664,7 +2683,7 @@ msgstr "From an itinerary"
 msgid "From narration"
 msgstr "From narration"
 
-#: src/features/map/components/WaypointEditor.tsx:960
+#: src/features/map/components/WaypointEditor.tsx:962
 msgid "Full photo"
 msgstr "Full photo"
 
@@ -2690,7 +2709,7 @@ msgstr "General"
 msgid "Generate assets"
 msgstr "Generate assets"
 
-#: src/features/map/components/Sidebar.tsx:323
+#: src/features/map/components/Sidebar.tsx:332
 msgid "Generate Assets"
 msgstr "Generate Assets"
 
@@ -2731,7 +2750,7 @@ msgstr "Generating the sample. The first one can take a minute or more while the
 msgid "Generating the sample. The first one takes about 20 seconds while the voice model loads."
 msgstr "Generating the sample. The first one takes about 20 seconds while the voice model loads."
 
-#: src/features/map/components/Sidebar.tsx:319
+#: src/features/map/components/Sidebar.tsx:328
 msgid "Generating..."
 msgstr "Generating..."
 
@@ -2763,8 +2782,8 @@ msgstr "Get a key"
 msgid "Get more fonts"
 msgstr "Get more fonts"
 
-#: src/features/map/components/WaypointEditor.tsx:490
-#: src/features/map/components/WaypointEditor.tsx:491
+#: src/features/map/components/WaypointEditor.tsx:492
+#: src/features/map/components/WaypointEditor.tsx:493
 msgid "Get name from coordinate"
 msgstr "Get name from coordinate"
 
@@ -2950,7 +2969,7 @@ msgstr "Imported {0} photos and generated route."
 msgid "Imported {0} waypoints successfully"
 msgstr "Imported {0} waypoints successfully"
 
-#: src/features/map/components/WaypointEditor.tsx:903
+#: src/features/map/components/WaypointEditor.tsx:905
 msgid "in place of the opening cue also stops the walker at the street view until the card goes."
 msgstr "in place of the opening cue also stops the walker at the street view until the card goes."
 
@@ -2958,11 +2977,11 @@ msgstr "in place of the opening cue also stops the walker at the street view unt
 msgid "In range"
 msgstr "In range"
 
-#: src/features/map/components/WaypointEditor.tsx:897
+#: src/features/map/components/WaypointEditor.tsx:899
 msgid "In the next stop's arriving script, these cues set when the card pops in and when it goes:"
 msgstr "In the next stop's arriving script, these cues set when the card pops in and when it goes:"
 
-#: src/features/map/components/WaypointEditor.tsx:943
+#: src/features/map/components/WaypointEditor.tsx:945
 msgid "In the overview, the marker waits here while the narration describes this place. Off: it walks on."
 msgstr "In the overview, the marker waits here while the narration describes this place. Off: it walks on."
 
@@ -3272,7 +3291,7 @@ msgstr "Light"
 #: src/features/map/components/LegColorButton.tsx:49
 #: src/features/map/components/LegColorButton.tsx:50
 #: src/features/map/components/LegColorButton.tsx:71
-#: src/features/map/hooks/useStopMenus.ts:176
+#: src/features/map/hooks/useStopMenus.ts:178
 msgid "Line color"
 msgstr "Line color"
 
@@ -3350,9 +3369,9 @@ msgstr "Locating places"
 msgid "Locating places ({done} of {total}) {label}"
 msgstr "Locating places ({done} of {total}) {label}"
 
-#: src/features/map/components/MapArea.tsx:440
+#: src/features/map/components/MapArea.tsx:441
 #: src/features/map/components/MapArea.tsx:481
-#: src/features/map/components/MapArea.tsx:521
+#: src/features/map/components/MapArea.tsx:520
 #: src/hooks/useWaypointActions.ts:17
 #: src/hooks/useWaypointActions.ts:51
 msgid "Locating..."
@@ -3367,8 +3386,8 @@ msgstr "Location"
 msgid "Location line"
 msgstr "Location line"
 
-#: src/features/map/components/WaypointEditor.tsx:482
-#: src/features/map/components/WaypointEditor.tsx:483
+#: src/features/map/components/WaypointEditor.tsx:484
+#: src/features/map/components/WaypointEditor.tsx:485
 msgid "Location Name"
 msgstr "Location Name"
 
@@ -3403,15 +3422,15 @@ msgstr "Longest leg in the overview"
 msgid "Look of the video"
 msgstr "Look of the video"
 
-#: src/features/map/components/WaypointEditor.tsx:830
+#: src/features/map/components/WaypointEditor.tsx:832
 msgid "Look up where this photo was downloaded from and keep the link"
 msgstr "Look up where this photo was downloaded from and keep the link"
 
-#: src/features/map/components/WaypointEditor.tsx:689
+#: src/features/map/components/WaypointEditor.tsx:691
 msgid "Looking…"
 msgstr "Looking…"
 
-#: src/features/map/components/WaypointEditor.tsx:685
+#: src/features/map/components/WaypointEditor.tsx:687
 msgid "Looks on Wikimedia Commons for free photos of this place. Sends the place name and position to Wikimedia."
 msgstr "Looks on Wikimedia Commons for free photos of this place. Sends the place name and position to Wikimedia."
 
@@ -3448,7 +3467,7 @@ msgid "Make a language version..."
 msgstr "Make a language version..."
 
 #: src/features/editor/EditorView.tsx:376
-#: src/features/map/components/WaypointEditor.tsx:176
+#: src/features/map/components/WaypointEditor.tsx:178
 msgid "Make again for this stop"
 msgstr "Make again for this stop"
 
@@ -3478,17 +3497,17 @@ msgid "Make the walking clip again"
 msgstr "Make the walking clip again"
 
 #: src/features/map/components/DrawBar.tsx:495
-#: src/features/map/components/MapArea.tsx:1214
+#: src/features/map/components/MapArea.tsx:1207
 msgid "Make this a corner"
 msgstr "Make this a corner"
 
 #: src/features/map/components/DrawBar.tsx:495
-#: src/features/map/components/MapArea.tsx:1214
+#: src/features/map/components/MapArea.tsx:1207
 msgid "Make this smooth"
 msgstr "Make this smooth"
 
-#: src/features/map/components/WaypointEditor.tsx:553
-#: src/features/map/components/WaypointEditor.tsx:554
+#: src/features/map/components/WaypointEditor.tsx:555
+#: src/features/map/components/WaypointEditor.tsx:556
 msgid "Make this stop's files again"
 msgstr "Make this stop's files again"
 
@@ -3504,7 +3523,7 @@ msgstr "Making it again"
 #~ msgid "Making the intro again..."
 #~ msgstr "Making the intro again..."
 
-#: src/hooks/useStopRegen.ts:104
+#: src/hooks/useStopRegen.ts:107
 msgid "Making the new voice for this stop. The first one can take a while."
 msgstr "Making the new voice for this stop. The first one can take a while."
 
@@ -3516,29 +3535,29 @@ msgstr "Making the new voice. The first one can take a while."
 #~ msgid "Making the overview again..."
 #~ msgstr "Making the overview again..."
 
-#: src/hooks/useStopRegen.ts:135
+#: src/hooks/useStopRegen.ts:138
 msgid "Making the overview narration again."
 msgstr "Making the overview narration again."
 
-#: src/hooks/useStopRegen.ts:104
+#: src/hooks/useStopRegen.ts:107
 msgid "Making the photo clip for this stop. This can take a few minutes."
 msgstr "Making the photo clip for this stop. This can take a few minutes."
 
-#: src/hooks/useStopRegen.ts:104
+#: src/hooks/useStopRegen.ts:107
 msgid "Making the subtitles for this stop."
 msgstr "Making the subtitles for this stop."
 
-#: src/hooks/useStopRegen.ts:160
+#: src/hooks/useStopRegen.ts:163
 msgid "Making the walking clip again. This can take a few minutes."
 msgstr "Making the walking clip again. This can take a few minutes."
 
-#: src/hooks/useStopRegen.ts:135
+#: src/hooks/useStopRegen.ts:138
 msgid "Making this clip again. This can take a few minutes."
 msgstr "Making this clip again. This can take a few minutes."
 
 #: src/features/editor/TimelinePane.tsx:430
 #: src/features/editor/TimelinePane.tsx:432
-#: src/features/map/components/WaypointEditor.tsx:553
+#: src/features/map/components/WaypointEditor.tsx:555
 msgid "Making this stop again..."
 msgstr "Making this stop again..."
 
@@ -3586,7 +3605,7 @@ msgstr "Mapbox"
 msgid "Mapillary"
 msgstr "Mapillary"
 
-#: src/features/map/components/WaypointEditor.tsx:917
+#: src/features/map/components/WaypointEditor.tsx:919
 msgid "Marked for Regeneration: Edit image, narration, or route mode, then click Resume Generation"
 msgstr "Marked for Regeneration: Edit image, narration, or route mode, then click Resume Generation"
 
@@ -3643,7 +3662,7 @@ msgstr "Missing on this PC. About 25 MB from Microsoft."
 msgid "Model"
 msgstr "Model"
 
-#: src/features/map/components/WaypointEditor.tsx:350
+#: src/features/map/components/WaypointEditor.tsx:352
 msgid "Model \"{engine}\" not found. Please install it from the App Settings"
 msgstr "Model \"{engine}\" not found. Please install it from the App Settings"
 
@@ -3747,7 +3766,7 @@ msgstr "Name, position, route mode, scripts and media counts for each stop"
 #: src/features/editor/EditorView.tsx:367
 #: src/features/editor/ExportDialog.tsx:86
 #: src/features/editor/Inspector.tsx:531
-#: src/features/map/components/WaypointEditor.tsx:587
+#: src/features/map/components/WaypointEditor.tsx:589
 msgid "Narration"
 msgstr "Narration"
 
@@ -3833,6 +3852,10 @@ msgstr "New Project"
 msgid "New Project Name"
 msgstr "New Project Name"
 
+#: src/features/map/components/SubCourseSection.tsx:59
+msgid "New stops go to the sub course"
+msgstr "New stops go to the sub course"
+
 #: src/features/editor/EditorView.tsx:462
 #: src/features/editor/TimelinePane.tsx:312
 msgid "New subtitle"
@@ -3863,7 +3886,7 @@ msgstr "No entries yet."
 msgid "No fonts match."
 msgstr "No fonts match."
 
-#: src/features/map/components/WaypointEditor.tsx:255
+#: src/features/map/components/WaypointEditor.tsx:257
 msgid "No free photos of this place were found."
 msgstr "No free photos of this place were found."
 
@@ -3924,11 +3947,11 @@ msgstr "No recent projects"
 msgid "No reference (model default)"
 msgstr "No reference (model default)"
 
-#: src/features/map/components/WaypointEditor.tsx:320
+#: src/features/map/components/WaypointEditor.tsx:322
 msgid "No route leads to this stop, so there is no way to describe."
 msgstr "No route leads to this stop, so there is no way to describe."
 
-#: src/features/map/components/WaypointEditor.tsx:327
+#: src/features/map/components/WaypointEditor.tsx:329
 msgid "No route leads to this stop; only its description's opening line was added."
 msgstr "No route leads to this stop; only its description's opening line was added."
 
@@ -3944,7 +3967,7 @@ msgstr "No sentences are kept for this narration yet. Make its narration again o
 msgid "No sentences match."
 msgstr "No sentences match."
 
-#: src/features/map/components/Sidebar.tsx:183
+#: src/features/map/components/Sidebar.tsx:191
 msgid "No stops added yet"
 msgstr "No stops added yet"
 
@@ -3974,7 +3997,7 @@ msgstr "No Internet Connection"
 #: src/features/editor/ExportDialog.tsx:87
 #: src/features/editor/ExportDialog.tsx:88
 #: src/features/editor/Inspector.tsx:321
-#: src/features/map/components/WaypointEditor.tsx:706
+#: src/features/map/components/WaypointEditor.tsx:708
 msgid "None"
 msgstr "None"
 
@@ -4035,8 +4058,8 @@ msgstr "Nothing to review yet."
 #~ msgid "Nothing waiting"
 #~ msgstr "Nothing waiting"
 
-#: src/hooks/useStopRegen.ts:116
-#: src/hooks/useStopRegen.ts:146
+#: src/hooks/useStopRegen.ts:119
+#: src/hooks/useStopRegen.ts:149
 msgid "Nothing was made: {skipped}"
 msgstr "Nothing was made: {skipped}"
 
@@ -4050,7 +4073,7 @@ msgstr "Nothing was made: {skipped}"
 msgid "Off"
 msgstr "Off"
 
-#: src/features/map/components/WaypointEditor.tsx:966
+#: src/features/map/components/WaypointEditor.tsx:968
 msgid "Off keeps this stop out of the overview narration."
 msgstr "Off keeps this stop out of the overview narration."
 
@@ -4070,8 +4093,8 @@ msgstr "Off keeps this stop out of the overview narration."
 msgid "Ollama or online AI"
 msgstr "Ollama or online AI"
 
-#: src/features/map/components/WaypointEditor.tsx:540
-#: src/features/map/hooks/useStopMenus.ts:246
+#: src/features/map/components/WaypointEditor.tsx:542
+#: src/features/map/hooks/useStopMenus.ts:266
 msgid "On route"
 msgstr "On route"
 
@@ -4172,7 +4195,7 @@ msgstr "Open Project Folder..."
 msgid "Open settings"
 msgstr "Open settings"
 
-#: src/features/map/components/WaypointEditor.tsx:821
+#: src/features/map/components/WaypointEditor.tsx:823
 msgid "Open the page this photo came from"
 msgstr "Open the page this photo came from"
 
@@ -4287,19 +4310,19 @@ msgstr "Overview speed"
 msgid "Pace and camera"
 msgstr "Pace and camera"
 
-#: src/features/map/components/WaypointEditor.tsx:73
+#: src/features/map/components/WaypointEditor.tsx:74
 msgid "Pan Down"
 msgstr "Pan Down"
 
-#: src/features/map/components/WaypointEditor.tsx:70
+#: src/features/map/components/WaypointEditor.tsx:71
 msgid "Pan Left"
 msgstr "Pan Left"
 
-#: src/features/map/components/WaypointEditor.tsx:71
+#: src/features/map/components/WaypointEditor.tsx:72
 msgid "Pan Right"
 msgstr "Pan Right"
 
-#: src/features/map/components/WaypointEditor.tsx:72
+#: src/features/map/components/WaypointEditor.tsx:73
 msgid "Pan Up"
 msgstr "Pan Up"
 
@@ -4307,7 +4330,7 @@ msgstr "Pan Up"
 msgid "Parsing Maps & GPS Data{prog}..."
 msgstr "Parsing Maps & GPS Data{prog}..."
 
-#: src/features/map/components/MapArea.tsx:1283
+#: src/features/map/components/MapArea.tsx:1276
 msgid "Parsing Route Data..."
 msgstr "Parsing Route Data..."
 
@@ -4325,8 +4348,8 @@ msgstr "Paste your key. It is kept in this PC's credential store, never in the p
 msgid "Pause"
 msgstr "Pause"
 
-#: src/features/map/components/WaypointEditor.tsx:942
-#: src/features/map/components/WaypointEditor.tsx:948
+#: src/features/map/components/WaypointEditor.tsx:944
+#: src/features/map/components/WaypointEditor.tsx:950
 msgid "Pause at Location"
 msgstr "Pause at Location"
 
@@ -4345,13 +4368,13 @@ msgstr "Percent"
 #~ msgid "Photo area height"
 #~ msgstr "Photo area height"
 
-#: src/features/map/components/WaypointEditor.tsx:953
+#: src/features/map/components/WaypointEditor.tsx:955
 msgid "Photo card"
 msgstr "Photo card"
 
 #: src/features/editor/EditorView.tsx:58
 #: src/features/editor/EditorView.tsx:384
-#: src/features/map/components/WaypointEditor.tsx:179
+#: src/features/map/components/WaypointEditor.tsx:181
 msgid "Photo clip"
 msgstr "Photo clip"
 
@@ -4360,8 +4383,8 @@ msgstr "Photo clip"
 msgid "Photo clips"
 msgstr "Photo clips"
 
-#: src/features/map/components/WaypointEditor.tsx:785
 #: src/features/map/components/WaypointEditor.tsx:787
+#: src/features/map/components/WaypointEditor.tsx:789
 msgid "Photo credit"
 msgstr "Photo credit"
 
@@ -4377,7 +4400,7 @@ msgstr "Photo credits (Wikimedia Commons), to include where you publish the vide
 msgid "Photo credits typed in the stop editor appear here after Generate"
 msgstr "Photo credits typed in the stop editor appear here after Generate"
 
-#: src/features/map/components/WaypointEditor.tsx:588
+#: src/features/map/components/WaypointEditor.tsx:590
 msgid "Photos"
 msgstr "Photos"
 
@@ -4414,7 +4437,7 @@ msgstr "Pick one from the list or type its name. Refresh asks the provider what 
 msgid "Pick the leg you want to draw, or select a stop in the list."
 msgstr "Pick the leg you want to draw, or select a stop in the list."
 
-#: src/features/map/components/WaypointEditor.tsx:908
+#: src/features/map/components/WaypointEditor.tsx:910
 msgid "pick the street view with that name instead of the next one passed."
 msgstr "pick the street view with that name instead of the next one passed."
 
@@ -4472,7 +4495,7 @@ msgid "Playing..."
 msgstr "Playing..."
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1199
+#: src/features/map/components/MapArea.tsx:1192
 msgid "Point {0}"
 msgstr "Point {0}"
 
@@ -4568,8 +4591,8 @@ msgid "Project saved to {fileName}"
 msgstr "Project saved to {fileName}"
 
 #: src/components/view/ProjectManager.tsx:258
-#: src/features/map/components/Sidebar.tsx:292
-#: src/features/map/components/Sidebar.tsx:293
+#: src/features/map/components/Sidebar.tsx:301
+#: src/features/map/components/Sidebar.tsx:302
 msgid "Project settings"
 msgstr "Project settings"
 
@@ -4785,11 +4808,11 @@ msgid "Remove"
 msgstr "Remove"
 
 #. placeholder {0}: waypoints.length
-#: src/features/map/components/Sidebar.tsx:247
+#: src/features/map/components/Sidebar.tsx:256
 msgid "Remove all {0} stops?"
 msgstr "Remove all {0} stops?"
 
-#: src/features/map/hooks/useStopMenus.ts:311
+#: src/features/map/hooks/useStopMenus.ts:331
 msgid "Remove all {count} via points"
 msgstr "Remove all {count} via points"
 
@@ -4802,9 +4825,9 @@ msgstr "Remove from List"
 msgid "Remove from queue"
 msgstr "Remove from queue"
 
-#: src/features/map/components/WaypointEditor.tsx:727
-#: src/features/map/components/WaypointEditor.tsx:767
-#: src/features/map/components/WaypointEditor.tsx:768
+#: src/features/map/components/WaypointEditor.tsx:729
+#: src/features/map/components/WaypointEditor.tsx:769
+#: src/features/map/components/WaypointEditor.tsx:770
 msgid "Remove Image"
 msgstr "Remove Image"
 
@@ -4821,12 +4844,18 @@ msgstr "Remove narration"
 msgid "Remove Project"
 msgstr "Remove Project"
 
-#: src/features/map/components/WaypointItem.tsx:167
-#: src/features/map/components/WaypointItem.tsx:168
+#: src/features/map/components/WaypointItem.tsx:169
+#: src/features/map/components/WaypointItem.tsx:170
 msgid "Remove stop"
 msgstr "Remove stop"
 
-#: src/features/map/hooks/useStopMenus.ts:309
+#: src/features/map/components/SubCourseSection.tsx:64
+#: src/features/map/components/SubCourseSection.tsx:68
+#: src/features/map/hooks/useStopMenus.ts:216
+msgid "Remove sub course"
+msgstr "Remove sub course"
+
+#: src/features/map/hooks/useStopMenus.ts:329
 msgid "Remove via point"
 msgstr "Remove via point"
 
@@ -4908,7 +4937,7 @@ msgstr "Required for map rendering and 3D terrain"
 #: src/components/ui/VoiceSettings.tsx:499
 #: src/components/ui/VoiceSettings.tsx:515
 #: src/components/view/ProjectSettingsModal.tsx:252
-#: src/features/map/components/WaypointEditor.tsx:1012
+#: src/features/map/components/WaypointEditor.tsx:1014
 msgid "Reset"
 msgstr "Reset"
 
@@ -4947,11 +4976,11 @@ msgid "Restore version"
 msgstr "Restore version"
 
 #: src/components/ui/RenderOverlay.tsx:956
-#: src/features/map/components/Sidebar.tsx:314
+#: src/features/map/components/Sidebar.tsx:323
 msgid "Resume Generation"
 msgstr "Resume Generation"
 
-#: src/features/map/hooks/useStopMenus.ts:165
+#: src/features/map/hooks/useStopMenus.ts:167
 msgid "Retrace previous path"
 msgstr "Retrace previous path"
 
@@ -4962,7 +4991,7 @@ msgstr "Retry"
 
 #: src/components/ui/TitleBar.tsx:321
 #: src/components/view/ProjectManager.tsx:281
-#: src/features/map/components/WaypointEditor.tsx:720
+#: src/features/map/components/WaypointEditor.tsx:722
 #: src/features/map/components/WaypointVideos.tsx:58
 msgid "Reveal in File Explorer"
 msgstr "Reveal in File Explorer"
@@ -4984,7 +5013,7 @@ msgstr "Review them, or carry on in the timeline editor."
 msgid "Right"
 msgstr "Right"
 
-#: src/features/map/components/WaypointItem.tsx:399
+#: src/features/map/components/WaypointItem.tsx:401
 msgid "Right-click the leg to clear via points"
 msgstr "Right-click the leg to clear via points"
 
@@ -5004,11 +5033,11 @@ msgstr "Road and path data that drawn routes snap to in Japan."
 msgid "Rough estimate from this PC's hardware. It becomes accurate after your first render."
 msgstr "Rough estimate from this PC's hardware. It becomes accurate after your first render."
 
-#: src/features/map/components/Sidebar.tsx:154
+#: src/features/map/components/Sidebar.tsx:162
 msgid "Route"
 msgstr "Route"
 
-#: src/features/map/hooks/useStopMenus.ts:180
+#: src/features/map/hooks/useStopMenus.ts:182
 msgid "Route color"
 msgstr "Route color"
 
@@ -5051,7 +5080,8 @@ msgstr "Route only. Skips voiceover and photo clips."
 msgid "Route overview"
 msgstr "Route overview"
 
-#: src/features/map/hooks/useStopMenus.ts:254
+#: src/features/map/hooks/useStopMenus.ts:215
+#: src/features/map/hooks/useStopMenus.ts:274
 msgid "Route to next stop"
 msgstr "Route to next stop"
 
@@ -5094,7 +5124,7 @@ msgstr "Runs Ollama's own installer"
 msgid "Runs open models such as Gemma 4 on this PC. Download a model in Settings > AI models."
 msgstr "Runs open models such as Gemma 4 on this PC. Download a model in Settings > AI models."
 
-#: src/features/map/components/MapArea.tsx:964
+#: src/features/map/components/MapArea.tsx:961
 msgid "S"
 msgstr "S"
 
@@ -5436,7 +5466,7 @@ msgstr "Show folder"
 msgid "Show log"
 msgstr "Show log"
 
-#: src/features/map/hooks/useStopMenus.ts:227
+#: src/features/map/hooks/useStopMenus.ts:239
 msgid "Show on map"
 msgstr "Show on map"
 
@@ -5452,7 +5482,7 @@ msgstr "Show video"
 msgid "Show Video"
 msgstr "Show Video"
 
-#: src/features/map/components/WaypointEditor.tsx:786
+#: src/features/map/components/WaypointEditor.tsx:788
 msgid "Shown in the video while this photo is on screen"
 msgstr "Shown in the video while this photo is on screen"
 
@@ -5498,8 +5528,8 @@ msgstr "Skip AI voiceover synthesis and pop-up images during generation"
 msgid "Skip for now"
 msgstr "Skip for now"
 
-#: src/features/map/components/WaypointEditor.tsx:926
-#: src/features/map/components/WaypointEditor.tsx:937
+#: src/features/map/components/WaypointEditor.tsx:928
+#: src/features/map/components/WaypointEditor.tsx:939
 msgid "Skip in Video Export"
 msgstr "Skip in Video Export"
 
@@ -5513,7 +5543,7 @@ msgstr "Skipped"
 msgid "Skips asset review and automatically stitches & exports finished video"
 msgstr "Skips asset review and automatically stitches & exports finished video"
 
-#: src/features/map/components/WaypointEditor.tsx:930
+#: src/features/map/components/WaypointEditor.tsx:932
 msgid "Skips this location during video generation"
 msgstr "Skips this location during video generation"
 
@@ -5557,7 +5587,7 @@ msgstr "Soft edge"
 msgid "Some legs are still waiting for terrain data. Move the map over them."
 msgstr "Some legs are still waiting for terrain data. Move the map over them."
 
-#: src/features/map/components/WaypointEditor.tsx:225
+#: src/features/map/components/WaypointEditor.tsx:227
 msgid "Some photos could not be converted and were skipped."
 msgstr "Some photos could not be converted and were skipped."
 
@@ -5598,11 +5628,11 @@ msgstr "Spoken lines are kept so a repeated line is not spoken again. Narration 
 msgid "Spoken over the opening photos, before the map appears. Auto-write starts the script with it."
 msgstr "Spoken over the opening photos, before the map appears. Auto-write starts the script with it."
 
-#: src/features/map/components/WaypointEditor.tsx:435
+#: src/features/map/components/WaypointEditor.tsx:437
 msgid "Spoken over this stop's photos once you arrive."
 msgstr "Spoken over this stop's photos once you arrive."
 
-#: src/features/map/components/WaypointEditor.tsx:660
+#: src/features/map/components/WaypointEditor.tsx:662
 msgid "Spoken while the camera pulls back from this last stop to the whole route, before the outro."
 msgstr "Spoken while the camera pulls back from this last stop to the whole route, before the outro."
 
@@ -5610,7 +5640,7 @@ msgstr "Spoken while the camera pulls back from this last stop to the whole rout
 #~ msgid "Spoken while the camera pulls back. The clip gets longer to fit it. Leave empty for none."
 #~ msgstr "Spoken while the camera pulls back. The clip gets longer to fit it. Leave empty for none."
 
-#: src/features/map/components/WaypointEditor.tsx:425
+#: src/features/map/components/WaypointEditor.tsx:427
 msgid "Spoken while the route travels to this stop."
 msgstr "Spoken while the route travels to this stop."
 
@@ -5624,8 +5654,8 @@ msgstr "Stand still while the voice says the selected words, then walk on"
 
 #: src/components/ui/RenderOverlay.tsx:384
 #: src/features/map/components/MapToolbar.tsx:90
-#: src/features/map/components/WaypointEditor.tsx:501
-#: src/features/map/hooks/useStopMenus.ts:237
+#: src/features/map/components/WaypointEditor.tsx:503
+#: src/features/map/hooks/useStopMenus.ts:249
 #: src/hooks/useFileActions.ts:284
 msgid "Start"
 msgstr "Start"
@@ -5634,6 +5664,10 @@ msgstr "Start"
 msgctxt "a moment on the timeline"
 msgid "Start"
 msgstr "Start"
+
+#: src/features/map/hooks/useStopMenus.ts:258
+msgid "Start a sub course here"
+msgstr "Start a sub course here"
 
 #: src/components/ui/NewProject.tsx:253
 msgid "Start from"
@@ -5692,8 +5726,8 @@ msgstr "Stitching Videos & Finalizing Export..."
 #: src/features/editor/VoicePiecesDialog.tsx:186
 #: src/features/editor/VoicePiecesDialog.tsx:187
 #: src/features/map/components/MapToolbar.tsx:88
-#: src/features/map/components/WaypointEditor.tsx:506
-#: src/features/map/hooks/useStopMenus.ts:238
+#: src/features/map/components/WaypointEditor.tsx:508
+#: src/features/map/hooks/useStopMenus.ts:250
 msgid "Stop"
 msgstr "Stop"
 
@@ -5707,7 +5741,7 @@ msgstr "Stop"
 msgid "Stop {0}"
 msgstr "Stop {0}"
 
-#: src/features/map/components/MapArea.tsx:536
+#: src/features/map/components/MapArea.tsx:534
 msgid "Stop By"
 msgstr "Stop By"
 
@@ -5719,14 +5753,14 @@ msgstr "Stop export"
 msgid "Stop this one"
 msgstr "Stop this one"
 
-#: src/features/map/hooks/useStopMenus.ts:234
+#: src/features/map/hooks/useStopMenus.ts:246
 msgid "Stop type"
 msgstr "Stop type"
 
 #: src/features/map/components/MapToolbar.tsx:89
-#: src/features/map/components/WaypointEditor.tsx:507
-#: src/features/map/components/WaypointItem.tsx:210
-#: src/features/map/hooks/useStopMenus.ts:239
+#: src/features/map/components/WaypointEditor.tsx:509
+#: src/features/map/components/WaypointItem.tsx:212
+#: src/features/map/hooks/useStopMenus.ts:251
 msgid "Stop-by"
 msgstr "Stop-by"
 
@@ -5734,9 +5768,9 @@ msgstr "Stop-by"
 msgid "Stop-by pin"
 msgstr "Stop-by pin"
 
-#: src/hooks/useStopRegen.ts:121
-#: src/hooks/useStopRegen.ts:150
-#: src/hooks/useStopRegen.ts:173
+#: src/hooks/useStopRegen.ts:124
+#: src/hooks/useStopRegen.ts:153
+#: src/hooks/useStopRegen.ts:176
 msgid "Stopped before it finished."
 msgstr "Stopped before it finished."
 
@@ -5767,13 +5801,13 @@ msgstr "Street photos at each turn of a walking leg"
 msgid "Street photos at turns"
 msgstr "Street photos at turns"
 
-#: src/features/map/components/WaypointItem.tsx:210
-#: src/features/map/hooks/useStopMenus.ts:241
+#: src/features/map/components/WaypointItem.tsx:212
+#: src/features/map/hooks/useStopMenus.ts:253
 msgid "Street view"
 msgstr "Street view"
 
 #. placeholder {0}: prev.filter((w) => w.isStreetView).length + 1
-#: src/features/map/components/MapArea.tsx:555
+#: src/features/map/components/MapArea.tsx:553
 msgid "Street view {0}"
 msgstr "Street view {0}"
 
@@ -5787,6 +5821,15 @@ msgstr "Streets"
 #: src/features/map/components/OverviewPanel.tsx:151
 msgid "Style"
 msgstr "Style"
+
+#: src/features/map/components/SubCourseSection.tsx:45
+#: src/features/map/hooks/useStopMenus.ts:214
+msgid "Sub course"
+msgstr "Sub course"
+
+#: src/features/map/components/SubCourseSection.tsx:46
+msgid "Sub course name"
+msgstr "Sub course name"
 
 #: src/components/ui/NewProject.tsx:382
 #: src/features/editor/Inspector.tsx:638
@@ -5814,7 +5857,7 @@ msgstr "Subtitle lines in the timeline"
 #: src/features/editor/ExportDialog.tsx:87
 #: src/features/editor/Inspector.tsx:696
 #: src/features/map/components/GenerateDialog.tsx:56
-#: src/features/map/components/WaypointEditor.tsx:178
+#: src/features/map/components/WaypointEditor.tsx:180
 msgid "Subtitles"
 msgstr "Subtitles"
 
@@ -5916,7 +5959,7 @@ msgstr "The assistant, Auto-Write script buttons and overview narration, in ever
 msgid "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
 msgstr "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
 
-#: src/hooks/useStopRegen.ts:147
+#: src/hooks/useStopRegen.ts:150
 msgid "The clip is ready."
 msgstr "The clip is ready."
 
@@ -5985,7 +6028,7 @@ msgstr "The model the assistant and Auto-Write use."
 #~ msgid "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
 #~ msgstr "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
 
-#: src/hooks/useStopRegen.ts:147
+#: src/hooks/useStopRegen.ts:150
 msgid "The narration is ready. If its length changed, make the clip again so it fits."
 msgstr "The narration is ready. If its length changed, make the clip again so it fits."
 
@@ -6013,7 +6056,7 @@ msgstr "The overview script is edited in the Overview narration section at the t
 msgid "The overview stops at each stop while the voice describes it, then moves on."
 msgstr "The overview stops at each stop while the voice describes it, then moves on."
 
-#: src/hooks/useStopRegen.ts:118
+#: src/hooks/useStopRegen.ts:121
 msgid "The photo clip is ready."
 msgstr "The photo clip is ready."
 
@@ -6042,11 +6085,11 @@ msgstr "The redone clips are ready. Your timeline edits were kept."
 msgid "The sound of your own video, mixed under the narration."
 msgstr "The sound of your own video, mixed under the narration."
 
-#: src/features/map/components/WaypointEditor.tsx:929
+#: src/features/map/components/WaypointEditor.tsx:931
 msgid "The start and destination are always included."
 msgstr "The start and destination are always included."
 
-#: src/hooks/useStopRegen.ts:118
+#: src/hooks/useStopRegen.ts:121
 msgid "The subtitles are ready."
 msgstr "The subtitles are ready."
 
@@ -6058,11 +6101,11 @@ msgstr "The video starts directly on the route. Turn the intro on to add a title
 msgid "The video's map follows the map in the editor ({editorLabel}) until you pick a style here."
 msgstr "The video's map follows the map in the editor ({editorLabel}) until you pick a style here."
 
-#: src/hooks/useStopRegen.ts:117
+#: src/hooks/useStopRegen.ts:120
 msgid "The voice is ready."
 msgstr "The voice is ready."
 
-#: src/hooks/useStopRegen.ts:117
+#: src/hooks/useStopRegen.ts:120
 msgid "The voice is ready. If its length changed, redo the photo clip so it fits."
 msgstr "The voice is ready. If its length changed, redo the photo clip so it fits."
 
@@ -6082,7 +6125,7 @@ msgstr "The voice reads every narration in this project. Changing the voice or t
 msgid "The walk reaches the stop by the time its name is spoken. Cues you type yourself always win."
 msgstr "The walk reaches the stop by the time its name is spoken. Cues you type yourself always win."
 
-#: src/hooks/useStopRegen.ts:170
+#: src/hooks/useStopRegen.ts:173
 msgid "The walking clip is ready."
 msgstr "The walking clip is ready."
 
@@ -6136,7 +6179,7 @@ msgstr "This PC (Ollama)"
 msgid "This PC does not have Microsoft's Visual C++ runtime. Without it, Navivi cannot read GPS files, render videos or run the voice engines, and Windows shows a \"VCRUNTIME140.dll not found\" message. Installing it downloads about 25 MB from Microsoft, and Windows asks for permission first."
 msgstr "This PC does not have Microsoft's Visual C++ runtime. Without it, Navivi cannot read GPS files, render videos or run the voice engines, and Windows shows a \"VCRUNTIME140.dll not found\" message. Installing it downloads about 25 MB from Microsoft, and Windows asks for permission first."
 
-#: src/features/map/components/WaypointEditor.tsx:280
+#: src/features/map/components/WaypointEditor.tsx:282
 msgid "This photo doesn't say where it came from. Drop it into Google Lens to search for it."
 msgstr "This photo doesn't say where it came from. Drop it into Google Lens to search for it."
 
@@ -6206,7 +6249,7 @@ msgstr "Three scenes from the attraction videos (or photos): your two lines, the
 msgid "Throw away your script? The video will write its own when you make it."
 msgstr "Throw away your script? The video will write its own when you make it."
 
-#: src/features/map/components/LegStats.tsx:43
+#: src/features/map/components/LegStats.tsx:42
 msgid "Time ignores climb: no elevation available for this leg"
 msgstr "Time ignores climb: no elevation available for this leg"
 
@@ -6310,7 +6353,7 @@ msgstr "Transition"
 msgid "Translating {0} of {1}…"
 msgstr "Translating {0} of {1}…"
 
-#: src/features/map/components/WaypointItem.tsx:284
+#: src/features/map/components/WaypointItem.tsx:286
 msgid "Travel mode to the next stop"
 msgstr "Travel mode to the next stop"
 
@@ -6323,13 +6366,17 @@ msgstr "Trim"
 msgid "Try again"
 msgstr "Try again"
 
-#: src/features/map/components/WaypointEditor.tsx:625
+#: src/features/map/components/WaypointEditor.tsx:627
 msgid "TTS Pronunciation Dictionary"
 msgstr "TTS Pronunciation Dictionary"
 
 #: src/features/map/components/MapLayers/HeatmapLegend.tsx:57
 msgid "Turn on 3D terrain"
 msgstr "Turn on 3D terrain"
+
+#: src/features/map/components/SubCourseSection.tsx:109
+msgid "Turn on the pin button above and click the map to add the sub course's stops."
+msgstr "Turn on the pin button above and click the map to add the sub course's stops."
 
 #: src/components/ui/VideoLookSettings.tsx:173
 #: src/components/ui/VideoLookSettings.tsx:174
@@ -6395,8 +6442,8 @@ msgstr "Undo"
 
 #: src/features/map/components/MapArea.tsx:465
 #: src/features/map/components/MapArea.tsx:506
-#: src/features/map/components/MapArea.tsx:543
-#: src/features/map/components/WaypointEditor.tsx:203
+#: src/features/map/components/MapArea.tsx:541
+#: src/features/map/components/WaypointEditor.tsx:205
 #: src/hooks/useWaypointActions.ts:44
 #: src/hooks/useWaypointActions.ts:60
 #: src/hooks/useWaypointActions.ts:64
@@ -6528,12 +6575,12 @@ msgstr "Version label"
 #~ msgstr "Vertical 9:16"
 
 #. placeholder {0}: idx + 1
-#: src/features/map/components/MapArea.tsx:1141
+#: src/features/map/components/MapArea.tsx:1134
 msgid "Via {0} · Right-click for options"
 msgstr "Via {0} · Right-click for options"
 
 #. placeholder {0}: viaIndex + 1
-#: src/features/map/hooks/useStopMenus.ts:306
+#: src/features/map/hooks/useStopMenus.ts:326
 msgid "Via point {0} of {count}"
 msgstr "Via point {0} of {count}"
 
@@ -6557,7 +6604,7 @@ msgstr "Video Exported Successfully!"
 msgid "Video style"
 msgstr "Video style"
 
-#: src/features/map/components/WaypointEditor.tsx:589
+#: src/features/map/components/WaypointEditor.tsx:591
 #: src/features/map/components/WaypointVideos.tsx:24
 msgid "Videos"
 msgstr "Videos"
@@ -6575,7 +6622,7 @@ msgstr "Visited pin"
 #: src/components/ui/VoiceSettings.tsx:411
 #: src/features/editor/EditorView.tsx:58
 #: src/features/editor/EditorView.tsx:380
-#: src/features/map/components/WaypointEditor.tsx:177
+#: src/features/map/components/WaypointEditor.tsx:179
 msgid "Voice"
 msgstr "Voice"
 
@@ -6593,7 +6640,7 @@ msgid "Voice 1 sentence again"
 msgstr "Voice 1 sentence again"
 
 #: src/features/editor/EditorView.tsx:386
-#: src/features/map/components/WaypointEditor.tsx:181
+#: src/features/map/components/WaypointEditor.tsx:183
 msgid "Voice and photo clip"
 msgstr "Voice and photo clip"
 
@@ -6656,11 +6703,11 @@ msgid "Waiting for the browser…"
 msgstr "Waiting for the browser…"
 
 #: src/components/ui/NewProject.tsx:182
-#: src/features/map/hooks/useStopMenus.ts:40
+#: src/features/map/hooks/useStopMenus.ts:42
 msgid "Walk"
 msgstr "Walk"
 
-#: src/features/map/components/WaypointEditor.tsx:77
+#: src/features/map/components/WaypointEditor.tsx:78
 msgid "Walk Back"
 msgstr "Walk Back"
 
@@ -6668,7 +6715,7 @@ msgstr "Walk Back"
 msgid "Walk faster while the voice says the selected words (the rest of the walk makes up the time)"
 msgstr "Walk faster while the voice says the selected words (the rest of the walk makes up the time)"
 
-#: src/features/map/components/WaypointEditor.tsx:76
+#: src/features/map/components/WaypointEditor.tsx:77
 msgid "Walk In"
 msgstr "Walk In"
 
@@ -6706,10 +6753,10 @@ msgstr "Watch preview"
 
 #: src/features/map/components/DrawBar.tsx:348
 #: src/features/map/components/MapArea.tsx:499
-#: src/features/map/components/MapArea.tsx:1008
-#: src/features/map/components/MapArea.tsx:1071
-#: src/features/map/hooks/useStopMenus.ts:158
-#: src/features/map/hooks/useStopMenus.ts:224
+#: src/features/map/components/MapArea.tsx:1001
+#: src/features/map/components/MapArea.tsx:1064
+#: src/features/map/hooks/useStopMenus.ts:160
+#: src/features/map/hooks/useStopMenus.ts:236
 msgid "Waypoint"
 msgstr "Waypoint"
 
@@ -6718,7 +6765,7 @@ msgstr "Waypoint"
 msgid "Waypoint {0}"
 msgstr "Waypoint {0}"
 
-#: src/features/map/components/WaypointEditor.tsx:761
+#: src/features/map/components/WaypointEditor.tsx:763
 msgid "Waypoint {idx}"
 msgstr "Waypoint {idx}"
 
@@ -6775,11 +6822,11 @@ msgstr "Whole route before the outro"
 msgid "Whole route first"
 msgstr "Whole route first"
 
-#: src/features/map/components/WaypointEditor.tsx:415
+#: src/features/map/components/WaypointEditor.tsx:417
 msgid "Why it's closed"
 msgstr "Why it's closed"
 
-#: src/features/map/components/WaypointEditor.tsx:416
+#: src/features/map/components/WaypointEditor.tsx:418
 msgid "Why this place can't be visited. Read in the overview after the stop-bys, and in its photo clip before the leg that passes it."
 msgstr "Why this place can't be visited. Read in the overview after the stop-bys, and in its photo clip before the leg that passes it."
 
@@ -6793,11 +6840,11 @@ msgid "Windows"
 msgstr "Windows"
 
 #. placeholder {0}: stats.slopeKm.toFixed(2)
-#: src/features/map/components/LegStats.tsx:38
+#: src/features/map/components/LegStats.tsx:37
 msgid "With height change: {0} km"
 msgstr "With height change: {0} km"
 
-#: src/features/map/components/WaypointEditor.tsx:899
+#: src/features/map/components/WaypointEditor.tsx:901
 msgid "Without them it shows briefly as the walker passes."
 msgstr "Without them it shows briefly as the walker passes."
 
