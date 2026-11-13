@@ -3,6 +3,7 @@ the cut into the leg's next piece (or a passing pip card)."""
 
 from __future__ import annotations
 
+import itertools
 import os
 import shutil
 from typing import List, Optional, Tuple
@@ -12,10 +13,26 @@ from services import tuning
 from .popupsequence import _wait_for_paint
 from .leg_camera import _clear_card_spot, _ease_in_out_cubic, _project_lonlat_to_px
 
+_card_numbers = itertools.count()  # every card's photo gets its own file name (see _play_stopby_photo_pause)
+
 # Screenshot options for every frame a residential leg pipes into ffmpeg
 # (read as mjpeg - see _record_leg's _spawn_ffmpeg). All frames of one pipe
 # must share this format.
 _FRAME_SHOT = {"type": "jpeg", "quality": tuning.LEG_FRAME_JPEG_QUALITY}
+
+
+async def screen_props(page, extra: str = "") -> list:
+    """[(left, top, w, h)] of the props on screen now (banners, stop chain, compass, summary/elevation card, caption,
+    plus the `extra` selectors): a photo card is placed off them (leg_camera._clear_card_spot)."""
+    selector = '[id^="hud-"], #section-caption' + (", " + extra if extra else "")
+    return await page.evaluate(
+        """(selector) => [...document.querySelectorAll(selector)]
+            .filter((el) => getComputedStyle(el).display !== 'none' && Number(getComputedStyle(el).opacity) > 0)
+            .map((el) => el.getBoundingClientRect())
+            .filter((r) => r.width > 0 && r.height > 0)
+            .map((r) => [r.left, r.top, r.width, r.height])""",
+        selector,
+    )
 
 
 async def _play_stopby_photo_pause(
@@ -72,9 +89,10 @@ async def _play_stopby_photo_pause(
     # browser's own HTTP cache happily serves back whichever photo it
     # fetched FIRST for every subsequent stop-by, regardless of the file on
     # disk having been overwritten with the next one's actual photo -- the
-    # "duplicate image" this trigger index makes impossible.
+    # "duplicate image" this trigger index makes impossible. Two cards can share a frame index (a {view wait} card
+    # ending where the next {view} starts showed the first photo under the second name), so each copy is unique.
     img_ext = os.path.splitext(photo_path)[1] or ".jpg"
-    img_name = f"stopby_preview_{trigger_index}{img_ext}"
+    img_name = f"stopby_preview_{trigger_index}_{next(_card_numbers)}{img_ext}"
     shutil.copy2(photo_path, os.path.join(html_dir, img_name))
     img_url = f"http://127.0.0.1:{port}/{img_name}"
 
@@ -114,13 +132,7 @@ async def _play_stopby_photo_pause(
     )
     anchor_x, anchor_y = card_left + card_w / 2.0, card_top + card_h
     # Props already on screen (summary/elevation card, banner, compass, another photo card): the card keeps off them.
-    obstacles = await page.evaluate(
-        """() => [...document.querySelectorAll('[id^="hud-"], #section-caption, #my-popup-pip, #leg-dest-preview')]
-            .filter((el) => getComputedStyle(el).display !== 'none' && Number(getComputedStyle(el).opacity) > 0)
-            .map((el) => el.getBoundingClientRect())
-            .filter((r) => r.width > 0 && r.height > 0)
-            .map((r) => [r.left, r.top, r.width, r.height])"""
-    )
+    obstacles = await screen_props(page, "#my-popup-pip, #leg-dest-preview")
     route_px = [
         _project_lonlat_to_px(lo, la, view_lon, view_lat, zoom, output_size, pitch=pitch) for lo, la in avoid_lonlat or ()
     ]
@@ -197,7 +209,7 @@ async def _play_stopby_photo_pause(
         # frozen behavior) if the caller didn't wire up `advance_frame`.
         idx = frame_index
         pop_frames = max(1, int(0.3 * fps))
-        fade_frames = max(1, int(0.4 * fps))
+        fade_frames = max(1, int(tuning.LEG_PHOTO_FADE_SECONDS * fps))
         hold_frames = max(1, int((hold_seconds or 1.2) * fps) - pop_frames - fade_frames)
         for i in range(pop_frames + hold_frames + fade_frames):
             if advance_frame is not None and idx >= frame_total:
@@ -353,7 +365,7 @@ async def _play_stopby_photo_pause(
         card_png = await page.screenshot(**_FRAME_SHOT)
         for _ in range(max(1, int(tuning.STOPBY_CARD_HOLD_SECONDS * fps))):
             await write_frame(card_png)
-        fade_frames = max(1, int(0.4 * fps))
+        fade_frames = max(1, int(tuning.LEG_PHOTO_FADE_SECONDS * fps))
         for i in range(fade_frames):
             a = 1.0 - (i + 1) / fade_frames
             await page.evaluate(
@@ -384,7 +396,7 @@ async def _play_stopby_photo_pause(
         # blur-out: accelerating blur + fade to black) instead of a flat
         # cut -- this is the LAST beat of the CURRENT clip. The new file
         # then resumes the walk directly, same as the pip branch above.
-        blur_frames = max(1, int(0.4 * fps))
+        blur_frames = max(1, int(tuning.LEG_PHOTO_FADE_SECONDS * fps))
         for i in range(blur_frames):
             progress = i / float(blur_frames - 1) if blur_frames > 1 else 1.0
             ease = progress ** 2

@@ -6,7 +6,7 @@ lead-in while rendering and writes it next to the clip; everything after
 (leg padding, subtitle burn, timeline.json, final export) reads it back here
 so the leg's narration — and its subtitles — start WITH the walk instead of
 at the clip's first frame. Clips with no sidecar (overview, attraction,
-intro/outro, 2D-fallback legs, legs cut into pieces) read as offset 0.
+intro/outro, 2D-fallback legs) read as offset 0; each piece of a cut leg writes its own.
 
 Kept dependency-free on purpose: pedestrian.py can't import from
 videopipeline (circular), and the export side shouldn't import pydeck.

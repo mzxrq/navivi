@@ -42,7 +42,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|next|/view|view wait:[^{}]+|view:[^{}]+|view wait|view|/turn|turn wait|turn|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}")
+CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|next|/slow|/fast|/stop|slow|fast|stop|walk on \d+(?:\.\d+)?|/view|view wait slow:[^{}]+|view wait slow|view wait:[^{}]+|view:[^{}]+|view wait|view|/turn|turn wait|turn|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}")
 
 
 @dataclass(frozen=True)
@@ -67,7 +67,7 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
     scene = 1
     photos = 0
     nexts = 0
-    cards = {"view": 0, "turn": 0}  # {view} street views, {turn} automatic turn photos
+    cards = {"view": 0, "turn": 0, "slow": 0, "fast": 0, "stop": 0}  # {view} street views, {turn} automatic turn photos
     last = ""  # the last character kept
     for match in CUE_RE.finditer(text):
         piece = text[pos:match.start()]
@@ -80,16 +80,23 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
         if tag.startswith("photo:"):
             photos += 1
             cues.append(Cue(f"photo{photos}:{tag[6:].strip()}", length))
-        elif tag.partition(":")[0] in ("view", "view wait", "turn", "turn wait"):
+        elif tag.partition(":")[0] in ("view", "view wait", "view wait slow", "turn", "turn wait"):
             tag, _, name = tag.partition(":")
             kind = tag.split()[0]
             cards[kind] += 1
             cues.append(Cue(f"{kind}{cards[kind]}", length))
-            if tag.endswith(" wait"):
+            if " wait" in tag:
                 cues.append(Cue(f"{kind}wait{cards[kind]}", length))
+            if tag.endswith(" slow"):  # {view wait slow}: the walker slows down into the spot
+                cues.append(Cue(f"{kind}waitslow{cards[kind]}", length))
             if name.strip():  # {view:X}: the street view named X
                 cues.append(Cue(f"{kind}name{cards[kind]}:{name.strip()}", length))
-        elif tag in ("/view", "/turn"):
+        elif tag.startswith("walk on "):  # {walk on 6}: the leg walks on 6 s after its voice ends (leg_walk_plan)
+            cues.append(Cue("walkon:" + tag[8:], length))
+        elif tag in ("slow", "fast", "stop"):  # leg pace spans: slow1 … slowend1 (see narration_step.pace_spans)
+            cards[tag] += 1
+            cues.append(Cue(f"{tag}{cards[tag]}", length))
+        elif tag in ("/view", "/turn", "/slow", "/fast", "/stop"):
             kind, n = tag[1:], cards[tag[1:]]
             if n and all(c.tag != f"{kind}end{n}" for c in cues):
                 cues.append(Cue(f"{kind}end{n}", length))
@@ -116,8 +123,9 @@ def _close_views(clean: str, cues: List[Cue]) -> List[Cue]:
     """A {view} with no {/view} (or {turn} with no {/turn}) ends with its sentence (the next 。！？ after it, or
     the end of the script)."""
     tags = {c.tag for c in cues}
-    for cue in [c for c in cues if re.fullmatch(r"(view|turn)\d+", c.tag)]:
-        end_tag = cue.tag[:4] + "end" + cue.tag[4:]
+    for cue in [c for c in cues if re.fullmatch(r"(view|turn|slow|fast|stop)\d+", c.tag)]:
+        kind = cue.tag.rstrip("0123456789")
+        end_tag = kind + "end" + cue.tag[len(kind):]
         if end_tag not in tags:
             end = next((i + 1 for i in range(cue.char_index, len(clean)) if clean[i] in "。！？!?."), len(clean))
             cues.append(Cue(end_tag, end))

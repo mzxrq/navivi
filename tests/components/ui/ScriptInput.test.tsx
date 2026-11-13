@@ -24,6 +24,11 @@ describe("insertCue", () => {
     expect(insertCue("ABCD", "end", 1, 3).text).toBe("A{end}D");
     expect(insertCue("AB", "arrive", 99, 99).text).toBe("AB{arrive}");
   });
+
+  it("wraps a selection in a pace pair, or puts an empty pair at the caret", () => {
+    expect(insertCue("A slow bit.", "slow", 2, 10)).toEqual({ text: "A {slow}slow bit{/slow}.", caret: 16 });
+    expect(insertCue("AB", "stop", 1, 1)).toEqual({ text: "A{stop}{/stop}B", caret: 7 });
+  });
 });
 
 describe("ScriptInput cue buttons", () => {

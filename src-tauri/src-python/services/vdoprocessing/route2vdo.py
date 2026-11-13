@@ -193,7 +193,8 @@ def leg_changed_parts(leg_parts: Dict[str, str], old_parts: Dict[str, str]) -> L
     if "route_inputs" not in old_parts:  # rendered before route_inputs was recorded: the line itself
         return [k for k in ("latlon", "render_version") if k in changed]
     return ([k for k in _LEG_CHECKPOINT_PARTS if k in changed]
-            + [k for k in _LEG_RECORDED_PARTS if k in old_parts and k in changed])
+            + [k for k in _LEG_RECORDED_PARTS if k in old_parts and k in changed]
+            + [k for k in ("kw.pace_cues",) if k in changed])  # added or removed {slow}/{fast}/{stop} too
 
 
 def cut_landmark_ids(mid_markers: List[Dict[str, Any]]) -> List[Optional[str]]:
@@ -872,6 +873,12 @@ class RouteAnimator:
                 dest_pin=res_data.get("dest_pin"),
                 theme=self.graphics.theme,
             )
+            if res_data.get("pace_cues"):  # only with {slow}/{fast}/{stop}, so other legs keep their fingerprint
+                leg_kwargs["pace_cues"] = {
+                    "spans": res_data["pace_cues"],
+                    "slow": float(self.config.get("pace_slow_factor") or tuning.PACE_SLOW_FACTOR),
+                    "fast": float(self.config.get("pace_fast_factor") or tuning.PACE_FAST_FACTOR),
+                }
             if self.config.get("mapbox_style_id"):  # only a chosen style, so a finished leg's fingerprint stays as it was
                 leg_kwargs["map_style"] = resolve_map_style(self.config, "mapbox/outdoors-v12")
             if res_data.get("elevations"):  # only with the heatmap on, so a finished leg's fingerprint stays as it was

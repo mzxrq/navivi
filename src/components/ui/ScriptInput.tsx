@@ -24,7 +24,9 @@ const getThinkingSteps = () => [
   t`Polishing voiceover tone...`,
 ];
 
-export type CueTag = "start" | "arrive" | "end" | "n" | "go" | "next" | "view" | "view wait" | "/view" | "turn" | "turn wait" | "/turn";
+export type CueTag = "start" | "arrive" | "end" | "n" | "go" | "next" | "view" | "view wait" | "view wait slow" | "/view" | "turn" | "turn wait" | "/turn" | "slow" | "fast" | "stop" | "walk on 6";
+
+const PAIRED = new Set(["slow", "fast", "stop"]); // inserted as {tag}…{/tag} around the selection
 
 const getCueHints = (): Record<CueTag, string> => ({
   start: t`Insert a cue: the walk starts moving at this point`,
@@ -35,10 +37,15 @@ const getCueHints = (): Record<CueTag, string> => ({
   next: t`Insert a cue: the next photo comes in here`,
   view: t`Insert a cue: the next street view photo pops up here`,
   "view wait": t`Insert a cue: the walker stops at the next street view and its photo pops up here, until {/view}`,
+  "view wait slow": t`Insert a cue: like {view wait}, but the walker slows down as it comes to the street view`,
   "/view": t`Insert a cue: the street view photo goes away here (without it: at the end of the sentence)`,
   turn: t`Insert a cue: the next automatic turn photo pops up here`,
   "turn wait": t`Insert a cue: the walker stops at the next turn photo and it pops up here, until {/turn}`,
   "/turn": t`Insert a cue: the turn photo goes away here (without it: at the end of the sentence)`,
+  slow: t`Walk slower while the voice says the selected words (the rest of the walk makes up the time)`,
+  fast: t`Walk faster while the voice says the selected words (the rest of the walk makes up the time)`,
+  stop: t`Stand still while the voice says the selected words, then walk on`,
+  "walk on 6": t`Insert a cue: the walker keeps walking 6 s after the voice ends and arrives then (change the number; replaces {end})`,
 });
 
 /** The text with {tag} put at the caret (or over the selection), plus where the caret goes afterwards. */
@@ -46,6 +53,10 @@ export function insertCue(text: string, tag: string, from: number, to: number): 
   const start = Math.max(0, Math.min(from, text.length));
   const end = Math.max(start, Math.min(to, text.length));
   const marker = `{${tag}}`;
+  if (PAIRED.has(tag)) {
+    const inside = text.slice(start, end);
+    return { text: text.slice(0, start) + marker + inside + `{/${tag}}` + text.slice(end), caret: start + marker.length + inside.length };
+  }
   return { text: text.slice(0, start) + marker + text.slice(end), caret: start + marker.length };
 }
 

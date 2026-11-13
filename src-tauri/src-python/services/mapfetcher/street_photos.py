@@ -267,6 +267,8 @@ def _attach(card: Dict, cue: tuple) -> None:
     card.update(piece=int(piece), show_seconds=round(float(show), 2), hide_seconds=round(float(hide), 2))
     if rest and rest[0]:
         card["wait"] = True
+        if rest[0] == "slow":
+            card["wait_slow"] = True
 
 
 def view_cue_spans(times: Dict[str, float], piece: int, kind: str = "view") -> List[tuple]:
@@ -282,8 +284,9 @@ def view_cue_spans(times: Dict[str, float], piece: int, kind: str = "view") -> L
         hide = float(times.get(f"{kind}end{n}", show))
         hide = min(max(hide, show + tuning.STREET_VIEW_MIN_SECONDS), show + tuning.STREET_VIEW_MAX_SECONDS)
         name = next((k.split(":", 1)[1] for k in times if k.startswith(f"{kind}name{n}:")), "")  # {view:X}
-        spans.append([show, hide, f"{kind}wait{n}" in times, name])
+        wait = "slow" if f"{kind}waitslow{n}" in times else f"{kind}wait{n}" in times  # "slow": eases into the spot
+        spans.append([show, hide, wait, name])
         n += 1
     for a, b in zip(spans, spans[1:]):
         a[1] = min(a[1], b[0])
-    return [(piece, s, h, w, x) if x else (piece, s, h, True) if w else (piece, s, h) for s, h, w, x in spans]
+    return [(piece, s, h, w, x) if x else (piece, s, h, w) if w else (piece, s, h) for s, h, w, x in spans]

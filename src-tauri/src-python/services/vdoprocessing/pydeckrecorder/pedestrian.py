@@ -50,7 +50,7 @@ from .pin_icons import (
     _DEST_PIN_URL, _START_PIN_URL, _TEARDROP_PIN_H, _TEARDROP_PIN_W, _label_pill_layer, _landmark_layers,
     _leg_pin_url,
 )
-from .stopby_pause import _FRAME_SHOT, _play_stopby_photo_pause
+from .stopby_pause import _FRAME_SHOT, _play_stopby_photo_pause, screen_props
 
 
 def _segment_plan(df_raw, leg_dist_km, landmarks, total_seconds):
@@ -110,7 +110,8 @@ def _wait_view_plan(df_raw, leg_dist_km, plan, landmarks, start_cue_seconds=None
             hold = hide - used - walk
             if hold < 1.0:
                 continue
-            out.append((spot, walk))
+            # {view wait slow}: this stretch eases into the spot (routedata.arrival_time_fraction), still arriving on the cue.
+            out.append((spot, walk, tuning.VIEW_WAIT_SLOW_SECONDS) if lm.get("wait_slow") else (spot, walk))
             walked += walk
             spots.append((walked, lm, hold))
             idx, used, held = spot, hide, held + hold
@@ -118,6 +119,49 @@ def _wait_view_plan(df_raw, leg_dist_km, plan, landmarks, start_cue_seconds=None
         walked += seconds - used
         start_idx = end_idx
     return out, spots, held
+
+
+def _paced_plan(leg_dist_km, plan, spans, start_cue_seconds=None, slow=0.5, fast=1.6):
+    """{slow} / {fast} / {stop} … {/…} spans ([(piece, kind, start, end)] in voice seconds) applied to `plan`
+    ([(last raw index, seconds)], one entry per narration piece): inside each piece the walker covers distance at
+    `slow` / `fast` times its other pace and stands still in a {stop}; every piece still ends where and when it
+    did, so arrivals stay on their cues. Returns (plan, [(walk seconds, "stop", hold seconds)], held seconds).
+    Cue times count from the piece's voice; the first piece's from its {start} cue (`start_cue_seconds`)."""
+    weight = {"slow": slow, "fast": fast, "stop": 0.0}
+    out, stops, held, walked, start_idx = [], [], 0.0, 0.0, 0
+    for piece, (end_idx, seconds) in enumerate(plan):
+        lead = float(start_cue_seconds or 0.0) if piece == 0 else 0.0
+        own = []  # [(start, end, weight)] inside 0 … seconds
+        for p, kind, a, b in spans:
+            a, b = max(0.0, a - lead), min(seconds, b - lead)
+            if p == piece and b > a and not (kind == "stop" and b - a < tuning.PACE_MIN_STOP_SECONDS):
+                own.append((a, b, weight[kind]))
+        edges = sorted({0.0, seconds, *(t for a, b, _ in own for t in (a, b))})
+        parts = [(a, b, next((w for s, e, w in own if s <= a and b <= e), 1.0)) for a, b in zip(edges, edges[1:])]
+        total = sum((b - a) * w for a, b, w in parts)
+        if not own or total <= 0:
+            out.append((end_idx, seconds))
+            walked, start_idx = walked + seconds, end_idx
+            continue
+        d0, d1 = leg_dist_km[start_idx], leg_dist_km[end_idx]
+        prev, covered, pending = start_idx, 0.0, 0.0
+        for a, b, w in parts:
+            if w == 0.0:
+                stops.append((walked + pending, "stop", b - a))
+                held += b - a
+                continue
+            covered += (b - a) * w
+            pending += b - a
+            idx = min(end_idx, bisect.bisect_left(leg_dist_km, d0 + (d1 - d0) * covered / total))
+            if prev < idx:
+                out.append((idx, pending))
+                walked, prev, pending = walked + pending, idx, 0.0
+        if prev < end_idx or pending:  # the piece's last walk must still end on its own point
+            last_s = out.pop()[1] if prev > start_idx else 0.0
+            out.append((end_idx, last_s + pending))
+            walked += pending
+        start_idx = end_idx
+    return out, stops, held
 
 
 def render_residential_leg_pydeck(
@@ -149,6 +193,7 @@ def render_residential_leg_pydeck(
     dest_popup_narration_seconds: Optional[float] = None,
     start_popup_narration_seconds: Optional[float] = None,
     start_cue_seconds: Optional[float] = None,
+    pace_cues: Optional[Dict] = None,
     arrival_photo_hold_seconds: Optional[float] = None,
     arrival_wait_seconds: Optional[float] = None,
     dest_image_display: str = "cover",
@@ -335,17 +380,31 @@ def render_residential_leg_pydeck(
         max(1.0, float(target_duration_seconds)) if target_duration_seconds is not None
         else max(3.0, (total_leg_km / travel_speed_kmh) * 3600.0)
     )
-    wait_spots = []
+    wait_spots, stands = [], []
     if target_duration_seconds is not None:
         waited_plan, wait_spots, held = _wait_view_plan(df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], landmarks, start_cue_seconds)
         if wait_spots:
             segment_plan, leg_duration = waited_plan, leg_duration - held
+            if pace_cues:
+                logger.info("Leg %s has {view wait}: its {slow}/{fast}/{stop} cues are not used.", dest_label)
+        elif pace_cues and pace_cues.get("spans"):
+            segment_plan, stands, held = _paced_plan(
+                leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], pace_cues["spans"], start_cue_seconds,
+                pace_cues.get("slow", tuning.PACE_SLOW_FACTOR), pace_cues.get("fast", tuning.PACE_FAST_FACTOR),
+            )
+            leg_duration -= held
     total_frames = max(10, int(leg_duration * fps))
 
     smooth_df = interpolate_route_data(
         df_raw, leg_duration, total_frames, total_leg_km, leg_dist_km, segment_plan=segment_plan,
         arrival_slow_seconds=arrival_slow_seconds,
     )
+    # {stop}: the walker's frame repeated for the hold, so everything timed per frame ({view} photos on the voice,
+    # cards, HUD) carries on while it stands.
+    for walked_s, _, hold_s in sorted(stands, reverse=True):
+        k = min(len(smooth_df) - 1, int(round(walked_s * fps)))
+        held_rows = smooth_df.iloc[[k] * int(round(hold_s * fps))]
+        smooth_df = pd.concat([smooth_df.iloc[: k + 1], held_rows, smooth_df.iloc[k + 1 :]], ignore_index=True)
 
     step_km = [0.0] + [
         haversine_km(
@@ -696,6 +755,7 @@ async def _record_leg(
             ]
             card_left, card_top = _clear_card_spot(
                 route_px, marker_px[0], leader_target_y, card_w, card_h, card_gap, edge_margin, out_w, out_h,
+                await screen_props(page),  # off the banners, stop chain, compass and summary card too
             )
             anchor_x = min(max(marker_px[0], card_left), card_left + card_w)
             anchor_y = min(max(leader_target_y, card_top), card_top + card_h)
@@ -772,7 +832,7 @@ async def _record_leg(
                     end_card.update(image=image_path, box=list(card_box), anchor=[anchor_x, anchor_y],
                                     marker=[marker_px[0], leader_target_y])
                     return True
-                fade_frames = max(1, int(0.4 * fps))
+                fade_frames = max(1, int(tuning.LEG_PHOTO_FADE_SECONDS * fps))
                 for i in range(fade_frames):
                     await page.evaluate(
                         """(alpha) => {
@@ -829,7 +889,7 @@ async def _record_leg(
                 # continuing on to an outro.
                 return True
 
-            fade_frames = max(1, int(0.4 * fps))
+            fade_frames = max(1, int(tuning.LEG_PHOTO_FADE_SECONDS * fps))
             for i in range(fade_frames):
                 alpha = 1.0 - ((i + 1) / fade_frames)
                 await page.evaluate(
@@ -965,7 +1025,7 @@ async def _record_leg(
         for _ in range(max(1, int(freeze_sec * fps))):
             await _write_frame(freeze_png)
 
-        fade_frames = max(1, int(0.4 * fps))
+        fade_frames = max(1, int(tuning.LEG_PHOTO_FADE_SECONDS * fps))
         for i in range(fade_frames):
             alpha = 1.0 - ((i + 1) / fade_frames)
             await page.evaluate(
@@ -1388,7 +1448,7 @@ async def _record_leg(
                         hold_png = await page.screenshot(**_FRAME_SHOT)
                         for _ in range(int(tuning.LEG_CARRIED_CARD_HOLD_SECONDS * fps)):
                             await _write_frame(hold_png)
-                        fade_frames = max(1, int(0.4 * fps))
+                        fade_frames = max(1, int(tuning.LEG_PHOTO_FADE_SECONDS * fps))
                         for i in range(fade_frames):
                             await page.evaluate(
                                 """(alpha) => {

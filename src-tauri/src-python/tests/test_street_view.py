@@ -121,3 +121,30 @@ def test_a_named_view_cue_pops_the_street_view_with_that_name():
     attach_cue_spans(cards, spans)
     assert cards[0]["show_seconds"] == 4.0 and cards[0]["wait"]
     assert cards[1]["show_seconds"] == 1.0 and "wait" not in cards[1]
+
+
+def test_view_wait_slow_eases_the_walker_into_the_spot_and_still_arrives_on_the_cue():
+    import pandas as pd
+
+    from services import tuning
+    from services.mapfetcher.street_photos import attach_cue_spans
+    from services.vdoprocessing.pydeckrecorder.pedestrian import _wait_view_plan
+    from services.vdoprocessing.pydeckrecorder.routedata import interpolate_route_data
+
+    clean, cues = strip_cues("Walk on {view wait slow:Gate}to the gate.{/view} Then on.")
+    assert clean == "Walk on to the gate. Then on."
+    assert [c.tag for c in cues] == ["view1", "viewwait1", "viewwaitslow1", "viewname1:Gate", "viewend1"]
+    spans = view_cue_spans({"view1": 6.0, "viewwait1": 6.0, "viewwaitslow1": 6.0, "viewend1": 8.0}, 0)
+    assert spans == [(0, 6.0, 8.0, "slow")]
+    (card,) = attach_cue_spans([{"lat": EAST[4][0], "lon": EAST[4][1]}], spans)
+    assert card["wait"] and card["wait_slow"]
+
+    df = pd.DataFrame({"lat": [lat for lat, _ in EAST], "lon": [lon for _, lon in EAST]})
+    km = [i * 0.1 for i in range(11)]
+    plan, spots, held = _wait_view_plan(df, km, [(10, 12.0)], [card])
+    assert plan == [(4, 6.0, tuning.VIEW_WAIT_SLOW_SECONDS), (10, 4.0)] and held == 2.0
+    smooth = interpolate_route_data(df.copy(), 10.0, 101, 1.0, km, segment_plan=plan)
+    # Reaches the spot (0.4 km) at 6 s either way, but covers less ground in the last second before it than an even pace.
+    step = lambda t: abs(float(smooth["lon"].iloc[int(t * 10)]) - float(smooth["lon"].iloc[int(t * 10) - 10]))  # noqa: E731
+    assert abs(float(smooth["lon"].iloc[60]) - EAST[4][1]) < 2e-5
+    assert step(6.0) < 0.7 * step(3.0)

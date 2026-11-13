@@ -118,6 +118,15 @@ class TestWalkPlan:
         store.set_cue_times("b", {"arrive": 14.0})
         assert leg_walk_plan(store, {"id": "b"}, 1, 30.0)[0] == 14.0
 
+    def test_walk_on_arrives_after_the_voice(self, tmp_path):
+        from services.localization.cues import strip_cues
+
+        assert [c.tag for c in strip_cues("Arrive at the temple.{walk on 6}")[1]] == ["walkon:6"]
+        store = CueStore(tmp_path)
+        store.set_cue_times("b", {"end": 20.0, "walkon:6": 30.0})  # {walk on} replaces {end} as the deadline
+        walk, _, wait = leg_walk_plan(store, {"id": "b"}, 1, 30.0, natural_seconds=10.0, max_wait_seconds=0.0)
+        assert walk == 36.0 and wait == 0.0
+
     def test_end_wins_over_arrive(self, tmp_path):
         store = CueStore(tmp_path)
         store.set_cue_times("b", {"arrive": 9.0, "end": 14.0})

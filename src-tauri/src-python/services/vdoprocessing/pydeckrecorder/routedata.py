@@ -81,10 +81,11 @@ def interpolate_route_data(
             while seg < len(segment_plan) - 1 and i > segment_plan[seg][0]:
                 seg_start_idx, seg_start_time = segment_plan[seg][0], seg_start_time + segment_plan[seg][1]
                 seg += 1
-            end_idx, seconds = segment_plan[seg]
+            end_idx, seconds = segment_plan[seg][:2]
+            slow = max(arrival_slow_seconds, segment_plan[seg][2] if len(segment_plan[seg]) > 2 else 0.0)  # 3rd: this one's own
             d0, d1 = leg_dist_km[seg_start_idx], leg_dist_km[min(end_idx, len(leg_dist_km) - 1)]
             frac = 1.0 if d1 <= d0 else min(1.0, max(0.0, (d - d0) / (d1 - d0)))
-            times.append(seg_start_time + arrival_time_fraction(frac, seconds, arrival_slow_seconds) * seconds)
+            times.append(seg_start_time + arrival_time_fraction(frac, seconds, slow) * seconds)
         df_raw["time_sec"] = times
     elif total_leg_km > 0:
         df_raw["time_sec"] = [

@@ -1,5 +1,5 @@
 // Mirrors services/localization/cues.CUE_RE: tags are never spoken.
-const CUE = /\{(start|arrive|end|distance|route|extras|closed|scene|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}/g;
+const CUE = /\{(start|arrive|end|distance|route|extras|closed|scene|open|close|\/?slow|\/?fast|\/?stop|walk on \d+(?:\.\d+)?|photo:[^{}]+|goPre\d+|go|\d+)\}/g;
 
 export interface OverviewLength {
   chars_per_second: number;

@@ -311,6 +311,15 @@ OVERVIEW_TOP_BAND_FRACTION = 0.12
 COURSE_STATS_DROP_PX = 30
 # Course legs: the walker slows (to 40% pace) over this long before each stop; arrival times stay.
 COURSE_ARRIVAL_SLOW_SECONDS = 3.0
+# Leg script cues {slow} … {/slow} / {fast} … {/fast}: the walker's pace there against the rest of its piece (the
+# rest makes up the time, so arrival stays on the cue). Per project: settings.pace_slow_factor / pace_fast_factor.
+PACE_SLOW_FACTOR = 0.5
+PACE_FAST_FACTOR = 1.6
+# {stop} … {/stop} shorter than this is ignored (a blink of a stop reads as a stutter).
+PACE_MIN_STOP_SECONDS = 0.8
+# {view wait slow}: the walker slows (to 40% pace) over this long before the street view spot (at most half that
+# stretch), still arriving on the {view} cue.
+VIEW_WAIT_SLOW_SECONDS = 3.0
 # A leg opens on a wide shot of the whole leg, then zooms into the close framing.
 RESIDENTIAL_WIDE_HOLD_SECONDS = 1.2
 RESIDENTIAL_WIDE_ZOOM_SECONDS = 1.0
@@ -441,6 +450,8 @@ RESIDENTIAL_ARRIVAL_POPUP_HOLD_SECONDS = 1.0
 # A leg's photo growing from its card to fullscreen, and shrinking back (arrival photos and stop-bys).
 FULLSCREEN_GROW_SECONDS = 0.4
 FULLSCREEN_SHRINK_SECONDS = 0.25
+# A leg's photo (fullscreen or card) fading away; was 0.4 s, the user found it slow (2026-11-13).
+LEG_PHOTO_FADE_SECONDS = 0.2
 # A leg after a stop with no narration: the camera glides from the last leg's view into this one's in this long.
 LEG_CONTINUE_GLIDE_SECONDS = 0.5
 # A leg's camera zooming from the wide view into its street-level framing at the start, and back out at the end.

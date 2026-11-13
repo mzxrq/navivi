@@ -336,6 +336,27 @@ def record_cue_times(project_config_path: str, audio_data: dict) -> None:
     store.save()
 
 
+PACE_KINDS = ("slow", "fast", "stop")
+
+
+def pace_spans(times: dict, piece: int) -> list:
+    """[(piece, kind, start, end)] from one narration's {slow}/{fast}/{stop} … {/…} cue times (slow1/slowend1, …),
+    in voice seconds, ordered; a span that runs into the next one ends where it starts."""
+    spans = []
+    for kind in PACE_KINDS:
+        n = 1
+        while f"{kind}{n}" in times:
+            start = float(times[f"{kind}{n}"])
+            end = float(times.get(f"{kind}end{n}", start))
+            if end > start:
+                spans.append([piece, kind, start, end])
+            n += 1
+    spans.sort(key=lambda s: s[2])
+    for a, b in zip(spans, spans[1:]):
+        a[3] = min(a[3], b[2])
+    return [tuple(s) for s in spans if s[3] > s[2]]
+
+
 def leg_walk_plan(
     store: CueStore,
     waypoint: dict,
@@ -371,6 +392,9 @@ def leg_walk_plan(
     voice = max(MIN_WALK_SECONDS, audio_seconds - origin - TAIL_SECONDS)  # voice length from the walk's start
     mark = cues.get("end") if cues.get("end") is not None else cues.get("arrive")
     deadline = voice if mark is None or mark <= origin else max(MIN_WALK_SECONDS, min(voice, mark - origin))
+    walk_on = max((float(k.split(":", 1)[1]) for k in cues if k.startswith("walkon:")), default=0.0)
+    if walk_on > 0:  # {walk on N}: arrives N s after the voice ends, the last stretch on the silent map
+        deadline = voice + walk_on
     if natural_seconds is None:
         walk = deadline
     else:
