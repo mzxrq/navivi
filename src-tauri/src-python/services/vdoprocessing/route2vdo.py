@@ -26,7 +26,6 @@ from services.mapfetcher.maplanguage import resolve_map_style
 from services.mapfetcher.street_photos import attach_cue_spans, clear_of, resolve_mapillary_token, street_view_landmarks, turn_photos
 from services.projectfiles import meta_dir, write_json_atomic
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
-from services.vdoprocessing.pydeckrecorder import record_headless_video
 from services.vdoprocessing.route_inputs import photo_inputs_hash
 from services.vdoprocessing.vdoexporter import caption_subtitle_style, subtitle_band_px
 
@@ -546,10 +545,8 @@ class RouteAnimator:
         return render
 
     def _render_residential_pydeck(self, res_sequence: List[Dict], fps: int) -> List[str]:
-        """GeoJsonLayer-driven alternative to both SpatialRenderer.
-        render_waypoints (flat top-down) and the 3D driving pipeline's
-        record_headless_video (vehicle-scenegraph chase cam): a pedestrian-
-        scale chase camera with a turn-by-turn HUD, one clip per leg.
+        """GeoJsonLayer-driven alternative to SpatialRenderer.render_waypoints
+        (flat top-down): a pedestrian-scale chase camera with a turn-by-turn HUD, one clip per leg.
 
         Reuses each res_sequence entry's own real `lats`/`lons` arrays
         (already resolved by render_step.py — including ferry-leg cached
@@ -1116,33 +1113,14 @@ class RouteAnimator:
         # [NOTE] [Core] Render each waypoint-to-waypoint leg. The GeoJsonLayer
         # PyDeck chase camera (top-down overview -> tilted follow, per leg)
         # is now the DEFAULT residential engine — set use_pydeck_pedestrian
-        # to false in a project's settings to opt back into either the
-        # older vehicle-scenegraph use_3d_res pipeline or, with both flags
-        # false, the flat 2D SpatialRenderer.
+        # to false in a project's settings to opt back into the flat 2D
+        # SpatialRenderer.
         if res_sequence and render_mode != "overview":
             if self.config.get("use_pydeck_pedestrian", True):
                 logger.info(
                     "Rendering Residential Sequence using GeoJsonLayer PyDeck (chase camera)..."
                 )
                 output_paths.extend(self._render_residential_pydeck(res_sequence, fps))
-            elif self.config.get("use_3d_res", False):
-                logger.info(
-                    "Attempting Residential Sequence using 3D PyDeck (Split by Leg)..."
-                )
-                res_route_path = self.config.get("res_route_path")
-                res_out_path = str(self.out_dir / "02_residential_map.mp4")
-                audio_durs = [
-                    seg.get("segment_duration", 0.0) for seg in res_sequence
-                ]
-                final_res_paths = record_headless_video(
-                    res_route_path,
-                    res_out_path,
-                    audio_durations=audio_durs,
-                    speed_kmh=60,
-                )
-                if not final_res_paths:
-                    raise RuntimeError("3D rendering generated an empty output sequence.")
-                output_paths.extend(final_res_paths)
             else:
                 logger.info(
                     "Rendering Residential Sequence using 2D SpatialRenderer..."

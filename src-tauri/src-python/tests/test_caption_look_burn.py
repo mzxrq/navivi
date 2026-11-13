@@ -86,3 +86,11 @@ def test_text_opacity_dims_the_fill(tmp_path, black, how):
     half = _frame(tmp_path, black, "half", how, {"shadow": 0, "opacity": 0.4})
     assert full.max() > 240
     assert 60 < half.max() < 160
+
+
+def test_a_folder_with_an_apostrophe_still_gets_its_label(black, tmp_path):
+    folder = tmp_path / "Mike's videos [1], a;b"
+    folder.mkdir()
+    out = folder / "labelled.mp4"
+    VideoExporter.burn_static_label(input_video_path=str(black), text="Test", output_video_path=str(out))
+    assert out.exists() and out.stat().st_size > 0

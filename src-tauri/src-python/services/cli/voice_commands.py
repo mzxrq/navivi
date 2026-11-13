@@ -15,19 +15,25 @@ PREVIEW_TEXT = "こんにちは。この声で、旅の案内をお届けしま�
 VOICE_ACTIONS = ("tts_voices_list", "tts_voice_add", "tts_voice_delete", "tts_voice_preview", "tts_engines", "tts_cache_info", "tts_cache_clear", "tts_install_kokoro", "tts_install_qwen3", "tts_install_irodori", "comfyui_install", "ollama_install")
 
 
+def _required(payload: Dict[str, Any], field: str) -> Any:
+    if not payload.get(field):
+        raise ValueError(f"Missing field: {field}")
+    return payload[field]
+
+
 def voices_list(_payload: Dict[str, Any]) -> Dict[str, Any]:
     return {"success": True, "voices_dir": str(voices.voices_dir()), "voices": voices.list_voices()}
 
 
 def voice_add(payload: Dict[str, Any]) -> Dict[str, Any]:
     voice = voices.add_voice(
-        payload["path"], payload.get("id") or None, replace=bool(payload.get("replace"))
+        _required(payload, "path"), payload.get("id") or None, replace=bool(payload.get("replace"))
     )
     return {"success": True, "voice": voice}
 
 
 def voice_delete(payload: Dict[str, Any]) -> Dict[str, Any]:
-    voice_id = payload["id"]
+    voice_id = _required(payload, "id")
     if not voices.delete_voice(voice_id):
         raise FileNotFoundError(f"Voice '{voice_id}' was not found.")
     return {"success": True, "id": voice_id}
@@ -148,8 +154,6 @@ _HANDLERS: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
 def run_voice_action(action: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         return _HANDLERS[action](payload or {})
-    except KeyError as exc:
-        return {"success": False, "error": f"Missing field: {exc.args[0]}"}
     except (ValueError, FileNotFoundError, FileExistsError) as exc:
         return {"success": False, "error": str(exc)}
     except Exception as exc:  # e.g. the TTS server failed to start

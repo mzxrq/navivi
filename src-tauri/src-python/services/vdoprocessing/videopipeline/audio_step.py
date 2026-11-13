@@ -254,18 +254,22 @@ LATIN_CHUNKING = 2
 
 
 def _text_marks(audio_path, fingerprint: Dict[str, Any]) -> Dict[str, Any]:
-    """What a non-Japanese clip's note must record: how its text was chunked and, for Qwen3, the language it was
-    read in. Empty for Japanese, so Japanese clips made before these marks stay valid."""
+    """What a clip's note must record beyond the voice: the high/low patterns of its dictionary words, and for a
+    non-Japanese clip how its text was chunked and, for Qwen3, the language it was read in. Empty for a Japanese
+    clip without patterns, so clips made before these marks stay valid."""
+    from services.tts import pitch_accent
     from services.tts.ttsengine import qwen3_language
 
     try:
         text = _spoken_text_path(audio_path).read_text(encoding="utf-8")
     except OSError:
         return {}
+    wanted = pitch_accent.wanted(text)
+    marks = {"pitch": [list(w) for w in wanted]} if wanted else {}  # lists: compared with the note's JSON
     language = qwen3_language(text)
     if language == "Japanese":
-        return {}
-    return {"chunking": LATIN_CHUNKING, **({"language": language} if fingerprint.get("engine") == "qwen3" else {})}
+        return marks
+    return {**marks, "chunking": LATIN_CHUNKING, **({"language": language} if fingerprint.get("engine") == "qwen3" else {})}
 
 
 def _write_voice_note(audio_path, client: Any) -> None:
@@ -553,13 +557,16 @@ async def _speak(
 ) -> str:
     """Voices a narration file, reusing its kept sentences (voice_pieces.py) when `project_dir` is given.
     `retake`: a new take past every cache; with `redo_pieces`, only those sentences, the rest keep their audio."""
-    from services.tts import voice_pieces
+    from services.tts import pitch_accent, voice_pieces
 
     folder = pieces_dir(project_dir, audio_filename) if project_dir is not None else None
     saved = tuple(getattr(client, k, d) for k, d in (
         ("bypass_cache", False), ("pieces_dir", None), ("pieces_voice", None), ("redo_texts", frozenset()),
     ))
-    client.pieces_dir, client.pieces_voice = folder, _client_fingerprint(client)
+    voice = _client_fingerprint(client)
+    wanted = pitch_accent.wanted(tts_script)
+    # Kept sentences were chosen for their high/low patterns: new patterns, new takes (the rest come from the line cache).
+    client.pieces_dir, client.pieces_voice = folder, {**voice, "pitch": [list(w) for w in wanted]} if voice and wanted else voice
     if retake and redo_pieces and folder is not None:
         client.redo_texts = frozenset(voice_pieces.texts(folder, redo_pieces))
     else:
@@ -903,7 +910,7 @@ def generate_audio(
                     project_dir=config_path.parent, pronunciation_dict=p_dict,
                 )
             except Exception as exc:
-                logger.warning("Overview narration TTS failed (%s). Leaving overview clip silent.", exc)
+                logger.error("Overview narration TTS failed (%s). Leaving overview clip silent.", exc)
                 overview_clip = None
             if overview_clip:
                 overview_audio_path = overview_clip["audio_path"]
@@ -920,7 +927,7 @@ def generate_audio(
                         output_dir, force, p_dict, project_dir=config_path.parent,
                     )
                 except Exception as exc:
-                    logger.warning("Finale narration TTS failed (%s). The finale stays silent.", exc)
+                    logger.error("Finale narration TTS failed (%s). The finale stays silent.", exc)
 
             for idx, wp in enumerate(waypoints):
                 label = wp.get("label", f"Waypoint {idx + 1}") if isinstance(wp, dict) else f"Waypoint {idx + 1}"
@@ -1010,7 +1017,7 @@ def generate_audio(
                         project_dir=config_path.parent,
                     )
                 except Exception as exc:
-                    logger.warning(
+                    logger.error(
                         "Attraction narration TTS failed for '%s' (%s). Leaving that clip silent.",
                         label, exc,
                     )

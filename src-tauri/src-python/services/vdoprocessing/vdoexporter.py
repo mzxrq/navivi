@@ -43,6 +43,7 @@ import cv2
 import numpy as np
 
 from services import runtime_paths, tuning
+from services.ffconcat import concat_entry
 from services.projectfiles import replace_into
 from services.localization.subtitle import SubtitleStyle
 from services.localization.caption_box import box_event_text, build_box, text_position_tag
@@ -330,6 +331,12 @@ _STDERR_TAIL_BYTES = 4000
 # instead of failing the whole render over someone else's file handle.
 _REPLACE_RETRY_ATTEMPTS = 5
 _REPLACE_RETRY_DELAY_SECONDS = 0.5
+
+
+def filter_path(path) -> str:
+    """`path` for a single-quoted ffmpeg filter option ('...'): forward slashes, the drive colon escaped, and an
+    apostrophe (C:/Users/O'Brien) closed out of the quotes with three backslashes (tested: [ ] , ; are fine)."""
+    return str(Path(path).resolve()).replace("\\", "/").replace(":", r"\:").replace("'", "'" + "\\" * 3 + "''")
 
 
 def sweep_stale_temp_files(directory, recursive: bool = False, min_age_seconds: float = 600) -> int:
@@ -1036,8 +1043,7 @@ class VideoExporter:
 
             # 2. Write Absolute Paths
             with open(concat_txt, "w", encoding="utf-8") as f:
-                for clip_path in muxed_paths:
-                    f.write(f"file 'file:{clip_path.resolve().as_posix()}'\n")
+                f.writelines(concat_entry(str(clip_path)) for clip_path in muxed_paths)
 
             # 3. Execute the seamless stitch
             result = subprocess.run(
@@ -1215,10 +1221,7 @@ class VideoExporter:
         if not ffmpeg_cmd:
             raise RuntimeError("FFmpeg binary not found.")
 
-        # [HACK] [Editor] FFmpeg's subtitle filter crashes on Windows absolute paths (e.g., C:\).
-        # We must format the path with forward slashes and escape the colon for the filter.
-        # e.g., 'C\:/Users/...' -> safely parsed by the FFmpeg filter graph.
-        safe_sub_path = sub_path.as_posix().replace(":", "\\:")
+        safe_sub_path = filter_path(sub_path)
         sub_filter = f"subtitles='{safe_sub_path}'"
         if style:
             sub_filter = f"subtitles=filename='{safe_sub_path}':force_style='{style.to_force_style()}'"
@@ -1342,9 +1345,7 @@ class VideoExporter:
         end_ts = VideoExporter._format_srt_timestamp(duration)
         srt_path.write_text(f"1\n00:00:00,000 --> {end_ts}\n{text}\n", encoding="utf-8")
 
-        # [HACK] [Subtitle] Same absolute/forward-slashed/colon-escaped path
-        # normalization burn_subtitles uses — libass's own escaping rules.
-        escaped_srt = str(srt_path.resolve()).replace("\\", "/").replace(":", r"\:")
+        escaped_srt = filter_path(srt_path)
 
         try:
             result = subprocess.run(
@@ -1475,7 +1476,7 @@ class VideoExporter:
             srt_path.write_text(
                 f"1\n00:00:00,000 --> {end_ts}\n{label_text}\n", encoding="utf-8"
             )
-            escaped_srt = str(srt_path.resolve()).replace("\\", "/").replace(":", r"\:")
+            escaped_srt = filter_path(srt_path)
             vf_parts.append(
                 f"subtitles=filename='{escaped_srt}':force_style='{style.to_force_style()}'"
             )

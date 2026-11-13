@@ -25,8 +25,8 @@ from .intro_outro_commands import test_intro_video, test_outro_video
 # split leg as the one leg it actually is, not several.
 _CONT_SUFFIX_RE = re.compile(r"_cont\d+$")
 
-# assets/audio/music and assets/video/user hold the user's own imports (as in src/services/assetCleanup.ts): never wiped.
-_USER_FOLDERS = {"music", "user"}
+# The user's own imports, never wiped: assets/audio/music, assets/video/custom (the timeline editor's imports), assets/video/user.
+_USER_FOLDERS = {"music", "custom", "user"}
 
 
 def _order_like_timeline(

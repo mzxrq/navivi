@@ -479,3 +479,38 @@ class TestQwen3ServerLogic:
         ends_properly[int(rate * 1.7):] = 0  # the voice stops, then a short silence, like a finished line
         assert server.tail_ratio(cut_off, rate) > server.TAIL_OK
         assert server.tail_ratio(ends_properly, rate) < server.TAIL_OK
+
+
+def test_a_voice_action_names_a_missing_field_and_keeps_other_errors_as_they_are(monkeypatch):
+    assert voice_commands.run_voice_action("tts_voice_delete", {}) == {"success": False, "error": "Missing field: id"}
+
+    def broken(_payload):
+        return {}["engine_key"]
+
+    monkeypatch.setitem(voice_commands._HANDLERS, "tts_engines", broken)
+    assert voice_commands.run_voice_action("tts_engines", {})["error"] == "KeyError: 'engine_key'"
+
+
+def test_a_hung_voice_server_times_out_instead_of_freezing_the_render(tmp_path, monkeypatch):
+    import threading
+    import time
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    import httpx
+
+    class Slow(BaseHTTPRequestHandler):
+        def do_POST(self):
+            time.sleep(2)
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Slow)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    monkeypatch.setattr(tuning, "TTS_REQUEST_TIMEOUT_SECONDS", 0.3)
+    client = ttsengine.IrodoriTTSClient(output_dir=tmp_path, base_url=f"http://127.0.0.1:{server.server_port}/v1/audio/speech")
+    try:
+        with pytest.raises(httpx.ReadTimeout):
+            asyncio.run(client._post_speech({"input": "x"}))
+    finally:
+        server.shutdown()

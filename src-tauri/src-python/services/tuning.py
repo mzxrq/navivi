@@ -1388,6 +1388,8 @@ TTS_PITCH_RETAKES = 3
 # Sent before every Irodori line: a line spoken from a cold start whispered its first word (カツラギ's つ near-silent);
 # with a pause before it, the first word comes out clear (listening test 2026-11-13). The pause is trimmed off. "" = off.
 TTS_IRODORI_LEAD_IN = "……"
+# One voice request (a chunk is ~40 s on a CPU): past this the server is taken as hung, restarted and asked again.
+TTS_REQUEST_TIMEOUT_SECONDS = 600
 # Kanji-first: send dictionary words in kanji and rely on the name check. Off: Whisper can write the right kanji
 # for a misread take (慈眼院 said じがんいん), so every dictionary word is spelled out (ジゲン院).
 TTS_KANJI_FIRST = False

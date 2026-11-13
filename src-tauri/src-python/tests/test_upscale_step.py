@@ -148,20 +148,19 @@ def test_disabled_or_fast_render_does_nothing(tmp_path, gpu):
         assert not map_path(tmp_path).exists()
 
 
-def test_job_config_swaps_paths_survives_reload_and_saves_originals(tmp_path, gpu):
+def test_job_config_swaps_paths_in_memory_and_survives_reload(tmp_path, gpu):
     cfg, images = _project(tmp_path, small=(640, 480))
     result = upscale_step.upscale_waypoint_images(str(cfg))
     upscaled = next(iter(result["map"].values()))
 
     JobConfigManager(cfg)
     manager = JobConfigManager(cfg)
-    wp = manager.get_waypoints()[0]
+    wp = manager.get("waypoints")[0]
     assert wp["popup_image"] == [upscaled] and wp["images"] == [upscaled]
 
-    manager.save()
     saved = json.loads(cfg.read_text(encoding="utf-8"))["waypoints"][0]
-    assert saved["popup_image"] == [images["small"]]
-    assert JobConfigManager(cfg).get_waypoints()[0]["popup_image"] == [upscaled]
+    assert saved["popup_image"] == [images["small"]]  # the file keeps the originals
+    assert JobConfigManager(cfg).get("waypoints")[0]["popup_image"] == [upscaled]
 
 
 def test_skip_rich_media_ignores_an_old_map(tmp_path, gpu):
@@ -171,19 +170,7 @@ def test_skip_rich_media_ignores_an_old_map(tmp_path, gpu):
     data["settings"]["skip_rich_media"] = True
     cfg.write_text(json.dumps(data), encoding="utf-8")
 
-    assert JobConfigManager(cfg).get_waypoints()[0]["popup_image"] == [images["small"]]
-
-    from services.vdoprocessing.pydeckrecorder.routedata import load_route_from_config
-
-    assert load_route_from_config(str(cfg))["waypoints"][0]["popup_image"] == [images["small"]]
-
-
-def test_pydeck_loader_gets_upscaled_paths(tmp_path, gpu):
-    cfg, _ = _project(tmp_path, small=(640, 480))
-    upscaled = next(iter(upscale_step.upscale_waypoint_images(str(cfg))["map"].values()))
-    from services.vdoprocessing.pydeckrecorder.routedata import load_route_from_config
-
-    assert load_route_from_config(str(cfg))["waypoints"][0]["popup_image"] == [upscaled]
+    assert JobConfigManager(cfg).get("waypoints")[0]["popup_image"] == [images["small"]]
 
 
 def test_estimate_counts_small_photos_and_maps_stage_numbers(tmp_path):

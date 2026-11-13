@@ -1,39 +1,12 @@
-"""Route/project data loading and pydeck HTML generation helpers."""
+"""Route interpolation and pydeck HTML patching helpers."""
 
-from pathlib import Path
-
-import json
 import math
+
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
 
-from services.config.upscaled_images import apply_upscaled_images
 from services.mapfetcher.maplanguage import current_map_language, style_localizer_script
-
-from .common import logger
-
-
-def load_route_from_config(config_path: str):
-    with open(config_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    apply_upscaled_images(data, Path(config_path).parent)
-
-    from services.projectfiles import ROUTE_CACHE, meta_file
-
-    cache_file = meta_file(Path(config_path).parent, ROUTE_CACHE)
-    if cache_file.exists():
-        try:
-            with open(cache_file, "r", encoding="utf-8") as cf:
-                cache_data = json.load(cf)
-                if isinstance(cache_data, dict) and "routing_cache" in cache_data:
-                    data["routing_cache"] = cache_data["routing_cache"]
-                else:
-                    data["routing_cache"] = cache_data
-        except Exception as e:
-            logger.warning(f"Failed to read .routecache.json: {e}")
-
-    return data
 
 
 def arrival_time_fraction(frac: float, seconds: float, slow_seconds: float, end_speed: float = 0.4) -> float:

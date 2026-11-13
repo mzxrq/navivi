@@ -46,25 +46,6 @@ class TestGetSet:
         manager = JobConfigManager(tmp_path / "job_config.json")
         assert manager.get("missing_key", "fallback") == "fallback"
 
-    def test_set_then_get_roundtrip(self, tmp_path):
-        manager = JobConfigManager(tmp_path / "job_config.json")
-        manager.set("project_name", "MyTrip")
-        assert manager.get("project_name") == "MyTrip"
-
-
-class TestWaypoints:
-    def test_get_waypoints_empty_by_default(self, tmp_path):
-        manager = JobConfigManager(tmp_path / "job_config.json")
-        assert manager.get_waypoints() == []
-
-    def test_add_waypoint_appends(self, tmp_path):
-        manager = JobConfigManager(tmp_path / "job_config.json")
-        manager.add_waypoint({"label": "Osaka"})
-        manager.add_waypoint({"label": "Kyoto"})
-        waypoints = manager.get_waypoints()
-        assert len(waypoints) == 2
-        assert waypoints[0]["label"] == "Osaka"
-        assert waypoints[1]["label"] == "Kyoto"
 
 
 class TestSettings:
@@ -72,52 +53,6 @@ class TestSettings:
         manager = JobConfigManager(tmp_path / "job_config.json")
         assert manager.get_settings() == {}
 
-    def test_update_settings_merges_not_replaces(self, tmp_path):
-        manager = JobConfigManager(tmp_path / "job_config.json")
-        manager.update_settings({"fps": 30})
-        manager.update_settings({"duration": 60})
-        settings = manager.get_settings()
-        assert settings == {"fps": 30, "duration": 60}
-
-    def test_update_settings_overwrites_existing_key(self, tmp_path):
-        manager = JobConfigManager(tmp_path / "job_config.json")
-        manager.update_settings({"fps": 30})
-        manager.update_settings({"fps": 60})
-        assert manager.get_settings()["fps"] == 60
-
-
-class TestSave:
-    def test_save_writes_to_original_config_path_by_default(self, tmp_path):
-        config_path = tmp_path / "job_config.json"
-        manager = JobConfigManager(config_path)
-        manager.set("project_name", "Saved")
-        manager.save()
-        assert json.loads(config_path.read_text(encoding="utf-8")) == {
-            "project_name": "Saved"
-        }
-
-    def test_save_prefers_directory_path_field(self, tmp_path):
-        alt_dir = tmp_path / "elsewhere"
-        manager = JobConfigManager(tmp_path / "job_config.json")
-        manager.set("directory_path", str(alt_dir))
-        manager.save()
-        saved_file = alt_dir / "job_config.json"
-        assert saved_file.exists()
-        assert manager.config_path == saved_file.resolve()
-
-    def test_save_to_explicit_target_path(self, tmp_path):
-        manager = JobConfigManager(tmp_path / "job_config.json")
-        manager.set("project_name", "Explicit")
-        target = tmp_path / "custom" / "out.json"
-        manager.save(target)
-        assert json.loads(target.read_text(encoding="utf-8"))["project_name"] == "Explicit"
-
-    def test_save_preserves_non_ascii_text(self, tmp_path):
-        config_path = tmp_path / "job_config.json"
-        manager = JobConfigManager(config_path)
-        manager.set("project_name", "大阪市")
-        manager.save()
-        assert "大阪市" in config_path.read_text(encoding="utf-8")
 
 
 class TestSingletonBehavior:

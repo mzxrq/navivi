@@ -65,3 +65,16 @@ def test_editor_durations_make_the_export_as_long_as_the_preview(media):
     VideoExporter.concat_from_timeline(timeline, str(out))
     assert abs(FFmpegManager.get_media_duration(str(out)) - 6.5) < 0.15
     assert _has_audio(out)
+
+
+def test_an_export_into_a_folder_with_an_apostrophe_works(media):
+    timeline = {
+        "video_tracks": [{"file_path": str(media / "a.mp4")}, {"file_path": str(media / "b.mp4")}],
+        "subtitles": [{"start": 0.5, "end": 2.0, "text": "hello"}],
+        "burn_subtitles": True,
+    }
+    folder = media / "Mike's videos"
+    folder.mkdir()
+    out = folder / "trip.mp4"
+    VideoExporter.concat_from_timeline(timeline, str(out))
+    assert abs(FFmpegManager.get_media_duration(str(out)) - 8.0) < 0.3

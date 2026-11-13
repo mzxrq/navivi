@@ -27,7 +27,6 @@ def build_animator_config(
     route_marker,
     seg_durations,
     settings,
-    use_3d_res,
     use_pydeck_pedestrian,
 ):
     """The config dict RouteAnimator renders the overview and the legs with."""
@@ -63,7 +62,6 @@ def build_animator_config(
             attraction_videos_enabled(settings)
             and float(settings.get("attraction_fade_seconds", 0.8)) > 0
         ),
-        "use_3d_res": use_3d_res,
         "use_pydeck_pedestrian": use_pydeck_pedestrian,
         "use_pydeck_overview": bool(settings.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW)),
         "mapbox_style_id": settings.get("mapbox_style_id"),

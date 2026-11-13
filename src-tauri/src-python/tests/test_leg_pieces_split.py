@@ -37,4 +37,20 @@ def test_padded_copy_from_an_earlier_run_is_reused(tmp_path, monkeypatch):
     os.utime(src, (1, 1))
     monkeypatch.setattr(FFmpegManager, "get_media_duration", staticmethod(lambda p: 12.0 if p.endswith("_padded.mp4") else 10.0))
     monkeypatch.setattr(leg_pieces.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("re-encoded")))
-    assert leg_pieces._pad_video_tail("ffmpeg", str(src), 1.5) == str(padded)
+    assert leg_pieces._pad_video_tail("ffmpeg", str(src), 2.0) == str(padded)
+
+
+def test_a_padded_copy_longer_than_now_needed_is_made_again(tmp_path, monkeypatch):
+    import os
+    from types import SimpleNamespace
+    from services.tts.ttsengine import FFmpegManager
+    from services.vdoprocessing.videopipeline import leg_pieces
+
+    src, padded = tmp_path / "L_cont2.mp4", tmp_path / "L_cont2_padded.mp4"
+    src.write_bytes(b"x"); padded.write_bytes(b"x")
+    os.utime(src, (1, 1))
+    monkeypatch.setattr(FFmpegManager, "get_media_duration", staticmethod(lambda p: 12.0 if p.endswith("_padded.mp4") else 10.0))
+    runs = []
+    monkeypatch.setattr(leg_pieces.subprocess, "run", lambda cmd, **k: runs.append(cmd) or SimpleNamespace(returncode=0, stderr=""))
+    assert leg_pieces._pad_video_tail("ffmpeg", str(src), 0.5) == str(padded)  # the narration got 1.5 s shorter
+    assert runs and "stop_duration=0.500" in " ".join(runs[0])

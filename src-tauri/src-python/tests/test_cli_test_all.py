@@ -7,7 +7,7 @@ from services.vdoprocessing.videopipeline import helpers as pipeline_helpers
 def test_force_keeps_imported_footage_and_music(monkeypatch, tmp_path):
     (tmp_path / "job_config.json").write_text("{}", encoding="utf-8")
     assets = tmp_path / "assets"
-    own = [assets / "video" / "user" / "mine.mp4", assets / "audio" / "music" / "song.mp3"]
+    own = [assets / "video" / "user" / "mine.mp4", assets / "video" / "custom" / "clip.mp4", assets / "audio" / "music" / "song.mp3"]
     generated = [
         assets / "video" / "route" / "02_waypoint_01_leg.mp4",
         assets / "video" / "attraction" / "04_attraction_01.mp4",

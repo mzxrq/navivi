@@ -46,3 +46,16 @@ def test_measured_times_are_used_when_the_voice_was_heard(tmp_path, monkeypatch)
     times = measured_cue_times(audio, cues, clean, 23.0, [])
     # sentence-start cues land exactly on the heard sentence starts
     assert (times["start"], times["1"], times["2"]) == (6.5, 12.0, 19.0)
+
+
+def test_an_english_take_keeps_the_estimate_without_listening(tmp_path, monkeypatch):
+    import pytest
+
+    from services.localization import cue_alignment
+    from services.localization.cues import strip_cues
+
+    monkeypatch.setattr(cue_alignment, "_segments", lambda path: pytest.fail("listened to an English take"))
+    clean, cues = strip_cues("Walk west. {1}Then turn left at the shrine.")
+    wav = tmp_path / "a.wav"
+    wav.write_bytes(b"x")
+    assert cue_alignment.measured_cue_times(wav, cues, clean, 6.0) == cue_alignment.cue_times(cues, clean, 6.0)

@@ -1,54 +1,6 @@
-"""Math & geo helpers: bearings, offsets, and haversine distance."""
+"""Haversine distances along a route."""
 
 import math
-
-
-def calculate_bearing(lon1, lat1, lon2, lat2):
-    lon1, lat1, lon2, lat2 = map(math.radians, [lon1, lat1, lon2, lat2])
-    dlon = lon2 - lon1
-    x = math.sin(dlon) * math.cos(lat2)
-    y = math.cos(lat1) * math.sin(lat2) - (
-        math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
-    )
-    initial_bearing = math.atan2(x, y)
-    return (math.degrees(initial_bearing) + 360) % 360
-
-
-def smooth_bearings(bearings, alpha=0.15):
-    # [NOTE] [Animation] Exponential smoothing over an angle, not a plain
-    # value -- diff is normalized into (-180, 180] first so the chase camera
-    # always turns the SHORT way around the compass (e.g. 350deg -> 10deg
-    # blends as +20, not as a near-full spin backwards through 180).
-    if not bearings:
-        return []
-    smoothed = [bearings[0]]
-    current = bearings[0]
-    for b in bearings[1:]:
-        diff = ((b - current + 180) % 360) - 180
-        current = (current + alpha * diff) % 360
-        smoothed.append(current)
-    return smoothed
-
-
-def offset_point(lon, lat, bearing_deg, distance_m):
-    # [NOTE] [Animation] Standard destination-point formula (given a start
-    # point, bearing, and distance) -- used to place the chase camera a
-    # fixed distance behind the vehicle along its current heading.
-    R = 6371000.0
-    bearing_rad = math.radians(bearing_deg)
-    lat_rad = math.radians(lat)
-    lon_rad = math.radians(lon)
-    ang_dist = distance_m / R
-
-    lat2 = math.asin(
-        math.sin(lat_rad) * math.cos(ang_dist)
-        + math.cos(lat_rad) * math.sin(ang_dist) * math.cos(bearing_rad)
-    )
-    lon2 = lon_rad + math.atan2(
-        math.sin(bearing_rad) * math.sin(ang_dist) * math.cos(lat_rad),
-        math.cos(ang_dist) - math.sin(lat_rad) * math.sin(lat2),
-    )
-    return math.degrees(lon2), math.degrees(lat2)
 
 
 def haversine_km(lon1, lat1, lon2, lat2):

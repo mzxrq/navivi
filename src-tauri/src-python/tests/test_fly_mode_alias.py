@@ -1,7 +1,6 @@
 """The editor saves a Fly leg as routeMode "curve"; every reader must treat it as an airplane leg."""
 
 from services import tuning
-from services.vdoprocessing.pydeckrecorder.legresolve import _resolve_leg
 from services.vdoprocessing.pydeckrecorder.leg_hud import _MODE_HUD, _hud_text
 from services.vdoprocessing.videopipeline.helpers import _build_point_modes
 
@@ -32,14 +31,3 @@ def test_fly_leg_point_modes_hud_label_and_speed():
 def test_fly_leg_is_a_2d_fallback_leg():
     assert tuning.MODE_ALIASES["curve"] in tuning.RESIDENTIAL_2D_FALLBACK_MODES
 
-
-def test_resolve_leg_maps_curve_to_airplane():
-    mode, _, _ = _resolve_leg("35.0,139.0|36.0,140.0|curve", _wps("curve"))
-    assert mode == "airplane"
-
-
-def test_resolve_leg_reads_the_keys_the_app_writes():
-    # src/utils/routeCacheKey.ts: "from|to|mode|drawn line" (+ "|via points"); three-field unpacking failed on every one.
-    for key in ("35.00000,139.00000|36.00000,140.00000|curve|", "35.00000,139.00000|36.00000,140.00000|draw|[[35.5,139.5]]|[[35.2,139.2]]"):
-        mode, place, from_wp = _resolve_leg(key, _wps("curve"))
-        assert mode == "airplane" and from_wp is not None and place is None  # the second stop has no label

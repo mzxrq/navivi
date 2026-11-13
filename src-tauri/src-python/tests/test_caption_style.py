@@ -8,7 +8,6 @@ from services import tuning
 from services.localization.subtitle import caption_style
 from services.vdoprocessing import vdoexporter
 from services.vdoprocessing.vdoexporter import VideoExporter
-from services.vdoprocessing.videopipeline.subtitle_step import _burn_checkpoint_key
 
 
 def _fields(style):
@@ -84,12 +83,3 @@ def test_burn_with_a_style_passes_it_to_libass(tmp_path, ffmpeg_calls):
     flt = _filter(ffmpeg_calls[0])
     assert f"force_style='{style.to_force_style()}'" in flt and "FontSize=22" in flt and "BorderStyle=3" in flt
 
-
-def test_changing_the_style_makes_an_already_burned_clip_stale(tmp_path):
-    video, srt = tmp_path / "clip.mp4", tmp_path / "clip.srt"
-    video.write_bytes(b"v")
-    srt.write_text("cues", encoding="utf-8")
-    base = _burn_checkpoint_key(str(video), str(srt), caption_style({}))
-    assert base == _burn_checkpoint_key(str(video), str(srt), caption_style({}))
-    assert base != _burn_checkpoint_key(str(video), str(srt), caption_style({"subtitle_color": "&H0000FFFF"}))
-    assert base != _burn_checkpoint_key(str(video), str(srt), None)

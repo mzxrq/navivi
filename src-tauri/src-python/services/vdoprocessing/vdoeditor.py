@@ -17,6 +17,7 @@ from typing import Final, List, Optional
 
 from services import runtime_paths, tuning
 from services.config.job_config import JobConfigManager
+from services.ffconcat import concat_entry
 from services.logger.logger import setup_logger
 
 # Logging configuration
@@ -99,9 +100,7 @@ class ConcatListManager:
                         f"Cannot concatenate missing file: {clean_path}"
                     )
 
-                # FFmpeg requires single quotes around the path, and escaping internal single quotes
-                safe_path = str(clean_path).replace("'", "'\\''")
-                f.write(f"file '{safe_path}'\n")
+                f.write(concat_entry(str(clean_path)))
 
         return temp_path
 
