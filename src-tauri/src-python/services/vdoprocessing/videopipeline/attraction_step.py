@@ -32,6 +32,16 @@ def _resolve_attraction_prompt(waypoint: dict) -> list:
     return [waypoint.get("label", "Beautiful Japanese scenery, high quality")]
 
 
+def _resolve_attraction_ai(waypoint: dict) -> Optional[list]:
+    """The editor's per-photo "AI clip" ticks (imageAi, one per image), or None when the project never set them -
+    then the project-wide "AI photo clips" setting decides, as it always did."""
+    flags = waypoint.get("imageAi")
+    if not isinstance(flags, list) or not flags:
+        return None
+    photos = len(waypoint.get("images") or waypoint.get("popup_image") or [])
+    return [bool(flags[i]) if i < len(flags) else False for i in range(photos)] or None
+
+
 def needs_wan(waypoints: list) -> bool:
     """Whether any of these waypoints' attraction clips will run on ComfyUI
     (a photo with a moving preset); stills and the user's own videos don't."""
@@ -43,9 +53,13 @@ def needs_wan(waypoints: list) -> bool:
     for wp in waypoints:
         if not isinstance(wp, dict) or wp.get("videos") or not wp.get("popup_image") or no_attraction(wp):
             continue
-        if any(normalize_camera_pan(p) not in (STILL_PRESET, *tuning.ATTRACTION_JUMP_CUT_PRESETS)
-               for p in _resolve_attraction_prompt(wp)):
-            return True
+        # A photo ticked for AI runs on ComfyUI whatever the project-wide setting says, so it has to start.
+        ai = _resolve_attraction_ai(wp)
+        for i, p in enumerate(_resolve_attraction_prompt(wp)):
+            if normalize_camera_pan(p) in (STILL_PRESET, *tuning.ATTRACTION_JUMP_CUT_PRESETS):
+                continue
+            if ai is None or (i < len(ai) and ai[i]):
+                return True
     return False
 
 
@@ -96,6 +110,7 @@ def generate_waypoint_attraction_video(
         place_label=label,
         force=force,
         photo_cuts=read_photo_cuts(audio_path) if audio_path else None,
+        ai_flags=_resolve_attraction_ai(waypoint),
     )
 
     if result_path:

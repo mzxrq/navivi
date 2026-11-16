@@ -288,6 +288,7 @@ class AttractionVideoGenerator:
         duration_sec: float = 6.0,
         save_path: Optional[str] = None,
         place: Optional[str] = None,
+        ai: Optional[bool] = None,
     ) -> Optional[str]:
         """_generate_single_clip_here, in its own process (ATTRACTION_CLIP_IN_CHILD)
         so the photo's RAM is all handed back when it's done; in this process if
@@ -298,13 +299,14 @@ class AttractionVideoGenerator:
             try:
                 return clip_worker.run(
                     {"kind": "clip", "config_path": str(self.config.config_path), "image": local_image_path,
-                     "prompt": prompt_text, "duration": duration_sec, "save_path": str(save_path), "place": place},
+                     "prompt": prompt_text, "duration": duration_sec, "save_path": str(save_path), "place": place,
+                     "ai": ai},
                     self.output_dir / ".partial",
                 ).get("clip")
             except Exception as exc:
                 logger.warning("Clip worker failed for %s (%s: %s) - making it in this process.",
                                local_image_path, type(exc).__name__, exc)
-        return self._generate_single_clip_here(local_image_path, prompt_text, duration_sec, save_path, place)
+        return self._generate_single_clip_here(local_image_path, prompt_text, duration_sec, save_path, place, ai)
 
     def _generate_single_clip_here(
         self,
@@ -313,6 +315,7 @@ class AttractionVideoGenerator:
         duration_sec: float = 6.0,
         save_path: Optional[str] = None,
         place: Optional[str] = None,
+        ai: Optional[bool] = None,
     ) -> Optional[str]:
         """Generates a clip via ComfyUI (Wan2.2 I2V), falling back to the
         local pan/zoom generator on failure. Returns the raw clip path.
@@ -330,8 +333,8 @@ class AttractionVideoGenerator:
         if normalize_camera_pan(prompt_text) == STILL_PRESET:
             return self._still_clip(local_image_path, str(save_path), duration_sec)
 
-        # Project setting "AI photo clips" off: every move is the 3D photo on the CPU, ComfyUI never starts.
-        if self._cpu_only():
+        # Project setting "AI photo clips" off: the 3D photo on the CPU, unless this photo was ticked for AI.
+        if self._cpu_only(ai):
             return self._parallax_clip(local_image_path, str(save_path), duration_sec, prompt_text)
 
         if normalize_camera_pan(prompt_text) in tuning.ATTRACTION_JUMP_CUT_PRESETS:
@@ -401,8 +404,12 @@ class AttractionVideoGenerator:
 
         return self._parallax_clip(local_image_path, str(save_path), duration_sec, prompt_text)
 
-    def _cpu_only(self) -> bool:
-        """settings.photo_clip_engine "cpu": no ComfyUI, the 3D photo move for every preset."""
+    def _cpu_only(self, ai: Optional[bool] = None) -> bool:
+        """settings.photo_clip_engine "cpu": no ComfyUI, the 3D photo move for every preset.
+        `ai`: this one photo's own choice (waypoint.imageAi), which wins - with the setting off the editor picks
+        the few photos worth ComfyUI one by one, every other photo staying on the CPU."""
+        if ai is not None:
+            return not ai
         settings = self.config.get_settings() if hasattr(self.config, "get_settings") else {}
         return str((settings or {}).get("photo_clip_engine") or "ai").lower() == "cpu"
 
@@ -899,6 +906,7 @@ class AttractionVideoGenerator:
         place_label: Optional[str] = None,
         force: bool = False,
         photo_cuts: Optional[List[float]] = None,
+        ai_flags: Optional[List[bool]] = None,
     ) -> Optional[str]:
         """
         `photo_cuts`: seconds into the narration where photo 2, 3, … come in (the script's {next} cues); unset or
@@ -968,9 +976,14 @@ class AttractionVideoGenerator:
         ]
         from services.vdoprocessing.camera_pan import STILL_PRESET
 
-        # A CPU-only clip is another clip than the AI one: switching the setting makes the moves again.
-        cpu = self._cpu_only()
-        keys = [self._clip_key(img, pan) + ("c3" if cpu and pan != STILL_PRESET else "") for img, pan in zip(image_list, pans)]
+        # A CPU-only clip is another clip than the AI one: switching the setting (or one photo's own tick) makes
+        # that photo's move again, and only that one.
+        ai_of = lambda i: (ai_flags[i] if ai_flags and i < len(ai_flags) else None)  # noqa: E731
+        cpu_of = [self._cpu_only(ai_of(i)) for i in range(len(image_list))]
+        keys = [
+            self._clip_key(img, pan) + ("c3" if cpu_of[i] and pan != STILL_PRESET else "")
+            for i, (img, pan) in enumerate(zip(image_list, pans))
+        ]
         recorded = self._read_inputs(output_filename)
         if "keys" in recorded:
             inputs_changed = recorded["keys"] != keys
@@ -1079,6 +1092,7 @@ class AttractionVideoGenerator:
             )
             clip = self._generate_single_clip(
                 img_path, current_prompt, per_clip_duration, save_path=str(raw_work), place=place_label,
+                ai=ai_of(idx),
             )
             if clip and os.path.exists(clip):
                 Path(str(raw_clip_path) + ".signlock").unlink(missing_ok=True)

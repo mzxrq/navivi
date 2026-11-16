@@ -30,7 +30,7 @@ def generator(tmp_path, monkeypatch):
     # Wan stand-in: every moving photo gives a 2 s clip; "none" stays the real still clip.
     real = AttractionVideoGenerator._generate_single_clip
 
-    def fake(self, image, prompt, duration_sec=6.0, save_path=None, place=None):
+    def fake(self, image, prompt, duration_sec=6.0, save_path=None, place=None, ai=None):
         if str(prompt).lower() == "none":
             return real(self, image, prompt, duration_sec, save_path, place)
         return _fake_clip(save_path, 2.0)

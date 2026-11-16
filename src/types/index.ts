@@ -22,6 +22,8 @@ export interface Waypoint {
   imageDisplay?: "pip" | "fullscreen" | "cover"; // pip = boxed card (what the app has always written), cover = photo fills the frame
   overviewHighlight?: boolean; // false = the overview narration skips this stop; unset = described like the rest
   imagePans?: string[];
+  // Per photo, with "AI photo clips" off: this one still goes through ComfyUI. Parallel to `images`, like imagePans.
+  imageAi?: boolean[];
   imageCredits?: Record<string, PhotoCredit>; // who took a photo that was found online, keyed by the photo's path
   videos?: string[];
   videoSound?: boolean[];

@@ -148,6 +148,9 @@ export function WaypointEditor({
 
   const wpImages = wp.images || [];
   const imagePans = wp.imagePans || [];
+  const imageAi = wp.imageAi || [];
+  // "AI photo clips" on: every photo goes through ComfyUI anyway, so there is nothing to pick.
+  const pickAiPerPhoto = (settings.photo_clip_engine ?? "ai") !== "ai";
   const main = mainStops(waypoints);
   const isStart = main[0]?.id === wpId;
   const isDest = main.length > 1 && main[main.length - 1]?.id === wpId;
@@ -234,6 +237,7 @@ export function WaypointEditor({
       updateWaypoint(wp.id, {
         images: [...wpImages, ...picked].slice(0, MAX_IMAGES),
         imagePans: [...imagePans, ...picked.map(() => "none")].slice(0, MAX_IMAGES),
+        imageAi: [...imageAi, ...picked.map(() => false)].slice(0, MAX_IMAGES),
       });
     } catch (e) {
       console.error(e);
@@ -287,24 +291,33 @@ export function WaypointEditor({
   const removeImage = (idx: number) => {
     const images = [...wpImages];
     const pans = [...imagePans];
+    const ai = [...imageAi];
     images.splice(idx, 1);
     pans.splice(idx, 1);
-    updateWaypoint(wp.id, { images, imagePans: pans });
+    ai.splice(idx, 1);
+    updateWaypoint(wp.id, { images, imagePans: pans, imageAi: ai });
   };
 
   const moveImage = (from: number, to: number) => {
     if (from === to) return;
     const images = [...wpImages];
     const pans = wpImages.map((_, i) => imagePans[i] || "none");
+    const ai = wpImages.map((_, i) => !!imageAi[i]);
     images.splice(to, 0, ...images.splice(from, 1));
     pans.splice(to, 0, ...pans.splice(from, 1));
-    updateWaypoint(wp.id, { images, imagePans: pans });
+    ai.splice(to, 0, ...ai.splice(from, 1));
+    updateWaypoint(wp.id, { images, imagePans: pans, imageAi: ai });
   };
 
   const updateImagePan = (idx: number, pan: string) => {
     const pans = [...imagePans];
     pans[idx] = pan;
     updateWaypoint(wp.id, { imagePans: pans });
+  };
+
+  // Default off: with the setting off the person ticks only the few photos worth a ComfyUI clip.
+  const updateImageAi = (idx: number, on: boolean) => {
+    updateWaypoint(wp.id, { imageAi: wpImages.map((_, i) => (i === idx ? on : !!imageAi[i])) });
   };
 
   // "Whole route first": the arriving script is the way here, read off the route (no AI); the description gets its opening line.
@@ -717,6 +730,12 @@ export function WaypointEditor({
                                       onSelect: () => updateImagePan(idx, value),
                                     })),
                                   ],
+                                },
+                                pickAiPerPhoto && currentPan !== "none" && {
+                                  label: t`AI clip for this photo`,
+                                  icon: Sparkles,
+                                  checked: !!imageAi[idx],
+                                  onSelect: () => updateImageAi(idx, !imageAi[idx]),
                                 },
                                 {
                                   label: t`Reveal in File Explorer`,

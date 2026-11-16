@@ -38,7 +38,7 @@ def test_sharpen_photos_on_swaps_the_photo_ComfyUI_gets_and_off_keeps_it(tmp_pat
 
     seen = []
 
-    def fake(self, image, prompt, duration_sec=6.0, save_path=None, place=None):
+    def fake(self, image, prompt, duration_sec=6.0, save_path=None, place=None, ai=None):
         seen.append(image)
         return None
 

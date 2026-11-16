@@ -82,6 +82,7 @@ def main(job_file: str) -> None:
             generator = AttractionVideoGenerator(JobConfigManager(job["config_path"]))
             result["clip"] = generator._generate_single_clip_here(
                 job["image"], job["prompt"], job["duration"], save_path=job["save_path"], place=job.get("place"),
+                ai=job.get("ai"),
             )
         elif job["kind"] == "signlock":
             from services.vdoprocessing.sign_lock import lock_signs
