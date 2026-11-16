@@ -30,6 +30,9 @@ A script may carry inline tags that mark moments the video has to land on:
               {view:X} / {view wait:X} pick the street view named X ("viewname1:X") instead of the next one
     {turn}    the same for the leg's automatic turn photos (Mapillary): {turn} … {/turn}, {turn wait}
               ("turn1"/"turnend1"/"turnwait1", ...)
+    {at N}    leg narration only: the walker must be at the leg's Nth turn (leg_script.leg_turns, 1-indexed)
+              when this cue is reached, rushing ahead of its piece's own pace if it must (recorded as
+              "at1:N", "at2:N", ...; see pedestrian._at_points_plan)
 
 Tags are never spoken. They are stripped before TTS and subtitles, and the
 position each one had in the spoken text is kept so its time can be worked out
@@ -42,7 +45,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|next|/slow|/fast|/stop|slow|fast|stop|walk on \d+(?:\.\d+)?|/view|view wait slow:[^{}]+|view wait slow|view wait:[^{}]+|view:[^{}]+|view wait|view|/turn|turn wait|turn|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}")
+CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|next|/slow|/fast|/stop|slow|fast|stop|at \d+|walk on \d+(?:\.\d+)?|/view|view wait slow:[^{}]+|view wait slow|view wait:[^{}]+|view:[^{}]+|view wait|view|/turn|turn wait|turn|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}")
 
 
 @dataclass(frozen=True)
@@ -67,7 +70,7 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
     scene = 1
     photos = 0
     nexts = 0
-    cards = {"view": 0, "turn": 0, "slow": 0, "fast": 0, "stop": 0}  # {view} street views, {turn} automatic turn photos
+    cards = {"view": 0, "turn": 0, "slow": 0, "fast": 0, "stop": 0, "at": 0}  # {view} street views, {turn} automatic turn photos
     last = ""  # the last character kept
     for match in CUE_RE.finditer(text):
         piece = text[pos:match.start()]
@@ -93,6 +96,9 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
                 cues.append(Cue(f"{kind}name{cards[kind]}:{name.strip()}", length))
         elif tag.startswith("walk on "):  # {walk on 6}: the leg walks on 6 s after its voice ends (leg_walk_plan)
             cues.append(Cue("walkon:" + tag[8:], length))
+        elif tag.startswith("at "):  # {at N}: the walker must be at the leg's Nth turn here (pedestrian._at_points_plan)
+            cards["at"] += 1
+            cues.append(Cue(f"at{cards['at']}:{tag[3:]}", length))
         elif tag in ("slow", "fast", "stop"):  # leg pace spans: slow1 … slowend1 (see narration_step.pace_spans)
             cards[tag] += 1
             cues.append(Cue(f"{tag}{cards[tag]}", length))

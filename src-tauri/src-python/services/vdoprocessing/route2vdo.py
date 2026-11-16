@@ -886,6 +886,8 @@ class RouteAnimator:
                     "slow": float(self.config.get("pace_slow_factor") or tuning.PACE_SLOW_FACTOR),
                     "fast": float(self.config.get("pace_fast_factor") or tuning.PACE_FAST_FACTOR),
                 }
+            if res_data.get("at_cues"):  # only with {at N}, so other legs keep their fingerprint
+                leg_kwargs["at_cues"] = res_data["at_cues"]
             if self.config.get("mapbox_style_id"):  # only a chosen style, so a finished leg's fingerprint stays as it was
                 leg_kwargs["map_style"] = resolve_map_style(self.config, "mapbox/outdoors-v12")
             if res_data.get("elevations"):  # only with the heatmap on, so a finished leg's fingerprint stays as it was

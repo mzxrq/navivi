@@ -357,6 +357,17 @@ def pace_spans(times: dict, piece: int) -> list:
     return [tuple(s) for s in spans if s[3] > s[2]]
 
 
+def at_spans(times: dict, piece: int) -> list:
+    """[(piece, voice seconds, turn number N)] from a narration's {at N} cues (at1:N, at2:N, ...): the walker
+    must be at the leg's Nth turn (leg_script.leg_turns, 1-indexed) when the voice reaches each one."""
+    out = []
+    for tag, seconds in times.items():
+        name, sep, n = tag.partition(":")
+        if sep and name[:2] == "at" and name[2:].isdigit() and n.isdigit():
+            out.append((piece, float(seconds), int(n)))
+    return out
+
+
 def leg_walk_plan(
     store: CueStore,
     waypoint: dict,

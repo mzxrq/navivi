@@ -20,7 +20,7 @@ from .helpers import (
     leg_line_color_rgb,
     logger,
 )
-from .narration_step import MAX_EARLY_ARRIVAL_SECONDS, leg_walk_plan, pace_spans, waypoint_cue_key
+from .narration_step import MAX_EARLY_ARRIVAL_SECONDS, at_spans, leg_walk_plan, pace_spans, waypoint_cue_key
 from .render_look import _is_return_stop, _leg_pin, _returns_to, _project_rgb, overview_pin_glyphs
 
 # Bounds on how many points a synthetic straight-line ferry crossing is
@@ -408,6 +408,12 @@ def build_leg_sequence(
                 for k, target in enumerate(piece_targets) if use_cues and target < len(waypoints)
                 for span in pace_spans(cue_store.cue_times_for(waypoint_cue_key(waypoints[target], target)), k)
             ]
+            # {at N}: the walker must be at the leg's Nth turn when the voice reaches it (pedestrian._at_points_plan).
+            at_cues = [
+                span
+                for k, target in enumerate(piece_targets) if use_cues and target < len(waypoints)
+                for span in at_spans(cue_store.cue_times_for(waypoint_cue_key(waypoints[target], target)), k)
+            ]
 
             lats_arr, lons_arr = leg_item["lats"], leg_item["lons"]
             seg_dist = (
@@ -501,6 +507,7 @@ def build_leg_sequence(
                     "street_view_cues": street_view_cues,
                     "turn_cues": turn_cues,  # {turn} … {/turn}: the leg's automatic turn photos
                     "pace_cues": pace_cues,
+                    "at_cues": at_cues,
                     # Arrived early: hold on the arrived map until the voice is
                     # done, then the fullscreen photo transition.
                     "arrival_wait_seconds": arrival_wait_seconds,

@@ -24,7 +24,7 @@ const getThinkingSteps = () => [
   t`Polishing voiceover tone...`,
 ];
 
-export type CueTag = "start" | "arrive" | "end" | "n" | "go" | "next" | "view" | "view wait" | "view wait slow" | "/view" | "turn" | "turn wait" | "/turn" | "slow" | "fast" | "stop" | "walk on 6";
+export type CueTag = "start" | "arrive" | "end" | "n" | "go" | "next" | "view" | "view wait" | "view wait slow" | "/view" | "turn" | "turn wait" | "/turn" | "slow" | "fast" | "stop" | "walk on 6" | "at 1";
 
 const PAIRED = new Set(["slow", "fast", "stop"]); // inserted as {tag}…{/tag} around the selection
 
@@ -37,7 +37,7 @@ const getCueHints = (): Record<CueTag, string> => ({
   next: t`Insert a cue: the next photo comes in here`,
   view: t`Insert a cue: the next street view photo pops up here`,
   "view wait": t`Insert a cue: the walker stops at the next street view and its photo pops up here, until {/view}`,
-  "view wait slow": t`Insert a cue: like {view wait}, but the walker slows down as it comes to the street view`,
+  "view wait slow": t`Insert a cue: like '{view wait}', but the walker slows down as it comes to the street view`,
   "/view": t`Insert a cue: the street view photo goes away here (without it: at the end of the sentence)`,
   turn: t`Insert a cue: the next automatic turn photo pops up here`,
   "turn wait": t`Insert a cue: the walker stops at the next turn photo and it pops up here, until {/turn}`,
@@ -46,6 +46,7 @@ const getCueHints = (): Record<CueTag, string> => ({
   fast: t`Walk faster while the voice says the selected words (the rest of the walk makes up the time)`,
   stop: t`Stand still while the voice says the selected words, then walk on`,
   "walk on 6": t`Insert a cue: the walker keeps walking 6 s after the voice ends and arrives then (change the number; replaces {end})`,
+  "at 1": t`Insert a cue: the walker must be at the leg's 1st turn here, rushing if it must (change the number)`,
 });
 
 /** The text with {tag} put at the caret (or over the selection), plus where the caret goes afterwards. */

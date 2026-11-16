@@ -60,7 +60,7 @@ const MAX_IMAGES = MAX_PHOTOS_PER_STOP;
 // The arriving script's cue buttons: {view} with street views, {turn} with automatic turn photos.
 export function legCues(streetViews: boolean, turnPhotos: boolean): CueTag[] {
   return [
-    "start", "arrive", "end", "slow", "fast", "stop", "walk on 6",
+    "start", "arrive", "end", "slow", "fast", "stop", "walk on 6", "at 1",
     ...(streetViews ? (["view", "view wait", "view wait slow", "/view"] as CueTag[]) : []),
     ...(turnPhotos ? (["turn", "turn wait", "/turn"] as CueTag[]) : []),
   ];
