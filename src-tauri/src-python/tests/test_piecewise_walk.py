@@ -49,8 +49,17 @@ def test_segment_plan_is_none_when_it_cannot_be_planned():
     assert _segment_plan(df, [], [], 20.0) is None
     no_time = [{"connect_to_route": True, "popup_image": "x.jpg", "lat": 34.0, "lon": 135.005}]
     assert _segment_plan(df, [], no_time, 20.0) is None
-    unconnected = [{"connect_to_route": False, "popup_image": "x.jpg", "lat": 34.0, "lon": 135.005, "walk_seconds": 4}]
-    assert _segment_plan(df, [], unconnected, 20.0) is None
+    # Planned for the stop the leg pops up at without walking there: it is no piece of its own.
+    off_route = [{"popup_image": "x.jpg", "lat": 34.0, "lon": 135.005, "walk_seconds": 4, "pops_after": ""}]
+    assert _segment_plan(df, [], off_route, 20.0) is None
+
+
+def test_a_near_unconnected_stopby_gets_its_own_piece_time():
+    # It cuts the leg (the pip beat) and was planned a walk, so the plan must give it its seconds; leaving it out
+    # made the leg one speed and its piece's narration outran the walk.
+    df, _ = _line()
+    near = [{"connect_to_route": False, "popup_image": "x.jpg", "lat": 34.0, "lon": 135.005, "walk_seconds": 4.0}]
+    assert _segment_plan(df, [], near, 20.0) == [(5, 4.0), (10, 16.0)]
 
 
 def test_only_unconnected_stopbys_have_no_attraction_video():

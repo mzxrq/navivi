@@ -246,7 +246,12 @@ async def _play_stopby_photo_pause(
                 const cap = document.getElementById('stopby-caption'); if (cap) cap.remove();
             }"""
         )
-        if not stopby.get("passing"):  # a street photo has no narration piece of its own
+        # Only a stop-by the leg planned a piece for ends a clip here; it is the one that carries `walk_seconds`
+        # (leg_sequence's marker_plans). A street photo is "passing", and a stop-by the plan skipped (not visited
+        # and not closed, see leg_sequence's stop_positions) must not cut either: the piece after it would inherit
+        # the destination's whole narration with only the leftover walk, and leg_pieces froze the last frame to
+        # cover the rest - 7 s of a held photo on tomogashimashuhen's 第四砲台跡.
+        if not stopby.get("passing") and stopby.get("walk_seconds") is not None:
             await cut_to_new_clip()
         return idx
 

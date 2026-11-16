@@ -54,15 +54,19 @@ from .stopby_pause import _FRAME_SHOT, _play_stopby_photo_pause, screen_props
 
 
 def _segment_plan(df_raw, leg_dist_km, landmarks, total_seconds):
-    """[(last raw point index, seconds)] for a leg cut at connected stop-bys, from
-    each landmark's own `walk_seconds` (the last piece gets what is left of
-    `total_seconds`). None when the leg has no cut, a landmark has no time, or
-    the stop-bys don't come in route order - the leg then walks at one speed."""
+    """[(last raw point index, seconds)] for a leg cut at a stop-by, from each landmark's own `walk_seconds` (the
+    last piece gets what is left of `total_seconds`). None when the leg has no cut, a landmark has no time, or the
+    stop-bys don't come in route order - the leg then walks at one speed.
+
+    Every landmark that `walk_seconds` was planned for counts, connected or not: a stop-by near the route cuts the
+    leg too (the pip beat), and leaving it out made the whole leg one speed, so the cut fell wherever the walker
+    happened to be and each piece's narration no longer matched its walk (leg_pieces then padded the gap with a
+    frozen frame - 7 s on one leg of tomogashimashuhen)."""
     if not landmarks or total_seconds is None:
         return None
     stops = [
         lm for lm in landmarks
-        if lm.get("connect_to_route") and lm.get("popup_image") and lm.get("pops_after") is None
+        if lm.get("walk_seconds") is not None and lm.get("popup_image") and lm.get("pops_after") is None
         and lm.get("lat") is not None and lm.get("lon") is not None
     ]
     if not stops or any(lm.get("walk_seconds") is None for lm in stops):
