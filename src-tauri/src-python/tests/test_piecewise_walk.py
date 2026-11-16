@@ -75,3 +75,16 @@ def test_a_stopby_with_nothing_to_tell_pops_up_as_a_card_not_fullscreen():
     before, after = _leg_fingerprint_parts([], "X", kw, "r"), _leg_fingerprint_parts([], "X", quiet_kw, "r")
     assert "quiet_stopby" in leg_changed_parts(after, before)
     assert leg_changed_parts(before, before) == []
+
+
+def test_changing_the_stopby_reopen_beat_re_renders_only_the_legs_that_have_one():
+    from services.vdoprocessing.route2vdo import _leg_fingerprint_parts, leg_changed_parts
+
+    connected = {"label": "Shrine", "popup_image": "a.jpg", "connect_to_route": True}
+    with_stopby = _leg_fingerprint_parts([], "X", {"landmarks": [connected]}, "r")
+    plain = _leg_fingerprint_parts([], "X", {"landmarks": [{"label": "Rock", "popup_image": "a.jpg"}]}, "r")
+    assert "stopby_reopen" in with_stopby and "stopby_reopen" not in plain
+    # One with its own attraction video opens the same way (photo, then the hop), so it is part of this beat.
+    with_video = _leg_fingerprint_parts([], "X", {"landmarks": [{**connected, "attraction_video": "v.mp4"}]}, "r")
+    assert "stopby_reopen" in with_video
+    assert leg_changed_parts(with_stopby, with_stopby) == []

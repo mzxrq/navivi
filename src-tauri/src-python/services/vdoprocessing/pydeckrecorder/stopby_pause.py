@@ -418,6 +418,8 @@ async def _play_stopby_photo_pause(
         return
 
     # The canvas never stopped rendering across the cut: the walk's map/trail
-    # are underneath the photo the whole time.
+    # are underneath the photo the whole time. The photo was already held fullscreen for freeze_sec above, so the
+    # new piece only re-establishes it briefly (as the two attraction branches do); holding freeze_sec again showed
+    # the same still for twice as long and pushed this piece's narration that much later.
     await cut_to_new_clip()
-    await reopen_and_shrink(freeze_sec)
+    await reopen_and_shrink(tuning.STOPBY_REOPEN_HOLD_SECONDS)

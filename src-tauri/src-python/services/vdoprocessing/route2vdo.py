@@ -72,7 +72,7 @@ LEG_FAR_STOPBY_VERSION = 2
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
-_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text", "kw.leg_elevations", "return_stop", "closed", "quiet_stopby", "pops_after")
+_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text", "kw.leg_elevations", "return_stop", "closed", "quiet_stopby", "stopby_reopen", "pops_after")
 # The stops' names on the leg's banner and its narration timing (fix.md #9). Compared only when the leg's
 # record has them, so a leg rendered before these were checked is not re-rendered for it.
 _LEG_RECORDED_PARTS = ("kw.route_chain", "kw.target_duration_seconds", "kw.start_cue_seconds", "kw.arrival_wait_seconds")
@@ -180,6 +180,12 @@ def _leg_fingerprint_parts(
     quiet = [lm.get("label") for lm in leg_kwargs.get("landmarks") or [] if lm.get("quiet")]
     if quiet:
         parts["quiet_stopby"] = h(quiet)  # a stop-by whose narration was emptied re-renders only the legs passing it
+    # A connected stop-by cuts the leg and the next piece opens on its photo and a camera hop; only those legs
+    # re-render when that opening changes (v3: a brief re-open and a shorter hop, which delayed the narration).
+    reopen = [lm.get("label") for lm in leg_kwargs.get("landmarks") or []
+              if lm.get("connect_to_route") and lm.get("popup_image")]
+    if reopen:
+        parts["stopby_reopen"] = h([reopen, 3])
     if "leg_elevations" in leg_kwargs:
         # Heatmap legs also draw the elevation profile card: re-render only them when it changes.
         parts["kw.leg_elevations"] = h([leg_kwargs["leg_elevations"], LEG_ELEVATION_CARD_VERSION])

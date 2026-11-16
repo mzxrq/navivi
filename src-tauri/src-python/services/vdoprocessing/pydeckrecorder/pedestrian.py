@@ -1880,7 +1880,7 @@ async def _record_leg(
                                 # Lock max zoom to prevent zooming in too much on short segments
                                 new_zoom = min(new_zoom, 17.5)
                                 
-                                hop_frames = max(1, int(1.5 * fps))
+                                hop_frames = max(1, int(tuning.STOPBY_PIECE_HOP_SECONDS * fps))
                                 for i in range(hop_frames):
                                     t = _ease_in_out_cubic((i + 1) / hop_frames)
                                     pan_lon = locked_lon + (new_lon - locked_lon) * t
@@ -1943,7 +1943,8 @@ async def _record_leg(
 
                     pip_lm = pip_triggers.get(index)
                     if pip_lm is not None:
-                        # Unconnected landmark: no camera hop, no leg cut --
+                        # Unconnected landmark: no camera hop, and no leg cut unless it is a stop-by with a
+                        # narration piece of its own (a street photo is "passing" and never cuts) --
                         # the walker keeps moving under the pip card itself
                         # (see `_play_stopby_photo_pause`'s pip_only branch),
                         # so it hands back whichever frame index it actually
@@ -1954,6 +1955,7 @@ async def _record_leg(
                         next_trigger = next(
                             (k for k in all_trigger_indices if k > index), frame_total
                         )
+                        cuts_before = frame_state["cuts"]
                         index = await _play_stopby_photo_pause(
                             page, _write_frame, _cut_to_new_clip, fps, html_dir, port,
                             pip_lm, locked_lon, locked_lat, locked_zoom, output_size, index,
@@ -1961,6 +1963,12 @@ async def _record_leg(
                             advance_frame=_draw_walker_frame, frame_index=index + 1, frame_total=next_trigger,
                             avoid_lonlat=route_lonlat,
                         )
+                        # It cut: this new piece needs its own voice delay, or the one beside it stays whatever
+                        # an earlier render left there (a stale sidecar made that piece's narration start late).
+                        if frame_state["cuts"] > cuts_before:
+                            piece_lead = (frame_state["count"] - frame_state["clip_start"]) / fps
+                            write_audio_offset(proc_ref["real_path"], piece_lead)
+                            _voice_from(piece_lead)
                         continue
 
                     index += 1

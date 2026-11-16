@@ -457,6 +457,9 @@ FULLSCREEN_SHRINK_SECONDS = 0.25
 LEG_PHOTO_FADE_SECONDS = 0.2
 # A leg after a stop with no narration: the camera glides from the last leg's view into this one's in this long.
 LEG_CONTINUE_GLIDE_SECONDS = 0.5
+# The camera hop into the next piece's framing after a stop-by's photo. It opens that piece, and the piece's
+# narration waits for its whole opening, so a long hop is dead air before the voice (was a hard-coded 1.5 s).
+STOPBY_PIECE_HOP_SECONDS = 0.6
 # A leg's camera zooming from the wide view into its street-level framing at the start, and back out at the end.
 LEG_ZOOM_SECONDS = 0.6
 # A leg holds on the arrived map this long before the arrival photo pops in.
