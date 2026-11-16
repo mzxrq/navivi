@@ -7,12 +7,22 @@ def test_only_stopbys_with_an_existing_photo_take_a_piece(tmp_path):
     photo = tmp_path / "p.jpg"
     photo.write_bytes(b"x")
     markers = [
-        {"waypoint_id": "no_photo", "lat": 1, "lng": 2},
-        {"waypoint_id": "connected", "lat": 1, "lng": 2, "connect_to_route": True, "popup_image": str(photo)},
-        {"waypoint_id": "passed", "lat": 1, "lng": 2, "popup_image": str(photo)},
-        {"waypoint_id": "missing_file", "lat": 1, "lng": 2, "popup_image": str(tmp_path / "gone.jpg")},
+        {"waypoint_id": "no_photo", "lat": 1, "lng": 2, "walk_seconds": 5},
+        {"waypoint_id": "connected", "lat": 1, "lng": 2, "connect_to_route": True, "popup_image": str(photo), "walk_seconds": 5},
+        {"waypoint_id": "passed", "lat": 1, "lng": 2, "popup_image": str(photo), "walk_seconds": 5},
+        {"waypoint_id": "missing_file", "lat": 1, "lng": 2, "popup_image": str(tmp_path / "gone.jpg"), "walk_seconds": 5},
     ]
     assert cut_landmark_ids(markers) == ["connected", "passed"]
+
+
+def test_a_stopby_with_no_piece_of_its_own_is_not_a_cut_target(tmp_path):
+    """It does not cut the leg (stopby_pause needs walk_seconds), so listing it would shift every piece onto the
+    stop before it and drop the destination's narration - the leg then plays silent."""
+    photo = tmp_path / "p.jpg"
+    photo.write_bytes(b"x")
+    unplanned = {"waypoint_id": "passed_by", "lat": 1, "lng": 2, "popup_image": str(photo)}
+    assert cut_landmark_ids([unplanned]) == []
+    assert cut_landmark_ids([{**unplanned, "walk_seconds": 4.0}]) == ["passed_by"]
 
 
 def test_a_renamed_stop_or_new_timing_re_renders_the_leg_but_old_records_are_kept():

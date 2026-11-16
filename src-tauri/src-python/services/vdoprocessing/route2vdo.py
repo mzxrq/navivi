@@ -206,13 +206,16 @@ def leg_changed_parts(leg_parts: Dict[str, str], old_parts: Dict[str, str]) -> L
 
 
 def cut_landmark_ids(mid_markers: List[Dict[str, Any]]) -> List[Optional[str]]:
-    """The stop-bys a leg is cut at, in order: one with a photo that exists (pedestrian.py's photo pause,
-    connected or not). A photo-less one is never a piece, so it must not take a piece's narration."""
+    """The stop-bys a leg is cut at, in order: one with a photo that exists and a narration piece of its own
+    (connected or not). Must match what actually cuts (stopby_pause: `walk_seconds` set, see leg_sequence's
+    marker_plans) - listing one that does not cut shifts every piece onto the stop before it and drops the
+    destination's narration off the end, leaving the leg silent."""
     return [
         m.get("waypoint_id")
         for m in mid_markers
         if m.get("lat") is not None
         and m.get("lng", m.get("lon")) is not None
+        and m.get("walk_seconds") is not None
         and isinstance(m.get("popup_image"), str) and os.path.exists(m["popup_image"])
     ]
 
