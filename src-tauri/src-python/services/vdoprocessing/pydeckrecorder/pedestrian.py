@@ -47,7 +47,7 @@ from .leg_hud import (
     _remaining_minutes, _walk_headings,
 )
 from .pin_icons import (
-    _DEST_PIN_URL, _START_PIN_URL, _TEARDROP_PIN_H, _TEARDROP_PIN_W, _label_pill_layer, _landmark_layers,
+    _DEST_PIN_URL, _START_PIN_URL, _TEARDROP_PIN_H, _TEARDROP_PIN_W, LabelSpace, _label_pill_layer, _landmark_layers,
     _leg_pin_url,
 )
 from .stopby_pause import _FRAME_SHOT, _play_stopby_photo_pause, screen_props
@@ -563,8 +563,18 @@ def render_residential_leg_pydeck(
             line_width_scale=1, line_width_min_pixels=line_thickness,
         ))
     route_pts = label_avoid  # place-name pills sit where they hide the least of it
+    # One space for every pill on this leg, so a name lands on neither another name nor a marker. The markers go
+    # in first (the pins below are added to the deck later, but the pills are placed against all of them).
+    label_space = LabelSpace(locked_lat, locked_lon, label_mpp) if label_mpp else None
+    if label_space:
+        pin_w = 60 * _TEARDROP_PIN_W / _TEARDROP_PIN_H
+        label_space.pin(df_raw.iloc[0]["lat"], df_raw.iloc[0]["lon"], pin_w, 60, anchor_bottom=True)
+        if dest_pin is not False:
+            label_space.pin(df_raw.iloc[-1]["lat"], df_raw.iloc[-1]["lon"], pin_w, 60, anchor_bottom=True)
+        for lm in landmarks or []:
+            label_space.pin(lm["lat"], lm["lon"], 14, 14)  # the landmark dot (radius 7, centred on the point)
     base_layers.extend(_landmark_layers(landmarks or [], id_prefix="leg-landmark", white_dot=True, avoid=route_pts,
-                                        mpp=label_mpp))
+                                        mpp=label_mpp, space=label_space))
     # The start pin is static (this leg's starting point never moves) so it
     # goes straight into base_layers and is visible for the whole clip, same
     # as the destination pin below.
@@ -593,7 +603,7 @@ def render_residential_leg_pydeck(
             [{"lon": start_lon, "lat": start_lat, "text": start_label}],
             "leg-start-label",
             size_px=34,
-            pixel_offset_y=8, avoid=route_pts, clear_above=64, clear_side=26, mpp=label_mpp,
+            pixel_offset_y=8, avoid=route_pts, clear_above=64, clear_side=26, mpp=label_mpp, space=label_space,
         )
     )
     # Destination pin + name pill, shown for the whole leg (stop-by-cut
@@ -619,7 +629,7 @@ def render_residential_leg_pydeck(
             [{"lon": dest_lon, "lat": dest_lat, "text": dest_label or ""}],
             "leg-dest-label",
             size_px=34,
-            pixel_offset_y=8, avoid=route_pts, clear_above=64, clear_side=26, mpp=label_mpp,
+            pixel_offset_y=8, avoid=route_pts, clear_above=64, clear_side=26, mpp=label_mpp, space=label_space,
         )
     )
 

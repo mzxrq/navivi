@@ -25,6 +25,7 @@ _CLOSED_DOT_URL = "data:image/svg+xml;charset=utf-8," + urllib.parse.quote(
 def _landmark_layers(
     landmarks: List[Dict], id_prefix: str = "stopby", white_dot: bool = False,
     avoid: Optional[List[Tuple[float, float]]] = None, mpp: Optional[float] = None,
+    space: Optional["LabelSpace"] = None,
 ) -> List[pdk.Layer]:
     """landmarks: [{"lat", "lon", ("label")}, ...] -- small unnumbered brown
     dots with a plain label beside them, matching the reference video's
@@ -71,7 +72,7 @@ def _landmark_layers(
             f"{id_prefix}-labels",
             size_px=26,
             pixel_offset_y=10,
-            avoid=avoid, clear_above=10, clear_side=12, mpp=mpp,
+            avoid=avoid, clear_above=10, clear_side=12, mpp=mpp, space=space,
         )
     )
     return layers
@@ -233,32 +234,84 @@ def _fit_meters_per_px(path: List[Tuple[float, float]]) -> float:
     return max(w_m / 1920, h_m / 1080, 0.05) * 1.25
 
 
+class LabelSpace:
+    """The pills already placed on one frame, in pixels from a fixed point, so the next pill can keep off them.
+    Shared by every `_label_pill_layer` call of the same render; each only knows the route, not the other pills."""
+
+    GAP = 6  # px kept between two pills
+    ROWS = 3  # how far out a pill may stack to find a free spot
+
+    def __init__(self, lat: float, lon: float, mpp: float):
+        self.lat, self.lon, self.mpp = lat, lon, mpp
+        self.boxes: List[Tuple[float, float, float, float]] = []
+        self._gaps: List[float] = []
+
+    def at(self, lat: float, lon: float) -> Tuple[float, float]:
+        k = math.cos(math.radians(self.lat))
+        return ((lon - self.lon) * 111320 * k / self.mpp, (self.lat - lat) * 110540 / self.mpp)
+
+    def hits(self, x0: float, y0: float, x1: float, y1: float) -> int:
+        return sum(
+            not (b[2] + g <= x0 or b[0] - g >= x1 or b[3] + g <= y0 or b[1] - g >= y1)
+            for b, g in zip(self.boxes, self._gaps)
+        )
+
+    def add(self, box: Tuple[float, float, float, float], gap: Optional[float] = None) -> None:
+        self.boxes.append(box)
+        self._gaps.append(self.GAP if gap is None else gap)
+
+    def pin(self, lat: float, lon: float, w: float, h: float, anchor_bottom: bool = False) -> None:
+        """A marker a pill must not cover. No gap around it: a place's own pill is meant to sit right against it."""
+        x, y = self.at(lat, lon)
+        top = y - h if anchor_bottom else y - h / 2
+        self.add((x - w / 2, top, x + w / 2, top + h), gap=0)
+
+
 def label_offset(
     lat: float, lon: float, w: float, h: float, path: List[Tuple[float, float]], mpp: float,
-    below: float, above: float, side: float,
+    below: float, above: float, side: float, space: Optional[LabelSpace] = None,
 ) -> Tuple[float, float]:
-    """Pixel offset (x right, y down) of a w x h pill's centre from its point: below, above, right or left
-    of it, whichever covers the least of `path` [(lat, lon)] (ties keep that order)."""
+    """Pixel offset (x right, y down) of a w x h pill's centre from its point: below, above, right or left of it,
+    whichever covers the least of `path` [(lat, lon)] (ties keep that order). With a `space`, a spot already
+    holding a pill is skipped and the pill is stacked a row further out instead; the spot taken is recorded."""
     k = math.cos(math.radians(lat))
     pts = [((p_lon - lon) * 111320 * k / mpp, (lat - p_lat) * 110540 / mpp) for p_lat, p_lon in path]
     samples = []
     for (ax, ay), (bx, by) in zip(pts, pts[1:]):
         n = max(1, int(math.hypot(bx - ax, by - ay) / 3))
         samples += [(ax + (bx - ax) * i / n, ay + (by - ay) * i / n) for i in range(n + 1)]
-    boxes = [
-        (-w / 2, below, w / 2, below + h), (-w / 2, -above - h, w / 2, -above),
-        (side, -h / 2, side + w, h / 2), (-side - w, -h / 2, -side, h / 2),
-    ]
+    # Row 0 is the four spots touching the point; each further row stacks one pill-height (or width) further out,
+    # for a name that would otherwise sit on one already placed.
+    rows = []
+    for step in range(LabelSpace.ROWS if space else 1):
+        dy, dx = step * (h + LabelSpace.GAP), step * (w + LabelSpace.GAP)
+        rows += [
+            (step, (-w / 2, below + dy, w / 2, below + dy + h)),
+            (step, (-w / 2, -above - dy - h, w / 2, -above - dy)),
+            (step, (side + dx, -h / 2, side + dx + w, h / 2)),
+            (step, (-side - dx - w, -h / 2, -side - dx, h / 2)),
+        ]
     m = 4  # the line's own width
-    hits = [sum(x0 - m <= x <= x1 + m and y0 - m <= y <= y1 + m for x, y in samples) for x0, y0, x1, y1 in boxes]
-    x0, y0, x1, y1 = boxes[hits.index(min(hits))]
+    hits = [
+        sum(x0 - m <= x <= x1 + m and y0 - m <= y <= y1 + m for x, y in samples) for _, (x0, y0, x1, y1) in rows
+    ]
+    if space is None:
+        x0, y0, x1, y1 = rows[hits.index(min(hits))][1]
+        return (x0 + x1) / 2, (y0 + y1) / 2
+    ox, oy = space.at(lat, lon)
+    # A free spot always beats a crowded one; then the nearest row, and only then the least of the route covered,
+    # so a lone pill still lands exactly where it used to.
+    taken = [space.hits(b[0] + ox, b[1] + oy, b[2] + ox, b[3] + oy) for _, b in rows]
+    best = min(range(len(rows)), key=lambda i: (taken[i], rows[i][0], hits[i]))
+    x0, y0, x1, y1 = rows[best][1]
+    space.add((x0 + ox, y0 + oy, x1 + ox, y1 + oy))
     return (x0 + x1) / 2, (y0 + y1) / 2
 
 
 def _label_pill_layer(
     entries: List[Dict], layer_id: str, size_px: int = 34, pixel_offset_y: int = 0,
     avoid: Optional[List[Tuple[float, float]]] = None, clear_above: int = 0, clear_side: int = 0,
-    mpp: Optional[float] = None,
+    mpp: Optional[float] = None, space: Optional[LabelSpace] = None,
 ) -> List[pdk.Layer]:
     """One IconLayer of place-name pills. `entries`: [{"lat", "lon",
     "text"}, ...]. Without `avoid` each pill hangs just BELOW its own point
@@ -280,7 +333,7 @@ def _label_pill_layer(
         url, width = _label_pill_svg_url(text)
         w = width * size_px / _LABEL_H
         offset = (
-            label_offset(e["lat"], e["lon"], w, size_px, avoid, mpp, pixel_offset_y, clear_above, clear_side)
+            label_offset(e["lat"], e["lon"], w, size_px, avoid, mpp, pixel_offset_y, clear_above, clear_side, space)
             if mpp else (0, pixel_offset_y + size_px / 2)
         )
         data.append({
