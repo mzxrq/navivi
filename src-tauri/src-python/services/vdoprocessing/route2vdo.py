@@ -72,7 +72,7 @@ LEG_FAR_STOPBY_VERSION = 2
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
-_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text", "kw.leg_elevations", "return_stop", "closed", "pops_after")
+_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text", "kw.leg_elevations", "return_stop", "closed", "quiet_stopby", "pops_after")
 # The stops' names on the leg's banner and its narration timing (fix.md #9). Compared only when the leg's
 # record has them, so a leg rendered before these were checked is not re-rendered for it.
 _LEG_RECORDED_PARTS = ("kw.route_chain", "kw.target_duration_seconds", "kw.start_cue_seconds", "kw.arrival_wait_seconds")
@@ -177,6 +177,9 @@ def _leg_fingerprint_parts(
     closed = [lm.get("label") for lm in leg_kwargs.get("landmarks") or [] if lm.get("inaccessible")]
     if closed:
         parts["closed"] = h([closed, 3])  # a place turned Closed re-renders the legs that pass it (v3: fullscreen photo)
+    quiet = [lm.get("label") for lm in leg_kwargs.get("landmarks") or [] if lm.get("quiet")]
+    if quiet:
+        parts["quiet_stopby"] = h(quiet)  # a stop-by whose narration was emptied re-renders only the legs passing it
     if "leg_elevations" in leg_kwargs:
         # Heatmap legs also draw the elevation profile card: re-render only them when it changes.
         parts["kw.leg_elevations"] = h([leg_kwargs["leg_elevations"], LEG_ELEVATION_CARD_VERSION])
@@ -193,7 +196,7 @@ def leg_changed_parts(leg_parts: Dict[str, str], old_parts: Dict[str, str]) -> L
         return [k for k in ("latlon", "render_version") if k in changed]
     return ([k for k in _LEG_CHECKPOINT_PARTS if k in changed]
             + [k for k in _LEG_RECORDED_PARTS if k in old_parts and k in changed]
-            + [k for k in ("kw.pace_cues",) if k in changed])  # added or removed {slow}/{fast}/{stop} too
+            + [k for k in ("kw.pace_cues", "kw.at_cues") if k in changed])  # added/removed {slow}/{fast}/{stop}/{at N} too
 
 
 def cut_landmark_ids(mid_markers: List[Dict[str, Any]]) -> List[Optional[str]]:
@@ -691,6 +694,9 @@ class RouteAnimator:
                     "connect_to_route": bool(m.get("connect_to_route", False)),
                     # Only when set: other legs' landmarks (and fingerprints) stay as they were.
                     **({"inaccessible": True} if m.get("inaccessible") else {}),
+                    # Nothing to tell here: its photo only pops up as a card, never fullscreen — the same rule a
+                    # normal stop already follows (audio_step.no_narration_stop, `quiet_stop_transition`).
+                    **({"quiet": True} if no_narration_stop(wp_by_id.get(m.get("waypoint_id")) or {}) else {}),
                     "popup_image": m.get("popup_image"),
                     "freeze_seconds": m.get("freeze_seconds"),
                     # Residential legs are always fullscreen.

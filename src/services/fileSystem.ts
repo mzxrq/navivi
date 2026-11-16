@@ -209,10 +209,10 @@ export const saveProjectData = async (
   // it for the sub course only).
   const mainLegs = mainLegCount(waypoints);
   const trackStops = mainStops(waypoints).filter((wp) => !wp.isStreetView);
-  await writeTextFile(gpxPath, trackGpx(projName, trackStops, routeSegments.slice(0, mainLegs), legEle.slice(0, mainLegs)));
+  await writeFileSafely(gpxPath, trackGpx(projName, trackStops, routeSegments.slice(0, mainLegs), legEle.slice(0, mainLegs)));
   const subs = subStops(waypoints);
   if (subs.length > 1) {
-    await writeTextFile(await join(projectDir, SUB_TRACK), trackGpx(projName, subs, routeSegments.slice(mainLegs), legEle.slice(mainLegs)));
+    await writeFileSafely(await join(projectDir, SUB_TRACK), trackGpx(projName, subs, routeSegments.slice(mainLegs), legEle.slice(mainLegs)));
   }
 
   const imageNames = await importAssets(imageAssetsDir, waypoints.flatMap((wp) => [...(wp.images ?? []), ...(wp.customMarker ? [wp.customMarker] : [])]), photoFileNames(waypoints));

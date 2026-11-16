@@ -164,6 +164,64 @@ def _paced_plan(leg_dist_km, plan, spans, start_cue_seconds=None, slow=0.5, fast
     return out, stops, held
 
 
+def _at_points_plan(df_raw, leg_dist_km, plan, at_cues, start_cue_seconds=None):
+    """{at N} cues ([(piece, voice seconds, turn number N)], see narration_step.at_spans) applied to `plan`
+    ([(last raw index, seconds)], one entry per narration piece): splits the piece so the walker is at the leg's
+    Nth turn (services.localization.leg_script.leg_turns, 1-indexed) exactly when the voice reaches that cue,
+    rushing ahead of the piece's own pace if it must - every piece still ends where and when it did. A cue whose
+    turn index is out of range, or whose target point/time doesn't fall strictly between the piece's own start
+    and end (or an earlier {at} cue already placed in it), is skipped (logged) rather than rushed anyway. Cue
+    times are voice seconds; the first piece's walk only starts at its {start} cue (`start_cue_seconds`)."""
+    if not at_cues:
+        return plan
+    from services.localization.leg_script import leg_turns
+
+    turns = leg_turns(df_raw[["lat", "lon"]].values.tolist())["turns"]
+    by_piece: Dict[int, list] = {}
+    for piece, seconds, n in at_cues:
+        by_piece.setdefault(piece, []).append((seconds, n))
+    out, start_idx = [], 0
+    for piece, (end_idx, seconds) in enumerate(plan):
+        lead = float(start_cue_seconds or 0.0) if piece == 0 else 0.0
+        idx, used = start_idx, 0.0
+        for cue_seconds, n in sorted(by_piece.get(piece, [])):
+            target_t = cue_seconds - lead
+            if not (1 <= n <= len(turns)) or not (used < target_t < seconds):
+                logger.info("Leg's {at %d} cue doesn't fit its piece; skipped.", n)
+                continue
+            turn = turns[n - 1]
+            seg = df_raw.iloc[idx + 1 : end_idx]
+            if seg.empty:
+                continue
+            target_idx = int(((seg["lat"] - turn["lat"]) ** 2 + (seg["lon"] - turn["lon"]) ** 2).idxmin())
+            if target_idx <= idx:
+                logger.info("Leg's {at %d} cue is behind an earlier one; skipped.", n)
+                continue
+            out.append((target_idx, target_t - used))
+            idx, used = target_idx, target_t
+        out.append((end_idx, seconds - used))
+        start_idx = end_idx
+    return out
+
+
+def _quiet_card(lm: Dict) -> Dict:
+    """Extra arguments for a stop-by (or closed place) with nothing to tell: its photo pops up as a card and fades,
+    never fullscreen, the way a normal stop with no narration already behaves. Its leg is still cut."""
+    if not lm.get("quiet"):
+        return {}
+    return {"pip_only": True, "hold_seconds": float(lm.get("freeze_seconds") or tuning.POPUP_MIN_DISPLAY_SECONDS)}
+
+
+def _insert_stands(smooth_df, stands, fps):
+    """{stop}: the walker's frame at each stand repeated for its hold, so everything timed per frame ({view} photos
+    on the voice, cards, HUD) carries on while it stands. `stands`: [(walk seconds to the spot, "stop", hold seconds)]."""
+    for walked_s, _, hold_s in sorted(stands, reverse=True):
+        k = min(len(smooth_df) - 1, int(round(walked_s * fps)))
+        held_rows = smooth_df.iloc[[k] * int(round(hold_s * fps))]
+        smooth_df = pd.concat([smooth_df.iloc[: k + 1], held_rows, smooth_df.iloc[k + 1 :]], ignore_index=True)
+    return smooth_df
+
+
 def render_residential_leg_pydeck(
     leg_latlon: List[Tuple[float, float]],
     dest_label: str,
@@ -195,6 +253,7 @@ def render_residential_leg_pydeck(
     start_popup_narration_seconds: Optional[float] = None,
     start_cue_seconds: Optional[float] = None,
     pace_cues: Optional[Dict] = None,
+    at_cues: Optional[List[Tuple[int, float, int]]] = None,
     arrival_photo_hold_seconds: Optional[float] = None,
     arrival_wait_seconds: Optional[float] = None,
     dest_image_display: str = "cover",
@@ -394,18 +453,17 @@ def render_residential_leg_pydeck(
                 pace_cues.get("slow", tuning.PACE_SLOW_FACTOR), pace_cues.get("fast", tuning.PACE_FAST_FACTOR),
             )
             leg_duration -= held
+        if at_cues:  # {at N}: composes with either branch above, or neither
+            segment_plan = _at_points_plan(
+                df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], at_cues, start_cue_seconds,
+            )
     total_frames = max(10, int(leg_duration * fps))
 
     smooth_df = interpolate_route_data(
         df_raw, leg_duration, total_frames, total_leg_km, leg_dist_km, segment_plan=segment_plan,
         arrival_slow_seconds=arrival_slow_seconds,
     )
-    # {stop}: the walker's frame repeated for the hold, so everything timed per frame ({view} photos on the voice,
-    # cards, HUD) carries on while it stands.
-    for walked_s, _, hold_s in sorted(stands, reverse=True):
-        k = min(len(smooth_df) - 1, int(round(walked_s * fps)))
-        held_rows = smooth_df.iloc[[k] * int(round(hold_s * fps))]
-        smooth_df = pd.concat([smooth_df.iloc[: k + 1], held_rows, smooth_df.iloc[k + 1 :]], ignore_index=True)
+    smooth_df = _insert_stands(smooth_df, stands, fps)
 
     step_km = [0.0] + [
         haversine_km(
@@ -1529,6 +1587,7 @@ async def _record_leg(
                             page, _write_frame, _cut_to_new_clip, fps, html_dir, port,
                             lm, *view, output_size, f"{tag}_{k}",
                             pitch=follow_pitch,
+                            **_quiet_card(lm),
                             small_hold_seconds=wait_s if wait_s > 0 else None,
                         )
                         if frame_state["cuts"] > cuts_before:
@@ -1782,6 +1841,7 @@ async def _record_leg(
                             page, _write_frame, _cut_to_new_clip, fps, html_dir, port,
                             stopby_lm, locked_lon, locked_lat, locked_zoom, output_size, index,
                             pitch=follow_pitch,
+                            **_quiet_card(stopby_lm),
                             small_hold_seconds=wait_s if wait_s > 0 else None,
                         )
                         if any(lm.get("pops_after") == stopby_lm.get("waypoint_id") for lm in followers):

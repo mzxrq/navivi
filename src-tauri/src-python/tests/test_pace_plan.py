@@ -46,3 +46,17 @@ def test_adding_or_removing_pace_cues_re_renders_the_leg():
     assert "kw.pace_cues" in leg_changed_parts({**base, "kw.pace_cues": "x"}, base)
     assert "kw.pace_cues" in leg_changed_parts(base, {**base, "kw.pace_cues": "x"})
     assert leg_changed_parts(base, base) == []
+
+
+def test_a_stand_repeats_the_walkers_frame_and_later_frames_shift():
+    import pandas as pd
+
+    from services.vdoprocessing.pydeckrecorder.pedestrian import _insert_stands
+
+    df = pd.DataFrame({"lon": [float(i) for i in range(100)], "lat": [0.0] * 100})
+    out = _insert_stands(df, [(2.0, "stop", 1.0), (5.0, "stop", 2.0)], fps=10)
+    assert len(out) == 100 + 10 + 20
+    assert list(out["lon"][20:31]) == [20.0] * 11  # the frame at 2 s held for 1 s
+    assert list(out["lon"][60:81]) == [50.0] * 21  # at 5 s walked (frame 50), held 2 s, after the first shift
+    assert out["lon"].iloc[-1] == 99.0
+    assert _insert_stands(df, [], 10) is df

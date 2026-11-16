@@ -204,19 +204,29 @@ def test_an_off_track_stop_by_does_not_push_later_stops_ahead():
     assert RouteGeometryProcessor.build_waypoint_index(df, wps) == [0, 1, 2, 4]
 
 
-def test_a_stop_by_along_the_leg_is_walked_to_and_a_far_one_at_the_start_is_not():
+def test_a_stop_by_along_the_leg_is_walked_to_and_one_off_the_frame_is_not():
     from services.vdoprocessing.videopipeline.leg_sequence import closest_leg_index, stopbys_near_the_route
 
     lats, lons = [35.0] * 5, [135.0, 135.001, 135.002, 135.003, 135.004]  # ~90 m apart, east-west
     wps = [
         {"lat": 35.0, "lng": 135.0},
         {"lat": 35.0003, "lng": 135.003, "isStopBy": True},  # ~33 m off the line, near point 3
-        {"lat": 35.01, "lng": 135.001, "isStopBy": True},  # ~1.1 km off, beside point 1: walked to there
+        {"lat": 35.01, "lng": 135.001, "isStopBy": True},  # ~1.1 km off, far outside the leg's frame: fly-out
         {"lat": 35.0, "lng": 135.002, "isStopBy": True, "connectToRoute": True},  # already walked to
         {"lat": 35.01, "lng": 134.999, "isStopBy": True},  # far, beside the start: pops there
     ]
-    assert stopbys_near_the_route(wps, [1, 2, 3, 4], lats, lons) == {1: 3, 2: 1}
+    assert stopbys_near_the_route(wps, [1, 2, 3, 4], lats, lons) == {1: 3}
     assert closest_leg_index(wps[2], lats, lons) == 1
+
+
+def test_a_far_stop_by_still_visible_in_the_legs_frame_is_walked_to():
+    from services.vdoprocessing.videopipeline.leg_sequence import stopbys_near_the_route
+
+    # An L-shaped leg: east along lat 35.0, then north along lng 135.004; its frame covers the whole box.
+    lats = [35.0] * 5 + [35.001, 35.002, 35.003, 35.004]
+    lons = [135.0, 135.001, 135.002, 135.003, 135.004] + [135.004] * 4
+    inside = {"lat": 35.003, "lng": 135.001, "isStopBy": True}  # ~270 m off the line, in the elbow: on screen
+    assert stopbys_near_the_route([{}, inside], [1], lats, lons) == {1: 7}
 
 
 def test_the_headline_names_the_stretch_being_traced():

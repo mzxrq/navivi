@@ -399,6 +399,9 @@ POPUP_MIN_DISPLAY_SECONDS = 2.0
 STOPBY_BATCH_SECONDS = 0.5
 # A stop-by this close to a leg's line is walked to and pops up there; a farther one pops at the stop before it.
 STOPBY_WALK_NEAR_METERS = 100.0
+# A farther stop-by still pops on the way (instead of the camera fly-out) only while it is visible in the leg's
+# locked framing (`leg_sequence._in_leg_frame`): the path fitted to the frame's shape, grown by this each side.
+STOPBY_VISIBLE_FRAME_PAD = 0.15
 # A recorded track that runs on this little past the final stop still ends at it (its E pin and ending zoom).
 LAST_STOP_TAIL_METERS = 60.0
 STOPBY_CAMERA_MOVE_SECONDS = 1.2  # a leg's camera flying out to a far stop-by, and back to the route after

@@ -78,6 +78,10 @@ fn kill_tracked_children(state: &BlueprintState) {
         }
     }
     kill_export();
+    let ollama = OLLAMA_PID.swap(0, Ordering::SeqCst);
+    if ollama != 0 {
+        runtime::kill_pid_tree(ollama);
+    }
     let _ = runtime::runtime_cancel(); // the first-run setup's uv / pip / browser download
 }
 
@@ -422,6 +426,9 @@ fn start_render(
     Ok("Rendering".to_string())
 }
 
+// The ollama server this app started (0: none, or one that was already running). Killed on exit with the rest.
+static OLLAMA_PID: AtomicU32 = AtomicU32::new(0);
+
 fn is_ollama_running() -> bool {
     TcpStream::connect_timeout(
         &"127.0.0.1:11434".parse().unwrap(), 
@@ -460,7 +467,12 @@ fn wake_up_ollama() -> Result<String, String> {
             .stderr(Stdio::null())
             .spawn();
         match spawned {
-            Ok(_) => return Ok("Ollama server started.".to_string()),
+            // Only a server this app started is tracked (one already running returned above), so quitting
+            // never ends the user's own ollama.
+            Ok(child) => {
+                OLLAMA_PID.store(child.id(), Ordering::SeqCst);
+                return Ok("Ollama server started.".to_string());
+            }
             Err(e) => last_error = e.to_string(),
         }
     }

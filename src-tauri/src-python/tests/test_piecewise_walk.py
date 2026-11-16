@@ -58,3 +58,20 @@ def test_only_unconnected_stopbys_have_no_attraction_video():
     assert not is_unvisited_stopby({"isStopBy": True, "connectToRoute": True})
     assert not is_unvisited_stopby({"isStopBy": False})
     assert not is_unvisited_stopby({})
+
+
+def test_a_stopby_with_nothing_to_tell_pops_up_as_a_card_not_fullscreen():
+    from services import tuning
+    from services.vdoprocessing.pydeckrecorder.pedestrian import _quiet_card
+    from services.vdoprocessing.route2vdo import _leg_fingerprint_parts, leg_changed_parts
+
+    assert _quiet_card({"popup_image": "a.jpg"}) == {}  # has narration: the usual fullscreen beat
+    assert _quiet_card({"quiet": True}) == {"pip_only": True, "hold_seconds": tuning.POPUP_MIN_DISPLAY_SECONDS}
+    assert _quiet_card({"quiet": True, "freeze_seconds": 4.0})["hold_seconds"] == 4.0
+
+    # Emptying that stop-by's narration re-renders the legs passing it, and only those.
+    kw = {"landmarks": [{"label": "Rock", "popup_image": "a.jpg"}]}
+    quiet_kw = {"landmarks": [{"label": "Rock", "popup_image": "a.jpg", "quiet": True}]}
+    before, after = _leg_fingerprint_parts([], "X", kw, "r"), _leg_fingerprint_parts([], "X", quiet_kw, "r")
+    assert "quiet_stopby" in leg_changed_parts(after, before)
+    assert leg_changed_parts(before, before) == []

@@ -36,17 +36,39 @@ def _same_spot(point: dict, waypoint) -> bool:
 
 def stopbys_near_the_route(waypoints: list, positions: list, lats, lons) -> dict:
     """{position: index of the closest leg point} for each not-connected stop-by within STOPBY_WALK_NEAR_METERS of
-    the leg's line, or farther but closest to a point past the leg's start: the walk goes there first and its photo
-    pops up on the way. Only a far one closest to the start pops at the stop before it (the walk would be empty).
+    the leg's line, or farther but visible in the leg's frame and closest to a point past the leg's start: the walk
+    goes there first and its photo pops up on the way. The others (off-frame, or closest to the start, where the
+    walk would be empty) pop at the stop before them with the camera fly-out instead: a pop-up for a spot that is
+    not on screen reads as a mistake.
     shortcut: distance to the line's points, not its segments; fine while routed points are dense (tens of metres)."""
     near = {}
     for p in positions:
         if waypoints[p].get("connectToRoute"):
             continue
         metres = _metres_to_leg(waypoints[p], lats, lons)
-        if metres is not None and (metres.min() <= tuning.STOPBY_WALK_NEAR_METERS or metres.argmin() > 0):
+        if metres is not None and (
+            metres.min() <= tuning.STOPBY_WALK_NEAR_METERS
+            or (metres.argmin() > 0 and _in_leg_frame(waypoints[p], lats, lons))
+        ):
             near[p] = int(metres.argmin())
     return near
+
+
+def _in_leg_frame(wp: dict, lats, lons, aspect: float = 16 / 9) -> bool:
+    """Roughly on screen in the leg's locked framing: that view fits the whole path, so the path's box grows to the
+    frame's shape (the shorter side gains the slack) and then by STOPBY_VISIBLE_FRAME_PAD each side.
+    shortcut: no pixel margins (the HUD band), so it reads a little wider than the real frame; the margins only
+    make it stricter, and a wrongly excluded spot still gets the camera fly-out, which looks right either way."""
+    lat, lng = float(wp["lat"]), float(wp.get("lng", wp.get("lon")))
+    lat_lo, lat_hi, lon_lo, lon_hi = min(lats), max(lats), min(lons), max(lons)
+    mid_lat, mid_lon = (lat_lo + lat_hi) / 2, (lon_lo + lon_hi) / 2
+    squash = math.cos(math.radians(mid_lat)) or 1.0  # a degree of longitude is shorter away from the equator
+    high, wide = lat_hi - lat_lo, (lon_hi - lon_lo) * squash
+    grow = 0.5 + tuning.STOPBY_VISIBLE_FRAME_PAD
+    return (
+        abs(lat - mid_lat) <= max(high, wide / aspect) * grow
+        and abs((lng - mid_lon) * squash) <= max(wide, high * aspect) * grow
+    )
 
 
 def _metres_to_leg(wp: dict, lats, lons):

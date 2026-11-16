@@ -355,8 +355,14 @@ export function EditorView() {
     const clip = routeClipOf(seg);
     const leg = legOf(seg);
     const remakeLeg = () => regenerateLeg(leg!, stopIndex ?? leg! - 1);
+    // Clips map to their stop by file-name number; after stops changed, an old timeline's numbers point at the
+    // wrong stop, so every Make-again here would rebuild a neighbour's files (same guard as the sentences dialog).
+    const stale =
+      (stopIndex !== null && !fileIsStop(stem(seg.audio ?? seg.video), waypoints[stopIndex])) ||
+      (leg !== null && !fileIsStop(stem(seg.video), waypoints[leg]));
+    const staleNote = { type: "label" as const, label: t`This clip is from before the stops changed: rebuild the timeline first.` };
     openContextMenu(e, [
-      leg !== null && { label: t`Make the walking clip again`, icon: Film, disabled: isRendering || !dir, onSelect: remakeLeg },
+      leg !== null && { label: t`Make the walking clip again`, icon: Film, disabled: isRendering || !dir || stale, onSelect: remakeLeg },
       // The outro has no narration of its own: only its video.
       clip === "outro" && { label: t`Make the outro again`, icon: RotateCcw, disabled: isRendering || !dir, onSelect: () => void regenerateClip(clip, "video") },
       !!clip && clip !== "outro" && {
@@ -376,7 +382,7 @@ export function EditorView() {
         label: t`Make again for this stop`,
         icon: RotateCcw,
         disabled: isRendering,
-        submenu: [
+        submenu: stale ? [staleNote] : [
           { label: t`Voice`, icon: Mic, disabled: !stop.hasArrivalVoice && !stop.hasAttractionVoice, onSelect: remake("voice") },
           // One narration file per clip.
           { label: t`Choose sentences to voice again...`, icon: FileText, disabled: !sentences?.redo, onSelect: () => openSentences(sentences) },
