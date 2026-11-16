@@ -258,6 +258,64 @@ def test_still_photo_is_held_for_the_whole_narration(generator, tmp_path):
     assert out and FFmpegManager.get_media_duration(out) == pytest.approx(14.0, abs=0.3)
 
 
+def _fake_video(path, seconds, sound=False):
+    """Footage as the user would add it: a clip with (or without) its own sound."""
+    cmd = [FFmpegManager.resolve_ffmpeg_bin(), "-y", "-loglevel", "error", "-f", "lavfi",
+           "-i", f"testsrc2=size=1280x704:rate=24:duration={seconds}"]
+    if sound:
+        cmd += ["-f", "lavfi", "-i", f"sine=frequency=440:duration={seconds}", "-c:a", "aac"]
+    subprocess.run([*cmd, "-pix_fmt", "yuv420p", str(path)], check=True)
+    return str(path)
+
+
+def test_own_footage_replaces_the_first_photo_and_plays_before_the_rest(generator, tmp_path, calls):
+    photos = _photos(tmp_path, 2)
+    out = generator.process_attraction_video(
+        popup_image_entry=photos, prompt_text=["pan-down", "pan-left"],
+        target_audio_duration=10.0, output_filename="04_attraction_17_mix.mp4",
+        videos=[_fake_video(tmp_path / "own.mp4", 3.0)],
+    )
+    # Photo 1 is replaced by the footage, so only photo 2 is generated - and for its half of the narration.
+    assert [(img, pan) for img, pan, _ in calls] == [(photos[1], "pan-left")]
+    assert calls[0][2] == pytest.approx(5.0)
+    assert len(_raws(generator, "04_attraction_17_mix")) == 2
+    assert out and FFmpegManager.get_media_duration(out) == pytest.approx(10.0, abs=0.3)
+
+
+def test_a_video_for_every_photo_leaves_nothing_to_generate(generator, tmp_path, calls):
+    out = generator.process_attraction_video(
+        popup_image_entry=_photos(tmp_path, 1), prompt_text=["pan-down"],
+        target_audio_duration=6.0, output_filename="04_attraction_20_allvideo.mp4",
+        videos=[_fake_video(tmp_path / "only.mp4", 2.0)],
+    )
+    assert calls == []
+    assert out and FFmpegManager.get_media_duration(out) == pytest.approx(6.0, abs=0.3)
+
+
+def test_kept_sound_follows_the_footage_into_the_mixed_clip(generator, tmp_path):
+    from services.vdoprocessing.user_videos import original_sound_path
+
+    out = generator.process_attraction_video(
+        popup_image_entry=_photos(tmp_path, 2), prompt_text=["pan-down", "pan-left"],
+        target_audio_duration=8.0, output_filename="04_attraction_18_sound.mp4",
+        videos=[_fake_video(tmp_path / "loud.mp4", 3.0, sound=True)], video_sound=[True],
+    )
+    sidecar = original_sound_path(out)
+    assert sidecar.exists()
+    assert FFmpegManager.get_media_duration(str(sidecar)) == pytest.approx(8.0, abs=0.3)
+
+
+def test_no_kept_sound_leaves_no_sidecar(generator, tmp_path):
+    from services.vdoprocessing.user_videos import original_sound_path
+
+    out = generator.process_attraction_video(
+        popup_image_entry=_photos(tmp_path, 1), prompt_text=["pan-down"],
+        target_audio_duration=6.0, output_filename="04_attraction_19_quiet.mp4",
+        videos=[_fake_video(tmp_path / "quiet.mp4", 3.0, sound=True)],
+    )
+    assert out and not original_sound_path(out).exists()
+
+
 def test_clip_is_remade_when_its_photos_change(generator, tmp_path, monkeypatch):
     first, second = _photos(tmp_path, 2)
     kwargs = dict(prompt_text=["pan-down"], target_audio_duration=0, output_filename="04_attraction_07_swap.mp4")

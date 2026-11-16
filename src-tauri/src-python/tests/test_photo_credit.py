@@ -12,7 +12,9 @@ def test_each_credited_photo_gets_its_share_of_the_clip_in_its_corner(tmp_path):
     items = credit_items(wp, 9.0)
     assert [(i["start"], i["end"], i["align"]) for i in items] == [(0.0, 3.0, "left"), (6.0, 9.0, "right")]
     assert items[1]["title"]["text"].endswith("Taro · CC BY 4.0")
-    assert credit_items({**wp, "videos": ["v.mp4"]}, 9.0) == []  # the user's own footage
+    # Own footage takes the place of the first photo (a.jpg): only the photos after it are credited, in their slot.
+    shifted = credit_items({**wp, "videos": ["v.mp4"]}, 9.0)
+    assert [(i["start"], i["end"], i["align"]) for i in shifted] == [(6.0, 9.0, "right")]
     assert credit_text({"text": "  ", "author": "", "license": ""}) == ""
 
     ass = Path(write_caption_ass([], None, (1920, 1080), tmp_path / "t.ass", texts=items)).read_text(encoding="utf-8")

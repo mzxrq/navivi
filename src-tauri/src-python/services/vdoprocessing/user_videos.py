@@ -12,7 +12,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from services.ffconcat import concat_entry
 from services.logger.logger import setup_logger
@@ -22,6 +22,15 @@ from services.vdoprocessing.videopipeline.helpers import output_is_valid
 logger = setup_logger(__name__)
 
 SIDECAR_SUFFIX = ".orig.wav"
+
+
+def photos_kept(waypoint: dict) -> List[str]:
+    """The stop's photos that still get a clip of their own: each of its videos takes the place of one, from the
+    first. One video and three photos = the footage, then photos 2 and 3."""
+    images = waypoint.get("images") or waypoint.get("popup_image") or []
+    if isinstance(images, str):
+        images = [images]
+    return [p for p in images if p][len([v for v in waypoint.get("videos") or [] if v]):]
 
 
 def original_sound_path(video_path: str) -> Path:
@@ -43,7 +52,7 @@ def _ffmpeg() -> str:
     return cmd
 
 
-def _normalise(src: str, dst: str) -> bool:
+def normalise_video(src: str, dst: str) -> bool:
     result = subprocess.run(
         [
             _ffmpeg(), "-y", "-loglevel", "error", "-i", src, "-an",
@@ -79,20 +88,24 @@ def _silence(length: float, dst: str) -> None:
     )
 
 
-def _write_original_sound(clips: List[str], raws: List[str], keep: List[bool], target: float, final: str, out: Path) -> None:
+def write_original_sound(parts: List[Tuple[Optional[str], float]], final: str, out: Path) -> None:
+    """`parts` = (video whose sound to keep, or None for silence; seconds), in the clip's own order.
+    Written to `final`'s length, so the exporter can mix it straight under the narration."""
     from services.tts.ttsengine import FFmpegManager
 
     final_len = FFmpegManager.get_media_duration(final)
     with tempfile.TemporaryDirectory(prefix="navivi_orig_") as tmp:
-        parts = []
-        for i, (src, raw) in enumerate(zip(clips, raws)):
-            length = target / len(clips) if target > 0 else FFmpegManager.get_media_duration(raw)
-            part = os.path.join(tmp, f"p{i}.wav")
-            (_audio_of if keep[i] else lambda _s, n, d: _silence(n, d))(src, length, part)
-            parts.append(part)
+        pieces = []
+        for i, (src, length) in enumerate(parts):
+            piece = os.path.join(tmp, f"p{i}.wav")
+            if src:
+                _audio_of(src, length, piece)
+            else:
+                _silence(length, piece)
+            pieces.append(piece)
         listing = os.path.join(tmp, "parts.txt")
         with open(listing, "w", encoding="utf-8") as f:
-            f.writelines(concat_entry(p) for p in parts)
+            f.writelines(concat_entry(p) for p in pieces)
         joined = os.path.join(tmp, "joined.wav")
         subprocess.run(
             [_ffmpeg(), "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listing, "-c", "copy", joined],
@@ -147,7 +160,7 @@ def process_user_videos(
     try:
         for i, src in enumerate(clips):
             raw = str(generator.output_dir / f"raw_{stem}_{i:02d}.mp4")
-            if _normalise(src, raw):
+            if normalise_video(src, raw):
                 raws.append(raw)
                 used.append(src)
                 used_keep.append(keep[i])
@@ -162,7 +175,14 @@ def process_user_videos(
                 place_label=place_label, camera_pan="none",
             )
         if result and any(used_keep):
-            _write_original_sound(used, raws, used_keep, target_audio_duration, result, sidecar)
+            from services.tts.ttsengine import FFmpegManager
+
+            share = target_audio_duration / len(raws) if target_audio_duration > 0 else None
+            write_original_sound(
+                [(src if used_keep[i] else None, share if share else FFmpegManager.get_media_duration(raws[i]))
+                 for i, src in enumerate(used)],
+                result, sidecar,
+            )
         if result:
             stamp.write_text(json.dumps(fingerprint), encoding="utf-8")
         return result

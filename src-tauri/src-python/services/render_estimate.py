@@ -180,7 +180,11 @@ def workload(config: dict) -> dict:
         *[wp.get("attractionNarration") for wp in waypoints],
     ]
     chars = _chars(*texts)
-    clips = sum(1 for wp in waypoints if (wp.get("images") or wp.get("popup_image")) and not wp.get("videos")) if attractions_on else 0
+    # Photos replaced by the stop's own footage are never generated (user_videos.photos_kept).
+    clips = sum(
+        1 for wp in waypoints
+        if len(wp.get("images") or wp.get("popup_image") or []) > len(wp.get("videos") or [])
+    ) if attractions_on else 0
     leg_seconds = float(settings.get("res_duration", 12)) * legs + float(settings.get("duration_seconds", 8))
     return {
         "gps": 1,

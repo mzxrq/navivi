@@ -6554,8 +6554,16 @@ msgid "Use this track"
 msgstr "Use this track"
 
 #: src/features/map/components/WaypointVideos.tsx:44
-msgid "Use your own footage for this stop. It plays in place of the animated photo clip and is fitted to the narration. Its sound is off unless you turn it on."
-msgstr "Use your own footage for this stop. It plays in place of the animated photo clip and is fitted to the narration. Its sound is off unless you turn it on."
+msgid "Use your own footage for this stop. Each video takes the place of one photo, from the first, and plays before the photos that are left. Its sound is off unless you turn it on."
+msgstr "Use your own footage for this stop. Each video takes the place of one photo, from the first, and plays before the photos that are left. Its sound is off unless you turn it on."
+
+#: src/features/map/components/WaypointVideos.tsx:44
+#~ msgid "Use your own footage for this stop. It plays first, before this stop's photo clips, and is fitted to the narration. Its sound is off unless you turn it on."
+#~ msgstr "Use your own footage for this stop. It plays first, before this stop's photo clips, and is fitted to the narration. Its sound is off unless you turn it on."
+
+#: src/features/map/components/WaypointVideos.tsx:44
+#~ msgid "Use your own footage for this stop. It plays in place of the animated photo clip and is fitted to the narration. Its sound is off unless you turn it on."
+#~ msgstr "Use your own footage for this stop. It plays in place of the animated photo clip and is fitted to the narration. Its sound is off unless you turn it on."
 
 #: src/components/ui/NewProject.tsx:357
 #~ msgid "Used as the default when exporting"

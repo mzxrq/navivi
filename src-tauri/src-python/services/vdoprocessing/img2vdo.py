@@ -154,6 +154,28 @@ class AttractionVideoGenerator:
             logger.warning("Could not record clip inputs for %s: %s", output_filename, exc)
 
     @staticmethod
+    def _video_key(path: str) -> str:
+        """Identifies one video's normalised clip. By the file, not its bytes: hashing whole footage is slow."""
+        stat = os.stat(path)
+        return hashlib.sha1(f"{path}|{stat.st_size}|{int(stat.st_mtime)}".encode("utf-8")).hexdigest()[:12]
+
+    @staticmethod
+    def _write_kept_sound(
+        final: str, target: float, srcs: List[Optional[str]], shares: Optional[List[float]], clips: List[str],
+    ) -> None:
+        """Footage with "keep its sound" on: its audio beside the finished clip, silent over the photos."""
+        from services.vdoprocessing.user_videos import original_sound_path, write_original_sound
+
+        original_sound_path(final).unlink(missing_ok=True)
+        if not any(srcs):
+            return
+        from services.tts.ttsengine import FFmpegManager
+
+        even = target / len(srcs) if target > 0 else None
+        lengths = shares or [even or FFmpegManager.get_media_duration(c) for c in clips]
+        write_original_sound(list(zip(srcs, lengths)), final, original_sound_path(final))
+
+    @staticmethod
     def _tail_signature() -> str:
         style = tuning.ATTRACTION_SLOW_MOVE_STYLE
         sig = style if style != "photo" else f"photo|{tuning.ATTRACTION_TAIL_PHOTO_FADE_SECONDS}|full-animation|first-shot"
@@ -907,10 +929,13 @@ class AttractionVideoGenerator:
         force: bool = False,
         photo_cuts: Optional[List[float]] = None,
         ai_flags: Optional[List[bool]] = None,
+        videos: Optional[List[str]] = None,
+        video_sound: Optional[List[bool]] = None,
     ) -> Optional[str]:
         """
         `photo_cuts`: seconds into the narration where photo 2, 3, … come in (the script's {next} cues); unset or
         not one per photo: an equal split.
+        `videos`/`video_sound`: the stop's own footage, played before its photos as one more clip of the same stop.
         Main processor:
         1. Checks if popup_image is a list or single string.
         2. Generates clips for all images using paired prompts.
@@ -952,6 +977,17 @@ class AttractionVideoGenerator:
         if not image_list:
             return None
 
+        # The stop's own footage takes the place of its first photos (1 video + 3 photos = the footage, then photos
+        # 2 and 3) and plays first; the rest of the clip is built from the photos that are left.
+        video_list = [v for v in (videos or []) if v and os.path.exists(v)]
+        keep_sound = [bool(video_sound[i]) if video_sound and i < len(video_sound) else False
+                      for i in range(len(video_list))]
+        if video_list:
+            per_photo = isinstance(prompt_text, list) and len(prompt_text) == len(image_list)
+            image_list = image_list[len(video_list):]
+            prompt_text = prompt_text[len(video_list):] if per_photo else prompt_text
+            ai_flags = ai_flags[len(video_list):] if ai_flags else ai_flags
+
         # "Sharpen photos": ComfyUI animates the sharpened copy (its clip key follows the new file).
         from services.config.upscaled_images import upscale_enabled
 
@@ -984,6 +1020,17 @@ class AttractionVideoGenerator:
             self._clip_key(img, pan) + ("c3" if cpu_of[i] and pan != STILL_PRESET else "")
             for i, (img, pan) in enumerate(zip(image_list, pans))
         ]
+        # Footage is one more clip of the same stop: the same share split, one fit and one label for the whole
+        # thing. Keyed by the file itself, so it is only normalised once.
+        sources = [*video_list, *image_list]
+        is_video = [True] * len(video_list) + [False] * len(image_list)
+        prompts = [STILL_PRESET] * len(video_list) + [
+            prompt_list[idx] if idx < len(prompt_list) else (prompt_list[-1] if prompt_list else "")
+            for idx in range(len(image_list))
+        ]
+        pans = [STILL_PRESET] * len(video_list) + pans
+        keys = [self._video_key(v) for v in video_list] + keys
+
         recorded = self._read_inputs(output_filename)
         if "keys" in recorded:
             inputs_changed = recorded["keys"] != keys
@@ -997,7 +1044,8 @@ class AttractionVideoGenerator:
                 "(unchanged photos reuse their clips).", output_filename,
             )
 
-        shares = self.photo_shares(target_audio_duration, len(image_list), photo_cuts)
+        # shortcut: {next} cues are counted per photo, so a stop mixing footage in splits evenly instead.
+        shares = self.photo_shares(target_audio_duration, len(sources), None if video_list else photo_cuts)
         cuts = [round(float(c), 2) for c in photo_cuts] if shares else None
         final_path = self.output_dir / output_filename
         refit = False
@@ -1050,7 +1098,7 @@ class AttractionVideoGenerator:
         # COMFYUI_MAX_FRAMES segment, ~3.7s), no extension.
         _DEFAULT_CLIP_SECONDS = tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_GEN_FPS
         per_clip_duration = (
-            (target_audio_duration / len(image_list))
+            (target_audio_duration / len(sources))
             if target_audio_duration > 0
             else _DEFAULT_CLIP_SECONDS
         )
@@ -1061,14 +1109,9 @@ class AttractionVideoGenerator:
         built_keys = []
         requested_by_key = dict(recorded.get("requested") or {})
         equal_share = per_clip_duration
-        for idx, img_path in enumerate(image_list):
+        for idx, img_path in enumerate(sources):
             per_clip_duration = min(shares[idx], self._MAX_EXTENDED_CLIP_SECONDS) if shares else equal_share
-            # Match image index to prompt index (fallback to the last prompt if we run out)
-            current_prompt = (
-                prompt_list[idx]
-                if idx < len(prompt_list)
-                else (prompt_list[-1] if prompt_list else "")
-            )
+            current_prompt = prompts[idx]
 
             raw_clip_path = self.output_dir / f"raw_{stem}_{keys[idx]}.mp4"
             if not force and self._raw_clip_covers(
@@ -1076,9 +1119,10 @@ class AttractionVideoGenerator:
             ):
                 logger.info(
                     "   -> Image %d/%d already rendered — reusing %s",
-                    idx + 1, len(image_list), raw_clip_path,
+                    idx + 1, len(sources), raw_clip_path,
                 )
-                self._lock_signs(str(raw_clip_path), img_path, pans[idx])
+                if not is_video[idx]:
+                    self._lock_signs(str(raw_clip_path), img_path, pans[idx])
                 generated_clips.append(str(raw_clip_path))
                 clip_presets.append(current_prompt)
                 built_keys.append(keys[idx])
@@ -1088,12 +1132,17 @@ class AttractionVideoGenerator:
             raw_work = self._partial_path(raw_clip_path)
             raw_work.unlink(missing_ok=True)
             logger.info(
-                f"   -> Rendering image {idx + 1}/{len(image_list)}: {img_path} with prompt: '{current_prompt}'"
+                f"   -> Rendering clip {idx + 1}/{len(sources)}: {img_path} with prompt: '{current_prompt}'"
             )
-            clip = self._generate_single_clip(
-                img_path, current_prompt, per_clip_duration, save_path=str(raw_work), place=place_label,
-                ai=ai_of(idx),
-            )
+            if is_video[idx]:
+                from services.vdoprocessing.user_videos import normalise_video
+
+                clip = str(raw_work) if normalise_video(img_path, str(raw_work)) else None
+            else:
+                clip = self._generate_single_clip(
+                    img_path, current_prompt, per_clip_duration, save_path=str(raw_work), place=place_label,
+                    ai=ai_of(idx - len(video_list)),
+                )
             if clip and os.path.exists(clip):
                 Path(str(raw_clip_path) + ".signlock").unlink(missing_ok=True)
                 Path(str(raw_clip_path) + ".shots.json").unlink(missing_ok=True)
@@ -1105,7 +1154,8 @@ class AttractionVideoGenerator:
                 raw_work.unlink(missing_ok=True)
                 clip = None
             if clip:
-                self._lock_signs(clip, img_path, pans[idx])
+                if not is_video[idx]:
+                    self._lock_signs(clip, img_path, pans[idx])
                 generated_clips.append(clip)
                 clip_presets.append(current_prompt)
                 built_keys.append(keys[idx])
@@ -1120,11 +1170,12 @@ class AttractionVideoGenerator:
         # the narration. (It used to be parked for an approval step nothing
         # in the app ever triggers, so these waypoints had no attraction
         # video at all.)
+        at = [keys.index(k) for k in built_keys]
         if len(generated_clips) > 1:
             final_output = self._combine_clips(
                 generated_clips, clip_presets, target_audio_duration, output_filename, place_label,
-                photos=[image_list[keys.index(k)] for k in built_keys],
-                shares=[shares[keys.index(k)] for k in built_keys] if shares and len(built_keys) == len(keys) else None,
+                photos=[None if is_video[i] else sources[i] for i in at],
+                shares=[shares[i] for i in at] if shares and len(built_keys) == len(keys) else None,
             )
         else:
             # 3. Single image: fit duration, place at output_filename, upscale.
@@ -1136,12 +1187,17 @@ class AttractionVideoGenerator:
                 overshoot_tolerance=self._AUDIO_DURATION_TOLERANCE_SECONDS,
                 place_label=place_label,
                 camera_pan=clip_presets[0],
-                photo_path=image_list[keys.index(built_keys[0])],
-                generated_pan=clip_presets[0],
+                photo_path=None if is_video[at[0]] else sources[at[0]],
+                generated_pan=None if is_video[at[0]] else clip_presets[0],
             )
             logger.info(f"Waypoint video deliverable complete: {final_output}")
 
         if final_output:
+            self._write_kept_sound(
+                final_output, target_audio_duration,
+                [(sources[i] if is_video[i] and keep_sound[i] else None) for i in at],
+                [shares[i] for i in at] if shares else None, generated_clips,
+            )
             # Only the photos that made it in: a failed photo is retried next run.
             self._write_inputs(
                 output_filename, built_keys, pans,

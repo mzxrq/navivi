@@ -40,17 +40,22 @@ def credit_items(
     waypoint: dict, clip_seconds: float, look: Optional[dict] = None, cuts: Optional[List[float]] = None,
 ) -> List[dict]:
     """One item per credited photo of a stop's attraction clip, over that photo's part of it: from one {next} cue
-    (`cuts`, as img2vdo.photo_shares cuts the clip) to the next, else an equal share. A stop with its own footage shows none."""
-    if not isinstance(waypoint, dict) or waypoint.get("videos"):
+    (`cuts`, as img2vdo.photo_shares cuts the clip) to the next, else an equal share. Own footage plays first and
+    takes the place of the photos it replaces (`photos_kept`), so the rest keep their slot in the clip."""
+    if not isinstance(waypoint, dict):
         return []
-    images = [p for p in waypoint.get("images") or [] if p]
+    from services.vdoprocessing.user_videos import photos_kept
+
+    images = photos_kept(waypoint)
     credits = waypoint.get("imageCredits") or {}
     # The pipeline hands photos over as absolute (or upscaled) paths; the credits are keyed by the saved relative one.
     by_name = {Path(k).name.lower(): v for k, v in credits.items()}
     by_stem = {Path(k).stem.lower(): v for k, v in credits.items()}
-    share = clip_seconds / len(images) if images else 0.0
-    edges = [share * i for i in range(len(images) + 1)]
-    if cuts and len(cuts) == len(images) - 1:
+    videos = len([v for v in waypoint.get("videos") or [] if v])
+    slots = videos + len(images)
+    share = clip_seconds / slots if slots else 0.0
+    edges = [share * (videos + i) for i in range(len(images) + 1)]
+    if not videos and cuts and len(cuts) == len(images) - 1:
         cued = [0.0, *[float(c) for c in cuts], clip_seconds]
         if min(b - a for a, b in zip(cued, cued[1:])) >= tuning.ATTRACTION_MIN_PHOTO_SECONDS:
             edges = cued

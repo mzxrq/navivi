@@ -6542,8 +6542,16 @@ msgid "Use this track"
 msgstr "この曲を使う"
 
 #: src/features/map/components/WaypointVideos.tsx:44
-msgid "Use your own footage for this stop. It plays in place of the animated photo clip and is fitted to the narration. Its sound is off unless you turn it on."
-msgstr "この地点にご自身の映像を使います。アニメーション化した写真クリップの代わりに再生され、ナレーションの長さに合わせられます。音声はオンにしない限りミュートです。"
+msgid "Use your own footage for this stop. Each video takes the place of one photo, from the first, and plays before the photos that are left. Its sound is off unless you turn it on."
+msgstr "この地点にご自身の映像を使います。映像1本が先頭から写真1枚の代わりになり、残りの写真より先に再生されます。音声はオンにしない限りミュートです。"
+
+#: src/features/map/components/WaypointVideos.tsx:44
+#~ msgid "Use your own footage for this stop. It plays first, before this stop's photo clips, and is fitted to the narration. Its sound is off unless you turn it on."
+#~ msgstr "この地点にご自身の映像を使います。写真のクリップより先に再生され、ナレーションの長さに合わせられます。音声はオンにしない限りミュートです。"
+
+#: src/features/map/components/WaypointVideos.tsx:44
+#~ msgid "Use your own footage for this stop. It plays in place of the animated photo clip and is fitted to the narration. Its sound is off unless you turn it on."
+#~ msgstr "この地点にご自身の映像を使います。アニメーション化した写真クリップの代わりに再生され、ナレーションの長さに合わせられます。音声はオンにしない限りミュートです。"
 
 #: src/components/ui/NewProject.tsx:357
 #~ msgid "Used as the default when exporting"

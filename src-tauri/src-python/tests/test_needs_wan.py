@@ -27,11 +27,15 @@ def test_no_preset_falls_back_to_a_wan_prompt():
     assert needs_wan([_wp()])
 
 
-def test_no_photo_or_own_videos_need_no_wan():
-    assert not needs_wan([
-        {"label": "x", "imagePans": ["panright"]},
-        _wp(imagePans=["panright"], videos=["v.mp4"]),
-    ])
+def test_a_stop_with_no_photo_needs_no_wan():
+    assert not needs_wan([{"label": "x", "imagePans": ["panright"]}, {"label": "y", "videos": ["v.mp4"]}])
+
+
+def test_own_footage_replaces_the_photos_it_stands_in_for():
+    # One video, one photo: the photo is replaced, so nothing is animated.
+    assert not needs_wan([_wp(imagePans=["panright"], videos=["v.mp4"])])
+    # One video, two photos: the second photo still runs on Wan.
+    assert needs_wan([_wp(images=["a.jpg", "b.jpg"], imagePans=["panright", "pan-left"], videos=["v.mp4"])])
 
 
 def test_one_pan_per_photo_from_image_pans():

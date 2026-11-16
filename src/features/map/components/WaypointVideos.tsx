@@ -42,8 +42,8 @@ export function WaypointVideos({ wp }: { wp: Waypoint }) {
     <div>
       <p className="text-[11px] text-zinc-500 mb-3 max-w-xl leading-relaxed">
         <Trans>
-          Use your own footage for this stop. It plays in place of the animated photo clip and is fitted to the narration. Its sound is off
-          unless you turn it on.
+          Use your own footage for this stop. Each video takes the place of one photo, from the first, and plays before the photos that are
+          left. Its sound is off unless you turn it on.
         </Trans>
       </p>
       <div className="flex flex-wrap gap-3">

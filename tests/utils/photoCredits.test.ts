@@ -44,14 +44,15 @@ describe("renameCredits", () => {
 });
 
 describe("collectCredits", () => {
-  it("lists each photo still used once, leaving out skipped stops and stops that use the user's own videos", () => {
+  it("lists each photo still used once, leaving out skipped stops and photos replaced by the stop's own footage", () => {
     const lines = collectCredits([
       wp({ images: ["a.jpg", "b.jpg"], imageCredits: { "a.jpg": credit("a"), "b.jpg": credit("a") } }),
       wp({ id: "b", images: ["c.jpg"], imageCredits: { "c.jpg": credit("c") }, skipAssetGeneration: true }),
-      wp({ id: "c", images: ["d.jpg"], imageCredits: { "d.jpg": credit("d") }, videos: ["v.mp4"] }),
+      // One video replaces d.jpg; e.jpg still plays after it.
+      wp({ id: "c", images: ["d.jpg", "e.jpg"], imageCredits: { "d.jpg": credit("d"), "e.jpg": credit("e") }, videos: ["v.mp4"] }),
       wp({ id: "d", images: ["mine.jpg"] }),
     ]);
-    expect(lines).toEqual([creditLine(credit("a"))]);
+    expect(lines).toEqual([creditLine(credit("a")), creditLine(credit("e"))]);
     expect(lines[0]).toBe("Taro · CC BY 4.0 · a.jpg");
   });
 });

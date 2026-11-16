@@ -77,8 +77,9 @@ export function renameCredits(credits: Record<string, PhotoCredit> | undefined, 
 export function collectCredits(waypoints: Waypoint[]): string[] {
   const lines = new Set<string>();
   for (const wp of waypoints) {
-    if (wp.skipAssetGeneration || (wp.videos?.length ?? 0) > 0) continue;
-    for (const image of wp.images ?? []) {
+    if (wp.skipAssetGeneration) continue;
+    // Each of the stop's own videos takes the place of one photo, from the first: those are not in the video.
+    for (const image of (wp.images ?? []).slice(wp.videos?.length ?? 0)) {
       const credit = wp.imageCredits?.[image];
       const line = credit && (credit.text?.trim() || creditLine(credit) || credit.url);
       if (line) lines.add(line);

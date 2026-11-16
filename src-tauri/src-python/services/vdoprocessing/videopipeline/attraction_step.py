@@ -51,11 +51,13 @@ def needs_wan(waypoints: list) -> bool:
     if tuning.ATTRACTION_GENERATOR == "parallax":
         return False
     for wp in waypoints:
-        if not isinstance(wp, dict) or wp.get("videos") or not wp.get("popup_image") or no_attraction(wp):
+        if not isinstance(wp, dict) or not wp.get("popup_image") or no_attraction(wp):
             continue
         # A photo ticked for AI runs on ComfyUI whatever the project-wide setting says, so it has to start.
         ai = _resolve_attraction_ai(wp)
-        for i, p in enumerate(_resolve_attraction_prompt(wp)):
+        # The stop's own footage replaces its first photos, which are then never animated.
+        drop = len(wp.get("videos") or [])
+        for i, p in enumerate(_resolve_attraction_prompt(wp)[drop:], start=drop):
             if normalize_camera_pan(p) in (STILL_PRESET, *tuning.ATTRACTION_JUMP_CUT_PRESETS):
                 continue
             if ai is None or (i < len(ai) and ai[i]):
@@ -81,7 +83,8 @@ def generate_waypoint_attraction_video(
     if target_audio_duration > 0:
         target_audio_duration += tuning.ATTRACTION_NARRATION_TAIL_SECONDS
 
-    if waypoint.get("videos"):
+    # Footage only: its own path. With photos too, both go through the photo pipeline as one clip.
+    if waypoint.get("videos") and not popup_image_entry:
         from services.vdoprocessing.user_videos import process_user_videos
 
         output_filename = attraction_output_filename(idx, label)
@@ -111,6 +114,8 @@ def generate_waypoint_attraction_video(
         force=force,
         photo_cuts=read_photo_cuts(audio_path) if audio_path else None,
         ai_flags=_resolve_attraction_ai(waypoint),
+        videos=waypoint.get("videos"),
+        video_sound=waypoint.get("videoSound"),
     )
 
     if result_path:
