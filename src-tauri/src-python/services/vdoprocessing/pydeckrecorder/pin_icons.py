@@ -285,12 +285,23 @@ def label_offset(
     rows = []
     for step in range(LabelSpace.ROWS if space else 1):
         dy, dx = step * (h + LabelSpace.GAP), step * (w + LabelSpace.GAP)
-        rows += [
-            (step, (-w / 2, below + dy, w / 2, below + dy + h)),
-            (step, (-w / 2, -above - dy - h, w / 2, -above - dy)),
-            (step, (side + dx, -h / 2, side + dx + w, h / 2)),
-            (step, (-side - dx - w, -h / 2, -side - dx, h / 2)),
+        base = [
+            (-w / 2, below + dy, w / 2, below + dy + h),
+            (-w / 2, -above - dy - h, w / 2, -above - dy),
+            (side + dx, -h / 2, side + dx + w, h / 2),
+            (-side - dx - w, -h / 2, -side - dx, h / 2),
         ]
+        rows += [(step, b) for b in base]
+        if step == 0 and space:
+            # A small nudge off each row-0 spot, same row (it still reads as sitting right against the point) --
+            # tried before stacking a whole row further out, which read as the pill floating away from its pin
+            # for a line it only barely clipped.
+            nudge = LabelSpace.GAP * 3
+            rows += [
+                (0, (x0 + nx, y0 + ny, x1 + nx, y1 + ny))
+                for x0, y0, x1, y1 in base
+                for nx, ny in ((-nudge, 0), (nudge, 0), (0, -nudge), (0, nudge))
+            ]
     m = 4  # the line's own width
     hits = [
         sum(x0 - m <= x <= x1 + m and y0 - m <= y <= y1 + m for x, y in samples) for _, (x0, y0, x1, y1) in rows

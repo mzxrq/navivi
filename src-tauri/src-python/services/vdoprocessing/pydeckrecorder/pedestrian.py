@@ -831,7 +831,7 @@ async def _record_leg(
             # the least of the route line (it used to sit straight above the pin, on top of the line).
             route_px = [
                 _project_lonlat_to_px(lo, la, view[0], view[1], view[2], output_size, pitch=view[3])
-                for lo, la in zip(smooth_df["lon"][::3], smooth_df["lat"][::3])
+                for lo, la in zip(smooth_df["lon"], smooth_df["lat"])
             ]
             card_left, card_top = _clear_card_spot(
                 route_px, marker_px[0], leader_target_y, card_w, card_h, card_gap, edge_margin, out_w, out_h,
