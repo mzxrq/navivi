@@ -189,8 +189,8 @@ UI_THEMES: Dict[str, Dict[str, Tuple[int, int, int, int]]] = {
         "card_text": (35, 35, 35, 255),
         "card_label": (110, 110, 110, 255),
         "divider": (0, 0, 0, 30),
-        "pill_bg": (255, 255, 255, 235),
-        "pill_text": (35, 35, 35, 255),
+        "pill_bg": (204, 98, 86, 255),  # #CC6256,
+        "pill_text": (255, 255, 255, 235)
     },
     "dark": {
         "card_bg": (30, 34, 40, 235),
@@ -406,7 +406,7 @@ STOPBY_VISIBLE_FRAME_PAD = 0.15
 LAST_STOP_TAIL_METERS = 60.0
 STOPBY_CAMERA_MOVE_SECONDS = 1.2  # a leg's camera flying out to a far stop-by, and back to the route after
 # Stop-bys in one group that get a held card (the narration names at most 3); the rest get only their pin.
-STOPBY_BATCH_MAX_HELD = 4
+STOPBY_BATCH_MAX_HELD = 8
 # An overview card stays fully shown (fades excluded) at least this long, even when the walker has moved on.
 OVERVIEW_POPUP_MIN_HOLD_SECONDS = 2.0
 # The overview walker stops this long at a "Connect to Route" stop-by (card showing); it has no cue of its own.
