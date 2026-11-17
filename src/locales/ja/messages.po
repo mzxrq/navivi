@@ -149,7 +149,7 @@ msgstr "{0} / {1}"
 
 #. placeholder {0}: voiced.length
 #. placeholder {1}: active.length
-#: src/features/map/components/GenerateDialog.tsx:86
+#: src/features/map/components/GenerateDialog.tsx:92
 msgid "{0} of {1} stops"
 msgstr "{1}か所中{0}か所"
 
@@ -165,17 +165,17 @@ msgstr "{0}件を選択中"
 
 #. placeholder {0}: waypoints.length
 #: src/components/ui/StatusBar.tsx:222
-#: src/features/map/components/GenerateDialog.tsx:148
+#: src/features/map/components/GenerateDialog.tsx:154
 msgid "{0} stops"
 msgstr "{0} 地点"
 
 #. placeholder {0}: silent.length
-#: src/features/map/components/GenerateDialog.tsx:182
+#: src/features/map/components/GenerateDialog.tsx:188
 msgid "{0} stops have no narration and will be silent"
 msgstr "{0}か所にナレーションがなく、無音になります"
 
 #. placeholder {0}: withPhotos.length
-#: src/features/map/components/GenerateDialog.tsx:93
+#: src/features/map/components/GenerateDialog.tsx:99
 msgid "{0} stops with photos"
 msgstr "写真ありの地点 {0}か所"
 
@@ -223,7 +223,7 @@ msgstr "{clips}クリップ"
 msgid "{count} clips are ready to be redone. Change their photo, script or route, then choose Resume Generation."
 msgstr "{count}件のクリップを作り直す準備ができました。写真、台本、ルートを変更してから「生成を再開」を選んでください。"
 
-#: src/features/map/components/GenerateDialog.tsx:236
+#: src/features/map/components/GenerateDialog.tsx:242
 msgid "{count} files"
 msgstr "{count}ファイル"
 
@@ -256,7 +256,7 @@ msgstr "{h}時間{rest}分"
 msgid "{imageCount} photos"
 msgstr "写真{imageCount}枚"
 
-#: src/features/map/components/GenerateDialog.tsx:80
+#: src/features/map/components/GenerateDialog.tsx:86
 msgid "{legs} legs"
 msgstr "{legs}区間"
 
@@ -334,7 +334,7 @@ msgstr "0 = 制限なし"
 msgid "1 clip"
 msgstr "1クリップ"
 
-#: src/features/map/components/GenerateDialog.tsx:236
+#: src/features/map/components/GenerateDialog.tsx:242
 msgid "1 file"
 msgstr "1ファイル"
 
@@ -346,7 +346,7 @@ msgstr "1個のファイルをスキップしました。ここにドロップ�
 #~ msgid "1 file was skipped: only photos, GPX files and text files can be dropped here."
 #~ msgstr "1個のファイルをスキップしました。ここにドロップできるのは写真、GPXファイル、テキストファイルだけです。"
 
-#: src/features/map/components/GenerateDialog.tsx:80
+#: src/features/map/components/GenerateDialog.tsx:86
 msgid "1 leg"
 msgstr "1区間"
 
@@ -358,11 +358,11 @@ msgstr "1分"
 msgid "1 photo could not be converted and was skipped."
 msgstr "1枚の写真を変換できなかったため、スキップしました。"
 
-#: src/features/map/components/GenerateDialog.tsx:148
+#: src/features/map/components/GenerateDialog.tsx:154
 msgid "1 stop"
 msgstr "1か所"
 
-#: src/features/map/components/GenerateDialog.tsx:181
+#: src/features/map/components/GenerateDialog.tsx:187
 msgid "1 stop has no narration and will be silent"
 msgstr "1か所にナレーションがなく、無音になります"
 
@@ -451,7 +451,7 @@ msgid "About"
 msgstr "このアプリについて"
 
 #. placeholder {0}: formatDuration(estimate.total_seconds)
-#: src/features/map/components/GenerateDialog.tsx:152
+#: src/features/map/components/GenerateDialog.tsx:158
 msgid "About {0}"
 msgstr "約{0}"
 
@@ -755,7 +755,7 @@ msgstr "AI モデル"
 msgid "AI photo clips"
 msgstr "AIで写真を動かす"
 
-#: src/features/map/components/GenerateDialog.tsx:85
+#: src/features/map/components/GenerateDialog.tsx:91
 msgid "AI voiceover"
 msgstr "AIナレーション"
 
@@ -1025,7 +1025,7 @@ msgstr "自動作成では、プロンプト、地点名、位置情報が{0}に
 msgid "Auto-Write sends the prompt, the place name, its location facts and the stop's photos to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 msgstr "自動作成では、プロンプト、地点名、位置情報、地点の写真が{0}に送信されます。アセットを生成で概要ナレーションの下書きを作るときも、各地点の名前とスクリプトが{1}に送信されます。それ以前に送信されることはなく、利用料金はそちらのご自身のアカウントに請求されます。"
 
-#: src/features/map/components/GenerateDialog.tsx:115
+#: src/features/map/components/GenerateDialog.tsx:121
 msgid "Back"
 msgstr "戻る"
 
@@ -1075,7 +1075,7 @@ msgstr "ベースマップのスタイル"
 msgid "Base maps and place names."
 msgstr "ベースマップと地名。"
 
-#: src/features/map/components/GenerateDialog.tsx:280
+#: src/features/map/components/GenerateDialog.tsx:294
 msgid "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 msgstr "このPCでの過去のレンダリングに基づく目安です。変更のないクリップは再利用されるため、早く終わる場合があります。"
 
@@ -1135,11 +1135,11 @@ msgstr "ボックスの不透明度"
 msgid "Box padding"
 msgstr "ボックスの余白"
 
-#: src/features/map/components/WaypointEditor.tsx:980
+#: src/features/map/components/WaypointEditor.tsx:991
 msgid "Boxed"
 msgstr "カード型"
 
-#: src/features/map/components/WaypointEditor.tsx:974
+#: src/features/map/components/WaypointEditor.tsx:985
 msgid "Boxed keeps the photo in a card with its caption; full photo fills the frame."
 msgstr "カード型は写真をキャプション付きのカードに収めます。全面表示は写真を画面いっぱいに表示します。"
 
@@ -1204,10 +1204,10 @@ msgstr "キャンセル"
 #: src/components/view/ProjectSettingsModal.tsx:131
 #: src/features/editor/ExportDialog.tsx:110
 #: src/features/editor/VoicePiecesDialog.tsx:119
-#: src/features/map/components/GenerateDialog.tsx:124
+#: src/features/map/components/GenerateDialog.tsx:130
 #: src/features/map/components/OverviewNarration.tsx:301
 #: src/features/map/components/Sidebar.tsx:263
-#: src/features/map/components/WaypointEditor.tsx:1054
+#: src/features/map/components/WaypointEditor.tsx:1065
 msgid "Cancel"
 msgstr "キャンセル"
 
@@ -1336,7 +1336,7 @@ msgstr "録り直す文を選ぶ..."
 msgid "Choose your preferred language for the application"
 msgstr "アプリケーションの言語を選択してください"
 
-#: src/features/map/components/WaypointEditor.tsx:1025
+#: src/features/map/components/WaypointEditor.tsx:1036
 msgid "Choose…"
 msgstr "選択…"
 
@@ -1810,7 +1810,7 @@ msgstr "カスタムカラー"
 #: src/components/ui/AppSettings.tsx:486
 #: src/features/map/components/MapArea.tsx:1019
 #: src/features/map/components/MapArea.tsx:1081
-#: src/features/map/components/WaypointEditor.tsx:997
+#: src/features/map/components/WaypointEditor.tsx:1008
 msgid "Custom Marker"
 msgstr "カスタムマーカー"
 
@@ -1849,7 +1849,7 @@ msgid "Default marker for all waypoints. Can be overridden per-stop."
 msgstr "すべてのポイントのデフォルトマーカーです。ポイントごとに上書きできます"
 
 #: src/components/ui/AppSettings.tsx:459
-#: src/features/map/components/WaypointEditor.tsx:1009
+#: src/features/map/components/WaypointEditor.tsx:1020
 msgid "Default pin"
 msgstr "標準のピン"
 
@@ -1870,7 +1870,7 @@ msgstr "ポイントを配置する際のデフォルトの経路検索"
 #: src/features/editor/Inspector.tsx:653
 #: src/features/editor/Inspector.tsx:687
 #: src/features/map/components/DrawBar.tsx:411
-#: src/features/map/components/WaypointEditor.tsx:1061
+#: src/features/map/components/WaypointEditor.tsx:1072
 msgid "Delete"
 msgstr "削除"
 
@@ -1890,7 +1890,7 @@ msgstr "{0} 件の字幕を削除"
 msgid "Delete Anchor"
 msgstr "アンカーを削除"
 
-#: src/features/map/components/GenerateDialog.tsx:127
+#: src/features/map/components/GenerateDialog.tsx:133
 msgid "Delete and generate"
 msgstr "削除して生成"
 
@@ -1898,7 +1898,7 @@ msgstr "削除して生成"
 msgid "Delete point"
 msgstr "点を削除"
 
-#: src/features/map/components/WaypointEditor.tsx:1071
+#: src/features/map/components/WaypointEditor.tsx:1082
 #: src/features/map/hooks/useStopMenus.ts:300
 msgid "Delete stop"
 msgstr "地点を削除"
@@ -1911,7 +1911,7 @@ msgstr "字幕を削除"
 msgid "Delete this saved version?"
 msgstr "この保存済みバージョンを削除しますか？"
 
-#: src/features/map/components/WaypointEditor.tsx:1047
+#: src/features/map/components/WaypointEditor.tsx:1058
 msgid "Delete this stop?"
 msgstr "この地点を削除しますか？"
 
@@ -1940,8 +1940,8 @@ msgstr "旅の内容を伝えてください。立ち寄り先と台本を用意
 msgid "Describe how the voice should speak"
 msgstr "声の話し方を指定してください"
 
-#: src/features/map/components/WaypointEditor.tsx:987
-#: src/features/map/components/WaypointEditor.tsx:991
+#: src/features/map/components/WaypointEditor.tsx:998
+#: src/features/map/components/WaypointEditor.tsx:1002
 msgid "Describe in the overview"
 msgstr "全体ナレーションで紹介する"
 
@@ -2330,7 +2330,7 @@ msgstr "レンダリング時間を見積もり中…"
 msgid "Estimating time left…"
 msgstr "残り時間の推定中…"
 
-#: src/features/map/components/GenerateDialog.tsx:152
+#: src/features/map/components/GenerateDialog.tsx:158
 msgid "Estimating…"
 msgstr "見積もり中…"
 
@@ -2342,7 +2342,7 @@ msgstr "すべての字幕と、動画内での開始・終了時刻"
 msgid "Every subtitle starts from this look"
 msgstr "すべての字幕の基本の見た目になります"
 
-#: src/features/map/components/GenerateDialog.tsx:137
+#: src/features/map/components/GenerateDialog.tsx:143
 msgid "Every voice, subtitle and clip in this project is made again, even the ones you are happy with, and replaces the files you have now. This can take as long as your first render. Your own photos, videos and music are not touched."
 msgstr "このプロジェクトの音声、字幕、クリップをすべて作り直します。気に入っているものも含まれ、現在のファイルは置き換えられます。最初のレンダリングと同じくらい時間がかかることがあります。ご自身の写真、動画、音楽には手を加えません。"
 
@@ -2369,7 +2369,7 @@ msgstr "レビューを展開"
 msgid "Export"
 msgstr "エクスポート"
 
-#: src/features/map/components/GenerateDialog.tsx:269
+#: src/features/map/components/GenerateDialog.tsx:275
 msgid "Export automatically"
 msgstr "自動で書き出す"
 
@@ -2520,7 +2520,7 @@ msgstr "プロジェクトの更新に失敗しました"
 msgid "Fast draft"
 msgstr "高速ドラフト"
 
-#: src/features/map/components/GenerateDialog.tsx:255
+#: src/features/map/components/GenerateDialog.tsx:261
 msgid "Fast render"
 msgstr "高速レンダリング"
 
@@ -2687,7 +2687,7 @@ msgstr "旅程表から作る"
 msgid "From narration"
 msgstr "ナレーションから"
 
-#: src/features/map/components/WaypointEditor.tsx:981
+#: src/features/map/components/WaypointEditor.tsx:992
 msgid "Full photo"
 msgstr "全面表示"
 
@@ -2708,8 +2708,8 @@ msgstr "全画面の写真"
 msgid "General"
 msgstr "一般"
 
-#: src/features/map/components/GenerateDialog.tsx:109
-#: src/features/map/components/GenerateDialog.tsx:127
+#: src/features/map/components/GenerateDialog.tsx:115
+#: src/features/map/components/GenerateDialog.tsx:133
 msgid "Generate assets"
 msgstr "アセットを生成"
 
@@ -2722,7 +2722,7 @@ msgstr "アセットを生成"
 msgid "Generate intro video"
 msgstr "イントロ動画を生成"
 
-#: src/features/map/components/GenerateDialog.tsx:198
+#: src/features/map/components/GenerateDialog.tsx:204
 msgid "Generate only makes what is missing and reuses the rest, so running it again will not change what you already have. To make something again, tick it here and it is deleted first."
 msgstr "生成は足りないものだけを作り、残りは再利用します。そのため、すでにあるものはもう一度実行しても変わりません。作り直したいものはここでチェックすると、先に削除されます。"
 
@@ -2800,7 +2800,7 @@ msgstr "Ollama を入手"
 msgid "Glass"
 msgstr "ガラス"
 
-#: src/features/map/components/GenerateDialog.tsx:233
+#: src/features/map/components/GenerateDialog.tsx:239
 msgid "Goes with the voice"
 msgstr "音声と一緒に作り直し"
 
@@ -2941,7 +2941,7 @@ msgstr "作成を最後まで進められませんでした: {0}"
 msgid "I could not reach the AI: {0}. Check Settings > AI models."
 msgstr "AI に接続できませんでした: {0}。設定の「AI モデル」を確認してください。"
 
-#: src/features/map/components/GenerateDialog.tsx:245
+#: src/features/map/components/GenerateDialog.tsx:251
 msgid "Ignores what already exists and makes every voice, subtitle and clip from scratch, even if nothing changed. Takes the longest."
 msgstr "既存のものを無視して、変更がなくてもすべての音声、字幕、クリップを最初から作り直します。最も時間がかかります。"
 
@@ -2985,7 +2985,7 @@ msgstr "範囲内"
 msgid "In the next stop's arriving script, these cues set when the card pops in and when it goes:"
 msgstr "次の地点の到着ナレーションに次のキューを入れると、カードを出す時と消す時を決められます:"
 
-#: src/features/map/components/WaypointEditor.tsx:964
+#: src/features/map/components/WaypointEditor.tsx:975
 msgid "In the overview, the marker waits here while the narration describes this place. Off: it walks on."
 msgstr "概要動画で、ナレーションがこの場所を説明している間、マーカーがここで止まります。オフにすると止まらずに進みます。"
 
@@ -2998,7 +2998,7 @@ msgstr "レンダリング済みの動画クリップを含める"
 msgid "Include the version and system details from \"This copy\" so it is easier to reproduce."
 msgstr "再現しやすいよう、「このバージョン」のバージョンとシステム情報を添えてください。"
 
-#: src/features/map/components/GenerateDialog.tsx:100
+#: src/features/map/components/GenerateDialog.tsx:106
 msgid "Included"
 msgstr "含む"
 
@@ -3162,7 +3162,7 @@ msgstr "斜体"
 msgid "Japanese"
 msgstr "日本語"
 
-#: src/features/map/components/GenerateDialog.tsx:210
+#: src/features/map/components/GenerateDialog.tsx:216
 msgid "Keep all"
 msgstr "すべて残す"
 
@@ -3186,6 +3186,14 @@ msgstr "作業を続ける"
 #: src/components/ui/RenderOverlay.tsx:850
 msgid "Keep working in the timeline editor. Export is available when it finishes."
 msgstr "タイムラインエディタで作業を続けられます。書き出しは完了後に使えます。"
+
+#: src/features/map/components/GenerateDialog.tsx:283
+msgid "Keeps every stop's current voice take. This run won't re-record any of them, even if ticked above."
+msgstr ""
+
+#: src/features/map/components/WaypointEditor.tsx:964
+msgid "Keeps this stop's current voice take. The pipeline never re-records it, even on a forced regenerate."
+msgstr ""
 
 #: src/components/ui/OnlineAiSettings.tsx:219
 msgid "Key saved"
@@ -3399,6 +3407,15 @@ msgstr "場所の名前"
 #~ msgid "Locations and scripts"
 #~ msgstr "場所と台本"
 
+#: src/features/map/components/GenerateDialog.tsx:282
+msgid "Lock all narration audio"
+msgstr ""
+
+#: src/features/map/components/WaypointEditor.tsx:963
+#: src/features/map/components/WaypointEditor.tsx:969
+msgid "Lock Narration Audio"
+msgstr ""
+
 #: src/features/editor/VoicePiecesDialog.tsx:211
 #: src/features/editor/VoicePiecesDialog.tsx:212
 msgid "Lock this take"
@@ -3458,7 +3475,7 @@ msgstr "小さくすると、カメラの向きがよりゆるやかに変わり
 msgid "lowSpecGenSessionMessage"
 msgstr "ロースペックモードで実行中です。再生成する前に、マップ上でポイントエディタを開き、画像、スクリプト、またはルートモードを調整してください"
 
-#: src/features/map/components/GenerateDialog.tsx:233
+#: src/features/map/components/GenerateDialog.tsx:239
 msgid "Made again"
 msgstr "作り直し済み"
 
@@ -3479,8 +3496,8 @@ msgstr "この地点を作り直す"
 msgid "Make every point smooth, or every point a corner"
 msgstr "すべてのポイントをなめらかに、または角にします"
 
-#: src/features/map/components/GenerateDialog.tsx:127
-#: src/features/map/components/GenerateDialog.tsx:244
+#: src/features/map/components/GenerateDialog.tsx:133
+#: src/features/map/components/GenerateDialog.tsx:250
 msgid "Make everything again"
 msgstr "すべて作り直す"
 
@@ -4072,12 +4089,12 @@ msgstr "何も作成されませんでした: {skipped}"
 #~ msgstr "実行中："
 
 #: src/components/ui/AppSettings.tsx:307
-#: src/features/map/components/GenerateDialog.tsx:100
+#: src/features/map/components/GenerateDialog.tsx:106
 #: src/features/map/components/OverviewPanel.tsx:49
 msgid "Off"
 msgstr "オフ"
 
-#: src/features/map/components/WaypointEditor.tsx:987
+#: src/features/map/components/WaypointEditor.tsx:998
 msgid "Off keeps this stop out of the overview narration."
 msgstr "オフにすると、この地点は全体ナレーションに含まれません。"
 
@@ -4352,8 +4369,8 @@ msgstr "キーを貼り付けてください。キーはこのPCの資格情報�
 msgid "Pause"
 msgstr "一時停止"
 
-#: src/features/map/components/WaypointEditor.tsx:963
-#: src/features/map/components/WaypointEditor.tsx:969
+#: src/features/map/components/WaypointEditor.tsx:974
+#: src/features/map/components/WaypointEditor.tsx:980
 msgid "Pause at Location"
 msgstr "この場所で一時停止"
 
@@ -4372,7 +4389,7 @@ msgstr "パーセント"
 #~ msgid "Photo area height"
 #~ msgstr "写真エリアの高さ"
 
-#: src/features/map/components/WaypointEditor.tsx:974
+#: src/features/map/components/WaypointEditor.tsx:985
 msgid "Photo card"
 msgstr "写真カード"
 
@@ -4383,7 +4400,7 @@ msgid "Photo clip"
 msgstr "写真クリップ"
 
 #: src/features/map/components/GenerateDialog.tsx:58
-#: src/features/map/components/GenerateDialog.tsx:92
+#: src/features/map/components/GenerateDialog.tsx:98
 msgid "Photo clips"
 msgstr "写真クリップ"
 
@@ -4941,7 +4958,7 @@ msgstr "マップのレンダリングや3D地形で必要です"
 #: src/components/ui/VoiceSettings.tsx:499
 #: src/components/ui/VoiceSettings.tsx:515
 #: src/components/view/ProjectSettingsModal.tsx:252
-#: src/features/map/components/WaypointEditor.tsx:1033
+#: src/features/map/components/WaypointEditor.tsx:1044
 msgid "Reset"
 msgstr "リセット"
 
@@ -5033,7 +5050,7 @@ msgstr "下から浮上"
 msgid "Road and path data that drawn routes snap to in Japan."
 msgstr "日本国内で、描いたルートが沿う道路・小道のデータ。"
 
-#: src/features/map/components/GenerateDialog.tsx:282
+#: src/features/map/components/GenerateDialog.tsx:296
 msgid "Rough estimate from this PC's hardware. It becomes accurate after your first render."
 msgstr "このPCのハードウェアからの概算です。最初のレンダリング後に精度が上がります。"
 
@@ -5076,7 +5093,7 @@ msgstr "ルート地図"
 msgid "Route marker"
 msgstr "ルートマーカー"
 
-#: src/features/map/components/GenerateDialog.tsx:256
+#: src/features/map/components/GenerateDialog.tsx:262
 msgid "Route only. Skips voiceover and photo clips."
 msgstr "ルートのみ。ナレーションと写真クリップを省略します。"
 
@@ -5094,7 +5111,7 @@ msgid "Route video"
 msgstr "ルート動画"
 
 #: src/features/map/components/GenerateDialog.tsx:57
-#: src/features/map/components/GenerateDialog.tsx:79
+#: src/features/map/components/GenerateDialog.tsx:85
 msgid "Route videos"
 msgstr "ルート動画"
 
@@ -5305,7 +5322,7 @@ msgid "Select a recent route or create a new workspace to begin"
 msgstr "最近のルートを選択するか、新しいワークスペースを作成して開始"
 
 #: src/components/ui/ContextMenu.tsx:396
-#: src/features/map/components/GenerateDialog.tsx:210
+#: src/features/map/components/GenerateDialog.tsx:216
 msgid "Select all"
 msgstr "すべて選択"
 
@@ -5418,7 +5435,7 @@ msgstr "影の色"
 
 #: src/components/ui/VideoLookSettings.tsx:185
 #: src/components/ui/VideoLookSettings.tsx:186
-#: src/features/map/components/GenerateDialog.tsx:262
+#: src/features/map/components/GenerateDialog.tsx:268
 msgid "Sharpen photos"
 msgstr "写真をシャープにする"
 
@@ -5538,8 +5555,8 @@ msgid "Skip in Video Export"
 msgstr "動画のエクスポート時にスキップ"
 
 #: src/components/ui/PipelineLogPanel.tsx:277
-#: src/features/map/components/GenerateDialog.tsx:86
-#: src/features/map/components/GenerateDialog.tsx:93
+#: src/features/map/components/GenerateDialog.tsx:92
+#: src/features/map/components/GenerateDialog.tsx:99
 msgid "Skipped"
 msgstr "スキップ"
 
@@ -5712,7 +5729,7 @@ msgstr "開始までの待ち"
 msgid "Starts at"
 msgstr "開始位置"
 
-#: src/features/map/components/GenerateDialog.tsx:270
+#: src/features/map/components/GenerateDialog.tsx:276
 msgid "Stitch the clips and export when done, without pausing to review."
 msgstr "完了後、確認で止まらずにクリップを結合して書き出します。"
 
@@ -6201,7 +6218,7 @@ msgstr "このプロジェクト"
 msgid "This project"
 msgstr "このプロジェクト"
 
-#: src/features/map/components/GenerateDialog.tsx:195
+#: src/features/map/components/GenerateDialog.tsx:201
 msgid "This project already has assets"
 msgstr "このプロジェクトにはすでに素材があります"
 
@@ -6261,7 +6278,7 @@ msgstr "この区間は標高を取得できないため、時間に登りは含
 #~ msgid "Time ignores climb: no elevation recorded for this leg"
 #~ msgstr "この区間は標高が記録されていないため、時間に登りは含まれていません"
 
-#: src/features/map/components/GenerateDialog.tsx:152
+#: src/features/map/components/GenerateDialog.tsx:158
 msgid "Time unavailable"
 msgstr "時間を取得できません"
 
@@ -6298,7 +6315,7 @@ msgstr "タイトルカードとエンディングカード"
 #: src/components/ui/NewProject.tsx:362
 #: src/components/ui/RenderOverlay.tsx:409
 #: src/components/ui/RenderOverlay.tsx:411
-#: src/features/map/components/GenerateDialog.tsx:99
+#: src/features/map/components/GenerateDialog.tsx:105
 msgid "Title card"
 msgstr "タイトルカード"
 
@@ -6487,7 +6504,7 @@ msgstr "未設定の場合は、マーカーの色を暗くした色になりま
 msgid "Unset, the project name."
 msgstr "未設定の場合は、プロジェクト名になります。"
 
-#: src/features/map/components/GenerateDialog.tsx:184
+#: src/features/map/components/GenerateDialog.tsx:190
 msgid "Untitled"
 msgstr "無題"
 
@@ -6515,7 +6532,7 @@ msgid "Upload 5–20 seconds of clear speech from one person, with no music or b
 msgstr "1人の話し声を5〜20秒、音楽や雑音なしでアップロードしてください。"
 
 #: src/components/ui/VideoLookSettings.tsx:185
-#: src/features/map/components/GenerateDialog.tsx:263
+#: src/features/map/components/GenerateDialog.tsx:269
 msgid "Upscales photos before they are shown. Needs a GPU and takes longer."
 msgstr "表示する前に写真を高解像度化します。GPU が必要で、時間がかかります。"
 
@@ -6926,7 +6943,7 @@ msgstr "動画を作るときに自動で作成されます"
 msgid "Written from the document's own course details. Clear it to leave the introduction empty."
 msgstr "ドキュメントに書かれたコースの情報から作成しました。空にすると紹介文は設定されません。"
 
-#: src/features/map/components/GenerateDialog.tsx:118
+#: src/features/map/components/GenerateDialog.tsx:124
 msgid "Yes, make everything again"
 msgstr "はい、すべて作り直す"
 

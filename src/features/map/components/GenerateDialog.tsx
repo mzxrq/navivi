@@ -12,7 +12,7 @@ import { useWorkspace } from "../../../hooks/useWorkspace";
 const hasText = (s?: string) => !!s && s.trim().length > 0;
 
 export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; onConfirm: (clear: AssetGroup[], force: boolean) => void }) {
-  const { waypoints, settings, metadata, updateSettings, setIsDirty, saveProject } = useWorkspace();
+  const { waypoints, settings, metadata, updateSettings, setIsDirty, saveProject, setWaypoints } = useWorkspace();
   const [estimate, setEstimate] = useState<RenderEstimate | null>(null);
   const [failed, setFailed] = useState(false);
   const [existing, setExisting] = useState<AssetCounts | null>(null);
@@ -66,6 +66,12 @@ export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; on
     setClear((prev) => (prev.includes(group) ? prev.filter((g) => g !== group) : [...prev, group]));
 
   const sharpen = settings.upscale_popup_images !== false;
+  const allLocked = active.length > 0 && active.every((w) => w.lockNarrationAudio);
+  const toggleLockAll = (v: boolean) => {
+    const ids = new Set(active.map((w) => w.id));
+    setWaypoints((prev) => prev.map((w) => (ids.has(w.id) ? { ...w, lockNarrationAudio: v || undefined } : w)));
+    setIsDirty(true);
+  };
 
   const setOption = (patch: { skip_rich_media?: boolean; quick_export?: boolean; upscale_popup_images?: boolean }) => {
     updateSettings(patch);
@@ -271,6 +277,14 @@ export function GenerateDialog({ onClose, onConfirm }: { onClose: () => void; on
           checked={quick}
           onChange={(v) => setOption({ quick_export: v })}
         />
+        {!skipRich && (
+          <OptionRow
+            label={t`Lock all narration audio`}
+            hint={t`Keeps every stop's current voice take. This run won't re-record any of them, even if ticked above.`}
+            checked={allLocked}
+            onChange={toggleLockAll}
+          />
+        )}
       </div>
 
       <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-snug text-zinc-400 dark:text-zinc-500">

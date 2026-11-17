@@ -446,7 +446,11 @@ async def generate_attraction_audio_for_waypoint(
         # no note: made before it existed, so only trust it when the dictionary changes nothing
         same_text = tts_script == script
     same_text = same_text or _keep_old_voice(existing_path, tts_script)
-    if not force and not retake and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
+    locked = bool(waypoint.get("lockNarrationAudio")) and output_is_valid(existing_path)
+    if locked and not retake:
+        logger.info("Step 2: [%d] '%s' attraction narration audio is locked — skipping TTS.", idx + 1, label)
+        audio_path = str(existing_path)
+    elif not force and not retake and output_is_valid(existing_path) and same_text and _voice_matches(existing_path, client):
         logger.info(
             "Step 2: [%d] '%s' attraction narration already exists — skipping TTS.",
             idx + 1, label,
@@ -698,7 +702,11 @@ async def generate_waypoint_audio(
 
     same_text = output_is_valid(existing_path) and (
         _spoken_text_matches(existing_path, script, waypoint, tts_script) or _keep_old_voice(existing_path, tts_script))
-    if not force and not retake and same_text and _voice_matches(existing_path, client):
+    locked = bool(waypoint.get("lockNarrationAudio")) and output_is_valid(existing_path)
+    if locked and not retake:
+        logger.info("Step 2: [%d] '%s' narration audio is locked — skipping TTS.", idx + 1, label)
+        audio_path = str(existing_path)
+    elif not force and not retake and same_text and _voice_matches(existing_path, client):
         logger.info(
             "Step 2: [%d] '%s' already exists — skipping TTS.", idx + 1, label
         )

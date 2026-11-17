@@ -39,6 +39,7 @@ export interface Waypoint {
   customRouteEle?: (number | null)[]; // recorded elevation (m) of [this stop, ...customRoute, next stop]; only valid while its length is customRoute.length + 2
   connectToRoute?: boolean;
   skipAssetGeneration?: boolean;
+  lockNarrationAudio?: boolean; // keep this stop's voice take as-is; the pipeline never re-runs TTS for it, even on --force or a script change
   isStub?: boolean;
   pauseAtWaypoint?: boolean;
   generatingScriptType?: "arriving" | "attraction" | null;

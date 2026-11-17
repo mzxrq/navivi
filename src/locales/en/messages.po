@@ -149,7 +149,7 @@ msgstr "{0} of {1}"
 
 #. placeholder {0}: voiced.length
 #. placeholder {1}: active.length
-#: src/features/map/components/GenerateDialog.tsx:86
+#: src/features/map/components/GenerateDialog.tsx:92
 msgid "{0} of {1} stops"
 msgstr "{0} of {1} stops"
 
@@ -165,17 +165,17 @@ msgstr "{0} selected"
 
 #. placeholder {0}: waypoints.length
 #: src/components/ui/StatusBar.tsx:222
-#: src/features/map/components/GenerateDialog.tsx:148
+#: src/features/map/components/GenerateDialog.tsx:154
 msgid "{0} stops"
 msgstr "{0} stops"
 
 #. placeholder {0}: silent.length
-#: src/features/map/components/GenerateDialog.tsx:182
+#: src/features/map/components/GenerateDialog.tsx:188
 msgid "{0} stops have no narration and will be silent"
 msgstr "{0} stops have no narration and will be silent"
 
 #. placeholder {0}: withPhotos.length
-#: src/features/map/components/GenerateDialog.tsx:93
+#: src/features/map/components/GenerateDialog.tsx:99
 msgid "{0} stops with photos"
 msgstr "{0} stops with photos"
 
@@ -223,7 +223,7 @@ msgstr "{clips} clips"
 msgid "{count} clips are ready to be redone. Change their photo, script or route, then choose Resume Generation."
 msgstr "{count} clips are ready to be redone. Change their photo, script or route, then choose Resume Generation."
 
-#: src/features/map/components/GenerateDialog.tsx:236
+#: src/features/map/components/GenerateDialog.tsx:242
 msgid "{count} files"
 msgstr "{count} files"
 
@@ -256,7 +256,7 @@ msgstr "{h} h {rest} min"
 msgid "{imageCount} photos"
 msgstr "{imageCount} photos"
 
-#: src/features/map/components/GenerateDialog.tsx:80
+#: src/features/map/components/GenerateDialog.tsx:86
 msgid "{legs} legs"
 msgstr "{legs} legs"
 
@@ -334,7 +334,7 @@ msgstr "0 = no limit"
 msgid "1 clip"
 msgstr "1 clip"
 
-#: src/features/map/components/GenerateDialog.tsx:236
+#: src/features/map/components/GenerateDialog.tsx:242
 msgid "1 file"
 msgstr "1 file"
 
@@ -346,7 +346,7 @@ msgstr "1 file was skipped: only photos, GPX files and documents can be dropped 
 #~ msgid "1 file was skipped: only photos, GPX files and text files can be dropped here."
 #~ msgstr "1 file was skipped: only photos, GPX files and text files can be dropped here."
 
-#: src/features/map/components/GenerateDialog.tsx:80
+#: src/features/map/components/GenerateDialog.tsx:86
 msgid "1 leg"
 msgstr "1 leg"
 
@@ -358,11 +358,11 @@ msgstr "1 minute"
 msgid "1 photo could not be converted and was skipped."
 msgstr "1 photo could not be converted and was skipped."
 
-#: src/features/map/components/GenerateDialog.tsx:148
+#: src/features/map/components/GenerateDialog.tsx:154
 msgid "1 stop"
 msgstr "1 stop"
 
-#: src/features/map/components/GenerateDialog.tsx:181
+#: src/features/map/components/GenerateDialog.tsx:187
 msgid "1 stop has no narration and will be silent"
 msgstr "1 stop has no narration and will be silent"
 
@@ -451,7 +451,7 @@ msgid "About"
 msgstr "About"
 
 #. placeholder {0}: formatDuration(estimate.total_seconds)
-#: src/features/map/components/GenerateDialog.tsx:152
+#: src/features/map/components/GenerateDialog.tsx:158
 msgid "About {0}"
 msgstr "About {0}"
 
@@ -755,7 +755,7 @@ msgstr "AI models"
 msgid "AI photo clips"
 msgstr "AI photo clips"
 
-#: src/features/map/components/GenerateDialog.tsx:85
+#: src/features/map/components/GenerateDialog.tsx:91
 msgid "AI voiceover"
 msgstr "AI voiceover"
 
@@ -1025,7 +1025,7 @@ msgstr "Auto-Write sends the prompt, the place name and its location facts to {0
 msgid "Auto-Write sends the prompt, the place name, its location facts and the stop's photos to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 msgstr "Auto-Write sends the prompt, the place name, its location facts and the stop's photos to {0}. Generate Assets also sends your stops' names and scripts to {1} when it drafts the overview narration. Nothing is sent before then, and usage is billed to your own account there."
 
-#: src/features/map/components/GenerateDialog.tsx:115
+#: src/features/map/components/GenerateDialog.tsx:121
 msgid "Back"
 msgstr "Back"
 
@@ -1075,7 +1075,7 @@ msgstr "Base Map Style"
 msgid "Base maps and place names."
 msgstr "Base maps and place names."
 
-#: src/features/map/components/GenerateDialog.tsx:280
+#: src/features/map/components/GenerateDialog.tsx:294
 msgid "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 msgstr "Based on your earlier renders on this PC. Unchanged clips are reused, so it may finish sooner."
 
@@ -1135,11 +1135,11 @@ msgstr "Box opacity"
 msgid "Box padding"
 msgstr "Box padding"
 
-#: src/features/map/components/WaypointEditor.tsx:980
+#: src/features/map/components/WaypointEditor.tsx:991
 msgid "Boxed"
 msgstr "Boxed"
 
-#: src/features/map/components/WaypointEditor.tsx:974
+#: src/features/map/components/WaypointEditor.tsx:985
 msgid "Boxed keeps the photo in a card with its caption; full photo fills the frame."
 msgstr "Boxed keeps the photo in a card with its caption; full photo fills the frame."
 
@@ -1204,10 +1204,10 @@ msgstr "Cancel"
 #: src/components/view/ProjectSettingsModal.tsx:131
 #: src/features/editor/ExportDialog.tsx:110
 #: src/features/editor/VoicePiecesDialog.tsx:119
-#: src/features/map/components/GenerateDialog.tsx:124
+#: src/features/map/components/GenerateDialog.tsx:130
 #: src/features/map/components/OverviewNarration.tsx:301
 #: src/features/map/components/Sidebar.tsx:263
-#: src/features/map/components/WaypointEditor.tsx:1054
+#: src/features/map/components/WaypointEditor.tsx:1065
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -1336,7 +1336,7 @@ msgstr "Choose sentences to voice again..."
 msgid "Choose your preferred language for the application"
 msgstr "Choose your preferred language for the application"
 
-#: src/features/map/components/WaypointEditor.tsx:1025
+#: src/features/map/components/WaypointEditor.tsx:1036
 msgid "Choose…"
 msgstr "Choose…"
 
@@ -1810,7 +1810,7 @@ msgstr "Custom Color"
 #: src/components/ui/AppSettings.tsx:486
 #: src/features/map/components/MapArea.tsx:1019
 #: src/features/map/components/MapArea.tsx:1081
-#: src/features/map/components/WaypointEditor.tsx:997
+#: src/features/map/components/WaypointEditor.tsx:1008
 msgid "Custom Marker"
 msgstr "Custom Marker"
 
@@ -1849,7 +1849,7 @@ msgid "Default marker for all waypoints. Can be overridden per-stop."
 msgstr "Default marker for all waypoints. Can be overridden per-stop."
 
 #: src/components/ui/AppSettings.tsx:459
-#: src/features/map/components/WaypointEditor.tsx:1009
+#: src/features/map/components/WaypointEditor.tsx:1020
 msgid "Default pin"
 msgstr "Default pin"
 
@@ -1870,7 +1870,7 @@ msgstr "Sets the default pathfinding engine when placing waypoints"
 #: src/features/editor/Inspector.tsx:653
 #: src/features/editor/Inspector.tsx:687
 #: src/features/map/components/DrawBar.tsx:411
-#: src/features/map/components/WaypointEditor.tsx:1061
+#: src/features/map/components/WaypointEditor.tsx:1072
 msgid "Delete"
 msgstr "Delete"
 
@@ -1890,7 +1890,7 @@ msgstr "Delete {0} subtitles"
 msgid "Delete Anchor"
 msgstr "Delete Anchor"
 
-#: src/features/map/components/GenerateDialog.tsx:127
+#: src/features/map/components/GenerateDialog.tsx:133
 msgid "Delete and generate"
 msgstr "Delete and generate"
 
@@ -1898,7 +1898,7 @@ msgstr "Delete and generate"
 msgid "Delete point"
 msgstr "Delete point"
 
-#: src/features/map/components/WaypointEditor.tsx:1071
+#: src/features/map/components/WaypointEditor.tsx:1082
 #: src/features/map/hooks/useStopMenus.ts:300
 msgid "Delete stop"
 msgstr "Delete stop"
@@ -1911,7 +1911,7 @@ msgstr "Delete subtitle"
 msgid "Delete this saved version?"
 msgstr "Delete this saved version?"
 
-#: src/features/map/components/WaypointEditor.tsx:1047
+#: src/features/map/components/WaypointEditor.tsx:1058
 msgid "Delete this stop?"
 msgstr "Delete this stop?"
 
@@ -1940,8 +1940,8 @@ msgstr "Describe a trip and I will set up the stops and scripts for you. Attach 
 msgid "Describe how the voice should speak"
 msgstr "Describe how the voice should speak"
 
-#: src/features/map/components/WaypointEditor.tsx:987
-#: src/features/map/components/WaypointEditor.tsx:991
+#: src/features/map/components/WaypointEditor.tsx:998
+#: src/features/map/components/WaypointEditor.tsx:1002
 msgid "Describe in the overview"
 msgstr "Describe in the overview"
 
@@ -2330,7 +2330,7 @@ msgstr "Estimating render time…"
 msgid "Estimating time left…"
 msgstr "Estimating time left…"
 
-#: src/features/map/components/GenerateDialog.tsx:152
+#: src/features/map/components/GenerateDialog.tsx:158
 msgid "Estimating…"
 msgstr "Estimating…"
 
@@ -2342,7 +2342,7 @@ msgstr "Every caption with its start and end time in the video"
 msgid "Every subtitle starts from this look"
 msgstr "Every subtitle starts from this look"
 
-#: src/features/map/components/GenerateDialog.tsx:137
+#: src/features/map/components/GenerateDialog.tsx:143
 msgid "Every voice, subtitle and clip in this project is made again, even the ones you are happy with, and replaces the files you have now. This can take as long as your first render. Your own photos, videos and music are not touched."
 msgstr "Every voice, subtitle and clip in this project is made again, even the ones you are happy with, and replaces the files you have now. This can take as long as your first render. Your own photos, videos and music are not touched."
 
@@ -2369,7 +2369,7 @@ msgstr "Expand Review"
 msgid "Export"
 msgstr "Export"
 
-#: src/features/map/components/GenerateDialog.tsx:269
+#: src/features/map/components/GenerateDialog.tsx:275
 msgid "Export automatically"
 msgstr "Export automatically"
 
@@ -2520,7 +2520,7 @@ msgstr "Failed to update project"
 msgid "Fast draft"
 msgstr "Fast draft"
 
-#: src/features/map/components/GenerateDialog.tsx:255
+#: src/features/map/components/GenerateDialog.tsx:261
 msgid "Fast render"
 msgstr "Fast render"
 
@@ -2687,7 +2687,7 @@ msgstr "From an itinerary"
 msgid "From narration"
 msgstr "From narration"
 
-#: src/features/map/components/WaypointEditor.tsx:981
+#: src/features/map/components/WaypointEditor.tsx:992
 msgid "Full photo"
 msgstr "Full photo"
 
@@ -2708,8 +2708,8 @@ msgstr "Full-screen photos"
 msgid "General"
 msgstr "General"
 
-#: src/features/map/components/GenerateDialog.tsx:109
-#: src/features/map/components/GenerateDialog.tsx:127
+#: src/features/map/components/GenerateDialog.tsx:115
+#: src/features/map/components/GenerateDialog.tsx:133
 msgid "Generate assets"
 msgstr "Generate assets"
 
@@ -2722,7 +2722,7 @@ msgstr "Generate Assets"
 msgid "Generate intro video"
 msgstr "Generate intro video"
 
-#: src/features/map/components/GenerateDialog.tsx:198
+#: src/features/map/components/GenerateDialog.tsx:204
 msgid "Generate only makes what is missing and reuses the rest, so running it again will not change what you already have. To make something again, tick it here and it is deleted first."
 msgstr "Generate only makes what is missing and reuses the rest, so running it again will not change what you already have. To make something again, tick it here and it is deleted first."
 
@@ -2800,7 +2800,7 @@ msgstr "Get Ollama"
 msgid "Glass"
 msgstr "Glass"
 
-#: src/features/map/components/GenerateDialog.tsx:233
+#: src/features/map/components/GenerateDialog.tsx:239
 msgid "Goes with the voice"
 msgstr "Goes with the voice"
 
@@ -2941,7 +2941,7 @@ msgstr "I could not finish building: {0}"
 msgid "I could not reach the AI: {0}. Check Settings > AI models."
 msgstr "I could not reach the AI: {0}. Check Settings > AI models."
 
-#: src/features/map/components/GenerateDialog.tsx:245
+#: src/features/map/components/GenerateDialog.tsx:251
 msgid "Ignores what already exists and makes every voice, subtitle and clip from scratch, even if nothing changed. Takes the longest."
 msgstr "Ignores what already exists and makes every voice, subtitle and clip from scratch, even if nothing changed. Takes the longest."
 
@@ -2985,7 +2985,7 @@ msgstr "In range"
 msgid "In the next stop's arriving script, these cues set when the card pops in and when it goes:"
 msgstr "In the next stop's arriving script, these cues set when the card pops in and when it goes:"
 
-#: src/features/map/components/WaypointEditor.tsx:964
+#: src/features/map/components/WaypointEditor.tsx:975
 msgid "In the overview, the marker waits here while the narration describes this place. Off: it walks on."
 msgstr "In the overview, the marker waits here while the narration describes this place. Off: it walks on."
 
@@ -2998,7 +2998,7 @@ msgstr "Include rendered video clips"
 msgid "Include the version and system details from \"This copy\" so it is easier to reproduce."
 msgstr "Include the version and system details from \"This copy\" so it is easier to reproduce."
 
-#: src/features/map/components/GenerateDialog.tsx:100
+#: src/features/map/components/GenerateDialog.tsx:106
 msgid "Included"
 msgstr "Included"
 
@@ -3162,7 +3162,7 @@ msgstr "Italic"
 msgid "Japanese"
 msgstr "Japanese"
 
-#: src/features/map/components/GenerateDialog.tsx:210
+#: src/features/map/components/GenerateDialog.tsx:216
 msgid "Keep all"
 msgstr "Keep all"
 
@@ -3186,6 +3186,14 @@ msgstr "Keep working"
 #: src/components/ui/RenderOverlay.tsx:850
 msgid "Keep working in the timeline editor. Export is available when it finishes."
 msgstr "Keep working in the timeline editor. Export is available when it finishes."
+
+#: src/features/map/components/GenerateDialog.tsx:283
+msgid "Keeps every stop's current voice take. This run won't re-record any of them, even if ticked above."
+msgstr "Keeps every stop's current voice take. This run won't re-record any of them, even if ticked above."
+
+#: src/features/map/components/WaypointEditor.tsx:964
+msgid "Keeps this stop's current voice take. The pipeline never re-records it, even on a forced regenerate."
+msgstr "Keeps this stop's current voice take. The pipeline never re-records it, even on a forced regenerate."
 
 #: src/components/ui/OnlineAiSettings.tsx:219
 msgid "Key saved"
@@ -3403,6 +3411,15 @@ msgstr "Location Name"
 #~ msgid "Locations and scripts"
 #~ msgstr "Locations and scripts"
 
+#: src/features/map/components/GenerateDialog.tsx:282
+msgid "Lock all narration audio"
+msgstr "Lock all narration audio"
+
+#: src/features/map/components/WaypointEditor.tsx:963
+#: src/features/map/components/WaypointEditor.tsx:969
+msgid "Lock Narration Audio"
+msgstr "Lock Narration Audio"
+
 #: src/features/editor/VoicePiecesDialog.tsx:211
 #: src/features/editor/VoicePiecesDialog.tsx:212
 msgid "Lock this take"
@@ -3462,7 +3479,7 @@ msgstr "Lower turns the camera more gently."
 msgid "lowSpecGenSessionMessage"
 msgstr "System in low-spec mode. Opened Waypoint Editor on map to adjust images, script, or route mode before re-running generation"
 
-#: src/features/map/components/GenerateDialog.tsx:233
+#: src/features/map/components/GenerateDialog.tsx:239
 msgid "Made again"
 msgstr "Made again"
 
@@ -3483,8 +3500,8 @@ msgstr "Make again for this stop"
 msgid "Make every point smooth, or every point a corner"
 msgstr "Make every point smooth, or every point a corner"
 
-#: src/features/map/components/GenerateDialog.tsx:127
-#: src/features/map/components/GenerateDialog.tsx:244
+#: src/features/map/components/GenerateDialog.tsx:133
+#: src/features/map/components/GenerateDialog.tsx:250
 msgid "Make everything again"
 msgstr "Make everything again"
 
@@ -4076,12 +4093,12 @@ msgstr "Nothing was made: {skipped}"
 #~ msgstr "Now:"
 
 #: src/components/ui/AppSettings.tsx:307
-#: src/features/map/components/GenerateDialog.tsx:100
+#: src/features/map/components/GenerateDialog.tsx:106
 #: src/features/map/components/OverviewPanel.tsx:49
 msgid "Off"
 msgstr "Off"
 
-#: src/features/map/components/WaypointEditor.tsx:987
+#: src/features/map/components/WaypointEditor.tsx:998
 msgid "Off keeps this stop out of the overview narration."
 msgstr "Off keeps this stop out of the overview narration."
 
@@ -4356,8 +4373,8 @@ msgstr "Paste your key. It is kept in this PC's credential store, never in the p
 msgid "Pause"
 msgstr "Pause"
 
-#: src/features/map/components/WaypointEditor.tsx:963
-#: src/features/map/components/WaypointEditor.tsx:969
+#: src/features/map/components/WaypointEditor.tsx:974
+#: src/features/map/components/WaypointEditor.tsx:980
 msgid "Pause at Location"
 msgstr "Pause at Location"
 
@@ -4376,7 +4393,7 @@ msgstr "Percent"
 #~ msgid "Photo area height"
 #~ msgstr "Photo area height"
 
-#: src/features/map/components/WaypointEditor.tsx:974
+#: src/features/map/components/WaypointEditor.tsx:985
 msgid "Photo card"
 msgstr "Photo card"
 
@@ -4387,7 +4404,7 @@ msgid "Photo clip"
 msgstr "Photo clip"
 
 #: src/features/map/components/GenerateDialog.tsx:58
-#: src/features/map/components/GenerateDialog.tsx:92
+#: src/features/map/components/GenerateDialog.tsx:98
 msgid "Photo clips"
 msgstr "Photo clips"
 
@@ -4945,7 +4962,7 @@ msgstr "Required for map rendering and 3D terrain"
 #: src/components/ui/VoiceSettings.tsx:499
 #: src/components/ui/VoiceSettings.tsx:515
 #: src/components/view/ProjectSettingsModal.tsx:252
-#: src/features/map/components/WaypointEditor.tsx:1033
+#: src/features/map/components/WaypointEditor.tsx:1044
 msgid "Reset"
 msgstr "Reset"
 
@@ -5037,7 +5054,7 @@ msgstr "Rise"
 msgid "Road and path data that drawn routes snap to in Japan."
 msgstr "Road and path data that drawn routes snap to in Japan."
 
-#: src/features/map/components/GenerateDialog.tsx:282
+#: src/features/map/components/GenerateDialog.tsx:296
 msgid "Rough estimate from this PC's hardware. It becomes accurate after your first render."
 msgstr "Rough estimate from this PC's hardware. It becomes accurate after your first render."
 
@@ -5080,7 +5097,7 @@ msgstr "Route map"
 msgid "Route marker"
 msgstr "Route marker"
 
-#: src/features/map/components/GenerateDialog.tsx:256
+#: src/features/map/components/GenerateDialog.tsx:262
 msgid "Route only. Skips voiceover and photo clips."
 msgstr "Route only. Skips voiceover and photo clips."
 
@@ -5098,7 +5115,7 @@ msgid "Route video"
 msgstr "Route video"
 
 #: src/features/map/components/GenerateDialog.tsx:57
-#: src/features/map/components/GenerateDialog.tsx:79
+#: src/features/map/components/GenerateDialog.tsx:85
 msgid "Route videos"
 msgstr "Route videos"
 
@@ -5309,7 +5326,7 @@ msgid "Select a recent route or create a new workspace to begin"
 msgstr "Select a recent route or create a new workspace to begin"
 
 #: src/components/ui/ContextMenu.tsx:396
-#: src/features/map/components/GenerateDialog.tsx:210
+#: src/features/map/components/GenerateDialog.tsx:216
 msgid "Select all"
 msgstr "Select all"
 
@@ -5422,7 +5439,7 @@ msgstr "Shadow color"
 
 #: src/components/ui/VideoLookSettings.tsx:185
 #: src/components/ui/VideoLookSettings.tsx:186
-#: src/features/map/components/GenerateDialog.tsx:262
+#: src/features/map/components/GenerateDialog.tsx:268
 msgid "Sharpen photos"
 msgstr "Sharpen photos"
 
@@ -5542,8 +5559,8 @@ msgid "Skip in Video Export"
 msgstr "Skip in Video Export"
 
 #: src/components/ui/PipelineLogPanel.tsx:277
-#: src/features/map/components/GenerateDialog.tsx:86
-#: src/features/map/components/GenerateDialog.tsx:93
+#: src/features/map/components/GenerateDialog.tsx:92
+#: src/features/map/components/GenerateDialog.tsx:99
 msgid "Skipped"
 msgstr "Skipped"
 
@@ -5716,7 +5733,7 @@ msgstr "Starts after"
 msgid "Starts at"
 msgstr "Starts at"
 
-#: src/features/map/components/GenerateDialog.tsx:270
+#: src/features/map/components/GenerateDialog.tsx:276
 msgid "Stitch the clips and export when done, without pausing to review."
 msgstr "Stitch the clips and export when done, without pausing to review."
 
@@ -6205,7 +6222,7 @@ msgstr "this project"
 msgid "This project"
 msgstr "This project"
 
-#: src/features/map/components/GenerateDialog.tsx:195
+#: src/features/map/components/GenerateDialog.tsx:201
 msgid "This project already has assets"
 msgstr "This project already has assets"
 
@@ -6269,7 +6286,7 @@ msgstr "Time ignores climb: no elevation available for this leg"
 #~ msgid "Time ignores climb: no elevation recorded for this leg"
 #~ msgstr "Time ignores climb: no elevation recorded for this leg"
 
-#: src/features/map/components/GenerateDialog.tsx:152
+#: src/features/map/components/GenerateDialog.tsx:158
 msgid "Time unavailable"
 msgstr "Time unavailable"
 
@@ -6306,7 +6323,7 @@ msgstr "Title and ending cards"
 #: src/components/ui/NewProject.tsx:362
 #: src/components/ui/RenderOverlay.tsx:409
 #: src/components/ui/RenderOverlay.tsx:411
-#: src/features/map/components/GenerateDialog.tsx:99
+#: src/features/map/components/GenerateDialog.tsx:105
 msgid "Title card"
 msgstr "Title card"
 
@@ -6499,7 +6516,7 @@ msgstr "Unset, it is the marker color, darker."
 msgid "Unset, the project name."
 msgstr "Unset, the project name."
 
-#: src/features/map/components/GenerateDialog.tsx:184
+#: src/features/map/components/GenerateDialog.tsx:190
 msgid "Untitled"
 msgstr "Untitled"
 
@@ -6527,7 +6544,7 @@ msgid "Upload 5–20 seconds of clear speech from one person, with no music or b
 msgstr "Upload 5–20 seconds of clear speech from one person, with no music or background noise."
 
 #: src/components/ui/VideoLookSettings.tsx:185
-#: src/features/map/components/GenerateDialog.tsx:263
+#: src/features/map/components/GenerateDialog.tsx:269
 msgid "Upscales photos before they are shown. Needs a GPU and takes longer."
 msgstr "Upscales photos before they are shown. Needs a GPU and takes longer."
 
@@ -6938,7 +6955,7 @@ msgstr "Written automatically when you make the video"
 msgid "Written from the document's own course details. Clear it to leave the introduction empty."
 msgstr "Written from the document's own course details. Clear it to leave the introduction empty."
 
-#: src/features/map/components/GenerateDialog.tsx:118
+#: src/features/map/components/GenerateDialog.tsx:124
 msgid "Yes, make everything again"
 msgstr "Yes, make everything again"
 

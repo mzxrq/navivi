@@ -960,6 +960,17 @@ ${t`Open the page this photo came from`}`}
                 </OptionRow>
 
                 <OptionRow
+                  title={t`Lock Narration Audio`}
+                  description={t`Keeps this stop's current voice take. The pipeline never re-records it, even on a forced regenerate.`}
+                >
+                  <Switch
+                    checked={!!wp.lockNarrationAudio}
+                    onChange={(v) => updateWaypoint(wp.id, { lockNarrationAudio: v })}
+                    label={t`Lock Narration Audio`}
+                  />
+                </OptionRow>
+
+                <OptionRow
                   title={t`Pause at Location`}
                   description={t`In the overview, the marker waits here while the narration describes this place. Off: it walks on.`}
                 >

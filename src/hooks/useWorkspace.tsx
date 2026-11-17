@@ -585,6 +585,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           isStreetView: wp.isStreetView || undefined,
           inaccessible: wp.inaccessible || undefined,
           skipAssetGeneration: wp.skipAssetGeneration ?? undefined,
+          lockNarrationAudio: wp.lockNarrationAudio ?? undefined,
           pauseAtWaypoint: wp.pauseAtWaypoint ?? undefined,
           images: savedImages(wp),
           videos: wp.videos || [],

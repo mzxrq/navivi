@@ -97,6 +97,7 @@ export function useWaypointActions() {
       isGeneratingVideo: false,
       generatingScriptType: null,
       skipAssetGeneration: undefined,
+      lockNarrationAudio: undefined,
       isStub: undefined,
       timestamp: undefined,
       timelineOffset: undefined,
