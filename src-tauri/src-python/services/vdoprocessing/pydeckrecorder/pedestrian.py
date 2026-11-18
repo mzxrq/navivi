@@ -40,11 +40,11 @@ from .elevation import leg_segment_colors, profile_card, quantize, usable_height
 from .routedata import interpolate_route_data, patch_pydeck_html
 from .leg_camera import (
     _LEG_TOP_MARGIN_PX, _ease_in_out_cubic, _fit_view_for_path, _framed_points, _leg_bottom_margin_px,
-    _clear_card_spot, _project_lonlat_to_px,
+    _clear_card_spot, _project_lonlat_to_px, _recenter_view_for_target_px,
 )
 from .leg_hud import (
-    compass_svg, _DEFAULT_MODE_HUD, _MODE_HUD, _css_rgba, _heading_label, _hud_css, _hud_text, _localized_hud,
-    _remaining_minutes, _walk_headings,
+    compass_svg, direction_arrow_svg, _DEFAULT_MODE_HUD, _MODE_HUD, _bearing_to_deg, _css_rgba, _heading_label,
+    _hud_css, _hud_text, _localized_hud, _remaining_minutes, _walk_headings,
 )
 from .pin_icons import (
     _DEST_PIN_URL, _START_PIN_URL, _TEARDROP_PIN_H, _TEARDROP_PIN_W, LabelSpace, _label_pill_layer, _landmark_layers,
@@ -84,6 +84,12 @@ def _segment_plan(df_raw, leg_dist_km, landmarks, total_seconds):
     return plan
 
 
+def _piece_of(i: int, entry: tuple) -> int:
+    """`entry`'s true narration piece: its own tag (4th element) if tagged, else its position -
+    true only for an untouched seed plan, where position already equals piece."""
+    return entry[3] if len(entry) > 3 else i
+
+
 def _wait_view_plan(df_raw, leg_dist_km, plan, landmarks, start_cue_seconds=None):
     """Splits `plan` ([(last raw index, seconds)], one segment per narration piece) so the walker reaches each
     {view wait} street view when the voice gets to its {view}, stands still until {/view}, then walks on: the
@@ -115,11 +121,13 @@ def _wait_view_plan(df_raw, leg_dist_km, plan, landmarks, start_cue_seconds=None
             if hold < 1.0:
                 continue
             # {view wait slow}: this stretch eases into the spot (routedata.arrival_time_fraction), still arriving on the cue.
-            out.append((spot, walk, tuning.VIEW_WAIT_SLOW_SECONDS) if lm.get("wait_slow") else (spot, walk))
+            out.append(
+                (spot, walk, tuning.VIEW_WAIT_SLOW_SECONDS, piece) if lm.get("wait_slow") else (spot, walk, 0.0, piece)
+            )
             walked += walk
             spots.append((walked, lm, hold))
             idx, used, held = spot, hide, held + hold
-        out.append((end_idx, seconds - used))
+        out.append((end_idx, seconds - used, 0.0, piece))
         walked += seconds - used
         start_idx = end_idx
     return out, spots, held
@@ -144,7 +152,7 @@ def _paced_plan(leg_dist_km, plan, spans, start_cue_seconds=None, slow=0.5, fast
         parts = [(a, b, next((w for s, e, w in own if s <= a and b <= e), 1.0)) for a, b in zip(edges, edges[1:])]
         total = sum((b - a) * w for a, b, w in parts)
         if not own or total <= 0:
-            out.append((end_idx, seconds))
+            out.append((end_idx, seconds, 0.0, piece))
             walked, start_idx = walked + seconds, end_idx
             continue
         d0, d1 = leg_dist_km[start_idx], leg_dist_km[end_idx]
@@ -158,11 +166,11 @@ def _paced_plan(leg_dist_km, plan, spans, start_cue_seconds=None, slow=0.5, fast
             pending += b - a
             idx = min(end_idx, bisect.bisect_left(leg_dist_km, d0 + (d1 - d0) * covered / total))
             if prev < idx:
-                out.append((idx, pending))
+                out.append((idx, pending, 0.0, piece))
                 walked, prev, pending = walked + pending, idx, 0.0
         if prev < end_idx or pending:  # the piece's last walk must still end on its own point
             last_s = out.pop()[1] if prev > start_idx else 0.0
-            out.append((end_idx, last_s + pending))
+            out.append((end_idx, last_s + pending, 0.0, piece))
             walked += pending
         start_idx = end_idx
     return out, stops, held
@@ -185,7 +193,9 @@ def _at_points_plan(df_raw, leg_dist_km, plan, at_cues, start_cue_seconds=None):
     for piece, seconds, n in at_cues:
         by_piece.setdefault(piece, []).append((seconds, n))
     out, start_idx = [], 0
-    for piece, (end_idx, seconds) in enumerate(plan):
+    for i, entry in enumerate(plan):
+        end_idx, seconds = entry[0], entry[1]
+        piece = _piece_of(i, entry)
         lead = float(start_cue_seconds or 0.0) if piece == 0 else 0.0
         idx, used = start_idx, 0.0
         for cue_seconds, n in sorted(by_piece.get(piece, [])):
@@ -201,9 +211,9 @@ def _at_points_plan(df_raw, leg_dist_km, plan, at_cues, start_cue_seconds=None):
             if target_idx <= idx:
                 logger.info("Leg's {at %d} cue is behind an earlier one; skipped.", n)
                 continue
-            out.append((target_idx, target_t - used))
+            out.append((target_idx, target_t - used, 0.0, piece))
             idx, used = target_idx, target_t
-        out.append((end_idx, seconds - used))
+        out.append((end_idx, seconds - used, 0.0, piece))
         start_idx = end_idx
     return out
 
@@ -679,6 +689,12 @@ def render_residential_leg_pydeck(
 
         current_stop = _stop_number(dest_pin)
         progress = (current_stop, total_stops) if current_stop and total_stops else None
+        # The chain pill's own start/end circle badges -- the same S/E/number glyph already on that
+        # waypoint's map pin (pin_icons' numbered teardrop), not a fresh number of our own.
+        chain_badges = (
+            (start_pin or {}).get("glyph"),
+            (dest_pin or {}).get("glyph") if dest_pin is not False else None,
+        )
 
         produced_paths = asyncio.run(_record_leg(
             html_path, html_dir, output_size, output_path, fps,
@@ -693,7 +709,7 @@ def render_residential_leg_pydeck(
             hud_card_png=hud_card_png, theme=theme, bottom_reserve_px=bottom_reserve_px,
             segment_colors=segment_colors, opening_photo=opening_photo,
             opening_view=opening_view, end_view_path=end_view_path, wait_spots=wait_spots, prior_trail=prior_trail,
-            hold_end_card=hold_end_card, progress=progress,
+            hold_end_card=hold_end_card, progress=progress, chain_badges=chain_badges,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -722,6 +738,7 @@ async def _record_leg(
     wait_spots: Optional[List] = None,
     hold_end_card: bool = False,
     progress: Optional[Tuple[int, int]] = None,
+    chain_badges: Optional[Tuple[Optional[str], Optional[str]]] = None,
 ):
     """`wait_spots`: [(walk seconds, card, hold seconds)] for {view wait} street views (see _wait_view_plan).
     `hold_end_card`: the arrival photo card (pip) stays up at the end instead of fading: the next leg slides on with it
@@ -743,7 +760,7 @@ async def _record_leg(
         image_path, freeze_seconds_raw, card_key: str, marker_px=None, grow: bool = False,
         cut_after: bool = False, hold_seconds: Optional[float] = None,
         quick: bool = False, small_hold_seconds: Optional[float] = None,
-        pip_end: bool = False, view=None,
+        pip_end: bool = False, view=None, prefer_top: bool = False,
     ) -> bool:
         """Shared by every one of this leg's photo beats -- the opening
         departure preview (`start_popup_image`, only ever set on the trip's
@@ -840,7 +857,10 @@ async def _record_leg(
         # of shoving it into a random corner. Target the top of the
         # teardrop pin (which is 44px tall).
         leader_target_y = marker_px[1] - 44.0
-        card_gap = 30.0
+        # 108px, not 64: the pin's own name label floats ABOVE the pin (pin_icons.label_offset's own
+        # clear_above=64 band) with its own ~34px height on top of that -- 64 only cleared the pin
+        # itself, so the card's bottom edge still landed right on the label sitting over it.
+        card_gap = 108.0
         card_left = marker_px[0] - card_w / 2.0
         card_top = leader_target_y - card_gap - card_h
         # Clamped to stay fully on screen -- the shrink path's marker_px is
@@ -865,10 +885,25 @@ async def _record_leg(
             card_left, card_top = _clear_card_spot(
                 route_px, marker_px[0], leader_target_y, card_w, card_h, card_gap, edge_margin, out_w, out_h,
                 await screen_props(page),  # off the banners, stop chain, compass and summary card too
+                prefer_top=prefer_top,
             )
             anchor_x = min(max(marker_px[0], card_left), card_left + card_w)
             anchor_y = min(max(leader_target_y, card_top), card_top + card_h)
         card_box = (card_left, card_top, card_w, card_h)
+
+        # Leader line: a short stub toward the marker rather than a full connector reaching it. The pin
+        # and its own name label are deck.gl layers painted on the canvas BELOW this HTML/SVG overlay, so
+        # a line drawn all the way to the marker visibly crossed over both of them. Stopping well short
+        # reads as the line simply continuing on behind them instead.
+        _leader_dx = marker_px[0] - anchor_x
+        _leader_dy = leader_target_y - anchor_y
+        _leader_dist = math.hypot(_leader_dx, _leader_dy)
+        _leader_stub = min(_leader_dist, 40.0)
+        if _leader_dist > 1e-6:
+            leader_end_x = anchor_x + _leader_dx * (_leader_stub / _leader_dist)
+            leader_end_y = anchor_y + _leader_dy * (_leader_stub / _leader_dist)
+        else:
+            leader_end_x, leader_end_y = anchor_x, anchor_y
 
         if grow:
             # Pop in AT the small card size with the leader line already
@@ -910,7 +945,7 @@ async def _record_leg(
                 })""",
                 [
                     img_url, card_box[0], card_box[1], card_box[2], card_box[3],
-                    anchor_x, anchor_y, marker_px[0], leader_target_y,
+                    anchor_x, anchor_y, leader_end_x, leader_end_y,
                 ],
             )
             await _wait_for_paint(page)
@@ -939,7 +974,7 @@ async def _record_leg(
                     await _write_frame(hold_small_png)
                 if hold_end_card:
                     end_card.update(image=image_path, box=list(card_box), anchor=[anchor_x, anchor_y],
-                                    marker=[marker_px[0], leader_target_y])
+                                    marker=[leader_end_x, leader_end_y])
                     return True
                 fade_frames = max(1, int(tuning.LEG_PHOTO_FADE_SECONDS * fps))
                 for i in range(fade_frames):
@@ -1110,6 +1145,18 @@ async def _record_leg(
         leader_grow_frames = max(1, int(0.3 * fps))
         anchor_x = card_box[0] + card_w / 2.0
         anchor_y = card_box[1] + card_h
+        # Same short-stub logic as the other leader line above (card settled at its final small size
+        # here, so recomputed against THIS anchor): stop well short of the marker/label instead of
+        # drawing across them.
+        _leader_dx = marker_px[0] - anchor_x
+        _leader_dy = leader_target_y - anchor_y
+        _leader_dist = math.hypot(_leader_dx, _leader_dy)
+        _leader_stub = min(_leader_dist, 40.0)
+        if _leader_dist > 1e-6:
+            leader_end_x = anchor_x + _leader_dx * (_leader_stub / _leader_dist)
+            leader_end_y = anchor_y + _leader_dy * (_leader_stub / _leader_dist)
+        else:
+            leader_end_x, leader_end_y = anchor_x, anchor_y
         for i in range(leader_grow_frames):
             t = _ease_in_out_cubic((i + 1) / leader_grow_frames)
             await page.evaluate(
@@ -1122,8 +1169,8 @@ async def _record_leg(
                     }
                 }""",
                 [
-                    anchor_x + (marker_px[0] - anchor_x) * t,
-                    anchor_y + (leader_target_y - anchor_y) * t,
+                    anchor_x + (leader_end_x - anchor_x) * t,
+                    anchor_y + (leader_end_y - anchor_y) * t,
                     t,
                 ],
             )
@@ -1179,7 +1226,7 @@ async def _record_leg(
                     hud_labels["stop_progress"].format(n=progress[0], total=progress[1]) if progress else None
                 )
                 await page.evaluate(
-                    """async ([css, bannerIcon, timeLabel, cardIcon, chainPlaces, useImgCard, compassSvg, distLabel, progressText, progressN, progressTotal]) => {
+                    """async ([css, bannerIcon, timeLabel, cardIcon, chainPlaces, chainBadges, useImgCard, compassSvg, directionSvg, distLabel, progressText, progressN, progressTotal]) => {
                         const style = document.createElement('style');
                         style.textContent = css;
                         document.head.appendChild(style);
@@ -1208,6 +1255,13 @@ async def _record_leg(
                                     arrow.className = 'arrow';
                                     arrow.innerHTML = '<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-0.1em"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
                                     chain.appendChild(arrow);
+                                }
+                                const badge = chainBadges && chainBadges[i];
+                                if (badge) {
+                                    const circle = document.createElement('span');
+                                    circle.className = 'badge';
+                                    circle.textContent = badge;
+                                    chain.appendChild(circle);
                                 }
                                 const place = document.createElement('span');
                                 place.className = 'place';
@@ -1248,6 +1302,15 @@ async def _record_leg(
                             compassWrap.appendChild(lbl);
                             document.body.appendChild(compassWrap);
                         }
+                        if (directionSvg) {
+                            const directionWrap = document.createElement('div');
+                            directionWrap.id = 'hud-direction-wrap';
+                            directionWrap.insertAdjacentHTML('beforeend', directionSvg);
+                            const dlbl = document.createElement('div');
+                            dlbl.id = 'hud-direction-label';
+                            directionWrap.appendChild(dlbl);
+                            document.body.appendChild(directionWrap);
+                        }
                         const card = document.createElement('div');
                         card.id = 'hud-card';
                         card.innerHTML = `
@@ -1264,9 +1327,13 @@ async def _record_leg(
                         }
                     }""",
                     [_hud_css(theme), mode_hud["banner_icon"], mode_hud["time_label"], mode_hud["icon"], route_chain,
+                     ([chain_badges[0]] + [None] * (len(route_chain) - 2) + [chain_badges[1]])
+                     if route_chain and len(route_chain) >= 2 and chain_badges else None,
                      hud_card_png is not None,
                      compass_svg(int(tuning.RESIDENTIAL_COMPASS_SIZE_PX))
                      if tuning.RESIDENTIAL_SHOW_COMPASS else "",
+                     direction_arrow_svg(int(tuning.RESIDENTIAL_DIRECTION_SIZE_PX))
+                     if tuning.RESIDENTIAL_SHOW_DIRECTION else "",
                      hud_labels["distance_label"], progress_text,
                      progress[0] if progress else None, progress[1] if progress else None],
                 )
@@ -1361,15 +1428,27 @@ async def _record_leg(
 
                 def _needle_js(index: int) -> str:
                     deg = headings[min(index, len(headings) - 1)] if headings else 0.0
-                    _point, deg_text = _heading_label(deg).split(" ", 1)
+                    point, deg_text = _heading_label(deg).split(" ", 1)
                     return (
                         "const np = document.getElementById('hud-compass-pointer');"
                         f" if (np) np.setAttribute('transform', 'rotate({deg} 50 60)');"
+                        " const nd = document.getElementById('hud-compass-letter');"
+                        f" if (nd) nd.textContent = {json.dumps(point)};"
                         " const nl = document.getElementById('hud-compass-label');"
                         f" if (nl) nl.textContent = {json.dumps(deg_text)};"
                     )
 
-                await page.evaluate(f"() => {{ {_needle_js(0)} }}")
+                def _direction_js(index: int, dist_text: str = "") -> str:
+                    row = smooth_df.iloc[min(index, len(smooth_df) - 1)]
+                    deg = _bearing_to_deg(row["lon"], row["lat"], dest_lon, dest_lat)
+                    return (
+                        "const dp = document.getElementById('hud-direction-pointer');"
+                        f" if (dp) dp.setAttribute('transform', 'rotate({deg} 50 50)');"
+                        " const dl = document.getElementById('hud-direction-label');"
+                        f" if (dl) dl.textContent = {json.dumps(dist_text)};"
+                    )
+
+                await page.evaluate(f"() => {{ {_needle_js(0)} {_direction_js(0)} }}")
 
                 c_trail = json.dumps(walker_color)
                 c_glow = json.dumps(walker_color + [90])
@@ -1565,6 +1644,7 @@ async def _record_leg(
                             document.getElementById('hud-time').textContent = {json.dumps(hud_minutes.format(n=rem_min0))};
                             document.getElementById('hud-dist').textContent = {json.dumps(dist_text0)};
                             {_needle_js(0)}
+                            {_direction_js(0, dist_text0)}
                         }}
                         """
                         await page.evaluate(js)
@@ -1844,6 +1924,7 @@ async def _record_leg(
                         document.getElementById('hud-time').textContent = {json.dumps(hud_minutes.format(n=rem_min))};
                         document.getElementById('hud-dist').textContent = {json.dumps(dist_text)};
                         {_needle_js(index)}
+                        {_direction_js(index, dist_text)}
                     }}
                     """
                     await page.evaluate(js)
@@ -2106,6 +2187,40 @@ async def _record_leg(
                     # no popup photo at all.
                     cut_on_arrival = False
                     if dest_popup_image:
+                        # Slide the camera so the destination pin lands at a fixed screen spot (centered,
+                        # a bit below middle) instead of wherever the whole-leg locked frame left it --
+                        # that guarantees the popup card growing above the pin, and the pin's own name
+                        # pill below it, always have room, regardless of which way this leg ran.
+                        target_px = (
+                            tuning.ARRIVAL_RECENTER_TARGET_FRAC[0] * output_size[0],
+                            tuning.ARRIVAL_RECENTER_TARGET_FRAC[1] * output_size[1],
+                        )
+                        new_lon, new_lat = _recenter_view_for_target_px(
+                            dest_lon, dest_lat, target_px, locked_lon, locked_lat, locked_zoom, output_size,
+                        )
+                        pan_frames = max(1, int(tuning.ARRIVAL_RECENTER_SECONDS * fps))
+                        for i in range(pan_frames):
+                            t = _ease_in_out_cubic((i + 1) / pan_frames)
+                            pan_lon = locked_lon + (new_lon - locked_lon) * t
+                            pan_lat = locked_lat + (new_lat - locked_lat) * t
+                            await page.evaluate(
+                                f"""() => {{
+                                    if (window.deckgl) {{
+                                        window.deckgl.setProps({{
+                                            viewState: {{
+                                                longitude: {pan_lon}, latitude: {pan_lat},
+                                                zoom: {locked_zoom}, pitch: {follow_pitch}, bearing: 0,
+                                                transitionDuration: 0
+                                            }}
+                                        }});
+                                    }}
+                                }}"""
+                            )
+                            await _wait_for_paint(page)
+                            last_png_bytes = await page.screenshot(**_FRAME_SHOT)
+                            await _write_frame(last_png_bytes)
+                        locked_lon, locked_lat = new_lon, new_lat
+
                         arrival_marker_px = _project_lonlat_to_px(
                             dest_lon, dest_lat, locked_lon, locked_lat, locked_zoom,
                             output_size, pitch=follow_pitch,
@@ -2119,7 +2234,11 @@ async def _record_leg(
                                 else max(0.0, arrival_wait_seconds - tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS)
                             ),
                             pip_end=dest_image_display == "pip",
-                            view=(locked_lon, locked_lat, locked_zoom, follow_pitch),
+                            # The camera was just recentered above so the plain "directly above the pin"
+                            # spot always has room -- prefer_top keeps it there instead of letting
+                            # `_clear_card_spot`'s route-avoidance nudge it off to a side over a few
+                            # covered route pixels, while still dodging real HUD chrome if it ever has to.
+                            view=(locked_lon, locked_lat, locked_zoom, follow_pitch), prefer_top=True,
                             hold_seconds=(
                                 arrival_photo_hold_seconds
                                 if arrival_photo_hold_seconds is not None

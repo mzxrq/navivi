@@ -256,6 +256,11 @@ LEG_FRAME_PADDING_MAX_SPAN = 0.20  # padding above the largest span_km ceiling
 LEG_FRAME_TOP_MARGIN_PX = 186.0  # 40px to the top pills + ~70px of pill + 16px gap + the 60px pin above its point
 LEG_FRAME_BOTTOM_PIN_PX = 70.0  # added under the caption band, for the start pin's name pill below its point
 LEG_FRAME_SIDE_MARGIN_PX = 100.0  # left/right clearance, in real pixels rather than a share of the span
+# On arrival, the camera slides so the destination pin lands at this fixed screen spot (share of width/height)
+# instead of wherever the whole-leg locked frame happened to leave it -- so the arrival photo card (which
+# floats above the pin) always has room, and the pin's own name pill always has room below it.
+ARRIVAL_RECENTER_TARGET_FRAC: Tuple[float, float] = (0.5, 0.62)
+ARRIVAL_RECENTER_SECONDS = 1.0  # how long that slide takes
 # Leg HUD compass under the destination pill: north-up dial, the needle follows the heading measured over
 # +/- HEADING_WINDOW_M of path so GPS wiggles don't make it twitch.
 RESIDENTIAL_SHOW_COMPASS = True
@@ -263,6 +268,13 @@ RESIDENTIAL_COMPASS_SIZE_PX = 104
 # Leg HUD summary card size vs. the overview's card.
 RESIDENTIAL_HUD_CARD_SCALE = 1.3
 RESIDENTIAL_COMPASS_HEADING_WINDOW_M = 20.0
+# Arrow above the summary card pointing straight at the destination (bearing from the walker's
+# current spot, not the compass's travel heading), with the remaining distance below it.
+RESIDENTIAL_SHOW_DIRECTION = True
+RESIDENTIAL_DIRECTION_SIZE_PX = 72
+# Fixed spot above the summary card's own fixed bottom:32px -- same "eyeball a gap above the
+# neighboring pill" approach as the compass's top:128px below the banner.
+RESIDENTIAL_DIRECTION_BOTTOM_PX = 176
 # A stop-by merges into the leg around it (its pin shown in passing) instead of getting its own leg.
 # settings.merge_stopby_waypoints overrides.
 DEFAULT_MERGE_STOPBY_WAYPOINTS = True

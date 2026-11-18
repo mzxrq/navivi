@@ -223,6 +223,38 @@ def _project_lonlat_to_px(
     return px, py
 
 
+def _recenter_view_for_target_px(
+    lon: float, lat: float, target_px: Tuple[float, float],
+    view_lon: float, view_lat: float, zoom: float,
+    output_size: Tuple[int, int],
+) -> Tuple[float, float]:
+    """The (view_lon, view_lat) that puts (lon, lat) at `target_px` under this same `zoom`, north-up
+    (pitch=0) -- the exact inverse of `_project_lonlat_to_px`'s flat-projection branch, used to slide
+    the arrival camera so the destination pin lands at a fixed screen spot instead of wherever the
+    whole-leg locked frame happened to leave it (so its popup card has guaranteed room above it)."""
+    scale = _WEBMERCATOR_TILE_PX * (2.0 ** zoom)
+
+    def merc_x(lon_: float) -> float:
+        return (lon_ + 180.0) / 360.0 * scale
+
+    def merc_y(lat_: float) -> float:
+        sin_lat = max(-0.9999, min(0.9999, math.sin(math.radians(lat_))))
+        return (0.5 - math.log((1.0 + sin_lat) / (1.0 - sin_lat)) / (4.0 * math.pi)) * scale
+
+    out_w, out_h = output_size
+    target_x, target_y = target_px
+
+    view_merc_x = merc_x(lon) - target_x + out_w / 2.0
+    new_view_lon = view_merc_x / scale * 360.0 - 180.0
+
+    view_merc_y = out_h / 2.0 + merc_y(lat) - target_y
+    y_frac = view_merc_y / scale
+    sin_lat = max(-0.9999, min(0.9999, math.tanh(math.pi * (1.0 - 2.0 * y_frac))))
+    new_view_lat = math.degrees(math.asin(sin_lat))
+
+    return new_view_lon, new_view_lat
+
+
 def _nearest_index(route_latlon: List[Tuple[float, float]], lat: float, lon: float) -> int:
     best_i, best_d = 0, float("inf")
     for i, (rlat, rlon) in enumerate(route_latlon):
@@ -254,11 +286,18 @@ def _point_at_fraction(route_lonlat: List[List[float]], cum_km: List[float], tot
     return route_lonlat
 
 
-def _clear_card_spot(route_px, mx, my, w, h, gap, margin, out_w, out_h, obstacles=()) -> Tuple[float, float]:
+def _clear_card_spot(
+    route_px, mx, my, w, h, gap, margin, out_w, out_h, obstacles=(), prefer_top: bool = False,
+) -> Tuple[float, float]:
     """(left, top) of a w x h card beside the marker at (mx, my): first off every on-screen prop in
     `obstacles` (left, top, w, h), then covering the fewest route points, then with the shortest leader.
     Above first (the old spot), then below, right, left, diagonals; the leader grows only when the near spots hit a prop
-    or the route."""
+    or the route.
+
+    `prefer_top`: the caller already made sure there's nothing ELSE in the way up there (e.g. the arrival
+    camera recenter below, which exists for exactly this) -- so once the plain "above" spot clears actual
+    screen furniture, take it even if the route line runs under it, instead of letting a few covered route
+    points bump the card off to a side where it no longer reads as sitting on top of the pin."""
     pad = 10.0  # the route line's own width
     spots = [
         (ring, s)
@@ -282,4 +321,8 @@ def _clear_card_spot(route_px, mx, my, w, h, gap, margin, out_w, out_h, obstacle
         return sum(left - pad <= x <= left + w + pad and top - pad <= y <= top + h + pad for x, y in route_px)
 
     placed = [(ring, clamp(*s)) for ring, s in spots]
+    if prefer_top:
+        top_spot = placed[0][1]  # ring 0's first spot is always the plain "above" position
+        if hidden(*top_spot) == 0:
+            return top_spot
     return min(placed, key=lambda p: (hidden(*p[1]), covered(*p[1]), p[0]))[1]
