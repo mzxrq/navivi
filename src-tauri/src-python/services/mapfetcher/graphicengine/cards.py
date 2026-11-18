@@ -1167,7 +1167,12 @@ class _CardMixin:
 
         canvas = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
         draw = ImageDraw.Draw(canvas)
-        draw.rounded_rectangle([0, 0, card_w, card_h], radius=card_h // 2, fill=self.ui["pill_bg"])
+        draw.rounded_rectangle(
+            [0, 0, card_w, card_h], radius=14 * scale, fill=self.ui["pill_bg"],
+            outline=self.ui["divider"], width=max(1, scale),
+        )
+        # Same ground as the leg HUD's #hud-banner: pill_bg is the accent color itself now, so the text
+        # is the theme's pill_text (white), not tuning.ACCENT_COLOR -- that would be invisible on itself.
         draw.text((pad_x - bbox[0], pad_y - bbox[1]), text, font=font, fill=self.ui["pill_text"])
         canvas = canvas.resize((max(1, card_w // scale), max(1, card_h // scale)), Image.LANCZOS)
 

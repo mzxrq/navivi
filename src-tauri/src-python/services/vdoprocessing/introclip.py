@@ -489,7 +489,7 @@ def _write_logo_badge(video_dir: Path, run_id: str) -> Optional[Path]:
     w = int(max(logo.width, measure.textlength(text, font=font))) + 2 * pad
     badge = Image.new("RGBA", (w, size + gap + logo.height + 2 * pad), (0, 0, 0, 0))
     draw = ImageDraw.Draw(badge)
-    draw.rounded_rectangle([0, 0, badge.width - 1, badge.height - 1], radius=pad, fill=(255, 255, 255))
+    draw.rounded_rectangle([0, 0, badge.width - 1, badge.height - 1], radius=pad, fill=(243, 236, 222))  # washi
     draw.text((w / 2, pad), text, font=font, fill=tuning.INTRO_LOGO_TITLE_COLOR, anchor="mt")
     badge.alpha_composite(logo, ((w - logo.width) // 2, pad + size + gap))
     path = video_dir / f".intro_logo_{run_id}.png"

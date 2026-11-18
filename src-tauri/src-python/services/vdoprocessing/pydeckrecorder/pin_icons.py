@@ -188,10 +188,10 @@ _LABEL_PAD_X = 30
 
 
 def _label_pill_svg_url(
-    text: str, bg: str = "rgba(30,34,40,0.82)", fg: str = "#ffffff"
+    text: str, bg: str = "rgba(204,98,86,0.92)", fg: str = "#FFFFFF"
 ) -> Tuple[str, int]:
-    """A place name in a flowchart-terminator pill (a stadium: rx = half the
-    height, so the ends are true semicircles) as an SVG data URL.
+    """A place name on the accent-colored tag -- a rounded rect, less round than the old full-stadium pill --
+    as an SVG data URL.
 
     Rendered as an ICON rather than a TextLayer `background` because that
     background is strictly rectangular -- deck.gl has no corner radius for
@@ -216,8 +216,8 @@ def _label_pill_svg_url(
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {_LABEL_H}" '
         f'width="{width}" height="{_LABEL_H}">'
-        f'<rect x="1" y="1" width="{width - 2}" height="{_LABEL_H - 2}" '
-        f'rx="{(_LABEL_H - 2) / 2:.0f}" ry="{(_LABEL_H - 2) / 2:.0f}" fill="{bg}"/>'
+        f'<rect x="1" y="1" width="{width - 2}" height="{_LABEL_H - 2}" rx="14" ry="14" '
+        f'fill="{bg}" stroke="rgba(222,204,150,0.7)" stroke-width="1.5"/>'
         f'<text x="{width / 2:.0f}" y="{_LABEL_H / 2:.0f}" text-anchor="middle" '
         f'dominant-baseline="central" font-family="Noto Sans JP, sans-serif" '
         f'font-weight="700" font-size="{_LABEL_FONT_SIZE}" fill="{fg}">{escape(text)}</text>'
