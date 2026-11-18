@@ -184,23 +184,30 @@ SUMMARY_CARD_FIXED_DURATION_SAMPLE = LABELS_JA["duration_sample"]
 DEFAULT_UI_THEME = "dark"
 # RGBA, PIL (RGB) channel order.
 UI_THEMES: Dict[str, Dict[str, Tuple[int, int, int, int]]] = {
+    # Washi paper / sumi ink / shu (stamp red) -- the same palette as the scrapbook outro
+    # (OUTRO_SCRAPBOOK_*), extended across every overlay so the whole video reads as one piece.
     "light": {
-        "card_bg": (255, 255, 255, 240),
-        "card_text": (35, 35, 35, 255),
-        "card_label": (110, 110, 110, 255),
-        "divider": (0, 0, 0, 30),
-        "pill_bg": (204, 98, 86, 255),  # #CC6256,
-        "pill_text": (255, 255, 255, 235)
+        "card_bg": (249, 246, 234, 240),  # washi (#F9F6EA, the reference palette's cream)
+        "card_text": (60, 55, 50, 255),  # sumi
+        "card_label": (120, 108, 92, 255),  # sumi, dimmed
+        "divider": (222, 204, 150, 90),  # tape
+        # Fully opaque, unlike card_bg -- a translucent pill let a map place-name tag sitting right behind it
+        # (also accent-colored now) show through as a ghosted double-text wherever the two coincidentally overlap.
+        "pill_bg": (204, 98, 86, 255),  # accent (#CC6256) -- the ground every banner/label sits on
+        "pill_text": (255, 255, 255, 255),  # white, on the accent ground
     },
     "dark": {
-        "card_bg": (30, 34, 40, 235),
-        "card_text": (245, 245, 245, 255),
-        "card_label": (170, 174, 180, 255),
-        "divider": (255, 255, 255, 40),
-        "pill_bg": (30, 34, 40, 225),
-        "pill_text": (255, 255, 255, 255),
+        "card_bg": (60, 55, 50, 225),  # sumi, translucent
+        "card_text": (243, 236, 222, 255),  # washi
+        "card_label": (200, 190, 175, 255),  # washi, dimmed
+        "divider": (222, 204, 150, 60),  # tape
+        "pill_bg": (10, 10, 10, 255),  # black
+        "pill_text": (255, 255, 255, 255),  # white
     },
 }
+# The one accent, theme-independent -- used only on the single active/current element per frame (the "heading
+# to" destination banner, the compass needle), never as a fill.
+ACCENT_COLOR: Tuple[int, int, int] = (204, 98, 86)  # c
 
 
 def resolve_ui_theme(job_config_or_settings: Optional[Dict] = None) -> str:
@@ -232,6 +239,23 @@ RESIDENTIAL_PIN_EDGE_MARGIN = 0.10
 RESIDENTIAL_MAP_BOTTOM_BAR_FRACTION = 0.16
 # Leg map tiles fetched at once (network-bound). Kept low for the tile provider's rate limit.
 RESIDENTIAL_TILE_FETCH_WORKERS = 4
+# --- Leg locked-camera framing (pydeckrecorder/leg_camera.py's _fit_view_for_path) -----------------
+# How the whole walk is framed for the leg's locked camera. Smaller padding and a higher zoom cap both
+# zoom in; the two margins reserve clear bands for the HUD and the burned-in caption AND decide where the
+# path sits vertically -- the path is centred between them, so a bigger bottom margin lifts it up the frame.
+LEG_FRAME_PADDING = 0.15  # fallback padding when a leg's own span isn't known; see LEG_FRAME_PADDING_BY_SPAN_KM
+LEG_FRAME_MAX_ZOOM = 17.5  # cap, so a very short leg doesn't zoom to an abstract block-level crop
+# Whole-leg camera padding by the leg's own bounding-box diagonal (km): short legs zoom in tighter, long
+# legs keep more breathing room. Mirrors OVERVIEW_PADDING_BY_SPAN_KM.
+LEG_FRAME_PADDING_BY_SPAN_KM: Tuple[Tuple[float, float], ...] = (
+    (0.3, 0.05),
+    (0.8, 0.10),
+    (2.0, 0.15),
+)
+LEG_FRAME_PADDING_MAX_SPAN = 0.20  # padding above the largest span_km ceiling
+LEG_FRAME_TOP_MARGIN_PX = 186.0  # 40px to the top pills + ~70px of pill + 16px gap + the 60px pin above its point
+LEG_FRAME_BOTTOM_PIN_PX = 70.0  # added under the caption band, for the start pin's name pill below its point
+LEG_FRAME_SIDE_MARGIN_PX = 100.0  # left/right clearance, in real pixels rather than a share of the span
 # Leg HUD compass under the destination pill: north-up dial, the needle follows the heading measured over
 # +/- HEADING_WINDOW_M of path so GPS wiggles don't make it twitch.
 RESIDENTIAL_SHOW_COMPASS = True
@@ -373,9 +397,9 @@ OVERVIEW_POPUP_TRIGGER_TOLERANCE_SECONDS = 0.2
 # Seconds from a stop at which the overview banner switches from "{label} へ" to "まもなく {label}".
 OVERVIEW_BANNER_NEAR_SECONDS = 3.0
 # Px kept free at the top of the overview for the "next stop" banner.
-OVERVIEW_TOP_CARD_CLEARANCE = 150
+OVERVIEW_TOP_CARD_CLEARANCE = 250
 # Share of the frame height kept free at the bottom for the burned-in captions (up to two lines).
-OVERVIEW_BOTTOM_CARD_CLEARANCE = 0.1
+OVERVIEW_BOTTOM_CARD_CLEARANCE = 0.05
 # Ending recap: every photo card fades in at once, over this long.
 RECAP_GROUP_FADE_SECONDS = 0.4
 # Recap leader-line/border colors, cycled around the ring so neighbouring cards differ (BGR, Tableau10-based,
@@ -1130,24 +1154,30 @@ INTRO_VOICE_TAIL_SECONDS = 0.4
 INTRO_MIN_SECONDS = 4.0
 INTRO_MAX_SECONDS = 26.0
 INTRO_MAX_IMAGE_COUNT = 5
-# Intro text defaults, in intro px; settings.intro_title_style / intro_subtitle_style override.
+# Intro text defaults, in intro px; settings.intro_title_style / intro_subtitle_style override. Also the
+# place-name caption on attraction clips (DEFAULT_TITLE_STYLE, introclip.py) -- it overrides size/outline/
+# shadow but not font family or color, so this washi choice carries over there too.
+# Font family stays "Yu Gothic UI", not a serif: stacked_line_ys()/apply_line_margins() (mirrored in
+# src/utils/textStyle.ts) space kicker/title/subtitle from each line's nominal font SIZE, assuming a line
+# height close to that size -- Noto Serif JP's taller CJK line metrics made the title's descenders overlap
+# the subtitle above/below it. Changing that shared geometry is a separate, riskier fix than this redesign.
 INTRO_TITLE_FONT_FAMILY = "Yu Gothic UI"
 INTRO_TITLE_FONT_SIZE = 150
 INTRO_TITLE_OUTLINE = 2
 INTRO_TITLE_BOLD = True
-INTRO_TITLE_COLOR: Tuple[int, int, int] = (255, 255, 255)
+INTRO_TITLE_COLOR: Tuple[int, int, int] = (243, 236, 222)  # washi
 # Second line under the title (only drawn when a subtitle is set).
 INTRO_SUBTITLE_FONT_FAMILY = "Yu Gothic UI"
 INTRO_SUBTITLE_FONT_SIZE = 70
 INTRO_SUBTITLE_OUTLINE = 0
 INTRO_SUBTITLE_BOLD = True
-INTRO_SUBTITLE_COLOR: Tuple[int, int, int] = (255, 255, 255)
+INTRO_SUBTITLE_COLOR: Tuple[int, int, int] = (243, 236, 222)  # washi
 # Small line above the title: where the walk is (settings.intro_location, e.g. "和歌山県 和歌山市").
 INTRO_KICKER_FONT_FAMILY = "Yu Gothic UI"
 INTRO_KICKER_FONT_SIZE = 90
 INTRO_KICKER_OUTLINE = 0
 INTRO_KICKER_BOLD = False
-INTRO_KICKER_COLOR: Tuple[int, int, int] = (205, 210, 220)
+INTRO_KICKER_COLOR: Tuple[int, int, int] = (210, 195, 165)  # tape, dimmed
 INTRO_KICKER_LETTER_SPACING = 4
 # Appended to the intro subtitle as "<subtitle> · 18 か所" (settings.intro_place_count turns it off).
 INTRO_PLACE_COUNT_SEPARATOR = " · "
@@ -1169,7 +1199,7 @@ INTRO_LOGO_HEIGHT = 42
 INTRO_LOGO_TITLE_FONT_SIZE = 17
 INTRO_LOGO_PADDING = 12
 INTRO_LOGO_MARGIN = 20
-INTRO_LOGO_TITLE_COLOR: Tuple[int, int, int] = (70, 76, 90)
+INTRO_LOGO_TITLE_COLOR: Tuple[int, int, int] = (60, 55, 50)  # sumi
 # Darkens each photo (multiply) so the white title stays readable.
 INTRO_IMAGE_DIM_FACTOR = 0.55
 # The title's own scale-up + fade (ASS tags), slower than the frame's fade so it reads as a reveal.
@@ -1257,7 +1287,7 @@ OUTRO_CARD_ASPECT = 4 / 3  # thumbnail width:height
 
 # "scroll" (default): cards three to a row, scrolled credits-style; "grid": the held frame above.
 # settings.outro_style overrides.
-DEFAULT_OUTRO_STYLE = "scroll"
+DEFAULT_OUTRO_STYLE = "scrapbook"
 # "scrapbook": polaroids on paper, then a stamp (title, distance, travel time), held this long before the logos.
 OUTRO_SCRAPBOOK_HOLD_SECONDS = 2.0
 OUTRO_SCRAPBOOK_PAPER_COLOR: Tuple[int, int, int] = (243, 236, 222)

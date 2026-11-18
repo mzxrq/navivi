@@ -14,16 +14,39 @@ from services import tuning, video_text
 # ---------------------------------------------------------------------------
 
 _HUD_CSS_TEMPLATE = string.Template("""
+/* overflow:hidden on every pill is a hard guarantee: whatever is inside never paints past the pill's own
+   background, regardless of a late font swap or a flex child briefly measuring wider than its final box. */
 #hud-banner {
-    position: fixed; top: 24px; right: 24px;
-    background: $pill_bg; color: $pill_text;
+    position: fixed; top: 40px; right: 24px; overflow: hidden;
+    background: $pill_bg; color: $pill_text; border: 1px solid $divider;
     font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 30px;
-    padding: 14px 34px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    padding: 14px 34px; border-radius: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
     white-space: nowrap; z-index: 1000;
 }
+#hud-banner .icon { font-size: 28px; line-height: 1; }
+#hud-banner .icon svg { display: inline-block; width: 0.8em; height: 0.8em; vertical-align: -0.1em; }
+#hud-chain {
+    position: fixed; top: 40px; left: 24px; overflow: hidden;
+    background: $pill_bg; color: $pill_text; border: 1px solid $divider;
+    font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 30px;
+    padding: 14px 34px; border-radius: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    white-space: nowrap; z-index: 1000; box-sizing: border-box;
+}
+#hud-chain .arrow { opacity: 0.6; margin: 0 6px; }
+/* Small standalone pill, centered at the very top: which numbered stop this leg is walking toward. */
+#hud-stopcount {
+    position: fixed; top: 40px; left: 50%; transform: translateX(-50%); z-index: 1000; overflow: hidden;
+    background: $pill_bg; color: $pill_text; border: 1px solid $divider;
+    font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 22px; line-height: 1.1;
+    padding: 9px 26px; border-radius: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    display: flex; flex-direction: column; align-items: center; gap: 6px; white-space: nowrap;
+}
+#hud-stopcount .dots { display: flex; gap: 6px; flex-wrap: nowrap; }
+#hud-stopcount .dots i { width: 9px; height: 9px; border-radius: 50%; background: $divider; display: inline-block; }
+#hud-stopcount .dots i.on { background: $pill_text; }
 #hud-card {
     position: fixed; bottom: 32px; right: 32px;
-    background: $card_bg; border: 3px solid $card_text; border-radius: 30px;
+    background: $card_bg; border: 1px solid $divider; border-radius: 16px;
     padding: 28px 56px; display: flex; align-items: center; gap: 44px;
     font-family: "Noto Sans JP", sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,0.35);
     z-index: 1000;
@@ -36,35 +59,26 @@ _HUD_CSS_TEMPLATE = string.Template("""
 #hud-card .icon svg { display: block; width: 100%; height: 100%; }
 #hud-card.hidden { display: none; }
 #hud-card-img { position: fixed; bottom: ${card_bottom}px; right: ${card_right}px; z-index: 1000; }
-/* Destination pill + compass stacked in the top-right corner, compass underneath. */
-#hud-top-right {
-    position: fixed; top: 24px; right: 24px; z-index: 1000;
-    display: flex; flex-direction: column; align-items: flex-end; gap: 12px;
+/* Below the bar's right end, its own fixed spot rather than stacked inside the bar (which is full-width now). */
+#hud-compass-wrap {
+    position: fixed; top: 128px; right: 24px; z-index: 1000;
+    display: flex; flex-direction: column; align-items: center;
 }
-#hud-top-right #hud-banner { position: static; }
 #hud-compass { display: block; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.35)); }
-#hud-compass .dial { fill: $card_bg; stroke: $card_text; stroke-width: 3; }
-#hud-compass .tick { stroke: $card_label; stroke-width: 2; stroke-linecap: round; }
-#hud-compass .tick.n { stroke: $card_text; stroke-width: 3; }
-#hud-compass .letter { fill: $card_text; font: 700 15px "Noto Sans JP", sans-serif; }
-#hud-compass .tail { fill: $card_label; }
+/* Same ground as every other pill (orange in light, black in dark) with the needle/letter in pill_text
+   (white in both), so the compass follows the theme instead of staying a fixed orange in dark mode. */
+#hud-compass .dial { fill: $pill_bg; }
+#hud-compass .pointer { fill: $pill_text; }
+#hud-compass .letter { fill: $pill_text; font: 700 30px "Noto Sans JP", sans-serif; }
+/* Pulled up to overlap the dial's bottom edge, like a badge, instead of sitting below it with a gap.
+   Inverted from the dial (bg/text swapped) so it still reads against pill_bg's own color each theme. */
 #hud-compass-label {
-    margin-top: -4px; min-width: 104px; box-sizing: border-box; text-align: center;
-    background: $pill_bg; color: $pill_text;
-    font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 16px;
-    padding: 4px 12px; border-radius: 999px; box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+    box-sizing: border-box; text-align: center; margin-top: -14px; z-index: 1;
+    background: $pill_text; color: $pill_bg; border: 1px solid $divider;
+    font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 13px;
+    padding: 3px 10px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.3);
     white-space: nowrap; font-variant-numeric: tabular-nums;
 }
-#hud-banner .icon { font-size: 28px; line-height: 1; }
-/* Same size as #hud-banner, the pill opposite it. */
-#hud-chain {
-    position: fixed; top: 24px; left: 24px;
-    background: $pill_bg; color: $pill_text;
-    font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 30px;
-    padding: 14px 34px; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
-    white-space: nowrap; z-index: 1000;
-}
-#hud-chain .arrow { opacity: 0.6; margin: 0 6px; }
 """)
 
 
@@ -78,6 +92,7 @@ def _hud_css(theme: Optional[str] = None) -> str:
     # The card picture has ~20 px of transparent shadow around it: these are NOT the visible gaps.
     return _HUD_CSS_TEMPLATE.substitute({
         **{k: _css_rgba(v) for k, v in tuning.ui_theme(theme).items()},
+        "accent": f"rgb{tuning.ACCENT_COLOR}",
         "card_bottom": tuning.LEG_CARD_MARGIN_BOTTOM_PX, "card_right": tuning.LEG_CARD_MARGIN_PX,
     })
 
@@ -140,11 +155,18 @@ c97 452 180 821 184 820 12 -6 1529 -1669 1529 -1677 0 -16 459 -2425 476
 # non-arriving banner text for modes where the traveler is a passenger
 # rather than on foot (e.g. "〜へ 乗船中" for a ferry) -- walking has none.
 _JA = tuning.LABELS_JA
+# The banner's own leading icon reuses the exact same per-mode SVG as the distance card's icon (above),
+# just recolored via currentColor instead of its hardcoded dark fill -- not a new vector, the one already
+# drawn for the card, now also standing in for the emoji/unicode glyph this banner used to show.
+_BANNER_ICON_SVG = {
+    mode: svg.replace('fill="#111"', 'fill="currentColor"').replace('stroke="#111"', 'stroke="currentColor"')
+    for mode, svg in _MODE_ICON_SVG.items()
+}
 _MODE_HUD = {
-    "walking": {"mode": "walking", "icon": _MODE_ICON_SVG["walking"], "banner_icon": "●", "time_label": _JA["mode_duration_label"]["walking"], "en_route_suffix": "", "default_speed_kmh": 4.5},
-    "ferry": {"mode": "ferry", "icon": _MODE_ICON_SVG["ferry"], "banner_icon": "⛴", "time_label": _JA["mode_duration_label"]["ferry"], "en_route_suffix": _JA["en_route_suffix"]["ferry"], "default_speed_kmh": 30.0},
-    "driving": {"mode": "driving", "icon": _MODE_ICON_SVG["driving"], "banner_icon": "\U0001F697", "time_label": _JA["mode_duration_label"]["driving"], "en_route_suffix": "", "default_speed_kmh": 40.0},
-    "airplane": {"mode": "airplane", "icon": _MODE_ICON_SVG["airplane"], "banner_icon": "✈", "time_label": _JA["mode_duration_label"]["airplane"], "en_route_suffix": _JA["en_route_suffix"]["airplane"], "default_speed_kmh": 500.0},
+    "walking": {"mode": "walking", "icon": _MODE_ICON_SVG["walking"], "banner_icon": _BANNER_ICON_SVG["walking"], "time_label": _JA["mode_duration_label"]["walking"], "en_route_suffix": "", "default_speed_kmh": 4.5},
+    "ferry": {"mode": "ferry", "icon": _MODE_ICON_SVG["ferry"], "banner_icon": _BANNER_ICON_SVG["ferry"], "time_label": _JA["mode_duration_label"]["ferry"], "en_route_suffix": _JA["en_route_suffix"]["ferry"], "default_speed_kmh": 30.0},
+    "driving": {"mode": "driving", "icon": _MODE_ICON_SVG["driving"], "banner_icon": _BANNER_ICON_SVG["driving"], "time_label": _JA["mode_duration_label"]["driving"], "en_route_suffix": "", "default_speed_kmh": 40.0},
+    "airplane": {"mode": "airplane", "icon": _MODE_ICON_SVG["airplane"], "banner_icon": _BANNER_ICON_SVG["airplane"], "time_label": _JA["mode_duration_label"]["airplane"], "en_route_suffix": _JA["en_route_suffix"]["airplane"], "default_speed_kmh": 500.0},
 }
 _DEFAULT_MODE_HUD = _MODE_HUD["walking"]
 
@@ -161,19 +183,12 @@ def _localized_hud(mode_hud: Dict, labels: Optional[Dict] = None) -> Dict:
     }
 
 
-# 100x100 viewBox; only #hud-compass-needle rotates (about the centre).
+# 100x100 viewBox; north-up dial (the "N" letter is fixed) -- the pointer rotates per frame to the
+# current heading (rotate(deg, 50, 60), clockwise from up), and the degree pill below names it in words.
 _COMPASS_SVG = """<svg id="hud-compass" width="{size}" height="{size}" viewBox="0 0 100 100">
-<circle class="dial" cx="50" cy="50" r="46"/>
-<line class="tick n" x1="50" y1="7" x2="50" y2="15"/>
-<line class="tick" x1="93" y1="50" x2="87" y2="50"/>
-<line class="tick" x1="50" y1="93" x2="50" y2="87"/>
-<line class="tick" x1="7" y1="50" x2="13" y2="50"/>
-<text class="letter" x="50" y="31" text-anchor="middle">{north}</text>
-<g id="hud-compass-needle">
-<polygon class="tail" points="50,82 57,50 43,50"/>
-<polygon fill="#d93a32" points="50,18 57,50 43,50"/>
-</g>
-<circle cx="50" cy="50" r="4" fill="#ffffff" stroke="#555" stroke-width="1.5"/>
+<polygon id="hud-compass-pointer" class="pointer" points="50,2 60,20 40,20"/>
+<circle class="dial" cx="50" cy="60" r="38"/>
+<text id="hud-compass-letter" class="letter" x="50" y="71" text-anchor="middle">{north}</text>
 </svg>"""
 
 

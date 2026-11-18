@@ -263,6 +263,7 @@ def render_residential_leg_pydeck(
     dest_image_display: str = "cover",
     start_pin: Optional[Dict] = None,
     dest_pin: Optional[Dict] = None,
+    total_stops: Optional[int] = None,
     hud_card_png: Optional[Callable[[float, float, bool, float], bytes]] = None,
     theme: Optional[str] = None,
     bottom_reserve_px: float = 0.0,
@@ -510,14 +511,20 @@ def render_residential_leg_pydeck(
             break
 
     fit_lons, fit_lats = _framed_points(df_raw, 0, fit_end, landmarks)
+    fit_span_km = haversine_km(min(fit_lons), min(fit_lats), max(fit_lons), max(fit_lats))
+    leg_padding = tuning.LEG_FRAME_PADDING_MAX_SPAN
+    for max_span, padding in tuning.LEG_FRAME_PADDING_BY_SPAN_KM:
+        if fit_span_km <= max_span:
+            leg_padding = padding
+            break
     locked_lon, locked_lat, locked_zoom = _fit_view_for_path(
         fit_lons, fit_lats, output_size,
-        padding_frac=0.15, pitch=follow_pitch,
+        padding_frac=leg_padding, pitch=follow_pitch,
         bottom_margin_px=_leg_bottom_margin_px(bottom_reserve_px),
         top_margin_px=_LEG_TOP_MARGIN_PX,
     )
-    # Lock max zoom to 17.5 to prevent extreme zoom-in for very short segments
-    locked_zoom = min(locked_zoom, 17.5)
+    # Capped so a very short leg doesn't zoom to an abstract block-level crop.
+    locked_zoom = min(locked_zoom, tuning.LEG_FRAME_MAX_ZOOM)
     if prior_trail and opening_view:
         # The walk goes on from the leg before: keep its zoom where this leg still fits, so the camera only slides.
         locked_zoom = min(locked_zoom, float(opening_view["zoom"]))
@@ -573,6 +580,11 @@ def render_residential_leg_pydeck(
             label_space.pin(df_raw.iloc[-1]["lat"], df_raw.iloc[-1]["lon"], pin_w, 60, anchor_bottom=True)
         for lm in landmarks or []:
             label_space.pin(lm["lat"], lm["lon"], 14, 14)  # the landmark dot (radius 7, centred on the point)
+        # The HUD's own corners, in the same centre-relative px: the top pill row, the compass under it and the
+        # summary card. A name placed there was hidden behind (or peeked out between) the HUD pills.
+        hw, hh = output_size[0] / 2, output_size[1] / 2
+        for box in ((-hw, -hh, hw, -hh + 100), (hw - 140, -hh, hw, -hh + 270), (hw - 760, hh - 200, hw, hh)):
+            label_space.add(box)
     base_layers.extend(_landmark_layers(landmarks or [], id_prefix="leg-landmark", white_dot=True, avoid=route_pts,
                                         mpp=label_mpp, space=label_space))
     # The start pin is static (this leg's starting point never moves) so it
@@ -652,6 +664,22 @@ def render_residential_leg_pydeck(
         deck.to_html(html_path)
         patch_pydeck_html(html_path)
 
+        # The merged top bar's progress segment: "Stop N of total" -- S is stop 1, E is the last, a numbered
+        # glyph is already that stop's own number. None (no segment at all) when either end is unknown.
+        def _stop_number(pin: Optional[Dict]) -> Optional[int]:
+            glyph = (pin or {}).get("glyph")
+            if glyph == "S":
+                return 1
+            if glyph == "E":
+                return total_stops
+            try:
+                return int(glyph)
+            except (TypeError, ValueError):
+                return None
+
+        current_stop = _stop_number(dest_pin)
+        progress = (current_stop, total_stops) if current_stop and total_stops else None
+
         produced_paths = asyncio.run(_record_leg(
             html_path, html_dir, output_size, output_path, fps,
             df_raw, smooth_df, remaining_km, total_frames, dest_label,
@@ -665,7 +693,7 @@ def render_residential_leg_pydeck(
             hud_card_png=hud_card_png, theme=theme, bottom_reserve_px=bottom_reserve_px,
             segment_colors=segment_colors, opening_photo=opening_photo,
             opening_view=opening_view, end_view_path=end_view_path, wait_spots=wait_spots, prior_trail=prior_trail,
-            hold_end_card=hold_end_card,
+            hold_end_card=hold_end_card, progress=progress,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -693,6 +721,7 @@ async def _record_leg(
     end_view_path: Optional[str] = None,
     wait_spots: Optional[List] = None,
     hold_end_card: bool = False,
+    progress: Optional[Tuple[int, int]] = None,
 ):
     """`wait_spots`: [(walk seconds, card, hold seconds)] for {view wait} street views (see _wait_view_plan).
     `hold_end_card`: the arrival photo card (pip) stays up at the end instead of fading: the next leg slides on with it
@@ -1146,23 +1175,78 @@ async def _record_leg(
                     pass
                 await page.wait_for_timeout(2500)
 
+                progress_text = (
+                    hud_labels["stop_progress"].format(n=progress[0], total=progress[1]) if progress else None
+                )
                 await page.evaluate(
-                    """([css, bannerIcon, timeLabel, cardIcon, chainPlaces, useImgCard, compassSvg, distLabel]) => {
+                    """async ([css, bannerIcon, timeLabel, cardIcon, chainPlaces, useImgCard, compassSvg, distLabel, progressText, progressN, progressTotal]) => {
                         const style = document.createElement('style');
                         style.textContent = css;
                         document.head.appendChild(style);
-                        const topRight = document.createElement('div');
-                        topRight.id = 'hud-top-right';
-                        document.body.appendChild(topRight);
+
                         const banner = document.createElement('div');
                         banner.id = 'hud-banner';
-                        banner.innerHTML = `<span class="icon">${bannerIcon}</span> <span id="hud-banner-text"></span>`;
-                        topRight.appendChild(banner);
+                        banner.innerHTML = `<span id="hud-banner-text"></span>`;
+                        document.body.appendChild(banner);
+
+                        if (progressText) {
+                            const stopcount = document.createElement('div');
+                            stopcount.id = 'hud-stopcount';
+                            const dots = Array.from({ length: progressTotal }, (_, i) =>
+                                `<i class="${i < progressN ? 'on' : ''}"></i>`
+                            ).join('');
+                            stopcount.innerHTML = `<div>${progressText}</div><div class="dots">${dots}</div>`;
+                            document.body.appendChild(stopcount);
+                        }
+
+                        if (chainPlaces && chainPlaces.length) {
+                            const chain = document.createElement('div');
+                            chain.id = 'hud-chain';
+                            chainPlaces.forEach((p, i) => {
+                                if (i > 0) {
+                                    const arrow = document.createElement('span');
+                                    arrow.className = 'arrow';
+                                    arrow.innerHTML = '<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-0.1em"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+                                    chain.appendChild(arrow);
+                                }
+                                const place = document.createElement('span');
+                                place.className = 'place';
+                                place.textContent = p;
+                                chain.appendChild(place);
+                            });
+                            document.body.appendChild(chain);
+                            // Shrinks (then ends in "...") to clear whichever pill it would otherwise run into --
+                            // the stop-count pill if there is one, else the destination banner -- refitted
+                            // before the next paint whenever either one changes size. Measured only after the
+                            // webfont is actually loaded: fit-before-ready sized this against the narrower
+                            // fallback font, then "Noto Sans JP" swapped in wider and overran the next pill.
+                            const neighbor = document.getElementById('hud-stopcount') || banner;
+                            const fit = () => {
+                                const room = neighbor.getBoundingClientRect().left - 16 - chain.getBoundingClientRect().left;
+                                chain.style.fontSize = '';
+                                chain.style.maxWidth = '';
+                                let size = 30;
+                                while (chain.getBoundingClientRect().width > room && size > 16) {
+                                    size -= 1;
+                                    chain.style.fontSize = size + 'px';
+                                }
+                                if (chain.getBoundingClientRect().width > room) {
+                                    Object.assign(chain.style, { overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: Math.max(room, 0) + 'px' });
+                                }
+                            };
+                            new ResizeObserver(fit).observe(neighbor);
+                            if (document.fonts && document.fonts.ready) { await document.fonts.ready; }
+                            fit();
+                        }
+
                         if (compassSvg) {
-                            topRight.insertAdjacentHTML('beforeend', compassSvg);
+                            const compassWrap = document.createElement('div');
+                            compassWrap.id = 'hud-compass-wrap';
+                            compassWrap.insertAdjacentHTML('beforeend', compassSvg);
                             const lbl = document.createElement('div');
                             lbl.id = 'hud-compass-label';
-                            topRight.appendChild(lbl);
+                            compassWrap.appendChild(lbl);
+                            document.body.appendChild(compassWrap);
                         }
                         const card = document.createElement('div');
                         card.id = 'hud-card';
@@ -1178,47 +1262,13 @@ async def _record_leg(
                             img.id = 'hud-card-img';
                             document.body.appendChild(img);
                         }
-                        if (chainPlaces && chainPlaces.length) {
-                            const chain = document.createElement('div');
-                            chain.id = 'hud-chain';
-                            chainPlaces.forEach((p, i) => {
-                                if (i > 0) {
-                                    const arrow = document.createElement('span');
-                                    arrow.className = 'arrow';
-                                    arrow.textContent = '→';
-                                    chain.appendChild(arrow);
-                                }
-                                const place = document.createElement('span');
-                                place.className = 'place';
-                                place.textContent = p;
-                                chain.appendChild(place);
-                            });
-                            document.body.appendChild(chain);
-                            // A long chain shrinks (then ends in "...") to clear the destination pill, which
-                            // changes size with its text; refitted before the next paint whenever it does.
-                            const fit = () => {
-                                const pill = document.getElementById('hud-banner');
-                                if (!pill) return;
-                                const room = pill.getBoundingClientRect().left - 16 - chain.getBoundingClientRect().left;
-                                chain.style.fontSize = '';
-                                chain.style.maxWidth = '';
-                                let size = 30;
-                                while (chain.getBoundingClientRect().width > room && size > 18) {
-                                    size -= 1;
-                                    chain.style.fontSize = size + 'px';
-                                }
-                                if (chain.getBoundingClientRect().width > room) {
-                                    Object.assign(chain.style, { boxSizing: 'border-box', maxWidth: room + 'px', overflow: 'hidden', textOverflow: 'ellipsis' });
-                                }
-                            };
-                            new ResizeObserver(fit).observe(document.getElementById('hud-banner'));
-                        }
                     }""",
                     [_hud_css(theme), mode_hud["banner_icon"], mode_hud["time_label"], mode_hud["icon"], route_chain,
                      hud_card_png is not None,
                      compass_svg(int(tuning.RESIDENTIAL_COMPASS_SIZE_PX))
                      if tuning.RESIDENTIAL_SHOW_COMPASS else "",
-                     hud_labels["distance_label"]],
+                     hud_labels["distance_label"], progress_text,
+                     progress[0] if progress else None, progress[1] if progress else None],
                 )
 
                 hud_card_cache: Dict[Tuple[int, int, bool], str] = {}
@@ -1311,11 +1361,12 @@ async def _record_leg(
 
                 def _needle_js(index: int) -> str:
                     deg = headings[min(index, len(headings) - 1)] if headings else 0.0
+                    _point, deg_text = _heading_label(deg).split(" ", 1)
                     return (
-                        "const nd = document.getElementById('hud-compass-needle');"
-                        f" if (nd) nd.setAttribute('transform', 'rotate({deg:.1f} 50 50)');"
+                        "const np = document.getElementById('hud-compass-pointer');"
+                        f" if (np) np.setAttribute('transform', 'rotate({deg} 50 60)');"
                         " const nl = document.getElementById('hud-compass-label');"
-                        f" if (nl) nl.textContent = {json.dumps(_heading_label(deg))};"
+                        f" if (nl) nl.textContent = {json.dumps(deg_text)};"
                     )
 
                 await page.evaluate(f"() => {{ {_needle_js(0)} }}")
@@ -1887,12 +1938,12 @@ async def _record_leg(
                             if next_fit_lons:
                                 new_lon, new_lat, new_zoom = _fit_view_for_path(
                                     next_fit_lons, next_fit_lats, output_size,
-                                    padding_frac=0.15, pitch=follow_pitch,
+                                    padding_frac=tuning.LEG_FRAME_PADDING, pitch=follow_pitch,
                                     bottom_margin_px=_leg_bottom_margin_px(bottom_reserve_px),
                                     top_margin_px=_LEG_TOP_MARGIN_PX,
                                 )
                                 # Lock max zoom to prevent zooming in too much on short segments
-                                new_zoom = min(new_zoom, 17.5)
+                                new_zoom = min(new_zoom, tuning.LEG_FRAME_MAX_ZOOM)
                                 
                                 hop_frames = max(1, int(tuning.STOPBY_PIECE_HOP_SECONDS * fps))
                                 for i in range(hop_frames):
