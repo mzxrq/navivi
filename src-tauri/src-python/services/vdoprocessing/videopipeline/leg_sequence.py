@@ -609,14 +609,9 @@ def inject_waypoint_popups(
                 raw_label = end_label
 
             formatted = format_waypoint_label(raw_label, subtitle_lang)
-            prefix = (
-                text_labels["start_prefix"] if idx == 0
-                else text_labels["stop_prefix"] if idx == len(waypoints) - 1
-                else ""
-            )
-            route_labels[route_point_idx] = (
-                f"{prefix}{formatted}" if formatted else prefix.strip(": ")
-            )
+            # No more "出発:"/"到着:" (Departure:/Arrival:) text prefix here -- the leg chain banner now
+            # marks the start/end with a circle badge (S/E) instead (pedestrian.py's hud-chain).
+            route_labels[route_point_idx] = formatted
 
             popup_img = wp.get("popup_image")
             wp_skipped = bool(wp.get("skipAssetGeneration")) and 0 < idx < len(waypoints) - 1

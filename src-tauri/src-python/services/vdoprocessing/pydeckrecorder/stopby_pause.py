@@ -114,7 +114,10 @@ async def _play_stopby_photo_pause(
     # like different card sizes in the moment before that growth.
     card_w = tuning.STREET_PHOTO_CARD_WIDTH if stopby.get("street_view") else 200.0
     card_h = card_w * (float(out_h) / float(out_w))
-    card_gap = 26.0
+    # 64, not 26: the stop-by's own name pill can land above, below or beside its marker (whichever clears
+    # the route), with only ~12px of its own clearance -- 26 wasn't enough room, so the card (a DOM image,
+    # always painted over the canvas pill underneath it) ended up sitting right on top of the pill.
+    card_gap = 64.0
     card_margin = 16.0
     # Clamped to stay fully inside the frame -- a marker near an edge (see
     # the screenshot that prompted this: 石標 sitting right near the top
