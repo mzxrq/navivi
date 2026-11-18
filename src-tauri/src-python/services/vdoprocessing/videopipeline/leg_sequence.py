@@ -525,6 +525,9 @@ def build_leg_sequence(
                         settings, arrived=_is_return_stop(waypoints, end_pos),
                         image=pin_image_by_id.get(pin_id.get(leg_item.get("end_waypoint_id"), leg_item.get("end_waypoint_id"))),
                     ),
+                    # How many numbered stops (S, 1, 2 … E) the whole route has, for the HUD's "stop N of
+                    # total" progress -- the same count dest_pin's own glyph is drawn from.
+                    "total_stops": sum(1 for g in _glyph_by_pos if g),
                     "real_duration_seconds": (
                         (
                             chunk["timestamp"].iloc[-1] - chunk["timestamp"].iloc[0]

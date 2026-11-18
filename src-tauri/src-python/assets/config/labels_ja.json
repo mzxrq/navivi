@@ -36,6 +36,7 @@
   "stop_prefix": "到着: ",
   "soon_banner": "まもなく {dest}",
   "en_route_banner": "{dest} へ{suffix}",
+  "stop_progress": "{total}か所中 {n}か所目",
   "hud_minutes": "{n} 分",
   "duration_seconds": "{n}秒",
   "duration_hours_minutes": "{h}時間{m:02d}分",
