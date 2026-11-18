@@ -27,7 +27,6 @@ from services.mapfetcher.street_photos import attach_cue_spans, clear_of, resolv
 from services.projectfiles import meta_dir, write_json_atomic
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.route_inputs import photo_inputs_hash
-from services.vdoprocessing.vdoexporter import caption_subtitle_style, subtitle_band_px
 
 # Logging configuration
 logger = setup_logger("RouteAnimator")
@@ -61,7 +60,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # v7: leg card numbers are the overview card's own per-leg numbers;
 # v8: stop-bys are framed too, and the summary card sits lower;
 # v9: the 3D leg HUD card sits as low as the 2D one).
-LEG_RENDER_VERSION = 25  # v25: place names keep off each other, stacking a row further out when every spot beside their point is taken; v24: at a stop with no attraction script the photo card rides along the slide (setting quiet_stop_transition); v23: photo cards keep off the route before keeping the leader short; v22: {view wait} times count from the {start} cue; v21: name tags placed with the real camera scale; v20: cards keep off the kept walked line; v19: a leg continuing the walk slides at the zoom of the leg before; v18: quicker opening/closing zoom (LEG_ZOOM_SECONDS); v17: a leg after a stop with no narration continues the walk; v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
+LEG_RENDER_VERSION = 26  # v26: the chain, progress and destination banners merge into one top bar, with a "stop N of total" progress segment; v25: place names keep off each other, stacking a row further out when every spot beside their point is taken; v24: at a stop with no attraction script the photo card rides along the slide (setting quiet_stop_transition); v23: photo cards keep off the route before keeping the leader short; v22: {view wait} times count from the {start} cue; v21: name tags placed with the real camera scale; v20: cards keep off the kept walked line; v19: a leg continuing the walk slides at the zoom of the leg before; v18: quicker opening/closing zoom (LEG_ZOOM_SECONDS); v17: a leg after a stop with no narration continues the walk; v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
 # Bumped when the heatmap legs' elevation profile card changes (only those legs re-render; v1: the card).
 LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
@@ -863,10 +862,9 @@ class RouteAnimator:
             leg_kwargs = dict(
                 mode=leg_mode,
                 travel_speed_kmh=_reported_speed_kmh(mode_speed_kmh, leg_mode),
-                # Keep pins out of the burned caption's band (legs render at 1080p).
-                bottom_reserve_px=subtitle_band_px(
-                    1080, caption_subtitle_style(self.config.get("caption_style"), check_font=False)
-                ),
+                # No reserve for the burned caption's band: it squeezed tall/vertical legs for little benefit
+                # (the user's call -- LEG_FRAME_BOTTOM_PIN_PX already keeps the start pin's own label clear).
+                bottom_reserve_px=0,
                 walker_color=res_data.get("line_color"),
                 target_duration_seconds=target_duration,
                 landmarks=landmarks, route_chain=leg_labels or None, context_path=context_path,
@@ -887,6 +885,7 @@ class RouteAnimator:
                 dest_image_display=dest_image_display,
                 start_pin=res_data.get("start_pin"),
                 dest_pin=res_data.get("dest_pin"),
+                total_stops=res_data.get("total_stops"),
                 theme=self.graphics.theme,
             )
             if res_data.get("pace_cues"):  # only with {slow}/{fast}/{stop}, so other legs keep their fingerprint
