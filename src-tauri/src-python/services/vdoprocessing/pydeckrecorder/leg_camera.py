@@ -6,6 +6,8 @@ from __future__ import annotations
 import math
 from typing import List, Tuple
 
+from services import tuning
+
 _R = 6378137.0
 _EARTH_CIRCUMFERENCE_M = 2 * math.pi * _R
 _TILE_SIZE_PX = 512
@@ -110,7 +112,7 @@ def _fit_view_for_path(
     # margin from the usable width/height (on top of the existing
     # percentage padding) guarantees that much real screen space around the
     # path regardless of how small its own span is.
-    _marker_margin_px = 100.0
+    _marker_margin_px = float(tuning.LEG_FRAME_SIDE_MARGIN_PX)
     bottom_margin_px = max(_marker_margin_px, bottom_margin_px)
     top_margin_px = max(_marker_margin_px, top_margin_px)
     usable_h = max(1.0, out_h - top_margin_px - bottom_margin_px)
@@ -157,16 +159,18 @@ def _framed_points(df_raw, lo: int, hi: int, landmarks) -> Tuple[List[float], Li
     return lons, lats
 
 
-# Top clearance for a leg's locked framing, measured to a pin's POINT: the
-# corner banners (#hud-banner/#hud-chain: 24px down, ~70px tall), a 16px gap,
-# then the 60px pin standing above its point.
-_LEG_TOP_MARGIN_PX = 24.0 + 70.0 + 16.0 + 60.0
+# Top clearance for a leg's locked framing, measured to a pin's POINT: the corner banners (24px down,
+# ~70px tall), a 16px gap, then the 60px pin standing above its point. tuning.LEG_FRAME_TOP_MARGIN_PX.
+_LEG_TOP_MARGIN_PX = float(tuning.LEG_FRAME_TOP_MARGIN_PX)
 
 
 def _leg_bottom_margin_px(bottom_reserve_px: float) -> float:
     """Bottom margin for a leg's locked framing: the caption band plus room
     for the start pin's name pill under its point."""
-    return max(100.0, float(bottom_reserve_px or 0.0) + 60.0)
+    return max(
+        float(tuning.LEG_FRAME_SIDE_MARGIN_PX),
+        float(bottom_reserve_px or 0.0) + float(tuning.LEG_FRAME_BOTTOM_PIN_PX),
+    )
 
 
 def _project_lonlat_to_px(
