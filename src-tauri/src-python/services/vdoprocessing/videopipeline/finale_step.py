@@ -1,8 +1,13 @@
 """The finale before the outro: the last stop's photo appears as a small pinned card first, then that same
 card's picture grows to fill the frame — the hand-off into the next beat — before the camera pulls back from
 there until the whole route is in view (real map tiles every frame: pydeck_overview's ending push-in, played
-backwards). Nothing walks: the whole line is drawn from the start. It ends on the route summary card the
-overview ends with (total distance and time per mode), then the outro cuts in."""
+backwards). Nothing walks.
+
+It lands on the overview's own recap picture, drawn the same way that screen is: the route in the project's
+colour, each stop a plain colour dot, and every stop's slim pill badge (its pin's glyph, its name down the
+capsule, its photo) laid out by the recap's own layout. Three things carry the data in as it arrives - the
+route unspools backwards out of the close-up, each badge lands in turn as the line passes it, and the summary
+card's distance and time tick up to the real figures. Then the outro cuts in."""
 
 import csv
 from pathlib import Path
@@ -40,29 +45,130 @@ def _ease(t: float) -> float:
     return t * t * (3 - 2 * t)
 
 
-def _overlay(frame_bgr, extent, route, stops, line_bgr, line_px, marker_rgb) -> Image.Image:
-    """One map frame with the whole route line and every stop's badge (S, 1 … E) drawn on it."""
+# The route finishes drawing itself this far into the pull-back, leaving the
+# rest of it for the stops' own badges to come in over.
+_ROUTE_DRAW_FRACTION = 0.7
+# One stop's badge after another, and how long each takes to fade in.
+_BADGE_STEP_SECONDS = 0.12
+_BADGE_FADE_SECONDS = 0.25
+# The summary card's distance and time tick up over this long, finishing with
+# the last badge.
+_COUNT_UP_SECONDS = 1.1
+
+
+def _stop_colors(badge: str, settings: dict) -> Tuple[int, int, int]:
+    """The RGB a stop's dot takes, by the same roles the overview's pins use
+    (pins.py's _pin_label_and_color): S green, E purple, a stop-by brown, a
+    closed place red, everything else the colour a reached stop's pin ends
+    the overview in. Read through render_look's own _project_color, which
+    knows the app writes these settings as RGB while the renderers draw in
+    BGR — outrocard's reader assumes BGR and hands back the project's own
+    colours channel-swapped (its cyan route arrives as orange)."""
+    from .render_look import _arrived_marker_color, _project_color
+
+    bgr = {
+        "S": tuning.START_PIN_COLOR,
+        "E": tuning.END_PIN_COLOR,
+        "・": tuning.STOPBY_PIN_COLOR,
+        "×": tuning.CLOSED_PIN_COLOR,
+    }.get(badge)
+    if bgr is None:
+        marker = _project_color(settings, "marker_color", tuning.DEFAULT_MARKER_COLOR)
+        bgr = _arrived_marker_color(settings, marker)  # by the recap, every stop has been reached
+    return tuple(int(c) for c in reversed(bgr))
+
+
+def _map_frame(frame_bgr, extent, route, stops, line_bgr, line_px, drawn: float) -> Image.Image:
+    """One map frame of the pull-back, overlaid the way the overview's recap
+    screen is: the route in the project's own colour under a white halo, and
+    each stop marked by a plain colour dot — no numbered pin, since the
+    number lives in that stop's badge. `drawn` (0-1) is how much of the
+    route is on yet: it unspools BACKWARDS, from the last stop the camera
+    opens on toward the start, so the walk replays out of the close-up
+    instead of creeping in from off-screen. Each stop's dot lands as the
+    line reaches it."""
     h, w = frame_bgr.shape[:2]
     from services.mapfetcher.mapgeometry import RouteGeometryProcessor as G
 
     frame = frame_bgr.copy()
-    pts = np.array([G.project_latlon_to_pixel(la, lo, extent, w, h) for la, lo in route], dtype=np.float64)
+    upto = max(2, int(len(route) * min(max(drawn, 0.0), 1.0)))
+    first = len(route) - upto
+    pts = np.array(
+        [G.project_latlon_to_pixel(la, lo, extent, w, h) for la, lo in route[first:]], dtype=np.float64
+    )
     pts = np.clip(pts, -3 * w, 4 * w).astype(np.int32)
     cv2.polylines(frame, [pts], False, (255, 255, 255), line_px + 4, cv2.LINE_AA)
     cv2.polylines(frame, [pts], False, line_bgr, line_px, cv2.LINE_AA)
     img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    from services.mapfetcher.graphicengine import _GraphicsEngineBase
-    from services.vdoprocessing.outrocard import _load_font
 
     d = ImageDraw.Draw(img)
-    r = max(12, h // 54)
-    font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, int(r * 1.2))
-    for badge, lat, lon in stops:
-        x, y = G.project_latlon_to_pixel(lat, lon, extent, w, h)
+    r = max(4, int(h // 150))
+    for stop in stops:
+        if stop["at"] < first:
+            continue
+        x, y = G.project_latlon_to_pixel(stop["lat"], stop["lon"], extent, w, h)
         if -r <= x <= w + r and -r <= y <= h + r:
-            d.ellipse([x - r, y - r, x + r, y + r], fill=marker_rgb, outline="white", width=max(2, r // 5))
-            d.text((x, y), badge, font=font, fill="white", anchor="mm")
+            d.ellipse([x - r, y - r, x + r, y + r], fill=stop["color"], outline="white", width=max(2, r // 2))
     return img
+
+
+def _recap_badges(engine, stops, extent, size, reserved, route_px):
+    """Every stop laid out as the overview recap lays its pill badges out —
+    same slim capsules, same no-overlap lattice, same one-line-per-cluster
+    leader lines — by borrowing the recap's own layout (_layout_recap_cards)
+    with this clip's graphics engine. Returns them in the order the recap
+    would reveal them. [] for a stop set it can't place."""
+    from services.vdoprocessing.spatial_renderer.pins import _PinMixin
+    from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
+
+    class _RecapLayout(_PopupMixin, _PinMixin):
+        pass
+
+    from services.mapfetcher.mapgeometry import RouteGeometryProcessor as G
+
+    w, h = size
+    popups = []
+    for stop in stops:
+        if not stop["photo"]:
+            continue
+        x, y = G.project_latlon_to_pixel(stop["lat"], stop["lon"], extent, w, h)
+        if not (0 <= x <= w and 0 <= y <= h):
+            continue
+        popups.append({
+            "x": float(x), "y": float(y), "index": stop["index"], "order": stop["order"],
+            "badge_label": stop["badge"], "label": stop["name"],
+            "border_color": tuple(reversed(stop["color"])),  # the engine draws in BGR
+            "data": {"popup_image": str(stop["photo"]), "arrived": True},
+        })
+    if not popups:
+        return []
+    layout = _RecapLayout()
+    layout.config = {}
+    layout.graphics = engine
+    try:
+        return layout._layout_recap_cards(popups, w, h, reserved_boxes=reserved, route_obstacles=route_px)
+    except Exception as exc:  # a layout that can't place them is no reason to lose the clip
+        logger.info("Finale: no recap badges (%s).", exc)
+        return []
+
+
+def _with_badges(img: Image.Image, engine, badges, alphas) -> Image.Image:
+    """`img` with each badge drawn at its own alpha, lines first and then the
+    capsules — the recap's own order, so no line lands on top of a badge."""
+    frame = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)
+    shown = [(b, a) for b, a in zip(badges, alphas) if a > 0.01]
+    for badge, alpha in shown:
+        hud = badge.copy()
+        hud["hud_corner"] = None
+        hud["draw_leader_line"] = not badge.get("suppress_leader_line")
+        hud["leader_line_color"] = badge.get("recap_line_color") or badge.get("border_color")
+        frame = engine.render_popup_box(frame, hud, alpha=alpha, line_only=True)
+    for badge, alpha in shown:
+        hud = badge.copy()
+        hud["hud_corner"] = None
+        hud["draw_leader_line"] = False
+        frame = engine.render_popup_box(frame, hud, alpha=alpha, skip_line=True)
+    return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
 
 def finale_voice(project_config: dict, project_dir: Path) -> Optional[Tuple[Path, float]]:
@@ -82,24 +188,38 @@ def finale_voice(project_config: dict, project_dir: Path) -> Optional[Tuple[Path
         return None
 
 
-def _summary_card(config_path: Path, settings: dict):
-    """(engine, BGRA card): the overview's ending summary card for the whole route; None without a route brief."""
+def _graphics(settings: dict):
+    """The engine this clip draws its badges and summary card with, set up
+    the way the overview sets its own up so both look the same."""
+    from services.mapfetcher.graphicengine import GraphicsEngine
+
+    return GraphicsEngine(
+        summary_card_style=settings.get("summary_card_style", tuning.DEFAULT_SUMMARY_CARD_STYLE),
+        summary_card_labels=settings.get("summary_card_labels"),
+        theme=tuning.resolve_ui_theme(settings),
+    )
+
+
+def _summary_card(engine, config_path: Path):
+    """render(fraction) -> BGRA summary card for the whole route, the one the
+    overview ends on. `fraction` (0-1) scales the distance and the times, so
+    the finale can tick them up to the real figures. None without a brief."""
     try:
         from services.localization.overview_script import course_summary
         from services.localization.route_brief import load_brief
-        from services.mapfetcher.graphicengine import GraphicsEngine
 
         summary = course_summary(load_brief(str(config_path)))
-        engine = GraphicsEngine(
-            summary_card_style=settings.get("summary_card_style", tuning.DEFAULT_SUMMARY_CARD_STYLE),
-            summary_card_labels=settings.get("summary_card_labels"),
-            theme=tuning.resolve_ui_theme(settings),
-        )
-        card = engine.render_summary_card(
-            distance_km=summary["total_distance_km"], duration_seconds=summary["total_duration_seconds"],
-            mode_breakdown=summary["mode_breakdown"], mode_duration=summary["mode_duration"],
-        )
-        return engine, card
+
+        def render(fraction: float = 1.0):
+            k = min(max(fraction, 0.0), 1.0)
+            return engine.render_summary_card(
+                distance_km=summary["total_distance_km"] * k,
+                duration_seconds=summary["total_duration_seconds"] * k,
+                mode_breakdown={m: v * k for m, v in (summary["mode_breakdown"] or {}).items()},
+                mode_duration={m: v * k for m, v in (summary["mode_duration"] or {}).items()},
+            )
+
+        return render
     except Exception as exc:
         logger.info("Finale: no summary card (%s).", exc)
         return None
@@ -114,7 +234,7 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
         if not settings.get("enable_finale", tuning.DEFAULT_ENABLE_FINALE) or not settings.get("enable_outro", tuning.DEFAULT_ENABLE_OUTRO):
             return None
         project_dir = Path(job_config.get("directory_path") or config_path.parent)
-        from services.vdoprocessing.outrocard import _first_image, _project_colors, _route_badges
+        from services.vdoprocessing.outrocard import _first_image, _route_badges
 
         badges = _route_badges(job_config.get("waypoints", []) or [])
         route = route_latlon(project_dir)
@@ -128,7 +248,32 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
         if lat is None or lon is None or not photo or not photo_path.exists():
             logger.info("Finale: the last stop has no photo or position - skipping.")
             return None
-        stops = [(b, wp["lat"], wp.get("lng", wp.get("lon"))) for b, wp in badges if wp.get("lat") is not None]
+        # Each stop as the recap knows it: where it is, the colour its dot
+        # takes, the glyph and photo its badge shows, and the point along the
+        # track the drawing route reaches it at (so its dot lands then).
+        stops, order = [], 0
+        for index, (badge, wp) in enumerate(badges):
+            if wp.get("lat") is None:
+                continue
+            wp_lat, wp_lon = wp["lat"], wp.get("lng", wp.get("lon"))
+            if badge.isdigit():
+                order = int(badge)
+            wp_photo = _first_image(wp)
+            wp_photo_path = (
+                Path(wp_photo) if wp_photo and Path(wp_photo).is_absolute()
+                else project_dir / str(wp_photo or "")
+            )
+            at = min(
+                range(len(route)),
+                key=lambda i: (route[i][0] - wp_lat) ** 2 + (route[i][1] - wp_lon) ** 2,
+            )
+            stops.append({
+                "badge": badge, "index": index, "order": order,
+                "lat": wp_lat, "lon": wp_lon, "at": at,
+                "name": wp.get("label") or wp.get("name") or "",
+                "color": _stop_colors(badge, settings),
+                "photo": wp_photo_path if wp_photo and wp_photo_path.exists() else None,
+            })
 
         from .outro_step import _route_frame_size
 
@@ -137,10 +282,10 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
         out_w, out_h = size
         fps = int(settings.get("fps") or tuning.INTRO_FPS)
         voice = finale_voice({"settings": settings}, project_dir)
-        # The voice starts once the card has grown to fill the screen; the
-        # whole-route hold stretches so it ends inside the clip.
-        voice_start = 0.6 + 0.7
-        before_hold = 0.6 + 0.7 + tuning.FINALE_PHOTO_SECONDS + tuning.FINALE_ZOOM_SECONDS
+        # The clip opens on the fullscreen photo, so the voice starts with it;
+        # the whole-route hold stretches so it ends inside the clip.
+        voice_start = 0.0
+        before_hold = tuning.FINALE_PHOTO_SECONDS + tuning.FINALE_ZOOM_SECONDS
         hold_seconds = tuning.FINALE_HOLD_SECONDS
         if voice:
             hold_seconds = max(hold_seconds, voice_start + voice[1] + tuning.FINALE_VOICE_TAIL_SECONDS - before_hold)
@@ -149,8 +294,18 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
 
         out = Path(video_dir) / tuning.FINALE_OUTPUT_FILENAME
         key = clip_cache.fingerprint(
-            {"settings": settings, "stops": stops, "size": size, "voice": voice and voice[1]},
-            [gps_data_dir(project_dir) / "gpsdata.csv", photo_path, voice and voice[0], __file__, tuning.__file__],
+            {
+                "settings": settings, "size": size, "voice": voice and voice[1],
+                "stops": [
+                    (s["badge"], s["lat"], s["lon"], s["name"], str(s["photo"] or "")) for s in stops
+                ],
+            },
+            [
+                gps_data_dir(project_dir) / "gpsdata.csv", photo_path, voice and voice[0],
+                __file__, tuning.__file__,
+                # the recap badge layout the finale borrows
+                Path(__file__).parents[1] / "spatial_renderer" / "popups.py",
+            ],
         )
         if not force and clip_cache.reusable(project_dir, out, key):
             return str(out)
@@ -168,18 +323,51 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
             mapbox_key=resolve_mapbox_token(settings), map_style=resolve_map_style(settings, "mapbox/streets-v12"),
             route_latlon=route,
         )[::-1]  # pulls back: the close-up first
-        colors = _project_colors(settings)
-        line_bgr = tuple(reversed(colors.get("line", (33, 150, 243))))
-        marker = colors.get("marker", tuning.OUTRO_BADGE_COLOR)
+        # The very colour the overview draws this route in — read the way
+        # render_look reads it (the app writes these as RGB), not the way
+        # outrocard does, which hands back the project's cyan as orange.
+        from .render_look import _project_color
+
+        line_bgr = _project_color(settings, "line_color", tuning.MODE_LINE_COLORS["walking"])
         line_px = int(settings.get("line_thickness") or 6)
-        maps = [_overlay(f, ext, route, stops, line_bgr, line_px, marker) for f, ext in frames]
+        # The route traces itself over the first part of the pull-back, then
+        # stays whole for the rest of it.
+        maps = [
+            _map_frame(
+                f, ext, route, stops, line_bgr, line_px,
+                drawn=_ease((i + 1) / max(1, len(frames) * _ROUTE_DRAW_FRACTION)),
+            )
+            for i, (f, ext) in enumerate(frames)
+        ]
 
         from services.mapfetcher.mapgeometry import RouteGeometryProcessor as G
 
         full = ImageOps.fit(Image.open(photo_path).convert("RGB"), size, Image.LANCZOS)
-        card = _summary_card(config_path, settings)
+        engine = _graphics(settings)
+        card_render = _summary_card(engine, config_path)
         card_w = int(out_w * 0.2)
         card_h = int(card_w * out_h / out_w)
+
+        # Every stop's pill badge, laid out on the view the pull-back ends on
+        # exactly as the recap lays them out, and revealed one after another
+        # once the whole route is in shot.
+        final_extent = frames[-1][1]
+        summary_margin = 20
+        summary_box = []
+        if card_render is not None:
+            sample = card_render(1.0)
+            summary_box = [(
+                out_w - sample.shape[1] - summary_margin, out_h - sample.shape[0] - summary_margin,
+                float(out_w - summary_margin), float(out_h - summary_margin),
+            )]
+        route_px = np.array(
+            [G.project_latlon_to_pixel(la, lo, final_extent, out_w, out_h) for la, lo in route],
+            dtype=float,
+        )
+        recap_badges = _recap_badges(engine, stops, final_extent, size, summary_box, route_px)
+        # Revealed in the order the route itself unspools past them — the
+        # last stop first, back to the start.
+        recap_badges.sort(key=lambda b: -int(b.get("index", 0)))
 
         def card_box(i: int) -> Tuple[float, float]:
             px, py = G.project_latlon_to_pixel(float(lat), float(lon), frames[i][1], out_w, out_h)
@@ -202,35 +390,53 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
             return img
 
         def generate():
-            left, top, px, py = card_box(0)
-            small = (left, top, card_w, card_h)
-            # 1. the last stop's photo as a small card, pinned at its spot.
-            for _ in range(int(0.6 * fps)):
-                yield np.asarray(with_card(maps[0], small, 1.0, 1.0, 1.0, (px, py)))
-            # 2. that same photo grows to fill the frame — the hand-off into fullscreen.
-            k = max(1, int(0.7 * fps))
-            for i in range(k):
-                t = _ease((i + 1) / k)
-                box = tuple(a + (b - a) * t for a, b in zip(small, (0, 0, out_w, out_h)))
-                yield np.asarray(with_card(maps[0], box, 1.0, 1.0, max(0.0, (1 - t) * 2 - 1), (px, py)))
-            # 3. held fullscreen — the connection point the next beat (the pull-back below) continues from.
+            # Opens on the fullscreen photo, which the pull-back below shrinks
+            # back onto its pin.
             for _ in range(int(tuning.FINALE_PHOTO_SECONDS * fps)):
                 yield np.asarray(full)
-            # The camera pulls back; the card rides on its pin, shrinking and fading over the first part.
+            # The camera pulls back while the photo shrinks out of the full
+            # frame onto its pin, then fades off it.
+            shrink = max(1, int(len(maps) * 0.35))
+            fade = max(1, int(len(maps) * 0.3))
             for i, base in enumerate(maps):
-                f = min(1.0, i / max(1, len(maps) * 0.45))
                 left, top, px, py = card_box(i)
-                yield np.asarray(with_card(base, (left, top, card_w, card_h), 1 - 0.4 * f, 1 - f, 1 - f, (px, py)))
-            # The whole route, and the summary card fades in over it.
-            last_bgr = cv2.cvtColor(np.asarray(maps[-1]), cv2.COLOR_RGB2BGR)
-            k = max(1, int(0.4 * fps))
+                t = _ease(min(1.0, i / shrink))
+                box = tuple(
+                    a + (b - a) * t
+                    for a, b in zip((0.0, 0.0, float(out_w), float(out_h)), (left, top, float(card_w), float(card_h)))
+                )
+                f = min(1.0, max(0.0, (i - shrink) / fade))
+                yield np.asarray(with_card(base, box, 1 - 0.4 * f, 1 - f, (1 - f) * t, (px, py)))
+            # The whole route in shot: each stop's badge arrives in turn,
+            # the summary card fades in and its distance and time tick up to
+            # the real figures, and the finished picture — the recap's, at
+            # the recap's own size — is held.
+            step = max(1, int(_BADGE_STEP_SECONDS * fps))
+            badge_fade = max(1, int(_BADGE_FADE_SECONDS * fps))
+            count_frames = max(1, int(_COUNT_UP_SECONDS * fps))
+            card_fade = max(1, int(0.4 * fps))
+            settled = None
             for i in range(int(hold_seconds * fps)):
-                if card is None:
-                    yield np.asarray(maps[-1])
+                alphas = [
+                    min(1.0, max(0.0, (i - j * step) / badge_fade)) for j in range(len(recap_badges))
+                ]
+                done = all(a >= 1.0 for a in alphas)
+                if done and settled is not None:
+                    yield settled
                     continue
-                engine, card_bgra = card
-                frame = engine.composite_card_on_frame(last_bgr, card_bgra, alpha=min(1.0, (i + 1) / k))
-                yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img = _with_badges(maps[-1], engine, recap_badges, alphas) if recap_badges else maps[-1]
+                if card_render is None:
+                    frame_rgb = np.asarray(img)
+                else:
+                    counted = card_render(min(1.0, (i + 1) / count_frames))
+                    frame = engine.composite_card_on_frame(
+                        cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR),
+                        counted, alpha=min(1.0, (i + 1) / card_fade),
+                    )
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                if done and i + 1 >= count_frames:
+                    settled = frame_rgb  # nothing moves after this; reuse it
+                yield frame_rgb
 
         from services.vdoprocessing.outrocard import _pipe_frames
 
