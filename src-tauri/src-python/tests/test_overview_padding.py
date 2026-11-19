@@ -41,3 +41,25 @@ class TestAdaptiveOverviewPadding:
         # to be tuned in any shape (a mid-size route may want more than a big one).
         ceilings = [c for c, _ in tuning.OVERVIEW_PADDING_BY_SPAN_KM]
         assert ceilings == sorted(ceilings)
+
+
+class TestCrowdedRoutePadding:
+    """Many stops need room for their cards whatever the route's span, so the
+    span's padding is widened per stop above the threshold."""
+
+    def test_a_few_stops_leave_the_span_padding_alone(self):
+        df = _route_df(35.0, 139.0, 35.001, 139.001)
+        base = tuning.OVERVIEW_PADDING_BY_SPAN_KM[0][1]
+        assert _adaptive_overview_padding(df, tuning.OVERVIEW_PADDING_CROWD_STOPS) == base
+
+    def test_every_stop_above_the_threshold_widens_the_frame(self):
+        df = _route_df(35.0, 139.0, 35.001, 139.001)
+        base = tuning.OVERVIEW_PADDING_BY_SPAN_KM[0][1]
+        stops = tuning.OVERVIEW_PADDING_CROWD_STOPS + 4
+        assert _adaptive_overview_padding(df, stops) == pytest.approx(
+            base + 4 * tuning.OVERVIEW_PADDING_PER_CROWD_STOP
+        )
+
+    def test_it_stops_at_the_ceiling(self):
+        df = _route_df(35.0, 139.0, 36.0, 140.0)  # already the widest span padding
+        assert _adaptive_overview_padding(df, 200) == tuning.OVERVIEW_PADDING_MAX

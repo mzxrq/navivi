@@ -462,6 +462,12 @@ OVERVIEW_PADDING_BY_SPAN_KM: Tuple[Tuple[float, float], ...] = (
 )
 # Padding above the largest span_km ceiling.
 OVERVIEW_PADDING_MAX_SPAN = 0.18
+# ...and more room again once there are many stops to show: every one of them wants a card or a pill badge
+# somewhere clear of the route, and on a 20-stop route the span alone leaves nowhere to put them. Added per
+# stop above the threshold, on top of the span's own padding, up to OVERVIEW_PADDING_MAX.
+OVERVIEW_PADDING_CROWD_STOPS = 10
+OVERVIEW_PADDING_PER_CROWD_STOP = 0.01
+OVERVIEW_PADDING_MAX = 0.25
 # Overview: the walker takes at least this long from one numbered stop to the next, however close.
 OVERVIEW_MIN_LEG_SECONDS = 2.0
 # Overview: a reached pin grows from its tip with a slight overshoot over this long.
