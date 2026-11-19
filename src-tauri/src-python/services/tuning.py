@@ -450,8 +450,6 @@ OVERVIEW_POPUP_MIN_HOLD_SECONDS = 2.0
 # become their pill badges (see _render_recap_and_summary) — without the pause the change lands
 # the instant the walker stops and reads as a glitch rather than a step.
 RECAP_CARD_HOLD_SECONDS = 1.0
-# The overview walker stops this long at a "Connect to Route" stop-by (card showing); it has no cue of its own.
-OVERVIEW_CONNECTED_STOPBY_HOLD_SECONDS = 2.0
 # Overview map padding by route size: (span_km ceiling, padding) pairs, first that fits wins. The map is cut
 # to exactly the padded box, so small routes need a tight crop to be followed.
 OVERVIEW_PADDING_BY_SPAN_KM: Tuple[Tuple[float, float], ...] = (

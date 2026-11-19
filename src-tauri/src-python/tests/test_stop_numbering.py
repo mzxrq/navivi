@@ -10,15 +10,16 @@ def test_outro_badges_number_stops_as_the_overview_pins_do():
     wps = [
         {"label": "S"},
         {"label": "a"},
-        {"label": "linked, walker pauses", "isStopBy": True, "connectToRoute": True},
+        {"label": "linked to the route", "isStopBy": True, "connectToRoute": True},
         {"label": "linked, no pause", "isStopBy": True, "connectToRoute": True, "pauseAtWaypoint": False},
         {"label": "closed", "inaccessible": True},
         {"label": "b"},
         {"label": "side trip", "isStopBy": True},
         {"label": "E"},
     ]
-    assert [b for b, _ in _route_badges(wps)] == ["S", "1", "・", "・", "×", "4", "E"]  # a=1, paused link=2, closed=3, b=4
-    assert not stop_is_numbered({"isStopBy": True, "connectToRoute": True}, course=True)
+    # The walker passes every stop-by, connected or not, so none of them takes a number.
+    assert [b for b, _ in _route_badges(wps)] == ["S", "1", "・", "・", "×", "3", "E"]  # a=1, closed=2, b=3
+    assert not stop_is_numbered({"isStopBy": True, "connectToRoute": True})
     assert not stop_is_numbered({"skipAssetGeneration": True})
 
 

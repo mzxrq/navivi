@@ -153,7 +153,7 @@ class _TransitionMixin:
             if base_plate is None or base_plate.shape[:2] != (h, w):  # not this render's
                 base_plate = pre_popup_frame if pre_popup_frame is not None else self.last_frame
             outro_frame = base_plate.copy()
-            all_recap_popups = [ap for ap in active_popups if ap["data"].get("popup_image")]
+            all_recap_popups = [ap for ap in active_popups if self._wants_recap_card(ap)]
             # A loop route's "E" is the exact same real-world place as "S"
             # (see SpatialRendererBase._is_loop_route) — usually labeled
             # "... (Return)" in job_config.json, its own popup card would
@@ -170,16 +170,17 @@ class _TransitionMixin:
             hold_frames = 0 if self._ending_zoom_follows(stop_popup) else max(0, int(total_freeze * fps))
 
             if all_recap_popups:
-                laid_out = getattr(self, "_stay_layout", None) if self._cards_stay() else None
-                if laid_out:
-                    for ap in laid_out:
-                        ap["beside_box"] = ap["stay_box"]  # where the walk showed it
-                else:
-                    laid_out = self._layout_recap_cards(
-                        all_recap_popups, w, h,
-                        reserved_boxes=reserved_boxes,
-                        route_obstacles=route_obstacle_arr,
-                    )
+                # Laid out again for the recap, even when the cards stayed up
+                # through the whole walk: those sat in slots pitched for a
+                # full photo card, and leaving the badges there spaces them a
+                # card's width apart. A badge is slim, so its own lattice
+                # packs them side by side — the cross-fade below carries each
+                # card into its badge.
+                laid_out = self._layout_recap_cards(
+                    all_recap_popups, w, h,
+                    reserved_boxes=reserved_boxes,
+                    route_obstacles=route_obstacle_arr,
+                )
                 final_frame = self._render_recap_frame(
                     outro_frame, active_popups, group_popups=laid_out
                 )
@@ -322,10 +323,9 @@ class _TransitionMixin:
         if holds_ends:
             total_points = total_wp
         order = 0
-        course = (self.config or {}).get("overview_style") == "course"
         for pos, jw in enumerate(job_waypoints):
             is_stopby = bool(jw.get("isStopBy", False) or jw.get("skipAssetGeneration"))
-            if stop_is_numbered(jw, course) and not (holds_ends and pos == 0):
+            if stop_is_numbered(jw) and not (holds_ends and pos == 0):
                 order += 1
             # A loop route's job_config waypoints list ends with a
             # synthetic "(Return)" entry at the SAME coordinates as the

@@ -221,7 +221,9 @@ class _PinMixin:
         count the same way MapArea.tsx's normalIndex does)."""
         label, pin_color, split_color = self._pin_label_and_color(wp, total_points)
         px, py = int(wp.get("pin_x", wp["x"])), int(wp.get("pin_y", wp["y"]))
-        is_circle = False  # Normal marker for stop-bys as well
+        # A closed place is a circle, not a teardrop: it is not a stop on the
+        # walk, and the recap marks every stop it did make with a dot.
+        is_circle = bool(wp.get("data", {}).get("inaccessible"))
         self.graphics.draw_marker(
             frame, px, py, number=label, color=pin_color, split_color=split_color, is_circle=is_circle,
             scale=scale, image=wp.get("data", {}).get("pin_image"),
