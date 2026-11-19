@@ -16,9 +16,18 @@ from services import tuning
 from .helpers import logger
 
 
-def _adaptive_overview_padding(route_df: pd.DataFrame) -> float:
+def _crowd_padding(padding: float, stops: int) -> float:
+    """Widens `padding` for a route with many stops: each one wants a card
+    or a pill badge in clear space, and the span alone doesn't know how many
+    there are (see tuning.OVERVIEW_PADDING_CROWD_STOPS)."""
+    extra = max(0, stops - tuning.OVERVIEW_PADDING_CROWD_STOPS)
+    return min(padding + extra * tuning.OVERVIEW_PADDING_PER_CROWD_STOP, tuning.OVERVIEW_PADDING_MAX)
+
+
+def _adaptive_overview_padding(route_df: pd.DataFrame, stops: int = 0) -> float:
     """Picks the overview map's padding_factor from the route's own
-    bounding-box diagonal distance (km) — see tuning.OVERVIEW_PADDING_BY_SPAN_KM.
+    bounding-box diagonal distance (km) — see tuning.OVERVIEW_PADDING_BY_SPAN_KM —
+    then widens it for the number of stops that need room on screen.
     Falls back to the old flat 10% if the span can't be computed (e.g. a
     single-point route)."""
     try:
@@ -31,12 +40,12 @@ def _adaptive_overview_padding(route_df: pd.DataFrame) -> float:
             )[0]
         )
     except (KeyError, ValueError, IndexError):
-        return 0.10
+        return _crowd_padding(0.10, stops)
 
     for max_span, padding in tuning.OVERVIEW_PADDING_BY_SPAN_KM:
         if span_km <= max_span:
-            return padding
-    return tuning.OVERVIEW_PADDING_MAX_SPAN
+            return _crowd_padding(padding, stops)
+    return _crowd_padding(tuning.OVERVIEW_PADDING_MAX_SPAN, stops)
 
 
 # The overview map's size (MapFetcher.fetch_image's default output_size).
@@ -108,7 +117,10 @@ def purge_map_images_on_language_change(project_dir, language: Optional[str]) ->
 def overview_bounding_box(fetcher, route_df: pd.DataFrame, project_config: dict) -> dict:
     """The overview map's box: the route padded by its span; in the "course"
     style also clear of the headline above, and both styles clear of the subtitles below."""
-    bbox = fetcher.get_bounding_box(route_df, padding_factor=_adaptive_overview_padding(route_df))
+    stops = len(project_config.get("waypoints") or ())
+    bbox = fetcher.get_bounding_box(
+        route_df, padding_factor=_adaptive_overview_padding(route_df, stops)
+    )
     if overview_style(project_config) == "course":
         bbox = _reserve_overview_bands(
             bbox, OVERVIEW_FRAME_SIZE,
