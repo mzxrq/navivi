@@ -15,7 +15,7 @@ import numpy as np
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services.logger.progress import tracker
-from services import tuning, video_text
+from services import tuning
 from .base import logger
 from .overview_timing import warp_path
 
@@ -43,10 +43,57 @@ class _NoticeWriter:
         return getattr(self._video, name)
 
     def write(self, frame: np.ndarray) -> None:
+        frame = self._renderer._apply_hud(frame)
         self._video.write(self._renderer._apply_stopby_notice(frame))
 
 
 class _OverviewAnimationMixin:
+    def _apply_hud(self, frame: np.ndarray) -> np.ndarray:
+        """Persistent overview HUD: the scale bar (always, when the
+        renderer has a usable mpp — see render_overview's
+        self._hud_mpp) and the live "X km / Y left" chip (once the walk
+        has an actual position to measure progress from). Drawn through
+        _NoticeWriter.write so every frame this loop writes gets it,
+        regardless of which branch (walk, holds, batches) produced it —
+        same reasoning as the stop-by notice it's drawn alongside."""
+        frame = self.graphics.render_scale_bar(frame, getattr(self, "_hud_mpp", None))
+        total_km = getattr(self, "_hud_total_distance_km", None)
+        total_s = getattr(self, "_hud_total_duration_seconds", None)
+        frac = getattr(self, "_hud_progress_frac", None)
+        if total_km is not None and total_s is not None and frac is not None:
+            remaining = max(0.0, 1.0 - frac)
+            frame = self.graphics.render_distance_chip(frame, total_km * remaining, total_s * remaining)
+        return self._apply_preview_badge(frame)
+
+    def _apply_preview_badge(self, frame: np.ndarray) -> np.ndarray:
+        """The upcoming (not yet arrived) waypoint's own pill badge — see
+        _animate_overview_frames, which sets self._preview_badge to it
+        each frame (or None once nothing is left to preview). Placed
+        directly above its own map coordinate with no leader line: it
+        hasn't been reached yet, so there's no pin on screen to connect
+        it to — only the badge itself, a quiet "coming up" hint rather
+        than a real arrival. Cleared instantly once that waypoint is
+        itself triggered — its real full "pop up card" takes over from
+        there, and only shrinks back to this same pill badge once it's
+        been shown for a while (see _composite_baked_popups), at the very
+        spot the end-of-video recap will keep it in."""
+        popup = getattr(self, "_preview_badge", None)
+        if popup is None:
+            return frame
+        h, w = frame.shape[:2]
+        name_chars = len(str(popup.get("label") or ""))
+        badge_w, badge_h = self.graphics.beside_card_footprint(
+            is_pill_badge=True, pill_name_chars=name_chars
+        )
+        x, y = popup.get("pin_x", popup["x"]), popup.get("pin_y", popup["y"])
+        margin = 24
+        box_x = int(max(margin, min(x - badge_w / 2, w - badge_w - margin)))
+        box_y = int(max(margin, min(y - badge_h - 44, h - badge_h - margin)))
+        preview = popup.copy()
+        preview["is_pill_badge"] = True
+        preview["beside_box"] = (box_x, box_y)
+        return self.graphics.render_popup_box(frame, preview, alpha=1.0, skip_line=True)
+
     def _start_stopby_notice(self, fps: int, seconds: float, kind: str = "stopby") -> None:
         """Shows the stop-by notice (or, kind "closed", the closed-place one) once per video, from the next frame."""
         shown = self.__dict__.setdefault("_notice_kinds_shown", set())
@@ -362,6 +409,10 @@ class _OverviewAnimationMixin:
         # waypoint's card again on top at full opacity — a blurry/ghosted
         # double-image for whichever popup happened to still be fading.
         pre_popup_frame = None
+        # Stays None if the walk has no frames at all, which is what the
+        # card-hold tail below checks before reaching for the loop's own
+        # last-frame state.
+        frame_before_popups = None
 
         # Live CLI substep + ETA for this (often long, frame-by-frame)
         # render — total_stops excludes the start pin (index 0), which
@@ -540,6 +591,7 @@ class _OverviewAnimationMixin:
                 color_breakpoints = getattr(self, "_color_breakpoints", None)
                 if color_breakpoints:
                     leg_color = self._mode_at_fraction(color_breakpoints, frac)
+                self._hud_progress_frac = frac
             else:
                 current_mode = "walking"
             mode_history.append((current_mode, leg_color) if leg_color else current_mode)
@@ -687,6 +739,24 @@ class _OverviewAnimationMixin:
                         popup["data"]["arrived"] = True
                         popup["pop_frame"] = video.frames_written  # the pin pops in from here
 
+            # The next real waypoint still ahead (seq_ptr already advanced
+            # above for anything reached this frame) gets a small preview
+            # badge — name, number and a thumbnail — ahead of actually
+            # arriving, so the traveler is never walking toward a stop with
+            # nothing on screen naming it yet. Drawn every frame via
+            # _apply_hud/_NoticeWriter, same as the scale bar/distance chip,
+            # so every write path (walk, holds, batches) shows it; cleared
+            # the moment that waypoint is itself triggered (its own real
+            # card, not this preview, takes over from there).
+            self._preview_badge = None
+            if seq_ptr < len(sequential_popups):
+                upcoming = sequential_popups[seq_ptr]
+                if (
+                    not upcoming["data"].get("triggered")
+                    and upcoming["data"].get("popup_image")
+                ):
+                    self._preview_badge = upcoming
+
             # A fixed cooldown between triggers is what a single popup
             # needs to be readable before the next one bumps it — but
             # applied unconditionally to a real backlog (several
@@ -759,6 +829,14 @@ class _OverviewAnimationMixin:
                         self._draw_pin(frame_no_route, wp, len(points), scale=self._pin_pop_scale(wp, self._pop_now, fps))
 
             if not is_video:
+                # The recap draws a plain dot per stop, not the walk's
+                # teardrop pins (see _render_recap_frame / _draw_recap_dot),
+                # so it gets the plate from BEFORE they go on — drawing
+                # dots over the frame below would leave each teardrop
+                # sticking out around its own dot.
+                last_frame_of_walk = stop_popup and current_frame == len(smooth_path) - 1
+                if last_frame_of_walk:
+                    self._recap_plate = frame.copy()
                 # Every waypoint is shown once up front on the intro frame
                 # (a preview of the whole route), but from here on a pin
                 # only reappears once the traveler actually reaches it —
@@ -770,6 +848,8 @@ class _OverviewAnimationMixin:
                         # A passed stop-by / closed place with no photo has no card: its name pops up instead.
                         if self._is_loose_stopby(wp) and not wp["data"].get("popup_image"):
                             self._draw_place_name(frame, wp)
+                            if last_frame_of_walk:
+                                self._draw_place_name(self._recap_plate, wp)
 
             # [NOTE] [Animation] Only the very last iteration's pre-popup frame is ever read
             # (see the recap's use of it, below) — smooth_path's length is
@@ -1064,9 +1144,10 @@ class _OverviewAnimationMixin:
                         other_popup = other_bp["popup"]
                         if not other_popup.get("beside_box"):
                             continue
-                        other_hud = other_popup.copy()
-                        other_hud["hud_corner"] = None
-                        other_hud["draw_leader_line"] = True
+                        other_hud = self.walk_card_hud(
+                            other_popup, w, h, route_obstacle_arr,
+                            lambda popup: self._active_card_boxes(baked_popups, exclude=popup),
+                        )
                         other_alpha = self._popup_fade_alpha(other_bp)
                         frame = self.graphics.render_popup_box(
                             frame, other_hud, alpha=other_alpha, line_only=True
@@ -1085,19 +1166,27 @@ class _OverviewAnimationMixin:
                         # next one. Faded in from the start (see
                         # _popup_fade_alpha), same as every later frame
                         # _composite_baked_popups draws it for.
-                        self._layout_recap_popups(
-                            [new_bp], w, h, route_obstacles=route_obstacle_arr,
-                            reserved_boxes=self._active_card_boxes(
-                                baked_popups, exclude=triggered_popup
-                            ) + self._stopby_notice_reserved(w, h),
+                        # A card that stays already has its spot (its badge's,
+                        # from _layout_recap_cards) and must not be sent
+                        # looking for another one here: it would show at that
+                        # other spot for this one frame and jump back on the
+                        # next, when _composite_baked_popups puts it back.
+                        if not triggered_popup.get("stay_box"):
+                            self._layout_recap_popups(
+                                [new_bp], w, h, route_obstacles=route_obstacle_arr,
+                                reserved_boxes=self._active_card_boxes(
+                                    baked_popups, exclude=triggered_popup
+                                ) + self._stopby_notice_reserved(w, h),
+                            )
+                        hud_new = self.walk_card_hud(
+                            triggered_popup, w, h, route_obstacle_arr,
+                            lambda popup: self._active_card_boxes(baked_popups, exclude=popup),
                         )
-                        hud_new = triggered_popup.copy()
-                        hud_new["hud_corner"] = None
-                        hud_new["draw_leader_line"] = True
                         # Slide-up entrance, same as every later frame
                         # _composite_baked_popups draws this popup for —
-                        # see _popup_slide_offset_y.
-                        if hud_new.get("beside_box"):
+                        # see _popup_slide_offset_y. A staying card doesn't
+                        # slide (its leader line would sweep with it).
+                        if hud_new.get("beside_box") and not triggered_popup.get("stay_box"):
                             bx, by = hud_new["beside_box"]
                             hud_new["beside_box"] = (
                                 bx, int(by + self._popup_slide_offset_y(new_bp))
@@ -1123,13 +1212,6 @@ class _OverviewAnimationMixin:
                         self.graphics.draw_transport_icon(
                             frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
                         )
-                    # This IS the arrival frame — always "まもなく" (never
-                    # the "へ"/en-route phrasing), naming the waypoint that
-                    # just triggered rather than sequential_popups[seq_ptr]
-                    # (already advanced past it by this point in the loop).
-                    frame = self.graphics.render_top_banner(
-                        frame, video_text.current_labels()["soon_banner"].format(dest=triggered_popup.get("label") or "")
-                    )
                     self.last_frame = frame
                     video.write(frame)
                     prev_cx, prev_cy = cx, cy
@@ -1342,33 +1424,29 @@ class _OverviewAnimationMixin:
                         frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
                     )
 
-                # Dynamic "next stop" caption — the next real waypoint still
-                # ahead in route order (sequential_popups[seq_ptr]), or the
-                # final destination once every other real waypoint has
-                # already arrived. "まもなく" once within
-                # OVERVIEW_BANNER_NEAR_SECONDS of its own expected_frame
-                # (the same estimated-arrival frame the trigger logic
-                # above uses), "へ" (still en route) otherwise.
-                banner_target = (
-                    sequential_popups[seq_ptr] if seq_ptr < len(sequential_popups) else stop_popup
-                )
-                if banner_target:
-                    label = banner_target.get("label") or ""
-                    expected_frame = banner_target.get("expected_frame")
-                    near = (
-                        expected_frame is not None
-                        and (expected_frame - current_frame) <= int(fps * tuning.OVERVIEW_BANNER_NEAR_SECONDS)
-                    )
-                    _vt = video_text.current_labels()
-                    banner_text = (
-                        _vt["soon_banner"].format(dest=label) if near
-                        else _vt["en_route_banner"].format(dest=label, suffix="")
-                    )
-                    frame = self.graphics.render_top_banner(frame, banner_text)
-
                 self.last_frame = frame
                 video.write(frame)
 
             prev_cx, prev_cy = cx, cy
+
+        # The walk is over and every stop's card is still up (they stay for
+        # the whole walk — see _composite_baked_popups). Hold on that
+        # picture before the recap turns them all into badges. Composited
+        # frame by frame rather than freezing the last one: the final
+        # stop's card pops as the walk ends, so a frozen frame would hold
+        # it half faded-in for the whole beat.
+        hold_frames = int(tuning.RECAP_CARD_HOLD_SECONDS * fps)
+        if stop_popup and not is_video and self._cards_stay() and frame_before_popups is not None:
+            for _ in range(hold_frames):
+                held = frame_before_popups.copy()
+                held, baked_popups = self._composite_baked_popups(
+                    held, baked_popups, w, h, route_obstacle_arr,
+                    active_popups=active_popups, total_points=len(points), fps=fps,
+                )
+                self.graphics.draw_transport_icon(
+                    held, cx, cy, current_frame, smoothed_angle, mode=current_mode
+                )
+                self.last_frame = held
+                video.write(held)
 
         return pre_popup_frame

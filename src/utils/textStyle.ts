@@ -81,7 +81,7 @@ export function textStyleToCss(s: Required<TextStyle>): CSSProperties {
   } else {
     if (s.outline_width > 0) css.WebkitTextStroke = `${u(s.outline_width)} ${s.outline_color}`;
     css.paintOrder = "stroke fill";
-    if (s.shadow > 0) css.textShadow = `${u(s.shadow)} ${u(s.shadow)} 0 ${s.shadow_color}`;
+    if (s.shadow > 0) css.textShadow = `0 0 ${u(s.shadow)} ${s.shadow_color}`;
   }
   return css;
 }

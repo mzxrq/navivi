@@ -90,7 +90,7 @@ def build_animator_config(
             k: settings.get(k, default)
             for k, default in [
                 ("fps", 30),
-                ("line_thickness", 10),
+                ("line_thickness", 7),
                 ("marker_radius", 16),
                 ("map_font_size", 24),
                 ("card_border_thickness", tuning.DEFAULT_CARD_BORDER_THICKNESS),

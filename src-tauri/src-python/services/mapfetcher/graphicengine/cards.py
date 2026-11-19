@@ -1195,3 +1195,123 @@ class _CardMixin:
             card_bgr * card_alpha[..., None] + roi * (1 - card_alpha[..., None])
         ).astype(np.uint8)
         return out
+
+    # Round real-world distances a map scale bar may show, smallest first.
+    _SCALE_NICE_METERS: Tuple[float, ...] = (
+        1, 2, 5, 10, 20, 50, 100, 200, 500,
+        1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000,
+    )
+
+    def _nice_scale_meters(self, raw_m: float) -> float:
+        """Largest round distance (1/2/5 x 10^n) at or below `raw_m` — the
+        standard "pick a tidy number, then size the bar to it" map-scale-bar
+        approach, rather than a bar sized to an arbitrary distance like
+        "73 m"."""
+        fit = [m for m in self._SCALE_NICE_METERS if m <= raw_m]
+        return fit[-1] if fit else self._SCALE_NICE_METERS[0]
+
+    def render_scale_bar(
+        self, frame: np.ndarray, meters_per_pixel: Optional[float],
+        alpha: float = 1.0, bottom_margin: int = 40, right_margin: int = 28,
+    ) -> np.ndarray:
+        """Bottom-right map scale ruler: a tick-ended bar sized to a round
+        real-world distance, with that distance printed above it.
+        `meters_per_pixel` is the ground distance one frame pixel covers at
+        the route's own latitude (RouteGeometryProcessor.project_latlon_to_pixel's
+        own projection) — the same coordinate system the pins/route are
+        drawn in, so the bar is always accurate to what's actually on
+        screen, zoom included. No-ops without a usable scale (e.g. the
+        pydeck/GPU overview path, which never computes one)."""
+        if not meters_per_pixel or meters_per_pixel <= 0:
+            return frame
+        h, w = frame.shape[:2]
+        s = h / 1080.0
+        raw_m = 90 * s * meters_per_pixel
+        nice_m = self._nice_scale_meters(raw_m)
+        bar_px = max(8, round(nice_m / meters_per_pixel))
+        label = f"{nice_m / 1000:g} km" if nice_m >= 1000 else f"{nice_m:g} m"
+
+        scale = 2  # supersampled for antialiased text/ticks, then downscaled
+        font = self._card_font(self.FONT_CANDIDATES_BOLD, int(15 * s) * scale)
+        measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        bbox = measure.textbbox((0, 0), label, font=font)
+        text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        pad_x, pad_y = int(16 * s) * scale, int(10 * s) * scale
+        tick_h = int(8 * s) * scale
+        gap = int(4 * s) * scale
+        bar_w = bar_px * scale
+        card_w = max(text_w, bar_w) + pad_x * 2
+        card_h = pad_y * 2 + text_h + gap + tick_h
+
+        canvas = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        draw.rounded_rectangle([0, 0, card_w, card_h], radius=10 * scale, fill=self.ui["card_bg"])
+        draw.text((card_w // 2 - text_w // 2 - bbox[0], pad_y - bbox[1]), label, font=font, fill=self.ui["card_text"])
+        bar_y = pad_y + text_h + gap
+        bar_x0, bar_x1 = (card_w - bar_w) // 2, (card_w - bar_w) // 2 + bar_w
+        line_w = max(1, scale)
+        draw.line([(bar_x0, bar_y), (bar_x1, bar_y)], fill=self.ui["card_text"], width=line_w)
+        draw.line([(bar_x0, bar_y - tick_h // 2), (bar_x0, bar_y + tick_h // 2)], fill=self.ui["card_text"], width=line_w)
+        draw.line([(bar_x1, bar_y - tick_h // 2), (bar_x1, bar_y + tick_h // 2)], fill=self.ui["card_text"], width=line_w)
+        canvas = canvas.resize((max(1, card_w // scale), max(1, card_h // scale)), Image.LANCZOS)
+
+        return self._composite_pill(frame, canvas, alpha, x_from_right=right_margin, y_from_bottom=bottom_margin)
+
+    def render_distance_chip(
+        self, frame: np.ndarray, distance_km: float, duration_seconds: float,
+        alpha: float = 1.0, top_margin: int = 14, right_margin: int = 24, font_px: int = 20,
+    ) -> np.ndarray:
+        """Top-right HUD chip: how much of the route is still ahead, live
+        (e.g. "12.4 km · 2h 10m left") — passive background info shown for
+        the whole video, so it uses the neutral card_bg/card_text theme
+        rather than the accent pill render_top_banner used for the single
+        "active" element on a frame."""
+        dist_s = f"{distance_km * 1000:.0f} m" if distance_km < 1 else f"{distance_km:.1f} km"
+        dur_s = self._format_duration_ja(duration_seconds)
+        labels = getattr(self, "summary_card_labels", None) or video_text.current_labels()
+        text = drawable(labels["overview_remaining_hud"].format(distance=dist_s, duration=dur_s))
+
+        scale = 2
+        font = self._card_font(self.FONT_CANDIDATES_BOLD, font_px * scale)
+        measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        bbox = measure.textbbox((0, 0), text, font=font)
+        text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        pad_x, pad_y = int(16 * font_px / 22) * scale, int(10 * font_px / 22) * scale
+        card_w, card_h = text_w + pad_x * 2, text_h + pad_y * 2
+
+        canvas = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        draw.rounded_rectangle([0, 0, card_w, card_h], radius=14 * scale, fill=self.ui["card_bg"])
+        draw.text((pad_x - bbox[0], pad_y - bbox[1]), text, font=font, fill=self.ui["card_text"])
+        canvas = canvas.resize((max(1, card_w // scale), max(1, card_h // scale)), Image.LANCZOS)
+
+        return self._composite_pill(frame, canvas, alpha, x_from_right=right_margin, y_from_top=top_margin)
+
+    @staticmethod
+    def _composite_pill(
+        frame: np.ndarray, canvas: Image.Image, alpha: float,
+        x_from_right: Optional[int] = None, x_from_left: Optional[int] = None,
+        y_from_top: Optional[int] = None, y_from_bottom: Optional[int] = None,
+    ) -> np.ndarray:
+        """Shared alpha-composite of a finished RGBA PIL pill onto `frame`,
+        anchored by whichever edge margin the caller gives (render_top_banner
+        duplicates this inline for its own center/left anchoring; this is
+        the edge-anchored case the new HUD chips share)."""
+        card_bgra = np.array(canvas)[:, :, [2, 1, 0, 3]]
+        ch, cw = card_bgra.shape[:2]
+        h, w = frame.shape[:2]
+        x0 = (w - x_from_right - cw) if x_from_right is not None else (x_from_left or 0)
+        y0 = (h - y_from_bottom - ch) if y_from_bottom is not None else (y_from_top or 0)
+        x0, y0 = max(0, x0), max(0, y0)
+        cw, ch = min(cw, w - x0), min(ch, h - y0)
+        if cw <= 0 or ch <= 0:
+            return frame
+        card_bgra = card_bgra[:ch, :cw]
+        out = frame.copy()
+        card_bgr = card_bgra[:, :, :3].astype(np.float32)
+        card_alpha = (card_bgra[:, :, 3].astype(np.float32) / 255.0) * alpha
+        roi = out[y0 : y0 + ch, x0 : x0 + cw].astype(np.float32)
+        out[y0 : y0 + ch, x0 : x0 + cw] = (
+            card_bgr * card_alpha[..., None] + roi * (1 - card_alpha[..., None])
+        ).astype(np.uint8)
+        return out

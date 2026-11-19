@@ -54,15 +54,51 @@ def test_view_wait_cue_stops_the_walker_at_the_card():
     card = {"lat": EAST[4][0], "lon": EAST[4][1], "wait": True, "piece": 0, "show_seconds": 3.0, "hide_seconds": 5.0}
     km = [i * 0.1 for i in range(11)]
     plan, spots, held = _wait_view_plan(df, km, [(10, 12.0)], [card])
-    assert plan == [(4, 3.0), (10, 7.0)]  # walks 3 s to the spot, waits 2 s, then the rest: the piece is still 12 s
+    assert plan == [(4, 3.0, 0.0, 0), (10, 7.0, 0.0, 0)]  # walks 3 s to the spot, waits 2 s, then the rest: the piece is still 12 s
     assert spots == [(3.0, card, 2.0)] and held == 2.0
     # The cue opens the script: the walker can't be there yet, so it walks there first and waits the rest.
     early = dict(card, show_seconds=0.2, hide_seconds=8.0)
-    assert _wait_view_plan(df, km, [(10, 12.0)], [early]) == ([(4, 4.0), (10, 4.0)], [(4.0, early, 4.0)], 4.0)
+    assert _wait_view_plan(df, km, [(10, 12.0)], [early]) == ([(4, 4.0, 0.0, 0), (10, 4.0, 0.0, 0)], [(4.0, early, 4.0)], 4.0)
     late = dict(card, show_seconds=11.0, hide_seconds=13.0)
-    assert _wait_view_plan(df, km, [(10, 12.0)], [late]) == ([(10, 12.0)], [], 0.0)  # doesn't fit: a plain view
+    assert _wait_view_plan(df, km, [(10, 12.0)], [late]) == ([(10, 12.0, 0.0, 0)], [], 0.0)  # doesn't fit: a plain view
     # A {start} cue 8 s in: the walk starts there, so voice 11-13 s is walk 3-5 s, the same as `card`.
-    assert _wait_view_plan(df, km, [(10, 12.0)], [late], start_cue_seconds=8.0) == ([(4, 3.0), (10, 7.0)], [(3.0, late, 2.0)], 2.0)
+    assert _wait_view_plan(df, km, [(10, 12.0)], [late], start_cue_seconds=8.0) == (
+        [(4, 3.0, 0.0, 0), (10, 7.0, 0.0, 0)], [(3.0, late, 2.0)], 2.0,
+    )
+
+
+def test_at_cue_still_lands_on_its_own_piece_after_an_earlier_piece_is_split_by_view_wait():
+    """Splitting piece 0 (a {view wait}) must not shift where a LATER piece's {at N} cue lands - see
+    pedestrian._piece_of. Before that fix, _at_points_plan trusted a plan entry's LIST POSITION as its
+    piece number, which broke as soon as an earlier piece was split into more than one entry."""
+    import math
+
+    import pandas as pd
+
+    from services.vdoprocessing.pydeckrecorder.pedestrian import _at_points_plan, _wait_view_plan
+
+    lat0, lng0 = 35.0, 139.0
+    m_lat, m_lng = 1 / 110540.0, 1 / (111320.0 * math.cos(math.radians(lat0)))
+
+    def at(east_m, north_m):
+        return [lat0 + north_m * m_lat, lng0 + east_m * m_lng]
+
+    # 400 m east (20 m steps), a 90-degree turn, then 200 m north: leg_turns finds exactly one turn, at index 20.
+    points = [at(x, 0) for x in range(0, 400, 20)] + [at(400, y) for y in range(0, 200 + 1, 20)]
+    df = pd.DataFrame({"lat": [p[0] for p in points], "lon": [p[1] for p in points]})
+    km = [i * 0.02 for i in range(len(points))]
+    turn_idx = 20
+    seed = [(turn_idx, 10.0), (len(points) - 1, 10.0)]  # piece 0: to the turn, piece 1: the north leg
+    at_cues = [(1, 4.0, 1)]  # {at 1}: 4 s into piece 1's own voice
+
+    reference = _at_points_plan(df, km, seed, at_cues)
+
+    card = {"lat": at(100, 0)[0], "lon": at(100, 0)[1], "wait": True, "piece": 0, "show_seconds": 2.0, "hide_seconds": 4.0}
+    waited, _, _ = _wait_view_plan(df, km, seed, [card])
+    assert len(waited) == 3  # piece 0 split into 2 entries; piece 1 is still its own single entry
+
+    out = _at_points_plan(df, km, waited, at_cues)
+    assert out[-2:] == reference[-2:]  # piece 1's {at 1} lands the same whether or not piece 0 was split
 
 
 def test_a_placed_street_view_replaces_the_auto_turn_photo_near_it():
@@ -142,7 +178,7 @@ def test_view_wait_slow_eases_the_walker_into_the_spot_and_still_arrives_on_the_
     df = pd.DataFrame({"lat": [lat for lat, _ in EAST], "lon": [lon for _, lon in EAST]})
     km = [i * 0.1 for i in range(11)]
     plan, spots, held = _wait_view_plan(df, km, [(10, 12.0)], [card])
-    assert plan == [(4, 6.0, tuning.VIEW_WAIT_SLOW_SECONDS), (10, 4.0)] and held == 2.0
+    assert plan == [(4, 6.0, tuning.VIEW_WAIT_SLOW_SECONDS, 0), (10, 4.0, 0.0, 0)] and held == 2.0
     smooth = interpolate_route_data(df.copy(), 10.0, 101, 1.0, km, segment_plan=plan)
     # Reaches the spot (0.4 km) at 6 s either way, but covers less ground in the last second before it than an even pace.
     step = lambda t: abs(float(smooth["lon"].iloc[int(t * 10)]) - float(smooth["lon"].iloc[int(t * 10) - 10]))  # noqa: E731

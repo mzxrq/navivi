@@ -106,7 +106,7 @@ class _GraphicsEngineBase:
     def __init__(
         self,
         line_color=tuning.DEFAULT_LINE_COLOR,
-        line_thickness=10,
+        line_thickness=7,  # thin traced route (editorial look), not a highway (was 10)
         marker_color=tuning.DEFAULT_MARKER_COLOR,  # blue (BGR) — every pin except S/E
         arrived_marker_color=tuning.DEFAULT_ARRIVED_MARKER_COLOR,  # deeper blue once visited
         marker_radius=16,

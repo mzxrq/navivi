@@ -81,6 +81,40 @@ def _leader_crosses_placed(
     return False
 
 
+# How close a candidate leader line may pass to a route point before it's
+# treated as visibly crossing the route (px) — see _leader_crosses_route.
+_ROUTE_CROSS_TOLERANCE_PX = 6.0
+
+
+def _leader_crosses_route(
+    ax0: float, ay0: float, ax1: float, ay1: float,
+    route_x: Optional[np.ndarray], route_y: Optional[np.ndarray],
+) -> bool:
+    """Whether a candidate leader line (pin -> card anchor) passes close to
+    the route line itself. `route_obstacles` is a decimated point array,
+    not a polyline, so this samples points along the candidate segment and
+    checks each one against every route point's proximity — the same
+    "sample points, check proximity" idea free_spot's own overlaps() already
+    uses for its box-vs-route check, applied to the line instead of the
+    box. Deliberately out of scope until now (see _layout_beside_popups'
+    own docstring) — this is what fixes leader lines visibly crossing the
+    route line on the map."""
+    if route_x is None or len(route_x) == 0:
+        return False
+    length = math.hypot(ax1 - ax0, ay1 - ay0)
+    if length < 1.0:
+        return False
+    steps = max(1, int(length / _ROUTE_CROSS_TOLERANCE_PX))
+    t = np.linspace(0.0, 1.0, steps + 1)
+    pts_x = ax0 + (ax1 - ax0) * t
+    pts_y = ay0 + (ay1 - ay0) * t
+    close = (
+        (np.abs(pts_x[:, None] - route_x[None, :]) <= _ROUTE_CROSS_TOLERANCE_PX)
+        & (np.abs(pts_y[:, None] - route_y[None, :]) <= _ROUTE_CROSS_TOLERANCE_PX)
+    )
+    return bool(np.any(close))
+
+
 def _cluster_points_by_distance(
     points: List[Tuple[float, float]], link_dist: float
 ) -> List[List[int]]:
@@ -401,10 +435,11 @@ class _PopupMixin:
         back to the first merely-non-overlapping spot only if nothing
         crossing-free turns up within `max_radius` — a transient card
         showing with an imperfect line for one busy frame beats it
-        disappearing entirely because avoidance was too strict. This
-        does NOT check against the route line itself (only route-vs-BOX
-        overlap, same as before) — leader-line-vs-route-line crossing is
-        a separate, deliberately out-of-scope concern for now.
+        disappearing entirely because avoidance was too strict. "Crossing"
+        also covers the candidate leader line passing close to the route
+        line itself (_leader_crosses_route), not just other cards' boxes/
+        lines — previously only the card's own BOX was checked against
+        the route, so a line could still visibly cut across it.
 
         Also used (via _render_recap_frame, with a much larger max_radius
         so the spiral effectively covers the whole frame instead of
@@ -451,8 +486,7 @@ class _PopupMixin:
             # same pin, since the route passes close by on either side of
             # where it just arrived. A pin near the top of the frame
             # (where "above" would run off-screen) seeds below instead.
-            # top_margin reserves the banner-pill band at the top of the frame
-            # so popup cards never land on that chip (see render_top_banner).
+            # top_margin keeps a card off the very top edge of the frame.
             top_margin = tuning.OVERVIEW_TOP_CARD_CLEARANCE
             # Likewise the bottom band, where the narration captions are burned in.
             bottom_limit = _card_bottom_limit(h, margin)
@@ -500,6 +534,17 @@ class _PopupMixin:
                 ax, ay = _anchor_point(x, y, bx, by, card_w, card_h)
                 return _leader_crosses_placed([(x, y), (ax, ay)], placed, placed_lines)
 
+            def crosses_route(bx: float, by: float) -> bool:
+                # Route-avoidance on top of `crosses` — kept as a separate
+                # check (not folded into `crosses` itself) so the
+                # straight-above shortcut below can keep ignoring the
+                # route, per its own comment: that short stretch always
+                # sits close to the pin's own line anyway.
+                ax, ay = _anchor_point(x, y, bx, by, card_w, card_h)
+                if _leader_crosses_route(x, y, ax, ay, route_x, route_y):
+                    return True
+                return crosses(bx, by)
+
             def _above_is_clear(bx: float, by: float, pin_x: float, pin_y: float) -> bool:
                 rx0, ry0, rx1, ry1 = (
                     bx - card_gap, by - card_gap,
@@ -533,7 +578,7 @@ class _PopupMixin:
                 return bx, by
             if not overlaps(bx, by):
                 fallback = (bx, by)
-                if not crosses(bx, by):
+                if not crosses_route(bx, by):
                     return bx, by
 
             # [NOTE] [Animation] Archimedean-spiral search outward from the pin until a non-overlapping (and preferably non-crossing) spot is found or max_radius is exhausted.
@@ -548,7 +593,7 @@ class _PopupMixin:
                 if not overlaps(bx, by):
                     if fallback is None:
                         fallback = (bx, by)
-                    if not crosses(bx, by):
+                    if not crosses_route(bx, by):
                         return bx, by
 
             return fallback  # crossing-free spot never found; use the fallback (None if not even that exists — too crowded nearby, sit this frame out)
@@ -761,7 +806,7 @@ class _PopupMixin:
                 )
             return False
 
-        top = max(margin, tuning.OVERVIEW_TOP_CARD_CLEARANCE)  # below the "next stop" banner band
+        top = max(margin, tuning.OVERVIEW_TOP_CARD_CLEARANCE)
 
         def clamp(bx: float, by: float) -> Tuple[float, float]:
             return (
@@ -1092,11 +1137,9 @@ class _PopupMixin:
             reserve(bp)
 
     # --- End-of-video recap: card layout --------------------------------
-    # Card scales tried largest-first until the frame has enough free slots
-    # to give every card one at once. Floored at the last entry — below
-    # that a card's photo and label stop being legible, so a route with
-    # more stops than that many slots shows as many as fit rather than
-    # shrinking into illegibility.
+    # Card scales tried largest-first for the "pop_up_card" recap style
+    # (settings.overview_recap_style) — floored at the last entry, below
+    # which a card's photo and label stop being legible.
     _RECAP_CARD_SCALES: Tuple[float, ...] = (0.85, 0.75, 0.65, 0.55, 0.46, 0.38)
     _RECAP_CARD_MARGIN = 16
     # Breathing room between neighbouring cards. Generous on purpose: at a
@@ -1242,15 +1285,40 @@ class _PopupMixin:
         Each card's "card_scale" and "recap_line_color" are stamped onto
         the popup here too, so the per-frame draw never re-derives either —
         a card must not move, resize or change color as later cards join it
-        on screen (see _render_recap_frame)."""
+        on screen (see _render_recap_frame).
+
+        Style picked by settings.overview_recap_style (see render_look.py):
+        "pill_badge" (default) uses the slim vertical badge footprint (see
+        popup_box.pill_badge_footprint) at a FIXED text size — fixed-width
+        and far narrower than a photo card, so a dense/large route (20+
+        waypoints) still gets every stop its own slot instead of hitting
+        the lattice's capacity wall; a longer name only makes its own
+        badge taller (more name lines), never changes the text size, so
+        every badge in a recap reads at the same size. "pop_up_card" uses
+        the old wide photo-card footprint, tried at shrinking scales
+        (_RECAP_CARD_SCALES) until enough slots fit — it can still run out
+        of room on a large route."""
         if not popups:
             return []
+
+        pill_badge = self.config.get("overview_recap_style", "pill_badge") != "pop_up_card"
 
         def pin_of(popup: Dict) -> Tuple[float, float]:
             return popup.get("pin_x", popup["x"]), popup.get("pin_y", popup["y"])
 
         card_scale = self._RECAP_CARD_SCALES[-1]
-        card_w, card_h = self.graphics.beside_card_footprint(card_scale)
+        # Names are shown in full, never truncated — so a pill badge's
+        # lattice must be pitched for the LONGEST name among these popups
+        # (every slot has to fit the tallest badge that could land in it);
+        # a popup with a shorter name just draws a shorter (not stretched)
+        # badge inside its slot, see card_hs below.
+        max_name_chars = max(len(str(p.get("label") or "")) for p in popups)
+        if pill_badge:
+            card_w, card_h = self.graphics.beside_card_footprint(
+                is_pill_badge=True, pill_name_chars=max_name_chars
+            )
+        else:
+            card_w, card_h = self.graphics.beside_card_footprint(card_scale)
         slots: List[Tuple[int, int]] = []
         # Second pass drops the keep-off-the-route rule: a map whose route
         # sprawls across most of the frame would otherwise leave too few
@@ -1261,6 +1329,19 @@ class _PopupMixin:
         cy = sum(p[1] for p in all_pins) / len(all_pins)
 
         for obstacles in (route_obstacles, None):
+            if pill_badge:
+                # One fixed text size — no scale search — the narrow width
+                # alone is what gives a dense route room for every stop.
+                candidate = self._recap_card_slots(
+                    w, h, card_w, card_h, reserved_boxes, obstacles, centers=all_pins
+                )
+                if len(candidate) > len(slots):
+                    slots = candidate
+                if len(slots) >= len(popups):
+                    break
+                continue
+            # "pop_up_card": tried largest-first (_RECAP_CARD_SCALES) until
+            # the frame has a slot for every popup.
             for scale in self._RECAP_CARD_SCALES:
                 cw, ch = self.graphics.beside_card_footprint(scale)
                 candidate = self._recap_card_slots(
@@ -1282,9 +1363,9 @@ class _PopupMixin:
 
         if len(slots) < len(ordered):
             logger.warning(
-                "Recap layout: only %d free card slots for %d popup cards at "
-                "the smallest card scale — showing %d of them.",
-                len(slots), len(ordered), len(slots),
+                "Recap layout: only %d free %s slots for %d popup cards — "
+                "showing %d of them.",
+                len(slots), "pill-badge" if pill_badge else "card", len(ordered), len(slots),
             )
             ordered = ordered[: len(slots)]
 
@@ -1309,11 +1390,26 @@ class _PopupMixin:
         # its slots traded, which shortens both — so this strictly reduces
         # total leader length and always terminates.
         n = len(ordered)
+        # Each card's OWN height — for a pill badge, its real untruncated
+        # name may be shorter than the lattice's worst-case pitch, and
+        # anchoring against the inflated lattice card_h here would aim
+        # some leaders at empty space below its actual bottom edge. A
+        # pop-up card is all one fixed size at the chosen scale.
+        card_hs = (
+            [
+                self.graphics.beside_card_footprint(
+                    is_pill_badge=True, pill_name_chars=len(str(p.get("label") or "")),
+                )[1]
+                for p in ordered
+            ]
+            if pill_badge
+            else [card_h] * n
+        )
 
         def leader(j: int) -> Tuple[Tuple[float, float], Tuple[float, float]]:
             sx, sy = slots[slot_for[j]]
             px, py = pins_xy[j]
-            return (px, py), _anchor_point(px, py, sx, sy, card_w, card_h)
+            return (px, py), _anchor_point(px, py, sx, sy, card_w, card_hs[j])
 
         def crosses(a1, a2, b1, b2) -> bool:
             def turn(p, q, r):
@@ -1334,16 +1430,74 @@ class _PopupMixin:
             if not swapped:
                 break
 
+        route_x = route_obstacles[:, 0] if route_obstacles is not None else None
+        route_y = route_obstacles[:, 1] if route_obstacles is not None else None
+
+        # Near-pin clusters (e.g. two stops a few metres apart) share ONE
+        # leader line instead of each drawing its own line to virtually
+        # the same spot — the member whose own slot ended up closest to
+        # the cluster's centroid is the one that draws it (from the
+        # centroid, not just its own pin); the rest draw none. Reuses the
+        # same proximity clustering _layout_beside_popups' own hull-anchor
+        # logic is built on (see _cluster_points_by_distance).
+        link_dist = self.graphics.marker_radius * 3.0
+        cluster_anchor: Dict[int, Tuple[float, float]] = {}  # rep index -> shared pin point
+        suppressed = set()
+        for idxs in _cluster_points_by_distance(pins_xy, link_dist):
+            if len(idxs) < 2:
+                continue
+            ccx = sum(pins_xy[i][0] for i in idxs) / len(idxs)
+            ccy = sum(pins_xy[i][1] for i in idxs) / len(idxs)
+            rep = min(
+                idxs,
+                key=lambda i: math.hypot(
+                    slots[slot_for[i]][0] + card_w / 2.0 - ccx,
+                    slots[slot_for[i]][1] + card_hs[i] / 2.0 - ccy,
+                ),
+            )
+            cluster_anchor[rep] = (ccx, ccy)
+            suppressed.update(i for i in idxs if i != rep)
+
         palette = tuning.RECAP_LINE_COLOR_PALETTE
         for j, popup in enumerate(ordered):
             sx, sy = slots[slot_for[j]]
             popup["beside_box"] = (int(sx), int(sy))
-            popup["card_scale"] = card_scale
-            # Straight pin -> card lines only; the dense-cluster hull detour
-            # _layout_recap_popups adds would bend a leader away from the
-            # shortest path this layout is built around.
-            popup.pop("leader_via", None)
+            if pill_badge:
+                popup["is_pill_badge"] = True
+            else:
+                popup["card_scale"] = card_scale
             popup["recap_line_color"] = palette[j % len(palette)]
+            if j in suppressed:
+                popup["suppress_leader_line"] = True
+                popup.pop("leader_via", None)
+                continue
+            popup.pop("suppress_leader_line", None)
+            # Only the LINE starts from the cluster's shared point — the
+            # pin itself stays where it is ("pin_x"/"pin_y" is what draws
+            # it, see pins.py's _draw_pin).
+            popup.pop("leader_from", None)
+            if j in cluster_anchor:
+                popup["leader_from"] = cluster_anchor[j]
+            px, py = cluster_anchor.get(j, pins_xy[j])
+            ax, ay = _anchor_point(px, py, sx, sy, card_w, card_hs[j])
+            # render_popup_box's own default elbow (no leader_via set) bends
+            # horizontal-then-vertical — via_h below. Pick whichever of the
+            # two possible 90-degree bends keeps both of its straight
+            # segments off the route line (see _leader_crosses_route);
+            # only set leader_via when the OTHER bend is the one that's
+            # clear, since the default already matches via_h.
+            popup.pop("leader_via", None)
+            if px != ax and py != ay:
+                via_h, via_v = (ax, py), (px, ay)
+
+                def bend_clear(via: Tuple[float, float]) -> bool:
+                    return not (
+                        _leader_crosses_route(px, py, via[0], via[1], route_x, route_y)
+                        or _leader_crosses_route(via[0], via[1], ax, ay, route_x, route_y)
+                    )
+
+                if not bend_clear(via_h) and bend_clear(via_v):
+                    popup["leader_via"] = via_v
 
         return ordered
 
@@ -1384,7 +1538,10 @@ class _PopupMixin:
                 continue
             hud_popup = ap.copy()
             hud_popup["hud_corner"] = None
-            hud_popup["draw_leader_line"] = True
+            # A near-pin cluster shares one leader line (see
+            # _layout_recap_cards) — every member but the cluster's own
+            # representative is marked "suppress_leader_line" there.
+            hud_popup["draw_leader_line"] = not ap.get("suppress_leader_line")
             # By recap time every waypoint has "arrived", which collapses
             # _pin_label_and_color down to two flat colors (one shared by
             # every numbered stop, one by every stop-by landmark), so
@@ -1398,8 +1555,15 @@ class _PopupMixin:
             # Override the card's own border_color (set once, early in
             # render_overview's setup, back when no waypoint had "arrived"
             # yet — see _pin_color) with this SAME color the line uses, so
-            # each card visually matches the line leading to it.
-            hud_popup["border_color"] = line_color
+            # each card visually matches the line leading to it. NOT for a
+            # pill badge: border_color is the colour of its number circle,
+            # and the walk already showed that badge — in its own pin's
+            # colour — long before the recap, so recolouring it here makes
+            # the same badge change colour as the recap opens. Its line
+            # still gets the palette colour, which is what has to be
+            # distinct.
+            if not ap.get("is_pill_badge"):
+                hud_popup["border_color"] = line_color
             hud_popups.append(hud_popup)
 
         # Three passes — every line, then every pin, then every card —
@@ -1417,8 +1581,12 @@ class _PopupMixin:
             recap_frame = self.graphics.render_popup_box(
                 recap_frame, hud_popup, line_only=True
             )
+        plain_dot = self.config.get("overview_recap_style", "pill_badge") != "pop_up_card"
         for ap in active_popups:
-            self._draw_pin(recap_frame, ap, total_points)
+            if plain_dot:
+                self._draw_recap_dot(recap_frame, ap, total_points)
+            else:
+                self._draw_pin(recap_frame, ap, total_points)
         for hud_popup in hud_popups:
             recap_frame = self.graphics.render_popup_box(
                 recap_frame, hud_popup, skip_line=True
@@ -1571,18 +1739,123 @@ class _PopupMixin:
             popup = bp["popup"]
             if exclude is not None and popup is exclude:
                 continue
-            box = popup.get("beside_box")
+            # Where its full card actually hangs, which for a card bound
+            # for a badge spot is not that spot (see _card_box_beside_badge).
+            box = popup.get("card_box") or popup.get("beside_box")
             if not box:
                 continue
-            card_w, card_h = self.graphics.beside_card_footprint(
-                popup.get("card_scale", 1.0)
-            )
+            card_w, card_h = self.graphics.beside_card_footprint(popup.get("card_scale", 1.0))
             boxes.append((box[0], box[1], box[0] + card_w, box[1] + card_h))
         return boxes
 
     def _cards_stay(self) -> bool:
         """Walk the route (settings.overview_cards_stay, on by default): each stop's card stays up once shown."""
         return (self.config.get("overview_style") or "walk") == "walk" and bool(self.config.get("overview_cards_stay", True))
+
+    # Corners of its badge spot a full card can hang from: the card is
+    # several times that spot's size, so it has to spill somewhere.
+    _CARD_SPILL_CORNERS = ((0, 0), (1, 0), (0, 1), (1, 1))
+    # ...and, when every one of those is taken, how far out from the
+    # badge the card may be pushed instead, and in how many steps.
+    _CARD_SPILL_RINGS = 7
+    _CARD_SPILL_RING_PX = 70
+    _CARD_SPILL_PER_RING = 8
+
+    def _card_box_candidates(self, sx, sy, pill_w, pill_h, card_w, card_h, w, h):
+        """Where the full card could go, nearest first: hanging from each
+        corner of its badge spot, then rings of spots further out around
+        it (for when several cards are up at once and the corners are all
+        taken). Every candidate is clamped inside the frame."""
+        margin = self._RECAP_CARD_MARGIN
+        max_x, max_y = max(margin, w - card_w - margin), max(margin, _card_bottom_limit(h, margin) - card_h)
+
+        def clamped(x, y):
+            return int(min(max(x, margin), max_x)), int(min(max(y, margin), max_y))
+
+        for fx, fy in self._CARD_SPILL_CORNERS:
+            yield clamped(sx - (card_w - pill_w) * fx, sy - (card_h - pill_h) * fy)
+        cx, cy = sx + pill_w / 2.0, sy + pill_h / 2.0
+        for ring in range(1, self._CARD_SPILL_RINGS + 1):
+            r = ring * self._CARD_SPILL_RING_PX
+            for step in range(self._CARD_SPILL_PER_RING):
+                a = 2 * math.pi * step / self._CARD_SPILL_PER_RING
+                yield clamped(cx + r * math.cos(a) - card_w / 2.0,
+                              cy + r * math.sin(a) - card_h / 2.0)
+
+    def walk_card_hud(
+        self,
+        popup: Dict,
+        w: int,
+        h: int,
+        route_obstacles: Optional[np.ndarray],
+        taken_boxes,
+    ) -> Dict:
+        """A copy of `popup` as the WALK draws it: the full pop up card, at
+        the spot it hangs off its badge's (card_box, picked once — see
+        _card_box_beside_badge), with the recap's own badge styling
+        dropped. _layout_recap_cards runs up front, before the walk, and
+        stamps that styling (is_pill_badge, the shared-cluster line) onto
+        these very dicts, so any frame that builds a card straight from one
+        draws a BADGE instead — which is what made every card on screen
+        blink into a badge for the single frame each arrival is drawn on.
+        Every such frame goes through here instead."""
+        hud = popup.copy()
+        for phase_key in ("is_pill_badge", "suppress_leader_line", "leader_from", "leader_via"):
+            hud.pop(phase_key, None)
+        hud["hud_corner"] = None
+        hud["draw_leader_line"] = True
+        if popup.get("stay_box"):
+            if "card_box" not in popup:
+                popup["card_box"] = self._card_box_beside_badge(
+                    popup, w, h, route_obstacles, taken_boxes(popup)
+                )
+            hud["beside_box"] = popup["card_box"]
+        return hud
+
+    def _card_box_beside_badge(
+        self,
+        popup: Dict,
+        w: int,
+        h: int,
+        route_obstacles: Optional[np.ndarray],
+        taken: List[Tuple[float, float, float, float]],
+    ) -> Tuple[int, int]:
+        """Where a stop's FULL card hangs while it is showing, given the
+        badge spot ("stay_box") it will collapse into. The badge spot is
+        picked clear of the route and the pins, but the card is several
+        times its size and so always spills past it — so it takes the
+        nearest spot (see _card_box_candidates) that covers no other card
+        already on screen and the least route line and pins. Every stop's
+        card stays up for the rest of the walk, so by the end they are ALL
+        on screen together and none of them may cover another. Decided
+        once, on the card's first frame, and kept (as "card_box") so it
+        can't drift afterwards."""
+        sx, sy = popup["stay_box"]
+        pill_w, pill_h = self.graphics.beside_card_footprint(
+            is_pill_badge=True, pill_name_chars=len(str(popup.get("label") or ""))
+        )
+        card_w, card_h = self.graphics.beside_card_footprint(float(popup.get("card_scale", 1.0)))
+        ox = oy = None
+        if route_obstacles is not None and len(route_obstacles):
+            ox, oy = route_obstacles[:, 0], route_obstacles[:, 1]
+
+        best_score, best_box = None, (int(sx), int(sy))
+        for x, y in self._card_box_candidates(sx, sy, pill_w, pill_h, card_w, card_h, w, h):
+            clashes = sum(
+                1 for tx1, ty1, tx2, ty2 in taken
+                if x < tx2 and x + card_w > tx1 and y < ty2 and y + card_h > ty1
+            )
+            covered = 0
+            if ox is not None:
+                covered = int(np.count_nonzero(
+                    (ox >= x) & (ox <= x + card_w) & (oy >= y) & (oy <= y + card_h)
+                ))
+            score = (clashes, covered)  # keeping off other cards first, then off the map
+            if best_score is None or score < best_score:
+                best_score, best_box = score, (x, y)
+                if score == (0, 0):
+                    break  # nearest spot that's clear of everything
+        return best_box
 
     def _composite_baked_popups(
         self,
@@ -1631,8 +1904,12 @@ class _PopupMixin:
         for bp in flowing[MAX_CONCURRENT_FLOW_POPUPS:]:
             bp["popup"].pop("beside_box", None)
         for bp in flowing_visible:
+            # Its spot in the ending summary. The card itself hangs off
+            # this spot rather than on it (see _card_box_beside_badge), but
+            # it's what the badge taking the card's place at the recap sits
+            # on, so the badge never moves once it is there.
             if bp["popup"].get("stay_box"):
-                bp["popup"]["beside_box"] = bp["popup"]["stay_box"]  # its spot in the ending summary
+                bp["popup"]["beside_box"] = bp["popup"]["stay_box"]
         flowing_visible = [bp for bp in flowing_visible if not bp["popup"].get("stay_box")]
         if flowing_visible:
             # Room for the biggest card drawn (a "map" overview's stop card is OVERVIEW_MAP_CARD_SCALE), not the
@@ -1650,20 +1927,29 @@ class _PopupMixin:
             if hud_popup["data"].get("freeze_frame", False):
                 hud_popup.setdefault("hud_corner", "bottom_left")
             elif hud_popup.get("beside_box"):
-                hud_popup["hud_corner"] = None
-                hud_popup["draw_leader_line"] = True
+                hud_popup = self.walk_card_hud(
+                    bp["popup"], w, h, route_obstacles,
+                    lambda popup: self._active_card_boxes(baked_popups, exclude=popup),
+                )
             else:
                 continue  # no free spot this frame — nothing to draw
-            # Slide-up: each leader-lined card eases up into its real spot
+            # Slide-up: a leader-lined card eases up into its real spot
             # from slightly below as it fades in, rather than just fading
             # in place — see _popup_slide_offset_y. Only for leader-lined
             # (beside_box) cards; a fixed-HUD-corner freeze_frame card has
-            # no "below its real spot" that would read as a slide.
+            # no "below its real spot" that would read as a slide. NOT for
+            # a card that stays (stay_box, the walk's own): it is wired to
+            # its pin by a leader line that would have to sweep along with
+            # it, and a line swinging into place every time the walker
+            # passes a stop is the one thing on this map that should hold
+            # still. Those cards simply fade in where they belong.
             if hud_popup.get("beside_box"):
+                settled = bool(bp["popup"].get("stay_box"))
                 bx, by = hud_popup["beside_box"]
-                by = int(by + self._popup_slide_offset_y(bp))
+                if not settled:
+                    by = int(by + self._popup_slide_offset_y(bp))
                 # ...and grows into its full size about its centre.
-                grow = self._popup_enter_scale(bp)
+                grow = 1.0 if settled else self._popup_enter_scale(bp)
                 if grow < 0.999:
                     base = float(hud_popup.get("card_scale", 1.0))
                     full_w, full_h = self.graphics.beside_card_footprint(base)

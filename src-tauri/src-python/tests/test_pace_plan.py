@@ -15,26 +15,28 @@ def test_pace_cues_are_never_spoken_and_close_with_their_sentence():
 
 def test_slow_halves_the_pace_and_the_piece_keeps_its_length():
     plan, stops, held = _paced_plan(KM, [(100, 10.0)], [(0, "slow", 2.0, 6.0)])
-    assert plan == [(25, 2.0), (50, 4.0), (100, 4.0)]  # 25 points in 2 s, 25 in 4 s (half), 50 in 4 s
+    assert plan == [(25, 2.0, 0.0, 0), (50, 4.0, 0.0, 0), (100, 4.0, 0.0, 0)]  # 25 points in 2 s, 25 in 4 s (half), 50 in 4 s
     assert stops == [] and held == 0.0
 
 
 def test_stop_holds_without_a_card_and_the_arrival_stays():
     plan, stops, held = _paced_plan(KM, [(100, 10.0)], [(0, "stop", 4.0, 6.0)])
-    assert plan == [(50, 4.0), (100, 4.0)] and stops == [(4.0, "stop", 2.0)] and held == 2.0
+    assert plan == [(50, 4.0, 0.0, 0), (100, 4.0, 0.0, 0)] and stops == [(4.0, "stop", 2.0)] and held == 2.0
     plan, stops, held = _paced_plan(KM, [(100, 10.0)], [(0, "stop", 8.0, 10.0)])  # stands at the end
-    assert plan == [(100, 8.0)] and stops == [(8.0, "stop", 2.0)]
+    assert plan == [(100, 8.0, 0.0, 0)] and stops == [(8.0, "stop", 2.0)]
 
 
 def test_cue_times_count_from_start_and_short_stops_are_ignored():
-    assert _paced_plan(KM, [(100, 10.0)], [(0, "slow", 5.0, 9.0)], start_cue_seconds=3.0)[0] == [(25, 2.0), (50, 4.0), (100, 4.0)]
-    assert _paced_plan(KM, [(100, 10.0)], [(0, "stop", 4.0, 4.5)]) == ([(100, 10.0)], [], 0.0)
+    assert _paced_plan(KM, [(100, 10.0)], [(0, "slow", 5.0, 9.0)], start_cue_seconds=3.0)[0] == [
+        (25, 2.0, 0.0, 0), (50, 4.0, 0.0, 0), (100, 4.0, 0.0, 0),
+    ]
+    assert _paced_plan(KM, [(100, 10.0)], [(0, "stop", 4.0, 4.5)]) == ([(100, 10.0, 0.0, 0)], [], 0.0)
 
 
 def test_a_later_piece_is_paced_on_its_own_and_every_piece_ends_where_it_did():
     plan, _, _ = _paced_plan(KM, [(50, 5.0), (100, 5.0)], [(1, "fast", 1.0, 3.0)])
-    assert plan[0] == (50, 5.0) and plan[-1][0] == 100 and abs(sum(s for _, s in plan) - 10.0) < 1e-9
-    (i1, _), (i2, fast_s), (i3, after_s) = plan[1:]
+    assert plan[0] == (50, 5.0, 0.0, 0) and plan[-1][0] == 100 and abs(sum(e[1] for e in plan) - 10.0) < 1e-9
+    (i1, *_), (i2, fast_s, *_), (i3, after_s, *_) = plan[1:]
     assert fast_s == 2.0 and after_s == 2.0
     assert 1.4 < (i2 - i1) / (i3 - i2) < 1.8  # ~1.6x the points per second of the rest (snapped to route points)
 

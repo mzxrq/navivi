@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 
 from services import tuning, video_text
-from services.mapfetcher.mapgeometry import RouteGeometryProcessor
+from services.mapfetcher.mapgeometry import RouteGeometryProcessor, meters_per_pixel_for_extent
 from services.vdoprocessing.route_inputs import photo_inputs_hash, route_inputs_hash
 from services.vdoprocessing.vdoexporter import VideoExporter
 
@@ -50,7 +50,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 
 # Bump when the overview's rendering code changes what it draws, so
 # checkpointed overviews made by older code are re-rendered.
-OVERVIEW_RENDER_VERSION = 25  # v25: cards that stay go straight to their ending-summary spot; v24: walk: every stop's card stays up once shown (overview_cards_stay); v23: summary held 1 s before the ending zoom; v22: quicker ending zoom (0.65 s); v21: walk/map frame the route below a top band; v20: top band 150 px; v19: walk cards keep below the top banner band; v18: closed places get their own banner, no stop when passing one, ending zoom pins numbered as the overview; v16: walk/map: stop-bys and closed places pop up as passed; v15: cards keep off closed places' pins and names; v14: quicker ending zoom (1.0 s); v13: a walk with only {start}/{end} fits between them, closed places come in with the summary without a {closed} cue, "map" style; v12: the final stop sits on the route's last point (E pin, 3D ending zoom); v11: course: the headline names the stretch being traced ("A → B"); v10: intro cards fade out, static ending zoom aims at the stop; v9: course: stop-bys take no number, travel mode pinned to the stops; v8: course: connected stop-bys pop up with the others at {extras}, stops matched in route order; v7: course walker waits at {go} stops when named, minimum pace, no pins for return stops; v6: course headline docked top left; v5: pins on their cue, cue window, faster last stretch; v4: bottom caption band in the framing, cards clear of top/bottom bands; v3: connected stop-bys stop; ending photo goes fullscreen after the voice
+OVERVIEW_RENDER_VERSION = 41  # v41: the frame each arrival is drawn on builds its cards the same way every other frame does (walk_card_hud), so they stop blinking into pill badges for that one frame, and a staying card isn't sent looking for a second spot there; v40: a staying card fades in exactly where it belongs instead of sliding up 40 px and growing into place, so its leader line doesn't swing into position every time the walker passes a stop; v39: the hold on the finished walk (every card still up) is written by the walk itself, still compositing, so the last stop's card finishes fading in instead of being frozen half-drawn for the whole beat; v38: every stop's full card now stays up for the whole walk — none of them shrinks on the way — and the recap holds that picture for RECAP_CARD_HOLD_SECONDS before they all become pill badges together; v37: a pill badge's circle shows the same glyph its pin does (S, E, ・ or its number) and keeps its pin's colour into the recap instead of being recoloured to its leader line's; the card cross-fades into the badge rather than swapping in one frame; v36: a full card takes the nearest spot around its badge that covers no card already on screen (rings outward, not just the four corners of that badge), so the several cards a long OVERVIEW_CARD_MIN_SECONDS keeps up together can't pile on each other; v35: a stop's full card hangs off whichever corner of its badge spot leaves it covering the least route line, pin and neighbouring card, instead of always spilling right and down over them; and it stays up for at least OVERVIEW_CARD_MIN_SECONDS, so a stop the walker only passes through can still be read; v34: a stop's full card holds until the NEXT stop's card pops (a whole leg, not a fixed 1.8 s) and only then turns into its pill badge, so two stops with neighbouring badge spots never show their cards on top of each other; v33: a stop's card shrinks straight into the pill badge at its own ending-summary spot, so it never moves or resizes again; the recap draws plain dots on a pin-free plate (no teardrops left under them); near pins share one leader line; the ending zoom's card is the full pop up card the fullscreen photo grows out of; v32: walk: shrunk/preview/recap badges are all a vertical "pill badge" (number, full un-truncated name, photo) instead of a horizontal capsule; a shrunk badge stays near its own pin (no bottom tray) with its leader line still drawn; v31: walk: a shrunk badge parks in a bottom tray (left to right, wrapping rows) instead of stacking near its own pin, no leader line back to it; v30: walk: the next waypoint gets a small preview badge before it's actually reached, and shrunk badges stack near their own pin instead of spreading via the full card's spiral search; v29: walk: a flow-through card shrinks to a small badge pill (circle + label + thumbnail) once fully shown, freeing map space for later stops' cards; v28: walk: added a bottom-right map scale bar and a top-right live distance/ETA-remaining chip; v27: walk: dropped the top "next stop" banner, top clearance shrunk to a plain edge margin; v26: editorial redesign — muted pin/line/card palette, pin ground shadow, elbow leader lines (also checked against the route line), slower pop/fade pacing; v25: cards that stay go straight to their ending-summary spot; v24: walk: every stop's card stays up once shown (overview_cards_stay); v23: summary held 1 s before the ending zoom; v22: quicker ending zoom (0.65 s); v21: walk/map frame the route below a top band; v20: top band 150 px; v19: walk cards keep below the top banner band; v18: closed places get their own banner, no stop when passing one, ending zoom pins numbered as the overview; v16: walk/map: stop-bys and closed places pop up as passed; v15: cards keep off closed places' pins and names; v14: quicker ending zoom (1.0 s); v13: a walk with only {start}/{end} fits between them, closed places come in with the summary without a {closed} cue, "map" style; v12: the final stop sits on the route's last point (E pin, 3D ending zoom); v11: course: the headline names the stretch being traced ("A → B"); v10: intro cards fade out, static ending zoom aims at the stop; v9: course: stop-bys take no number, travel mode pinned to the stops; v8: course: connected stop-bys pop up with the others at {extras}, stops matched in route order; v7: course walker waits at {go} stops when named, minimum pace, no pins for return stops; v6: course headline docked top left; v5: pins on their cue, cue window, faster last stretch; v4: bottom caption band in the framing, cards clear of top/bottom bands; v3: connected stop-bys stop; ending photo goes fullscreen after the voice
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -283,6 +283,15 @@ class _OverviewRenderMixin:
             h, w = h - (h % 2), w - (w % 2)
             current_bg = cv2.resize(current_bg, (w, h))
 
+        # Persistent overview HUD (scale bar + live distance/ETA remaining),
+        # drawn per-frame in overview_animation.py's _NoticeWriter. None
+        # without an extent (e.g. a cached bg_path from before extent was
+        # recorded) — render_scale_bar/_apply_hud no-op on None.
+        self._hud_mpp = meters_per_pixel_for_extent(extent, w) if extent else None
+        self._hud_total_distance_km = (summary or {}).get("total_distance_km")
+        self._hud_total_duration_seconds = (summary or {}).get("total_duration_seconds")
+        self._hud_progress_frac = 0.0  # the intro, before any walking: the whole trip is still ahead
+
         duration = self.config.get("duration", 30.0)
         num_frames = max(_MIN_OVERVIEW_FRAMES, int(duration * fps))
         # the stop-by notice plays at the first stop-by of each video
@@ -509,12 +518,19 @@ class _OverviewRenderMixin:
         # separately.
         total_points_for_color = len(points)
         for ap in active_popups:
-            _, pin_color_for_border, _ = self._pin_label_and_color(ap, total_points_for_color)
+            pin_label, pin_color_for_border, _ = self._pin_label_and_color(ap, total_points_for_color)
             # _pin_label_and_color can return None for a plain numbered pin
             # not yet "arrived" (see _pin_color) — fall back to the base
             # marker color rather than letting popup_box's border draw
             # None through.
             ap["border_color"] = pin_color_for_border or self.graphics.marker_color
+            # ...and the same glyph its pin shows goes in its pill badge's
+            # own circle, so the two agree: "S" for the start, "E" for the
+            # finish, "・" for a stop-by, else its visit number. The badge
+            # used to read "order" instead, which left the start's circle
+            # blank and gave a stop-by the PREVIOUS stop's number (neither
+            # takes a number of its own — see the numbering loop above).
+            ap["badge_label"] = pin_label
 
         # job_config.json's own "waypoints" array here already includes the
         # route's start (index 0) and end (its last index) as real entries
@@ -867,21 +883,6 @@ class _OverviewRenderMixin:
         # reported as an old waypoint's popup still sitting on screen deep
         # into the return leg.
         max_leg_frames = int(fps * tuning.POPUP_FREEZE_SECONDS_MAX)
-        # The top banner starts anticipating the NEXT waypoint ("まもなく
-        # ...") this many seconds before it's actually reached (see
-        # OVERVIEW_BANNER_NEAR_SECONDS in the main animation loop) — a
-        # popup sized to last right up until that next waypoint's own
-        # expected_frame would still be on screen for the whole length of
-        # that anticipation window, visibly overlapping the "まもなく
-        # <next place>" banner with THIS waypoint's own card. Subtracting
-        # it here means the card finishes (fade-out included) before that
-        # banner even appears. This got noticeably more visible once
-        # walking's own on-screen pace slowed down (see
-        # tuning.WALKING_ANIMATION_SPEED_FACTOR): the same real leg now
-        # spans more animated frames, so the fixed anticipation window
-        # covers proportionally more of a walking leg's own popup display
-        # than it used to.
-        banner_near_frames = int(fps * tuning.OVERVIEW_BANNER_NEAR_SECONDS)
         for i, ap in enumerate(triggerable):
             this_frame = ap["expected_frame"]
             next_frame = (
@@ -890,7 +891,7 @@ class _OverviewRenderMixin:
                 else stop_expected_frame
             )
             if next_frame is not None:
-                raw_gap = next_frame - banner_near_frames - this_frame
+                raw_gap = next_frame - this_frame
                 ap["leg_display_seconds"] = (
                     min(max_leg_frames, max(min_leg_frames, raw_gap)) / fps
                 )
@@ -1003,7 +1004,7 @@ class _OverviewRenderMixin:
             )
             if not preview_recap_only:
                 for _ in range(int(clean_hold_sec * fps)):
-                    video.write(clean_frame)
+                    video.write(self._apply_hud(clean_frame))
 
             def _draw_intro_cards(base: np.ndarray, alpha: float) -> np.ndarray:
                 # Line, then pin, then card — in that order (mirrors
@@ -1045,7 +1046,7 @@ class _OverviewRenderMixin:
                 for c, box in zip(intro_cards, base_boxes):
                     if box:
                         c["beside_box"] = (box[0], int(box[1] + slide))
-                video.write(_draw_intro_cards(intro_frame, alpha))
+                video.write(self._apply_hud(_draw_intro_cards(intro_frame, alpha)))
 
             for c, box in zip(intro_cards, base_boxes):
                 if box:
@@ -1056,7 +1057,7 @@ class _OverviewRenderMixin:
                 start_cue_sec=(self.config.get("overview_cue_seconds") or {}).get("start"),
             )
             for _ in range(remaining_frames):
-                video.write(intro_frame)
+                video.write(self._apply_hud(intro_frame))
 
             # Slide-down exit: once the animation is about to actually
             # start moving, the preview cards ease back down and fade
@@ -1075,7 +1076,7 @@ class _OverviewRenderMixin:
                     for c, box in zip(intro_cards, base_boxes):
                         if box:
                             c["beside_box"] = (box[0], int(box[1] + slide))
-                    video.write(_draw_intro_cards(clean_frame, alpha))
+                    video.write(self._apply_hud(_draw_intro_cards(clean_frame, alpha)))
 
             # No zoom effect at the very start — the intro closes plainly
             # on the clean pins-only frame, unzoomed, right before the
@@ -1089,7 +1090,7 @@ class _OverviewRenderMixin:
             # The voice's {start} (or a short intro) leaves the map waiting
             # until the route sets off.
             for _ in range(max(0, walk_start_frames - video.frames_written)):
-                video.write(clean_frame)
+                video.write(self._apply_hud(clean_frame))
 
         for ap in active_popups:
             seconds = audio_cues.get(str(ap.get("order")))

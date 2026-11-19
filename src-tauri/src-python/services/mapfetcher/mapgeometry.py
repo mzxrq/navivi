@@ -53,6 +53,21 @@ def _inverse_mercator_y(my: float) -> float:
     return math.degrees(2 * math.atan(math.exp(my / EARTH_RADIUS_METERS)) - math.pi / 2)
 
 
+def meters_per_pixel_for_extent(extent: Tuple[float, float, float, float], img_w: int) -> float:
+    """Ground distance one pixel covers in an image rendered to this Web
+    Mercator `extent` (the same (min_x, max_x, min_y, max_y) projected-meter
+    box RouteGeometryProcessor.project_latlon_to_pixel uses), at the
+    extent's own vertical-center latitude. Mercator stretches distances
+    away from the equator by 1/cos(lat), so the raw (max_x-min_x)/img_w
+    isn't the true ground distance a pixel covers except at the equator —
+    this corrects for that. Used for the overview's on-screen scale bar."""
+    min_x, max_x, min_y, max_y = extent
+    if img_w <= 0 or max_x <= min_x:
+        return 0.0
+    lat_mid = _inverse_mercator_y((min_y + max_y) / 2.0)
+    return (max_x - min_x) / img_w * math.cos(math.radians(lat_mid))
+
+
 def meters_per_pixel(zoom: float) -> float:
     """Ground meters covered by one screen pixel at a given zoom level."""
     return _EARTH_CIRCUMFERENCE_M / (_TILE_SIZE_PX * (2.0 ** zoom))

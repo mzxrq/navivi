@@ -90,23 +90,6 @@ _HUD_CSS_TEMPLATE = string.Template("""
     padding: 3px 10px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.3);
     white-space: nowrap; font-variant-numeric: tabular-nums;
 }
-/* Stacked directly above the summary card, same right edge -- a fixed arrow pointing at the
-   destination's true bearing (not the compass's travel heading) with the remaining distance
-   below it, visible for the whole leg. */
-#hud-direction-wrap {
-    position: fixed; bottom: ${direction_bottom}px; right: 32px; z-index: 1000;
-    display: flex; flex-direction: column; align-items: center;
-}
-#hud-direction { display: block; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.35)); }
-#hud-direction .dial { fill: $pill_bg; }
-#hud-direction .pointer { fill: $pill_text; }
-#hud-direction-label {
-    box-sizing: border-box; text-align: center; margin-top: -14px; z-index: 1;
-    background: $pill_text; color: $pill_bg; border: 1px solid $divider;
-    font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 13px;
-    padding: 3px 10px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.3);
-    white-space: nowrap; font-variant-numeric: tabular-nums;
-}
 """)
 
 
@@ -122,7 +105,6 @@ def _hud_css(theme: Optional[str] = None) -> str:
         **{k: _css_rgba(v) for k, v in tuning.ui_theme(theme).items()},
         "accent": f"rgb{tuning.ACCENT_COLOR}",
         "card_bottom": tuning.LEG_CARD_MARGIN_BOTTOM_PX, "card_right": tuning.LEG_CARD_MARGIN_PX,
-        "direction_bottom": tuning.RESIDENTIAL_DIRECTION_BOTTOM_PX,
     })
 
 # Per-mode distance-card icon: a plain black line-drawing SVG (currentColor
@@ -212,13 +194,16 @@ def _localized_hud(mode_hud: Dict, labels: Optional[Dict] = None) -> Dict:
     }
 
 
-# 100x100 viewBox; the pointer is fixed (it marks "forward") -- the letter in the dial is the
-# current heading, both as an exact rotation (rotate(deg, 50, 60), clockwise from up) and as the
-# letter/degree text, updated per frame.
-_COMPASS_SVG = """<svg id="hud-compass" width="{size}" height="{size}" viewBox="0 0 100 100">
-<polygon id="hud-compass-pointer" class="pointer" points="50,2 60,20 40,20"/>
-<circle class="dial" cx="50" cy="60" r="38"/>
-<text id="hud-compass-letter" class="letter" x="50" y="71" text-anchor="middle">{north}</text>
+# 120x120 viewBox, dial+pointer centered at (60, 60): the pointer's tip sits 58 units from that
+# center, so the center needs 58 units of clearance on every side (118 clipped it on rotations
+# toward the edges - e.g. due west/east ran the tip past x=0/120 on the old 100-wide, off-center
+# box). The pointer is fixed (it marks "forward") -- the letter in the dial is the current heading,
+# both as an exact rotation (rotate(deg, 60, 60), clockwise from up) and as the letter/degree text,
+# updated per frame.
+_COMPASS_SVG = """<svg id="hud-compass" width="{px_size}" height="{px_size}" viewBox="0 0 120 120">
+<polygon id="hud-compass-pointer" class="pointer" points="60,2 70,20 50,20"/>
+<circle class="dial" cx="60" cy="60" r="38"/>
+<text id="hud-compass-letter" class="letter" x="60" y="71" text-anchor="middle">{north}</text>
 </svg>"""
 
 
@@ -232,30 +217,9 @@ def _compass_points() -> Tuple[str, ...]:
 
 
 def compass_svg(size: int) -> str:
-    return _COMPASS_SVG.format(size=size, north=_compass_points()[0])
-
-
-# 100x100 viewBox; the pointer rotates to the current bearing-to-destination (rotate(deg, 50, 50),
-# clockwise from up) -- no dial/letters, just the arrow, since this isn't a compass reading.
-_DIRECTION_ARROW_SVG = """<svg id="hud-direction" width="{size}" height="{size}" viewBox="0 0 100 100">
-<polygon id="hud-direction-pointer" class="pointer" points="50,10 72,55 50,43 28,55"/>
-</svg>"""
-
-
-def direction_arrow_svg(size: int) -> str:
-    return _DIRECTION_ARROW_SVG.format(size=size)
-
-
-def _bearing_to_deg(lon: float, lat: float, dest_lon: float, dest_lat: float) -> float:
-    """Bearing (degrees clockwise from north) from (lon, lat) to (dest_lon, dest_lat), using
-    the same flat local projection as `_walk_headings` -- fine at leg scale. 0.0 once the
-    walker is effectively at the destination (no direction left to point)."""
-    lat0 = math.radians((lat + dest_lat) / 2.0)
-    dx = (dest_lon - lon) * 111320.0 * math.cos(lat0)
-    dy = (dest_lat - lat) * 110540.0
-    if math.hypot(dx, dy) < 0.5:
-        return 0.0
-    return math.degrees(math.atan2(dx, dy)) % 360.0
+    # Scaled 120/100 along with the viewBox so the dial keeps its old on-screen size - only the
+    # extra clearance around it (previously clipping the pointer) grows.
+    return _COMPASS_SVG.format(px_size=round(size * 1.2), north=_compass_points()[0])
 
 
 def _heading_label(deg: float) -> str:

@@ -18,6 +18,24 @@ _PIN_HEAD_OFFSET_RATIO: Final[float] = 1.5
 _IMAGE_PIN_BOX_RATIO: Final[float] = 3.0
 
 
+def _draw_pin_ground_shadow(frame: np.ndarray, cx: int, cy: int, radius: float) -> None:
+    """Soft dark ellipse under a pin's tip, where it "touches" the map —
+    a cheap per-frame substitute for a blurred shadow sprite (pins redraw
+    every frame, so a Gaussian blur here would be too costly); just an
+    alpha-blended ellipse on the small region around the tip."""
+    rw, rh = max(2, int(radius * 1.1)), max(1, int(radius * 0.4))
+    y0, y1 = max(0, cy - rh), min(frame.shape[0], cy + rh + 1)
+    x0, x1 = max(0, cx - rw), min(frame.shape[1], cx + rw + 1)
+    if y1 <= y0 or x1 <= x0:
+        return
+    roi = frame[y0:y1, x0:x1]
+    overlay = roi.copy()
+    cv2.ellipse(
+        overlay, (cx - x0, cy - y0), (rw, rh), 0, 0, 360, (40, 35, 30), -1, cv2.LINE_AA,
+    )
+    cv2.addWeighted(overlay, 0.22, roi, 0.78, 0, roi)
+
+
 def _pin_silhouette(cx: int, head_cy: int, radius: float, tip_y: int) -> np.ndarray:
     """A classic teardrop/balloon-pin outline: the round head plus the two
     lines TANGENT to it down to the tip, rather than a separate triangle
@@ -150,6 +168,7 @@ class _DrawingMixin:
         if scale < 0.6:
             number = None
         head_cy = cy - int(radius * _PIN_HEAD_OFFSET_RATIO)
+        _draw_pin_ground_shadow(frame, cx, cy, radius)
 
         if is_circle:
             radius = int(radius * 0.65)

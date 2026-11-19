@@ -2,7 +2,7 @@
 
 import math
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -30,7 +30,25 @@ class _PopupBoxMixin:
     # can't be placed flush against (or past) the very edge of the frame.
     _BESIDE_POPUP_EDGE_MARGIN = 24
 
-    def beside_card_footprint(self, card_scale: float = 1.0, has_label: bool = True) -> Tuple[int, int]:
+    # "Pill badge" style (see _render_pill_badge): a slim vertical capsule
+    # used by the end-of-video recap instead of the big photo card, so many
+    # can sit side by side without the lattice running out of slots at a
+    # waypoint-heavy route (was overflowing past ~20 stops). Fixed WIDTH,
+    # but the name is shown in full (no truncation) — its height grows with
+    # the name's character count, so _layout_recap_cards sizes its lattice
+    # off the longest name among the popups actually being shown, and each
+    # individual badge is only as tall as its own (possibly shorter) name
+    # needs.
+    _PILL_BADGE_W = 34
+    _PILL_BADGE_NAME_CHARS = 4  # fallback length when the caller has no real name yet
+    _PILL_BADGE_LINE_H = 20
+    _PILL_BADGE_PHOTO_H = 46
+
+    def beside_card_footprint(
+        self, card_scale: float = 1.0, has_label: bool = True,
+        is_pill_badge: bool = False,
+        pill_name_chars: Optional[int] = None, pill_scale: float = 1.0,
+    ) -> Tuple[int, int]:
         """Returns the (total_w, total_h) footprint render_popup_box will
         actually draw for a "beside the pin" card at this card_scale —
         assumes a label is present (has_label=True), a safe upper-bound
@@ -39,7 +57,15 @@ class _PopupBoxMixin:
         _fit_label_caption) since this is called without knowing the
         actual label text — a one-line label just leaves a little extra
         clearance below its card instead of the two cards ever visually
-        overlapping because this estimate came in short."""
+        overlapping because this estimate came in short.
+
+        `is_pill_badge`: the vertical pill-badge footprint (see
+        _render_pill_badge) — also ignores card_scale/has_label. Pass
+        `pill_name_chars` (the real name's character count) for an exact
+        fit, or leave it out for the fallback _PILL_BADGE_NAME_CHARS
+        estimate (e.g. sizing ahead of knowing the real name)."""
+        if is_pill_badge:
+            return self.pill_badge_footprint(pill_name_chars, pill_scale)
         # The photo itself is full-bleed (flush to the card's left/right/
         # top edges, no white margin) — only a label caption, when present,
         # adds a strip of height below it.
@@ -55,6 +81,24 @@ class _PopupBoxMixin:
             text_block_h = font_size * 2 + line_gap + 14
         caption_gap = 10 if has_label else 0
         return target_img_w, target_img_h + caption_gap + text_block_h
+
+    def pill_badge_footprint(
+        self, name_chars: Optional[int] = None, scale: float = 1.0
+    ) -> Tuple[int, int]:
+        """(w, h) of the vertical pill badge (see _render_pill_badge):
+        number circle + `name_chars` name lines (the full name, no
+        truncation — pass the real name's character count) + photo. Every
+        badge draws at the SAME `scale`/text size — only `name_chars`
+        (and so the height) differs per badge, never the text itself.
+        `name_chars=None` falls back to _PILL_BADGE_NAME_CHARS, a rough
+        estimate for a caller sizing ahead of knowing the real name."""
+        w = max(1, round(self._PILL_BADGE_W * scale))
+        line_h = self._PILL_BADGE_LINE_H * scale
+        photo_h = self._PILL_BADGE_PHOTO_H * scale
+        bd = w - round(8 * scale)
+        chars = self._PILL_BADGE_NAME_CHARS if name_chars is None else max(1, name_chars)
+        h = round(5 * scale + bd + 6 * scale + chars * line_h + photo_h)
+        return w, h
 
     # Minimum caption font size _fit_label_caption will shrink to before
     # giving up and letting a still-too-wide second line clip — matches
@@ -181,6 +225,11 @@ class _PopupBoxMixin:
             )
         caption_gap = 10 if (has_label and not is_cover) else 0
         total_h = target_img_h + caption_gap + text_block_h
+        if popup_info.get("is_pill_badge"):
+            name = drawable(popup_info.get("label") or "")
+            total_w, total_h = self.pill_badge_footprint(
+                len(name), popup_info.get("pill_scale", 1.0)
+            )
         margin = self._BESIDE_POPUP_EDGE_MARGIN
 
         if not is_beside:
@@ -208,6 +257,108 @@ class _PopupBoxMixin:
         and its own final return. Only called when alpha < 1.0."""
         blend_alpha = max(0.0, alpha)
         return cv2.addWeighted(frame, blend_alpha, base_frame, 1 - blend_alpha, 0)
+
+    def _render_pill_badge(
+        self, working_frame: np.ndarray, popup_info: Dict, pop_img: Any,
+        box_x: int, box_y: int, total_w: int, total_h: int,
+    ) -> np.ndarray:
+        """Draws the "pill badge" style used by the end-of-video recap: a
+        slim VERTICAL capsule, top to bottom — number badge, place name
+        (one character per line), then the photo bleeding edge-to-edge and
+        clipped flush to the capsule's own rounded bottom corner (not a
+        separate inset thumbnail). Narrow enough that many can sit side by
+        side in the recap's lattice without the capacity wall a full photo
+        card hits past ~20 waypoints. `popup_info["pill_scale"]` (1.0 for
+        every badge today) scales the name font and line pitch along with
+        the capsule itself — total_w/total_h already reflect it (see
+        pill_badge_footprint), so only the two pieces sized off the fixed
+        constants directly (font, line pitch) need it applied here too."""
+        pill_scale = float(popup_info.get("pill_scale", 1.0))
+        h, w = working_frame.shape[:2]
+        pad = 10
+        rx0, ry0 = max(0, box_x - pad), max(0, box_y - pad)
+        rx1, ry1 = min(w, box_x + total_w + pad), min(h, box_y + total_h + pad)
+        bx, by = box_x - rx0, box_y - ry0
+        canvas = Image.new("RGBA", (rx1 - rx0, ry1 - ry0), (0, 0, 0, 0))
+        radius = total_w / 2.0
+
+        border_color = popup_info.get("border_color") or self.card_border_color
+        circle_rgba = tuple(reversed(border_color)) + (255,)
+
+        shadow_box = [bx - 6, by - 4, bx + total_w + 6, by + total_h + 6]
+        m = 24
+        sx0, sy0 = int(shadow_box[0]) - m, int(shadow_box[1]) - m
+        shadow_canvas = Image.new(
+            "RGBA", (int(shadow_box[2]) - sx0 + m + 1, int(shadow_box[3]) - sy0 + m + 1), (0, 0, 0, 0)
+        )
+        ImageDraw.Draw(shadow_canvas).rounded_rectangle(
+            [shadow_box[0] - sx0, shadow_box[1] - sy0, shadow_box[2] - sx0, shadow_box[3] - sy0],
+            radius=radius, fill=circle_rgba[:3] + (55,),
+        )
+        canvas.paste(shadow_canvas.filter(ImageFilter.GaussianBlur(radius=10)), (sx0, sy0))
+        draw = ImageDraw.Draw(canvas)
+
+        draw.rounded_rectangle(
+            [bx, by, bx + total_w - 1, by + total_h - 1], radius=radius,
+            fill=self.ui["card_bg"][:3] + (250,),
+        )
+
+        # 1. number badge, top of the pill
+        bd = total_w - 8
+        cbx, cby = bx + 4, by + 5
+        draw.ellipse([cbx, cby, cbx + bd, cby + bd], fill=circle_rgba)
+        # "badge_label" is the glyph its own pin shows — "S"/"E"/"・"/the
+        # visit number (see overview.py) — so the badge and the pin agree;
+        # "order" is the fallback for a caller that sets no label.
+        order_text = str(popup_info.get("badge_label") or popup_info.get("order") or "")
+        if order_text:
+            num_font = self._card_font(self.FONT_CANDIDATES_BOLD, max(11, int(bd * 0.5)))
+            tw = draw.textlength(order_text, font=num_font)
+            draw.text(
+                (cbx + bd / 2 - tw / 2, cby + bd / 2 - num_font.size / 2),
+                order_text, font=num_font, fill=(255, 255, 255, 255),
+            )
+
+        # 2. place name, one character per line, under the number, shown
+        # in FULL (no truncation) — total_h was already sized for this
+        # exact name's length (see popup_card_geometry's is_pill_badge
+        # branch / pill_badge_footprint).
+        name = drawable(popup_info.get("label") or "")
+        name_font = self._card_font(self.FONT_CANDIDATES_REGULAR, max(9, round(15 * pill_scale)))
+        line_h = self._PILL_BADGE_LINE_H * pill_scale
+        ty = cby + bd + 6
+        cx = bx + total_w / 2.0
+        for ch in name:
+            cw = draw.textlength(ch, font=name_font)
+            draw.text((cx - cw / 2, ty), ch, font=name_font, fill=self.ui["card_text"])
+            ty += line_h
+        photo_y0 = ty
+
+        # 3. photo, bleeding edge-to-edge at the bottom, clipped to the
+        # pill's OWN outline — square at the top where it meets the name,
+        # rounded at the bottom to match the capsule's own corner.
+        if pop_img is not None:
+            photo_h = (by + total_h) - photo_y0
+            if photo_h > 1:
+                src_h, src_w = pop_img.shape[:2]
+                scale = max(total_w / src_w, photo_h / src_h)
+                fit_w, fit_h = max(1, math.ceil(src_w * scale)), max(1, math.ceil(src_h * scale))
+                resized = cv2.resize(pop_img, (fit_w, fit_h))
+                cx0, cy0 = max(0, (fit_w - total_w) // 2), max(0, (fit_h - int(photo_h)) // 2)
+                photo = resized[cy0 : cy0 + int(photo_h), cx0 : cx0 + total_w]
+                photo_pil = Image.fromarray(cv2.cvtColor(photo, cv2.COLOR_BGR2RGB))
+                pmask = Image.new("L", (total_w, int(photo_h)), 0)
+                pmask_radius = max(1, min(radius, photo_h / 2.0) - 1)
+                ImageDraw.Draw(pmask).rounded_rectangle(
+                    [0, 0, total_w - 1, int(photo_h) - 1], radius=pmask_radius,
+                    fill=255, corners=(False, False, True, True),
+                )
+                canvas.paste(photo_pil, (bx, int(photo_y0)), mask=pmask)
+
+        base_pil = Image.fromarray(cv2.cvtColor(working_frame[ry0:ry1, rx0:rx1], cv2.COLOR_BGR2RGBA))
+        base_pil.alpha_composite(canvas)
+        working_frame[ry0:ry1, rx0:rx1] = cv2.cvtColor(np.array(base_pil), cv2.COLOR_RGBA2BGR)
+        return working_frame
 
     def render_popup_box(
         self,
@@ -257,20 +408,28 @@ class _PopupBoxMixin:
                     # marker out to "pin_x"/"pin_y", separate from the
                     # waypoint's true "x"/"y". Anchoring here to the raw
                     # x/y points the leader line at empty space instead of
-                    # the pin it's meant to connect to.
-                    point_x = int(popup_info.get("pin_x", popup_info["x"]))
-                    point_y = int(popup_info.get("pin_y", popup_info["y"]))
-                    # Defaults to a neutral gray; callers with several
-                    # leader lines on screen at once (e.g. the
-                    # end-of-video recap) pass "leader_line_color" —
-                    # matched to the card's own pin — so a line can
-                    # still be traced back to its pin despite crossing
-                    # others.
-                    line_color = popup_info.get("leader_line_color", (130, 130, 130))
+                    # the pin it's meant to connect to. "leader_from"
+                    # overrides both: a point this ONE line should start
+                    # from instead of its own pin (the recap's shared
+                    # line for a cluster of near pins — see
+                    # _layout_recap_cards), without moving the pin itself.
+                    leader_from = popup_info.get("leader_from")
+                    if leader_from is not None:
+                        point_x, point_y = int(leader_from[0]), int(leader_from[1])
+                    else:
+                        point_x = int(popup_info.get("pin_x", popup_info["x"]))
+                        point_y = int(popup_info.get("pin_y", popup_info["y"]))
+                    # Defaults to the card's own pin color (same as its
+                    # shadow tint below) rather than a flat neutral gray,
+                    # so the line, pin and card read as one color family;
+                    # a caller with several lines on screen at once (e.g.
+                    # the end-of-video recap) still passes its own
+                    # "leader_line_color" to tell cards apart.
+                    line_color = popup_info.get("leader_line_color") or popup_info.get("border_color") or (130, 130, 130)
                     # Callers showing many lines at once (the end-of-video
                     # recap) thicken theirs — a 2px hairline gets lost
                     # against a busy map once there are a dozen-plus cards.
-                    line_width = int(popup_info.get("leader_line_width", 2))
+                    line_width = int(popup_info.get("leader_line_width", 3))
                     # "leader_via" (set by _layout_recap_popups for a pin
                     # that's part of a tight cluster — see its own
                     # _padded_boundary docstring) routes the line through
@@ -298,20 +457,45 @@ class _PopupBoxMixin:
                         )
                     else:
                         # Connects the card back to the waypoint's own pin
-                        # directly — the grid layout can place the card
-                        # anywhere, so pick whichever edge (or corner) of
-                        # the box is actually nearest the pin.
+                        # — pick whichever edge (or corner) of the box is
+                        # actually nearest the pin, then route through one
+                        # elbow bend (horizontal, then vertical) rather
+                        # than a raw diagonal: the common editorial-map
+                        # leader-line convention, and it reads as drafted
+                        # rather than a stray line cutting across the map.
+                        # Skipped when the pin and card already share an
+                        # axis (anchor equals the pin on one coordinate) —
+                        # a straight segment there is just as tidy.
                         anchor_x = min(max(point_x, box_x), box_x + total_w)
                         anchor_y = min(max(point_y, box_y), box_y + total_h)
-                        cv2.line(
-                            working_frame, (point_x, point_y), (anchor_x, anchor_y),
-                            line_color, line_width, cv2.LINE_AA,
-                        )
+                        if point_x != anchor_x and point_y != anchor_y:
+                            via_x, via_y = anchor_x, point_y
+                            cv2.line(
+                                working_frame, (point_x, point_y), (via_x, via_y),
+                                line_color, line_width, cv2.LINE_AA,
+                            )
+                            cv2.line(
+                                working_frame, (via_x, via_y), (anchor_x, anchor_y),
+                                line_color, line_width, cv2.LINE_AA,
+                            )
+                        else:
+                            cv2.line(
+                                working_frame, (point_x, point_y), (anchor_x, anchor_y),
+                                line_color, line_width, cv2.LINE_AA,
+                            )
                     cv2.circle(
                         working_frame, (point_x, point_y), 4, line_color, -1, cv2.LINE_AA
                     )
 
                 if line_only:
+                    if alpha < 1.0:
+                        working_frame = self._fade_to_base(working_frame, alpha, target_frame)
+                    return working_frame
+
+                if popup_info.get("is_pill_badge"):
+                    working_frame = self._render_pill_badge(
+                        working_frame, popup_info, pop_img, box_x, box_y, total_w, total_h,
+                    )
                     if alpha < 1.0:
                         working_frame = self._fade_to_base(working_frame, alpha, target_frame)
                     return working_frame
@@ -420,10 +604,10 @@ class _PopupBoxMixin:
                 # visually ties back to the same color as the border/pin
                 # instead of reading as a generic drop-shadow.
                 shadow_box = [
-                    box_x - 6,
-                    box_y - 4,
-                    box_x + total_w + 6,
-                    box_y + total_h + 14,
+                    box_x - 8,
+                    box_y - 6,
+                    box_x + total_w + 8,
+                    box_y + total_h + 18,
                 ]
                 # Neutral black for the cover style specifically — no
                 # border to tie a colored shadow back to, and a colored
@@ -438,7 +622,7 @@ class _PopupBoxMixin:
                     [shadow_box[0] - sx0, shadow_box[1] - sy0, shadow_box[2] - sx0, shadow_box[3] - sy0],
                     radius=18, fill=shadow_rgba,
                 )
-                pil_canvas.paste(small.filter(ImageFilter.GaussianBlur(radius=11)), (sx0, sy0))
+                pil_canvas.paste(small.filter(ImageFilter.GaussianBlur(radius=17)), (sx0, sy0))
                 draw = ImageDraw.Draw(pil_canvas)
 
                 # PIL's rectangle coordinates are INCLUSIVE of the second
@@ -451,7 +635,7 @@ class _PopupBoxMixin:
                 card_box = [box_x, box_y, box_x + total_w - 1, box_y + total_h - 1]
                 draw.rounded_rectangle(
                     card_box,
-                    radius=14,
+                    radius=18,
                     fill=self.ui["card_bg"][:3] + (250,),
                 )
 
@@ -474,7 +658,7 @@ class _PopupBoxMixin:
                 # meets that white caption area, so only its top is rounded.
                 caption_below = has_label and not is_cover
                 mask_draw.rounded_rectangle(
-                    [0, 0, pw - 1, ph - 1], radius=14, fill=255,
+                    [0, 0, pw - 1, ph - 1], radius=18, fill=255,
                     corners=(True, True, not caption_below, not caption_below),
                 )
 

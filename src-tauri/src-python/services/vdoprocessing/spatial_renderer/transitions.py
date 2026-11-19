@@ -13,8 +13,6 @@ from services.vdoprocessing.vdoexporter import VideoExporter
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
 from services.mapfetcher.maplanguage import resolve_map_style
-from services.mapfetcher.graphicengine.pinimage import marker_for
-
 from .base import logger
 
 # The ending highlight's final hold stretches for leftover narration (see
@@ -144,14 +142,17 @@ class _TransitionMixin:
         if stop_popup:
             # Clean plate (see pre_popup_frame's own comment above) rather
             # than self.last_frame, which can still have a not-yet-finished
-            # popup fade-out baked into it — and it already has every
-            # numbered pin drawn on it, so the recap doesn't need to
-            # redraw them. The fullscreen photo comes later, in
+            # popup fade-out baked into it. Preferably the walk's PIN-FREE
+            # plate (_recap_plate, stashed by _animate_overview_frames):
+            # the recap marks each stop with its own plain dot instead
+            # (_render_recap_frame), and a dot drawn over the teardrop pin
+            # the walk left behind would leave that pin sticking out
+            # around it. The fullscreen photo comes later, in
             # _render_ending_highlight after the zoom — never here.
-            outro_frame = (
-                pre_popup_frame.copy() if pre_popup_frame is not None
-                else self.last_frame.copy()
-            )
+            base_plate = getattr(self, "_recap_plate", None)
+            if base_plate is None or base_plate.shape[:2] != (h, w):  # not this render's
+                base_plate = pre_popup_frame if pre_popup_frame is not None else self.last_frame
+            outro_frame = base_plate.copy()
             all_recap_popups = [ap for ap in active_popups if ap["data"].get("popup_image")]
             # A loop route's "E" is the exact same real-world place as "S"
             # (see SpatialRendererBase._is_loop_route) — usually labeled
@@ -199,6 +200,11 @@ class _TransitionMixin:
         if final_frame is not None:
             # Cards that stayed up are already on the last frame: fading from the bare map would blink them.
             source = self.last_frame if self._cards_stay() or outro_frame is None else outro_frame
+            # The beat where every stop's card is still up, before they all
+            # become badges, is written by the walk itself (see
+            # _animate_overview_frames' own RECAP_CARD_HOLD_SECONDS tail) —
+            # there the cards are still live, so one that popped as the walk
+            # ended finishes fading in instead of freezing half-drawn.
             fade_sec = max(
                 tuning.RECAP_GROUP_FADE_SECONDS, float(self.config.get("summary_fade", 0.5))
             )
@@ -285,11 +291,13 @@ class _TransitionMixin:
         exclude_px: int,
         exclude_py: int,
     ) -> None:
-        """Draws a pin for every OTHER job_config waypoint that happens to
-        fall inside this freshly fetched close-up tile — the featured
-        waypoint (at exclude_px/exclude_py) gets its own dedicated marker
-        drawn separately by the caller, so it's skipped here. Uses the
-        same S/E/stop-by/number precedence as everywhere else (via
+        """Draws a plain color dot (see _draw_recap_dot_color — this
+        highlight beat is the same "recap" family, no teardrop/numbered
+        pins) for every OTHER job_config waypoint that happens to fall
+        inside this freshly fetched close-up tile — the featured waypoint
+        (at exclude_px/exclude_py) gets its own dedicated marker drawn
+        separately by the caller, so it's skipped here. Uses the same
+        S/E/stop-by/number color precedence as everywhere else (via
         _pin_label_and_color), computed from each waypoint's real
         position in job_config's own waypoints list."""
         job_waypoints = (self._get_job_config() or {}).get("waypoints", [])
@@ -354,12 +362,8 @@ class _TransitionMixin:
             # project has customized the two to different colors.
             wp = {"index": pos + offset, "order": order, "data": {"is_stopby": is_stopby, "arrived": True,
                                                                 "inaccessible": bool(jw.get("inaccessible"))}}
-            label, color, split_color = self._pin_label_and_color(wp, total_points)
-            self.graphics.draw_marker(
-                frame, px, py, number=label, color=color, split_color=split_color,
-                is_circle=bool(is_stopby),
-                image=marker_for(jw, {"routeMarker": (self.config or {}).get("route_marker")}, (self.config or {}).get("marker_base_dir")),
-            )
+            _, color, _ = self._pin_label_and_color(wp, total_points)
+            self._draw_recap_dot_color(frame, px, py, color)
 
     def _gl_ending_zoom_enabled(self, bounding_box) -> bool:
         settings = (self._get_job_config() or {}).get("settings", {}) or {}
@@ -600,7 +604,15 @@ class _TransitionMixin:
                 # shrunk to a fraction of that size here, for no reason
                 # tied to this shot at all. Stripped so this card sizes
                 # itself fresh, same as every other popup draw does.
-                for _stale_key in ("card_scale", "beside_box", "leader_via", "recap_line_color"):
+                # "is_pill_badge"/"suppress_leader_line"/"leader_from" go
+                # too: this is an arrival beat, so it shows the full POP UP
+                # CARD — the same photo the fullscreen transition then
+                # grows out of (see the is_fullscreen branch below), which
+                # a slim pill badge would jump out of instead of grow into.
+                for _stale_key in (
+                    "card_scale", "beside_box", "leader_via", "recap_line_color",
+                    "is_pill_badge", "suppress_leader_line", "leader_from",
+                ):
                     highlight_popup.pop(_stale_key, None)
                 highlight_popup["hud_corner"] = None
                 highlight_popup["draw_leader_line"] = True
@@ -651,11 +663,9 @@ class _TransitionMixin:
                     self._draw_route_line_on_extent(frame_out, w, h, extent)
                     self._draw_nearby_waypoints(frame_out, w, h, extent, frame_px, frame_py)
                     if frame_idx < pop_start:
-                        self.graphics.draw_marker(
+                        self._draw_recap_dot_color(
                             frame_out, frame_px, frame_py,
-                            number="S" if is_start else "E",
-                            color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
-                            image=highlight_popup["data"].get("pin_image"),
+                            self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
                         )
                     else:
                         highlight_popup["x"], highlight_popup["y"] = frame_px, frame_py
@@ -675,11 +685,9 @@ class _TransitionMixin:
                         frame_out = self.graphics.render_popup_box(
                             frame_out, card, alpha=alpha, line_only=True
                         )
-                        self.graphics.draw_marker(
+                        self._draw_recap_dot_color(
                             frame_out, frame_px, frame_py,
-                            number="S" if is_start else "E",
-                            color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
-                            image=highlight_popup["data"].get("pin_image"),
+                            self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
                         )
                         frame_out = self.graphics.render_popup_box(
                             frame_out, card, alpha=alpha, skip_line=True
@@ -761,10 +769,13 @@ class _TransitionMixin:
             # still the SAME dict the recap just stamped its own
             # (typically shrunk, packing-many-cards) "card_scale" and
             # frame-specific "beside_box"/"leader_via"/"recap_line_color"
-            # onto — cleared so the highlight's card sizes and positions
-            # itself fresh instead of rendering at whatever fraction the
-            # recap needed.
-            for _stale_key in ("card_scale", "beside_box", "leader_via", "recap_line_color"):
+            # onto, plus the pill-badge flags — cleared so the highlight's
+            # card sizes and positions itself fresh, as the full pop up
+            # card the fullscreen transition then grows out of.
+            for _stale_key in (
+                "card_scale", "beside_box", "leader_via", "recap_line_color",
+                "is_pill_badge", "suppress_leader_line", "leader_from",
+            ):
                 highlight_popup.pop(_stale_key, None)
             highlight_popup["hud_corner"] = None  # forces the leader-lined "beside" card style
             highlight_popup["draw_leader_line"] = True
@@ -785,11 +796,9 @@ class _TransitionMixin:
             highlight_bg = self.graphics.render_popup_box(
                 highlight_bg, highlight_popup, line_only=True
             )
-            self.graphics.draw_marker(
+            self._draw_recap_dot_color(
                 highlight_bg, px, py,
-                number="S" if is_start else "E",
-                color=self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
-                image=highlight_popup["data"].get("pin_image"),
+                self._START_PIN_COLOR if is_start else self._END_PIN_COLOR,
             )
             highlight_frame = self.graphics.render_popup_box(
                 highlight_bg, highlight_popup, skip_line=True

@@ -43,7 +43,7 @@ from .leg_camera import (
     _clear_card_spot, _project_lonlat_to_px, _recenter_view_for_target_px,
 )
 from .leg_hud import (
-    compass_svg, direction_arrow_svg, _DEFAULT_MODE_HUD, _MODE_HUD, _bearing_to_deg, _css_rgba, _heading_label,
+    compass_svg, _DEFAULT_MODE_HUD, _MODE_HUD, _css_rgba, _heading_label,
     _hud_css, _hud_text, _localized_hud, _remaining_minutes, _walk_headings,
 )
 from .pin_icons import (
@@ -1226,7 +1226,7 @@ async def _record_leg(
                     hud_labels["stop_progress"].format(n=progress[0], total=progress[1]) if progress else None
                 )
                 await page.evaluate(
-                    """async ([css, bannerIcon, timeLabel, cardIcon, chainPlaces, chainBadges, useImgCard, compassSvg, directionSvg, distLabel, progressText, progressN, progressTotal]) => {
+                    """async ([css, bannerIcon, timeLabel, cardIcon, chainPlaces, chainBadges, useImgCard, compassSvg, distLabel, progressText, progressN, progressTotal]) => {
                         const style = document.createElement('style');
                         style.textContent = css;
                         document.head.appendChild(style);
@@ -1302,15 +1302,6 @@ async def _record_leg(
                             compassWrap.appendChild(lbl);
                             document.body.appendChild(compassWrap);
                         }
-                        if (directionSvg) {
-                            const directionWrap = document.createElement('div');
-                            directionWrap.id = 'hud-direction-wrap';
-                            directionWrap.insertAdjacentHTML('beforeend', directionSvg);
-                            const dlbl = document.createElement('div');
-                            dlbl.id = 'hud-direction-label';
-                            directionWrap.appendChild(dlbl);
-                            document.body.appendChild(directionWrap);
-                        }
                         const card = document.createElement('div');
                         card.id = 'hud-card';
                         card.innerHTML = `
@@ -1332,8 +1323,6 @@ async def _record_leg(
                      hud_card_png is not None,
                      compass_svg(int(tuning.RESIDENTIAL_COMPASS_SIZE_PX))
                      if tuning.RESIDENTIAL_SHOW_COMPASS else "",
-                     direction_arrow_svg(int(tuning.RESIDENTIAL_DIRECTION_SIZE_PX))
-                     if tuning.RESIDENTIAL_SHOW_DIRECTION else "",
                      hud_labels["distance_label"], progress_text,
                      progress[0] if progress else None, progress[1] if progress else None],
                 )
@@ -1431,24 +1420,14 @@ async def _record_leg(
                     point, deg_text = _heading_label(deg).split(" ", 1)
                     return (
                         "const np = document.getElementById('hud-compass-pointer');"
-                        f" if (np) np.setAttribute('transform', 'rotate({deg} 50 60)');"
+                        f" if (np) np.setAttribute('transform', 'rotate({deg} 60 60)');"
                         " const nd = document.getElementById('hud-compass-letter');"
                         f" if (nd) nd.textContent = {json.dumps(point)};"
                         " const nl = document.getElementById('hud-compass-label');"
                         f" if (nl) nl.textContent = {json.dumps(deg_text)};"
                     )
 
-                def _direction_js(index: int, dist_text: str = "") -> str:
-                    row = smooth_df.iloc[min(index, len(smooth_df) - 1)]
-                    deg = _bearing_to_deg(row["lon"], row["lat"], dest_lon, dest_lat)
-                    return (
-                        "const dp = document.getElementById('hud-direction-pointer');"
-                        f" if (dp) dp.setAttribute('transform', 'rotate({deg} 50 50)');"
-                        " const dl = document.getElementById('hud-direction-label');"
-                        f" if (dl) dl.textContent = {json.dumps(dist_text)};"
-                    )
-
-                await page.evaluate(f"() => {{ {_needle_js(0)} {_direction_js(0)} }}")
+                await page.evaluate(f"() => {{ {_needle_js(0)} }}")
 
                 c_trail = json.dumps(walker_color)
                 c_glow = json.dumps(walker_color + [90])
@@ -1644,7 +1623,6 @@ async def _record_leg(
                             document.getElementById('hud-time').textContent = {json.dumps(hud_minutes.format(n=rem_min0))};
                             document.getElementById('hud-dist').textContent = {json.dumps(dist_text0)};
                             {_needle_js(0)}
-                            {_direction_js(0, dist_text0)}
                         }}
                         """
                         await page.evaluate(js)
@@ -1924,7 +1902,6 @@ async def _record_leg(
                         document.getElementById('hud-time').textContent = {json.dumps(hud_minutes.format(n=rem_min))};
                         document.getElementById('hud-dist').textContent = {json.dumps(dist_text)};
                         {_needle_js(index)}
-                        {_direction_js(index, dist_text)}
                     }}
                     """
                     await page.evaluate(js)

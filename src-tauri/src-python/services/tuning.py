@@ -135,12 +135,15 @@ WALKING_ANIMATION_SPEED_FACTOR = 0.75
 FERRY_ANIMATION_SPEED_FACTOR = 1.5
 
 # --- Pin / line colors (BGR) ------------------------------------------------
-# The map editor's NaviPin.tsx colors, as BGR.
-START_PIN_COLOR: Tuple[int, int, int] = (3, 136, 19)  # #038813 green
-END_PIN_COLOR: Tuple[int, int, int] = (81, 15, 217)  # #d90f51 red/pink
-DRAWN_PIN_COLOR: Tuple[int, int, int] = (12, 121, 255)  # #ff790c orange — drawn-route waypoints
+# The map editor's NaviPin.tsx uses these same hues at full saturation; the walk-style
+# overview video softens them into a muted "editorial map" palette (same hue family, so
+# a pin's color still reads as the same role as in the editor, just toned down to sit
+# next to the muted route line/cards instead of clashing with it).
+START_PIN_COLOR: Tuple[int, int, int] = (60, 120, 55)  # muted forest green
+END_PIN_COLOR: Tuple[int, int, int] = (170, 70, 150)  # muted purple/violet
+DRAWN_PIN_COLOR: Tuple[int, int, int] = (70, 150, 200)  # muted ochre — drawn-route waypoints
 STOPBY_PIN_COLOR: Tuple[int, int, int] = (28, 38, 51)  # #33261c dark brown — stop-by waypoints
-CLOSED_PIN_COLOR: Tuple[int, int, int] = (38, 38, 220)  # #dc2626 red, with a "×" — closed places (editor: Closed)
+CLOSED_PIN_COLOR: Tuple[int, int, int] = (55, 60, 185)  # muted red, with a "×" — closed places (editor: Closed)
 # Walk-style overview: the summary hold lasts at least this long past {closed}, so the red pins are seen.
 CLOSED_HOLD_SECONDS = 3.0
 # Start and end this close (degrees, ~30 m) make a loop route: the E pin is drawn half green, half red.
@@ -155,12 +158,15 @@ PIN_NUMBER_TEXT_COLOR: Tuple[int, int, int] = (17, 17, 17)  # #111 — NaviPin's
 # A wider stroke under the route line keeps it legible over busy tiles. settings.route_line_border_color (BGR)
 # and route_line_border_thickness (px per side, 0 = none) override.
 DEFAULT_LINE_BORDER_COLOR: Tuple[int, int, int] = (255, 255, 255)  # white
-DEFAULT_LINE_BORDER_THICKNESS = 3
+# Thin paper-separation halo, not a second stroke competing with the (now muted) route color.
+DEFAULT_LINE_BORDER_THICKNESS = 2
 
 # --- Popup/summary card text & border --------------------------------------
 # settings.card_border_color (BGR) and card_border_thickness override.
 DEFAULT_CARD_BORDER_COLOR: Tuple[int, int, int] = (230, 230, 230)  # light gray
-DEFAULT_CARD_BORDER_THICKNESS = 1
+# 0: every card (popup and summary) reads its edge from its soft drop shadow alone,
+# matching the popup card's deliberately borderless look instead of a drawn outline.
+DEFAULT_CARD_BORDER_THICKNESS = 0
 # Photo caption size, as a multiple of settings.map_font_size.
 POPUP_LABEL_FONT_SCALE_BESIDE = 0.9  # "beside the pin" card
 POPUP_LABEL_FONT_SCALE_CORNER = 0.95  # fixed HUD-corner card
@@ -268,13 +274,6 @@ RESIDENTIAL_COMPASS_SIZE_PX = 104
 # Leg HUD summary card size vs. the overview's card.
 RESIDENTIAL_HUD_CARD_SCALE = 1.3
 RESIDENTIAL_COMPASS_HEADING_WINDOW_M = 20.0
-# Arrow above the summary card pointing straight at the destination (bearing from the walker's
-# current spot, not the compass's travel heading), with the remaining distance below it.
-RESIDENTIAL_SHOW_DIRECTION = True
-RESIDENTIAL_DIRECTION_SIZE_PX = 72
-# Fixed spot above the summary card's own fixed bottom:32px -- same "eyeball a gap above the
-# neighboring pill" approach as the compass's top:128px below the banner.
-RESIDENTIAL_DIRECTION_BOTTOM_PX = 176
 # A stop-by merges into the leg around it (its pin shown in passing) instead of getting its own leg.
 # settings.merge_stopby_waypoints overrides.
 DEFAULT_MERGE_STOPBY_WAYPOINTS = True
@@ -370,8 +369,9 @@ RESIDENTIAL_WIDE_MIN_DISTANCE_M = 400.0
 RESIDENTIAL_DEFAULT_MAX_CHUNK_DISTANCE_M = 8000.0
 # Route line color per travel mode; a mode missing here uses the renderer's line_color.
 MODE_LINE_COLORS: Dict[str, Tuple[int, int, int]] = {
-    # Blue reads well as the walking accent on the light summary card too.
-    "walking": (232, 115, 26),  # #1A73E8 blue
+    # Muted slate-ink instead of UI-blue, so the traced route reads as a drawn map line
+    # rather than the same saturated blue as the numbered pins/accent (editorial redesign).
+    "walking": (120, 105, 90),  # muted slate
     "ferry": (0, 140, 255),  # orange — reads clearly against blue water
     "airplane": (180, 60, 220),  # magenta/purple
     "car": (60, 180, 60),  # green
@@ -396,7 +396,8 @@ BIG_MAP_ZOOM_TARGET = 2.6
 ENDING_HIGHLIGHT_PYDECK_ZOOM_BOOST = 9.5
 
 # --- Popup / transition timing ----------------------------------------------
-POPUP_FADE_SECONDS = 0.6
+# Slower fade+slide (was 0.6) for a calmer, more deliberate card entrance/exit.
+POPUP_FADE_SECONDS = 0.8
 # The overview's opening start/end cards stay fully up at least this long; a later {start} keeps them up.
 OVERVIEW_INTRO_CARD_MIN_SECONDS = 2.0
 # Minimum gap between two popups triggering, so a cluster of stops doesn't pop on one frame.
@@ -406,10 +407,9 @@ OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS = 0.4
 MAX_CONCURRENT_FLOW_POPUPS = 4
 # How much earlier than its expected frame a popup may trigger (absorbs the estimate's jitter only).
 OVERVIEW_POPUP_TRIGGER_TOLERANCE_SECONDS = 0.2
-# Seconds from a stop at which the overview banner switches from "{label} へ" to "まもなく {label}".
-OVERVIEW_BANNER_NEAR_SECONDS = 3.0
-# Px kept free at the top of the overview for the "next stop" banner.
-OVERVIEW_TOP_CARD_CLEARANCE = 250
+# Px kept free at the top of the overview (screen-edge breathing room; the
+# "next stop" banner this used to clear for was removed — see git history).
+OVERVIEW_TOP_CARD_CLEARANCE = 40
 # Share of the frame height kept free at the bottom for the burned-in captions (up to two lines).
 OVERVIEW_BOTTOM_CARD_CLEARANCE = 0.05
 # Ending recap: every photo card fades in at once, over this long.
@@ -445,6 +445,11 @@ STOPBY_CAMERA_MOVE_SECONDS = 1.2  # a leg's camera flying out to a far stop-by, 
 STOPBY_BATCH_MAX_HELD = 8
 # An overview card stays fully shown (fades excluded) at least this long, even when the walker has moved on.
 OVERVIEW_POPUP_MIN_HOLD_SECONDS = 2.0
+# Walk style, cards_stay on: every stop's full photo card stays up for the whole walk, so at the
+# recap they are all still on screen. This is how long that picture is held before they all
+# become their pill badges (see _render_recap_and_summary) — without the pause the change lands
+# the instant the walker stops and reads as a glitch rather than a step.
+RECAP_CARD_HOLD_SECONDS = 1.0
 # The overview walker stops this long at a "Connect to Route" stop-by (card showing); it has no cue of its own.
 OVERVIEW_CONNECTED_STOPBY_HOLD_SECONDS = 2.0
 # Overview map padding by route size: (span_km ceiling, padding) pairs, first that fits wins. The map is cut
@@ -460,7 +465,8 @@ OVERVIEW_PADDING_MAX_SPAN = 0.18
 # Overview: the walker takes at least this long from one numbered stop to the next, however close.
 OVERVIEW_MIN_LEG_SECONDS = 2.0
 # Overview: a reached pin grows from its tip with a slight overshoot over this long.
-PIN_POP_SECONDS = 0.35
+# Slower than a snappy UI pop (was 0.35) for a more deliberate, editorial reveal.
+PIN_POP_SECONDS = 0.55
 # Leg frames are JPEG screenshots (PNG encoding was the slowest part of each frame).
 LEG_FRAME_JPEG_QUALITY = 92
 # Beside-the-pin cards are tried this close around their pin first (directions, max leader px, extra px for

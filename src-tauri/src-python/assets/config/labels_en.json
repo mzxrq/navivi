@@ -37,6 +37,7 @@
   "soon_banner": "Arriving soon: {dest}",
   "en_route_banner": "Heading to {dest}{suffix}",
   "stop_progress": "Stop {n} of {total}",
+  "overview_remaining_hud": "{distance} · {duration} left",
   "hud_minutes": "{n} min",
   "duration_seconds": "{n} sec",
   "duration_hours_minutes": "{h}h {m:02d}m",

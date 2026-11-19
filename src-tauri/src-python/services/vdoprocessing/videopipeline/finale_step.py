@@ -1,6 +1,7 @@
-"""The finale before the outro: the last stop's photo fills the frame and shrinks onto its pin, then the camera pulls
-back from there until the whole route is in view (real map tiles every frame: pydeck_overview's ending push-in,
-played backwards). Nothing walks: the whole line is drawn from the start. It ends on the route summary card the
+"""The finale before the outro: the last stop's photo appears as a small pinned card first, then that same
+card's picture grows to fill the frame — the hand-off into the next beat — before the camera pulls back from
+there until the whole route is in view (real map tiles every frame: pydeck_overview's ending push-in, played
+backwards). Nothing walks: the whole line is drawn from the start. It ends on the route summary card the
 overview ends with (total distance and time per mode), then the outro cuts in."""
 
 import csv
@@ -136,9 +137,10 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
         out_w, out_h = size
         fps = int(settings.get("fps") or tuning.INTRO_FPS)
         voice = finale_voice({"settings": settings}, project_dir)
-        # The voice starts as the photo shrinks; the whole-route hold stretches so it ends inside the clip.
-        voice_start = tuning.FINALE_PHOTO_SECONDS
-        before_hold = tuning.FINALE_PHOTO_SECONDS + 0.7 + 0.6 + tuning.FINALE_ZOOM_SECONDS
+        # The voice starts once the card has grown to fill the screen; the
+        # whole-route hold stretches so it ends inside the clip.
+        voice_start = 0.6 + 0.7
+        before_hold = 0.6 + 0.7 + tuning.FINALE_PHOTO_SECONDS + tuning.FINALE_ZOOM_SECONDS
         hold_seconds = tuning.FINALE_HOLD_SECONDS
         if voice:
             hold_seconds = max(hold_seconds, voice_start + voice[1] + tuning.FINALE_VOICE_TAIL_SECONDS - before_hold)
@@ -202,15 +204,18 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
         def generate():
             left, top, px, py = card_box(0)
             small = (left, top, card_w, card_h)
-            for _ in range(int(tuning.FINALE_PHOTO_SECONDS * fps)):
-                yield np.asarray(full)
+            # 1. the last stop's photo as a small card, pinned at its spot.
+            for _ in range(int(0.6 * fps)):
+                yield np.asarray(with_card(maps[0], small, 1.0, 1.0, 1.0, (px, py)))
+            # 2. that same photo grows to fill the frame — the hand-off into fullscreen.
             k = max(1, int(0.7 * fps))
             for i in range(k):
                 t = _ease((i + 1) / k)
-                box = tuple(a + (b - a) * t for a, b in zip((0, 0, out_w, out_h), small))
-                yield np.asarray(with_card(maps[0], box, 1.0, 1.0, max(0.0, t * 2 - 1), (px, py)))
-            for _ in range(int(0.6 * fps)):
-                yield np.asarray(with_card(maps[0], small, 1.0, 1.0, 1.0, (px, py)))
+                box = tuple(a + (b - a) * t for a, b in zip(small, (0, 0, out_w, out_h)))
+                yield np.asarray(with_card(maps[0], box, 1.0, 1.0, max(0.0, (1 - t) * 2 - 1), (px, py)))
+            # 3. held fullscreen — the connection point the next beat (the pull-back below) continues from.
+            for _ in range(int(tuning.FINALE_PHOTO_SECONDS * fps)):
+                yield np.asarray(full)
             # The camera pulls back; the card rides on its pin, shrinking and fading over the first part.
             for i, base in enumerate(maps):
                 f = min(1.0, i / max(1, len(maps) * 0.45))
