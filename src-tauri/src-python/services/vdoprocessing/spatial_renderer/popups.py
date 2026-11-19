@@ -115,6 +115,67 @@ def _leader_crosses_route(
     return bool(np.any(close))
 
 
+def _route_cells(
+    route_x: np.ndarray, route_y: np.ndarray, cell: float
+) -> Tuple[np.ndarray, int, int]:
+    """The route painted into a coarse boolean grid, one cell per
+    _ROUTE_CROSS_TOLERANCE_PX and grown by a cell all round. Scoring every
+    pin-to-slot leader against every route point directly is tens of
+    millions of comparisons on a real route; a lookup per sampled point is
+    a few thousand."""
+    gw = int(route_x.max() / cell) + 3
+    gh = int(route_y.max() / cell) + 3
+    grid = np.zeros((gh, gw), dtype=bool)
+    grid[
+        np.clip((route_y / cell).astype(int), 0, gh - 1),
+        np.clip((route_x / cell).astype(int), 0, gw - 1),
+    ] = True
+    grown = grid.copy()
+    grown[:, :-1] |= grid[:, 1:]
+    grown[:, 1:] |= grid[:, :-1]
+    grown[:-1] |= grown[1:].copy()
+    grown[1:] |= grown[:-1].copy()
+    return grown, gw, gh
+
+
+def _segment_hits_route(
+    grid: np.ndarray, gw: int, gh: int, cell: float,
+    x0: float, y0: float, x1: float, y1: float,
+) -> bool:
+    """Whether the straight line from (x0, y0) to (x1, y1) runs over the
+    route, read off _route_cells' grid."""
+    length = math.hypot(x1 - x0, y1 - y0)
+    if length < 1.0:
+        return False
+    t = np.linspace(0.0, 1.0, max(2, int(length / cell) + 1))
+    gx = np.clip(((x0 + (x1 - x0) * t) / cell).astype(int), 0, gw - 1)
+    gy = np.clip(((y0 + (y1 - y0) * t) / cell).astype(int), 0, gh - 1)
+    return bool(grid[gy, gx].any())
+
+
+def _leader_over_route(
+    px: float, py: float, ax: float, ay: float,
+    grid: np.ndarray, gw: int, gh: int, cell: float, skip: float,
+) -> bool:
+    """Whether the leader drawn from a pin at (px, py) to a card anchor at
+    (ax, ay) would run over the route. The drawn line is an ELBOW, not a
+    straight line (see _layout_recap_cards' leader_via), and it is the
+    elbow's long leg that ends up running ALONG the route — so both of the
+    two bends the draw chooses between are tested, and only a leader where
+    neither is clear counts. The first `skip` pixels out of the pin are
+    ignored: a stop sits ON the route, so its own spot always reads as
+    "over the line"."""
+
+    def bend(vx: float, vy: float) -> bool:
+        leg = math.hypot(vx - px, vy - py)
+        t0 = min(1.0, skip / leg) if leg > skip else 1.0
+        return _segment_hits_route(
+            grid, gw, gh, cell, px + (vx - px) * t0, py + (vy - py) * t0, vx, vy
+        ) or _segment_hits_route(grid, gw, gh, cell, vx, vy, ax, ay)
+
+    return bend(ax, py) and bend(px, ay)
+
+
 def _cluster_points_by_distance(
     points: List[Tuple[float, float]], link_dist: float
 ) -> List[List[int]]:
@@ -269,8 +330,8 @@ class _PopupMixin:
         it) is left ungrouped, and keeps the old pop-on-proximity
         behaviour — never shown at all would be worse.
 
-        `pass_by` (walk and map overviews): no batches at all — every unconnected stop-by and closed place
-        pops up on its own as the walker passes it (_is_loose_stopby)."""
+        `pass_by` (walk and map overviews): no batches at all — every stop-by (connected or not) and
+        closed place pops up on its own as the walker passes it (_is_loose_stopby)."""
         host = None
         # True only for the very next stop-by right after a real waypoint
         # (or at the very start of active_popups) — i.e. "is `ap` the
@@ -286,7 +347,7 @@ class _PopupMixin:
                 # Skipped in video export: pops up on its own as the walker
                 # passes (see _is_loose_stopby), never part of a batch.
                 continue
-            if pass_by and (data.get("inaccessible") or (data.get("is_stopby") and not data.get("connect_to_route"))):
+            if pass_by and (data.get("inaccessible") or data.get("is_stopby")):
                 continue
             if not data.get("is_stopby"):
                 host = ap
@@ -309,19 +370,26 @@ class _PopupMixin:
                 ap["stopby_host"] = host
 
     @staticmethod
+    def _wants_recap_card(popup: Dict) -> bool:
+        """Gets a card on the walk and a badge in the recap: anything with a
+        photo, and every stop-by/closed place even without one — its name
+        belongs in a badge like the rest, not drawn bare on the map."""
+        data = popup.get("data") or {}
+        return bool(data.get("popup_image") or data.get("is_stopby") or data.get("inaccessible"))
+
+    @staticmethod
     def _is_loose_stopby(popup: Dict) -> bool:
         """True for a stop-by that still pops on its own, on proximity,
         exempt from the sequential-arrival gate — i.e. an UNCONNECTED one
         with no host waypoint to be batched at (see _attach_stopby_groups,
         which only leaves a stop-by hostless when nothing precedes it).
 
-        A connected stop-by is deliberately NOT "loose": the route runs
-        through it, so it arrives in sequence like any ordinary stop. This
-        is the single place that distinction is made, so the trigger loop
-        can't apply one half of it and miss the other."""
+A connected stop-by is loose as well: the walker passes every
+        stop-by, so it pops up where it sits instead of arriving in
+        sequence like an ordinary stop."""
         data = popup.get("data") or {}
         return (
-            (bool(data.get("is_stopby")) and not data.get("connect_to_route") or bool(data.get("inaccessible")))
+            (bool(data.get("is_stopby")) or bool(data.get("inaccessible")))
             and popup.get("stopby_host") is None
         )
 
@@ -1153,6 +1221,27 @@ class _PopupMixin:
     # Clearance kept between a card and the route line/pins it must not
     # cover — the map underneath is the whole point of the recap frame.
     _RECAP_CARD_OBSTACLE_PAD = 10
+    # How hard a badge is pulled toward the middle of its own kind's pins, against the
+    # pull of its own pin (see _layout_recap_cards): 1.0 weighs the two the same, which
+    # gathers the stop-bys into their own block. Below about 0.5 it changes nothing;
+    # far above 1 it starts dragging a badge away from the place it marks.
+    _KIND_PULL = 1.0
+    # What a slot costs when the leader to it would be drawn over the route (see
+    # _layout_recap_cards), in the same squared pixels as the distance to its own pin:
+    # worth going this much further to stay clear of the line, no further. Every stop
+    # SITS on the route, so near a junction every direction crosses something and an
+    # absolute rule just exiles the badge to the far side of the frame.
+    _ROUTE_CROSS_PENALTY = 250.0 ** 2
+    # The clear space kept around a near-pin cluster's badges, in slot pitches, so the
+    # pair reads as a pair and the next stop along doesn't sit flush against it.
+    _CLUSTER_ROOM = 1.6
+    # How close two pins must be, in marker widths on the rendered frame, for their
+    # badges to be treated as one group and drawn touching (see _layout_recap_cards).
+    _PAIR_DISTANCE_MARKERS = 3.0
+    # Badges are spaced further apart than cards: two sitting flush read as a pair, and
+    # only stops a few metres apart should read that way (see _layout_recap_cards, which
+    # puts a cluster's own badges side by side with the tighter _RECAP_CARD_GAP).
+    _RECAP_BADGE_GAP = 55
 
     def _recap_card_slots(
         self,
@@ -1163,6 +1252,7 @@ class _PopupMixin:
         reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
         route_obstacles: Optional[np.ndarray] = None,
         centers: Optional[List[Tuple[float, float]]] = None,
+        gap: Optional[float] = None,
     ) -> List[Tuple[int, int]]:
         """Candidate card positions on a disjoint lattice covering the WHOLE
         frame — not just its border — minus any that would cover the route
@@ -1177,7 +1267,8 @@ class _PopupMixin:
         pitch is the card's own size plus a gap, so two slots can never
         overlap however many cards end up placed, and it is centred in the
         leftover space so the arrangement doesn't bias to one side."""
-        margin, gap = self._RECAP_CARD_MARGIN, self._RECAP_CARD_GAP
+        margin = self._RECAP_CARD_MARGIN
+        gap = self._RECAP_CARD_GAP if gap is None else gap
         pad = self._RECAP_CARD_OBSTACLE_PAD
         ox = oy = None
         if route_obstacles is not None and len(route_obstacles):
@@ -1209,7 +1300,12 @@ class _PopupMixin:
             
             golden_angle = math.pi * (3.0 - math.sqrt(5.0))
             n = 0
-            target_slots = len(centers) * 2
+            # Four candidate slots per card, not two: the spiral stops as
+            # soon as the quota is met, so a tight quota leaves the pins in
+            # a crowded part of the frame with no slot of their own near
+            # them and their cards end up stranded across the map, beside
+            # a stop they have nothing to do with.
+            target_slots = len(centers) * 4
             
             while len(slots) < target_slots and n < 8000:
                 r = 5.0 * math.sqrt(n)
@@ -1264,9 +1360,16 @@ class _PopupMixin:
         h: int,
         reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
         route_obstacles: Optional[np.ndarray] = None,
+        card_room: bool = False,
     ) -> List[Dict]:
         """Places EVERY recap card at once and returns them in the order
         they should be revealed.
+
+        `card_room` (cards that stay up for the whole walk): the lattice is
+        pitched for the real PHOTO card, not the slim badge, and the card
+        scale is shrunk until every stop has a slot of its own — otherwise
+        the walk draws full cards into badge-sized slots and a dense route
+        buries half of them. The recap still turns them into badges.
 
         Used for the recap instead of _layout_recap_popups' spiral/masonry
         search, which packs each card in beside its own pin. That reads
@@ -1313,7 +1416,8 @@ class _PopupMixin:
         # a popup with a shorter name just draws a shorter (not stretched)
         # badge inside its slot, see card_hs below.
         max_name_chars = max(len(str(p.get("label") or "")) for p in popups)
-        if pill_badge:
+        lattice_pill = pill_badge and not card_room
+        if lattice_pill:
             card_w, card_h = self.graphics.beside_card_footprint(
                 is_pill_badge=True, pill_name_chars=max_name_chars
             )
@@ -1329,14 +1433,22 @@ class _PopupMixin:
         cy = sum(p[1] for p in all_pins) / len(all_pins)
 
         for obstacles in (route_obstacles, None):
-            if pill_badge:
+            if lattice_pill:
                 # One fixed text size — no scale search — the narrow width
                 # alone is what gives a dense route room for every stop.
-                candidate = self._recap_card_slots(
-                    w, h, card_w, card_h, reserved_boxes, obstacles, centers=all_pins
-                )
-                if len(candidate) > len(slots):
-                    slots = candidate
+                # Spaced out first (_RECAP_BADGE_GAP, so two unrelated stops
+                # never read as a pair), packed tight if the frame cannot
+                # hold them all that way: a badge no one can see is worse
+                # than two sitting close.
+                for badge_gap in (self._RECAP_BADGE_GAP, self._RECAP_CARD_GAP):
+                    candidate = self._recap_card_slots(
+                        w, h, card_w, card_h, reserved_boxes, obstacles,
+                        centers=all_pins, gap=badge_gap,
+                    )
+                    if len(candidate) > len(slots):
+                        slots = candidate
+                    if len(slots) >= len(popups):
+                        break
                 if len(slots) >= len(popups):
                     break
                 continue
@@ -1381,7 +1493,185 @@ class _PopupMixin:
             (slot_arr[None, :, 0] - pin_arr[:, None, 0]) ** 2
             + (slot_arr[None, :, 1] - pin_arr[:, None, 1]) ** 2
         )
-        slot_for = list(linear_sum_assignment(cost)[1])
+        # A leader that runs along or across the route line is hard to follow
+        # and cuts the route in two. A slot whose line would do that costs
+        # _ROUTE_CROSS_PENALTY — far more than any distance on a 1920x1080
+        # frame, so the matching never picks one while a clear slot is free
+        # anywhere, and only falls back to one if every alternative is taken.
+        cell = _ROUTE_CROSS_TOLERANCE_PX
+        skip = float(self.graphics.marker_radius) + cell
+        grid = gw_ = gh_ = None
+        if route_obstacles is not None and len(route_obstacles):
+            grid, gw_, gh_ = _route_cells(
+                route_obstacles[:, 0], route_obstacles[:, 1], cell
+            )
+
+        def leader_hits(px_: float, py_: float, sidx: int) -> bool:
+            """Whether the leader from (px_, py_) to this slot would be drawn
+            over the route (see _leader_over_route)."""
+            if grid is None:
+                return False
+            sx_, sy_ = slots[sidx]
+            ax_, ay_ = _anchor_point(px_, py_, sx_, sy_, card_w, card_h)
+            return _leader_over_route(
+                px_, py_, ax_, ay_, grid, gw_, gh_, cell, skip
+            )
+
+        if grid is not None:
+            for j, (px_, py_) in enumerate(pins_xy):
+                for sidx in range(len(slots)):
+                    if leader_hits(px_, py_, sidx):
+                        cost[j, sidx] += self._ROUTE_CROSS_PENALTY
+
+        # Each kind keeps to its own part of the frame: a stop-by's badge sits
+        # with the other stop-bys rather than between two numbered stops,
+        # where it reads as one of them. Two things do it — every slot is
+        # also scored on its distance to the MIDDLE of its own kind's pins
+        # (_KIND_PULL, against the pin's own distance), and the kinds are
+        # matched one at a time, stops first, so the ones that carry the
+        # route's numbering get their pick. Within a kind it is still the
+        # minimum-total matching, so its leaders stay short and uncrossed.
+        def kind(popup: Dict) -> int:
+            data = popup.get("data") or {}
+            return 2 if data.get("inaccessible") else 1 if data.get("is_stopby") else 0
+
+        kinds = [kind(p) for p in ordered]
+        for k in set(kinds) if len(set(kinds)) > 1 else ():  # nothing to separate from
+            rows = [j for j, kj in enumerate(kinds) if kj == k]
+            mid = pin_arr[rows].mean(axis=0)
+            cost[rows] += self._KIND_PULL * (
+                (slot_arr[None, :, 0] - mid[0]) ** 2 + (slot_arr[None, :, 1] - mid[1]) ** 2
+            )
+        slot_for = [0] * len(ordered)
+        free = list(range(len(slots)))
+
+        def centre(s: int) -> Tuple[float, float]:
+            return slots[s][0] + card_w / 2.0, slots[s][1] + card_h / 2.0
+
+        def d2(s: int, to: Tuple[float, float]) -> float:
+            cx_, cy_ = centre(s)
+            return (cx_ - to[0]) ** 2 + (cy_ - to[1]) ** 2
+
+        # Stops only metres apart share ONE leader line (see the clustering
+        # further down), so the member that draws none can only be read by
+        # what it sits beside: its badge has to sit with its cluster's. They
+        # claim the slot nearest their shared point and that slot's own
+        # nearest neighbours BEFORE the matching below, which then works
+        # around them — claiming them afterwards and handing the badge that
+        # held one the cluster member's old far slot exiled it across the
+        # frame, away from its own pin.
+        # Every stop is either in a GROUP or ALONE. A stop within
+        # _PAIR_DISTANCE_PX of another joins its group (and through it any
+        # stop near THAT one, so a run of close stops is one group, not a
+        # chain of pairs); everything else stands alone. Measured on the
+        # rendered frame, not on the ground: two stops a kilometre apart on
+        # a city walk are as close on screen as two a hundred metres apart
+        # on a mountain route, and it is the picture that has to read.
+        # Only ever with its own kind: a stop and a stop-by that happen to
+        # sit at the same spot are not a pair, and drawing their badges
+        # touching would say they are.
+        link_dist = self.graphics.marker_radius * self._PAIR_DISTANCE_MARKERS
+        clusters = []
+        for k in sorted(set(kinds)):
+            rows = [j for j, kj in enumerate(kinds) if kj == k]
+            clusters += [
+                [rows[i] for i in grp]
+                for grp in _cluster_points_by_distance([pins_xy[j] for j in rows], link_dist)
+            ]
+        locked = set()
+        for idxs in clusters:
+            if len(idxs) < 2:
+                continue
+            ax = sum(pins_xy[i][0] for i in idxs) / len(idxs)
+            ay = sum(pins_xy[i][1] for i in idxs) / len(idxs)
+            def shared_cost(s: int) -> float:
+                return d2(s, (ax, ay)) + (
+                    self._ROUTE_CROSS_PENALTY if leader_hits(ax, ay, s) else 0.0
+                )
+
+            head = min(free, key=shared_cost)
+            # The rest go in boxes cut RIGHT BESIDE the head's, at the tight
+            # card gap — the lattice's own nearest free slot can be a long
+            # way off when the route leaves no room next door, and then the
+            # pair doesn't read as one. Whichever side is free, clear of the
+            # summary card and reached without a leader over the route.
+            margin = self._RECAP_CARD_MARGIN
+            step_x, step_y = card_w + self._RECAP_CARD_GAP, card_h + self._RECAP_CARD_GAP
+            hx, hy = slots[head]
+            near = [head]
+            for step in range(1, len(idxs)):
+                spots = []
+                for dx, dy in ((step, 0), (-step, 0), (0, step), (0, -step)):
+                    bx, by = hx + dx * step_x, hy + dy * step_y
+                    if not (margin <= bx and bx + card_w <= w - margin):
+                        continue
+                    if not (margin <= by and by + card_h <= _card_bottom_limit(h, margin)):
+                        continue
+                    if any(
+                        bx < rx2 and bx + card_w > rx1 and by < ry2 and by + card_h > ry1
+                        for rx1, ry1, rx2, ry2 in (reserved_boxes or ())
+                    ):
+                        continue
+                    spots.append((int(bx), int(by)))
+                if not spots:
+                    break
+                slots.append(spots[0])
+                sidx = len(slots) - 1
+
+                def spot_cost(spot: Tuple[int, int]) -> Tuple[float, float]:
+                    slots[sidx] = spot
+                    return (
+                        float(leader_hits(ax, ay, sidx)),
+                        d2(sidx, (ax, ay)),  # the nearest clear side, not just any
+                    )
+
+                slots[sidx] = min(spots, key=spot_cost)
+                near.append(sidx)
+            if len(near) < len(idxs):  # no room beside it: back to the lattice
+                near += sorted(
+                    (s for s in free if s != head),
+                    key=lambda s: d2(s, centre(head))
+                    + (self._ROUTE_CROSS_PENALTY if leader_hits(ax, ay, s) else 0.0),
+                )[: len(idxs) - len(near)]
+            # Left pin to the left box, so two neighbouring stops don't swap
+            # sides of their own pins.
+            for i, sidx in zip(
+                sorted(idxs, key=lambda i: pins_xy[i]),
+                sorted(near, key=lambda s: slots[s]),
+            ):
+                slot_for[i] = sidx
+            locked.update(idxs)
+            claimed = set(near)
+            free = [
+                s for s in free
+                if s not in claimed
+                and not any(
+                    slots[s][0] < slots[c][0] + card_w and slots[s][0] + card_w > slots[c][0]
+                    and slots[s][1] < slots[c][1] + card_h and slots[s][1] + card_h > slots[c][1]
+                    for c in claimed
+                )
+            ]
+            # ...and the slots right beside them are left empty, so the
+            # cluster reads as its own group: a stop a kilometre up the road
+            # packed flush against it looks like one of the pair. Given up
+            # again if the frame would then run short of slots.
+            edge = (card_w + self._RECAP_CARD_GAP) * self._CLUSTER_ROOM
+            buffer = {
+                sidx for sidx in free
+                if any(math.dist(centre(sidx), centre(c)) < edge for c in claimed)
+            }
+            if len(free) - len(buffer) >= len(ordered) - len(locked):
+                free = [sidx for sidx in free if sidx not in buffer]
+
+        for k in sorted(set(kinds)):
+            rows = [j for j, kj in enumerate(kinds) if kj == k and j not in locked]
+            if not rows:
+                continue
+            picked = linear_sum_assignment(cost[np.ix_(rows, free)])[1]
+            for j, c in zip(rows, picked):
+                slot_for[j] = free[c]
+            taken = {free[c] for c in picked}
+            free = [s for s in free if s not in taken]
 
         # Safety net. The matching above minimises pin-to-card-CENTRE
         # distance, while a leader actually stops at the card's near edge
@@ -1424,7 +1714,13 @@ class _PopupMixin:
             swapped = False
             for a in range(n):
                 for b in range(a + 1, n):
+                    if kinds[a] != kinds[b] or a in locked or b in locked:
+                        continue  # trading here would scatter the kinds or a cluster
                     if crosses(*leader(a), *leader(b)):
+                        if leader_hits(*pins_xy[a], slot_for[b]) or leader_hits(
+                            *pins_xy[b], slot_for[a]
+                        ):
+                            continue  # untangling these two would put one over the route
                         slot_for[a], slot_for[b] = slot_for[b], slot_for[a]
                         swapped = True
             if not swapped:
@@ -1440,10 +1736,9 @@ class _PopupMixin:
         # centroid, not just its own pin); the rest draw none. Reuses the
         # same proximity clustering _layout_beside_popups' own hull-anchor
         # logic is built on (see _cluster_points_by_distance).
-        link_dist = self.graphics.marker_radius * 3.0
         cluster_anchor: Dict[int, Tuple[float, float]] = {}  # rep index -> shared pin point
         suppressed = set()
-        for idxs in _cluster_points_by_distance(pins_xy, link_dist):
+        for idxs in clusters:
             if len(idxs) < 2:
                 continue
             ccx = sum(pins_xy[i][0] for i in idxs) / len(idxs)
@@ -1463,9 +1758,9 @@ class _PopupMixin:
             sx, sy = slots[slot_for[j]]
             popup["beside_box"] = (int(sx), int(sy))
             if pill_badge:
-                popup["is_pill_badge"] = True
-            else:
-                popup["card_scale"] = card_scale
+                popup["is_pill_badge"] = True  # what the recap draws
+            if not lattice_pill:
+                popup["card_scale"] = card_scale  # the size its slot was cut for
             popup["recap_line_color"] = palette[j % len(palette)]
             if j in suppressed:
                 popup["suppress_leader_line"] = True
@@ -1526,7 +1821,7 @@ class _PopupMixin:
         recap_frame = base_frame.copy()
         recap_popups = (
             group_popups if group_popups is not None
-            else [ap for ap in active_popups if ap["data"].get("popup_image")]
+            else [ap for ap in active_popups if self._wants_recap_card(ap)]
         )
         if not recap_popups:
             return recap_frame

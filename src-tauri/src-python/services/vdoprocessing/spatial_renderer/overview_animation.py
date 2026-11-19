@@ -49,20 +49,32 @@ class _NoticeWriter:
 
 class _OverviewAnimationMixin:
     def _apply_hud(self, frame: np.ndarray) -> np.ndarray:
-        """Persistent overview HUD: the scale bar (always, when the
-        renderer has a usable mpp — see render_overview's
-        self._hud_mpp) and the live "X km / Y left" chip (once the walk
-        has an actual position to measure progress from). Drawn through
+        """Persistent overview HUD: the trip's name and per-mode times on the
+        left, and on the right what is left of the route, the stop counter,
+        the stop being walked to and a progress bar (once the walk has an
+        actual position to measure progress from). Drawn through
         _NoticeWriter.write so every frame this loop writes gets it,
         regardless of which branch (walk, holds, batches) produced it —
         same reasoning as the stop-by notice it's drawn alongside."""
-        frame = self.graphics.render_scale_bar(frame, getattr(self, "_hud_mpp", None))
         total_km = getattr(self, "_hud_total_distance_km", None)
         total_s = getattr(self, "_hud_total_duration_seconds", None)
         frac = getattr(self, "_hud_progress_frac", None)
+        live = {}
         if total_km is not None and total_s is not None and frac is not None:
             remaining = max(0.0, 1.0 - frac)
-            frame = self.graphics.render_distance_chip(frame, total_km * remaining, total_s * remaining)
+            live = {
+                "remaining_km": total_km * remaining,
+                "remaining_seconds": total_s * remaining,
+                "progress": frac,
+            }
+        frame = self.graphics.render_overview_hud(
+            frame,
+            title=getattr(self, "_hud_title", None),
+            mode_duration=getattr(self, "_hud_mode_duration", None),
+            stops=getattr(self, "_hud_stops", None),
+            next_stop=getattr(self, "_hud_next_stop", None),
+            **live,
+        )
         return self._apply_preview_badge(frame)
 
     def _apply_preview_badge(self, frame: np.ndarray) -> np.ndarray:
@@ -749,8 +761,13 @@ class _OverviewAnimationMixin:
             # the moment that waypoint is itself triggered (its own real
             # card, not this preview, takes over from there).
             self._preview_badge = None
+            # Same two values the HUD's stop counter and "next" line show
+            # (seq_ptr = how many numbered stops have been reached).
+            self._hud_stops = (seq_ptr, len(sequential_popups)) if sequential_popups else None
+            self._hud_next_stop = None
             if seq_ptr < len(sequential_popups):
                 upcoming = sequential_popups[seq_ptr]
+                self._hud_next_stop = upcoming.get("label") or None
                 if (
                     not upcoming["data"].get("triggered")
                     and upcoming["data"].get("popup_image")
@@ -845,11 +862,6 @@ class _OverviewAnimationMixin:
                 for wp in active_popups:
                     if wp["data"].get("arrived") or wp["index"] == 0:
                         self._draw_pin(frame, wp, len(points), scale=self._pin_pop_scale(wp, self._pop_now, fps))
-                        # A passed stop-by / closed place with no photo has no card: its name pops up instead.
-                        if self._is_loose_stopby(wp) and not wp["data"].get("popup_image"):
-                            self._draw_place_name(frame, wp)
-                            if last_frame_of_walk:
-                                self._draw_place_name(self._recap_plate, wp)
 
             # [NOTE] [Animation] Only the very last iteration's pre-popup frame is ever read
             # (see the recap's use of it, below) — smooth_path's length is

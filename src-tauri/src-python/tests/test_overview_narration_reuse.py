@@ -46,7 +46,7 @@ def test_stopby_toggle_renumbers_the_saved_script(tmp_path, monkeypatch):
         {"id": "c"}, {"id": "z"},
     ]
     cfg.write_text(json.dumps({"overview_narration": "", "waypoints": waypoints}), encoding="utf-8")
-    # saved before stop-bys were marked: "s" was only passed by then
+    # saved before "s" was marked a stop-by
     (tmp_path / ".overview_narration.json").write_text(
         json.dumps({"source_ids": "a,b,s,c,z", "script": "{start}old"}), encoding="utf-8"
     )
@@ -56,7 +56,7 @@ def test_stopby_toggle_renumbers_the_saved_script(tmp_path, monkeypatch):
     monkeypatch.setattr(overview_script, "ollama_generate", lambda model: None)
     assert ensure_overview_narration(str(cfg)) is True
     saved = json.loads((tmp_path / ".navivi" / "overview_narration.json").read_text(encoding="utf-8"))
-    assert saved["source_ids"] == "a,b,s+,c,z"
+    assert saved["source_ids"] == "a,b,s-,c,z"  # a stop-by takes no number, connected or not
 
 
 def _course_project(tmp_path, narration, is_auto):
