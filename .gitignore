@@ -144,3 +144,6 @@ setup/stage/
 # Claude Code local settings (the project memory file is shared)
 .claude/*
 !.claude/CLAUDE.md
+
+# graphify knowledge graph (rebuilt whole on every run; drop this line to share it)
+graphify-out/

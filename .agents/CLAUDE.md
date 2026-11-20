@@ -143,6 +143,41 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
 - `services/config/job_config.py` — `JobConfigManager` is a **process-wide singleton** (tests reset it in `conftest.py`).
 - `services/tuning.py` — central hand-tuned constants (speeds, colors, timings, GPU cooldown, FFmpeg threads).
   Per-project overrides come from `job_config.json` `settings.*`; tuning.py holds fallback defaults only.
+- Stop numbering (S, 1, 2 … E) is one rule, `route_inputs.stop_is_numbered` + `returns_to`: a stop-by and a stop skipped in
+  video export show "・", and a return stop ("Add return stop", a copy at the same spot) shows again the number of the stop it
+  comes back to and gets no `{n}` cue. Six places count it for their own data shape — `overview_pin_glyphs` (legs/3D),
+  `spatial_renderer/overview.py`'s `order`, `waypoints.py`'s `_numbers`, `route2vdo`'s pydeck pins, `outrocard._route_badges`
+  and `overview_script.visible_waypoints` — so a change has to go through all of them (`tests/test_stop_numbering.py`).
+  The map editor's own `src/utils/stopLabel.ts` still numbers a return stop separately (it also names asset files).
+- The overview recap's pill badges (`spatial_renderer/popups.py::_layout_recap_cards`, `tests/test_recap_pill_layout.py`):
+  **no leader lines** (`leaders=False` from the walk/map recap — the badge's number and its pin's are the tie), so the
+  badges pack at the tight `_RECAP_CARD_GAP` and none of the route-crossing or line-untangling work runs. Every
+  video style arranges pill badges this way, the course one included (`course.py`, whose badges stay up for the
+  whole video; `_course_hud` reads `suppress_leader_line`). Only a `pop_up_card` recap still passes leaders — a wide
+  photo card carries no number, so the line is all that ties it to a pin — and that is the last user of `_RECAP_BADGE_GAP`.
+  The course style also raises the clear-space pull (`clutter_pull=_CLUTTER_PULL_COURSE_PX`), since its map is never
+  faded back and its badges stay up over the live route for the whole video.
+  One badge per PLACE (a return stop shares the first visit's, `_recap_popup_set`), all on one frame-wide lattice
+  (`_recap_card_slots`, cells offered nearest-pin-first) so they line up in rows and columns and can never overlap.
+  A badge within `_BADGE_BESIDE_PIN` of its own pin may rest on the route line and its leader is not charged the
+  route-crossing penalty — every stop sits ON the route, so the old keep-off rule left no cell beside any pin and each
+  badge was placed across the water with a long leader. Rows are laid out per COLUMN, from the top clearance down to
+  whatever is reserved below that column (the summary card's corner, the stop-by notice), so a blocked column's bottom
+  row lands where a full-height badge still clears — one ladder for the whole frame put that row where only a short
+  name fitted, and the longest name's badge was pushed out of the block of stops it belongs to. A block shows one kind
+  at a time and each kind in the order it was walked — S, 1, 2, 3 … E, then stop-bys, then closed places — trading
+  cells only inside the block (two empty cells end it, one does not; rows within `_SAME_ROW_PX` count as one row,
+  since per-column rows can differ by a pixel). A long name simply makes a taller badge that hangs below its
+  neighbours, their tops aligned. Where the map is empty is measured from the background image itself
+  (`_clutter_cost`: local contrast at 1/8 scale, so water and quiet blocks score low) and priced with
+  `_CLUTTER_PULL_PX`, kept low (120) because the recap fades its map anyway. There is no
+  pull toward the middle of a kind's pins (the old `_KIND_PULL`): on a route split between an island and the mainland
+  that middle is open water, and it stranded any stop with no near neighbour of its kind out in it. The background is
+  `plain_recap_plate` — the tiles faded `_RECAP_MAP_FADE` toward white with the route redrawn on top at full strength,
+  built BEFORE the route goes on (fading the finished plate took the route with it, and holding a band around the
+  route out of the fade just restored a ribbon of unfaded sea). Preview a frame without rendering a video:
+  `.agents/scratch/recap-layout/shoot.py` (render_mode `recap_frame`, 2D CPU only, ~1 min) — point it at a COPY of a
+  project.
 - Elevation heatmap in the video: `settings.show_route_heatmap` + `<ele>` in `raw_track.gpx` (`height` in the csv) → `pydeckrecorder/elevation.py`; see CODEMAP. Heatmap legs also show an elevation profile card bottom-left, level with the summary card (`elevation.profile_card`; bump `route2vdo.LEG_ELEVATION_CARD_VERSION` to re-render only those legs). Each leg keeps its previous render in `assets/video/route/.variants/`: switching a setting back restores it instead of rendering again.
 - Street photos at turns: `settings.street_photos_at_turns` + the app-wide Mapillary key (`NAVIVI_MAPILLARY_TOKEN`) → `mapfetcher/street_photos.py` adds a pip landmark per `leg_turns()` turn on walking legs (route2vdo.py); photos cached in `.navivi/streetview/` with `index.json` per turn (unchanged route = no requests; ≤2 req/s, limit 10, a 4xx stops that leg's requests), credit stamped on each. No Google Street View backup: removed 2026-10-22 (its terms forbid storing the images and promo videos need approval). Only turns ≥ TURN_DEG (50°), 50 m+ from either stop, one per zigzag, are looked up.
 - Street view waypoints (`isStreetView`, also `isStopBy`/not connected so nothing routes them): saved as job_config `street_views` [{id, lat, lng, label, image}], not in `waypoints`, so only `route2vdo` sees them. `street_photos.street_view_landmarks` puts each on the leg passing nearest (≤ `STREET_VIEW_MAX_OFF_ROUTE_M`) as a passing pip card; the n-th `{view}` … `{/view}` in a leg's narration (`view_cue_spans`, via `leg_sequence` `street_view_cues`) pops the n-th card in/out on the voice (`pedestrian` `_voice_from` / `timed_views`), otherwise it shows ~1.2 s at its spot. `{view wait}` (cue `viewwaitN`) also stops the walker there: `pedestrian._wait_view_plan` splits the walk plan so it reaches the spot on the cue and holds until `{/view}`, the piece keeping its length. `{view wait slow}` (cue `viewwaitslowN`, span flag `"slow"`, card `wait_slow`) also eases the walker into the spot: that plan entry gets a 3rd item, `tuning.VIEW_WAIT_SLOW_SECONDS`, used by `routedata.interpolate_route_data` as that stretch's own `arrival_time_fraction` slow-down.

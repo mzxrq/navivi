@@ -320,8 +320,16 @@ class _CourseOverviewMixin:
         card_popups = [ap for ap in on_route + extras if ap["data"].get("popup_image") and id(ap) not in returns]
         if self._is_loop_route and stop_popup is not None:
             card_popups = [ap for ap in card_popups if ap is not stop_popup]
+        # Pill badges are laid out exactly as the walk/map recap lays them out: no leader lines
+        # (the badge's number and its pin's are the tie), packed tight, beside their own pin and
+        # over the map's own clear space. A pop_up_card recap keeps its leaders — a wide photo
+        # card carries no number, so the line is the only thing tying it to a pin.
+        pill_recap = self.config.get("overview_recap_style", "pill_badge") != "pop_up_card"
         laid_out = self._layout_recap_cards(card_popups, w, h, reserved_boxes=reserved,
-                                            route_obstacles=route_obstacle_arr)
+                                            route_obstacles=route_obstacle_arr,
+                                            background=current_bg if pill_recap else None,
+                                            leaders=not pill_recap,
+                                            clutter_pull=self._CLUTTER_PULL_COURSE_PX)
         cards = {ap["index"]: ap for ap in laid_out}
 
         def reveal_time(dist: float) -> float:
@@ -411,6 +419,11 @@ class _CourseOverviewMixin:
             )
             return tuple(shown), tuple(anim), bumps, arrived, extra_on
 
+        # A pill badge already shows its stop's number, so the map under it only needs the
+        # colour: a plain dot, as the walk's recap draws (_draw_recap_dot), not a numbered
+        # teardrop repeating it.
+        draw_marker = self._draw_recap_dot if pill_recap else self._draw_pin
+
         def build_layer(state, base: np.ndarray) -> np.ndarray:
             shown, anim, bumps, arrived, extra_on = state
             alpha = dict(anim)
@@ -427,11 +440,11 @@ class _CourseOverviewMixin:
                     continue
                 u = bump.get(ap["index"])
                 scale = 1.0 + 0.3 * math.sin(math.pi * u) if u is not None else 1.0
-                self._draw_pin(plate, ap, total_points, scale=scale)
+                draw_marker(plate, ap, total_points, scale=scale)
             scales = dict(extra_on)
             for ap in extras:
                 if ap["index"] in scales:
-                    self._draw_pin(plate, ap, total_points, scale=scales[ap["index"]])
+                    draw_marker(plate, ap, total_points, scale=scales[ap["index"]])
             for hud in huds:
                 a = alpha.get(hud["index"])
                 if a is not None and hud.get("beside_box"):  # rises a little as it fades in
@@ -534,7 +547,7 @@ class _CourseOverviewMixin:
             cv2.polylines(clean, [whole], False, trace_color, thick, cv2.LINE_AA)
             for ap in on_route + extras:
                 if id(ap) not in returns:
-                    self._draw_pin(clean, ap, total_points)
+                    draw_marker(clean, ap, total_points)  # the same markers the video just held on
             start_popup = next((ap for ap in active_popups if ap["index"] == 0), None)
             hard_ended = self._render_ending_highlight(
                 video, w, h, fps, stop_popup, start_popup,
@@ -552,7 +565,7 @@ class _CourseOverviewMixin:
         """A laid-out card as the recap draws it (see _render_recap_frame)."""
         hud = ap.copy()
         hud["hud_corner"] = None
-        hud["draw_leader_line"] = True
+        hud["draw_leader_line"] = not ap.get("suppress_leader_line")
         color = ap.get("recap_line_color") or self.graphics.marker_color
         hud["leader_line_color"] = color
         hud["leader_line_width"] = self._RECAP_LEADER_WIDTH

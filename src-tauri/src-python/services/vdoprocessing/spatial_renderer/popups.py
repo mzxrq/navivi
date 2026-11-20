@@ -4,6 +4,7 @@ and the end-of-video highlight's higher-zoom image fetch."""
 import math
 from typing import Dict, List, Optional, Tuple
 
+import cv2
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial import ConvexHull, QhullError
@@ -84,6 +85,20 @@ def _leader_crosses_placed(
 # How close a candidate leader line may pass to a route point before it's
 # treated as visibly crossing the route (px) — see _leader_crosses_route.
 _ROUTE_CROSS_TOLERANCE_PX = 6.0
+
+
+def _segment_hits_box(
+    x0: float, y0: float, x1: float, y1: float,
+    box: Tuple[float, float, float, float],
+) -> bool:
+    """Whether a leader's straight leg runs into a card's box. Only the horizontal and vertical
+    legs an elbow is made of (see render_popup_box), so an overlap test on the leg's own
+    bounding box is exact — no general segment/rectangle clipping needed."""
+    bx0, by0, bx1, by1 = box
+    return (
+        min(x0, x1) < bx1 and max(x0, x1) > bx0
+        and min(y0, y1) < by1 and max(y0, y1) > by0
+    )
 
 
 def _leader_crosses_route(
@@ -376,6 +391,21 @@ class _PopupMixin:
         belongs in a badge like the rest, not drawn bare on the map."""
         data = popup.get("data") or {}
         return bool(data.get("popup_image") or data.get("is_stopby") or data.get("inaccessible"))
+
+    def _recap_popup_set(self, active_popups: List[Dict], stop_popup: Optional[Dict]) -> List[Dict]:
+        """The popups the recap lays out: one badge per PLACE. A return stop ("Add return stop") is a
+        second visit to a place already on the map — same spot, same photo, and since v54 the same
+        number — so its badge would sit beside the first visit's saying the same thing twice. A loop
+        route's "E" is the same case, the same real-world place as "S". Both are dropped here, the
+        place showing through its first visit's own badge."""
+        from services.vdoprocessing.route_inputs import returns_to
+
+        cards = [ap for ap in active_popups if self._wants_recap_card(ap)]
+        places = [ap.get("data") or {} for ap in cards]
+        cards = [ap for i, ap in enumerate(cards) if returns_to(places, i) is None]
+        if self._is_loop_route and stop_popup is not None:
+            cards = [ap for ap in cards if ap is not stop_popup]
+        return cards
 
     @staticmethod
     def _is_loose_stopby(popup: Dict) -> bool:
@@ -1221,11 +1251,6 @@ A connected stop-by is loose as well: the walker passes every
     # Clearance kept between a card and the route line/pins it must not
     # cover — the map underneath is the whole point of the recap frame.
     _RECAP_CARD_OBSTACLE_PAD = 10
-    # How hard a badge is pulled toward the middle of its own kind's pins, against the
-    # pull of its own pin (see _layout_recap_cards): 1.0 weighs the two the same, which
-    # gathers the stop-bys into their own block. Below about 0.5 it changes nothing;
-    # far above 1 it starts dragging a badge away from the place it marks.
-    _KIND_PULL = 1.0
     # What a slot costs when the leader to it would be drawn over the route (see
     # _layout_recap_cards), in the same squared pixels as the distance to its own pin:
     # worth going this much further to stay clear of the line, no further. Every stop
@@ -1238,6 +1263,24 @@ A connected stop-by is loose as well: the walker passes every
     # How close two pins must be, in marker widths on the rendered frame, for their
     # badges to be treated as one group and drawn touching (see _layout_recap_cards).
     _PAIR_DISTANCE_MARKERS = 3.0
+    # How far the map behind the recap is faded toward white (see plain_recap_plate).
+    _RECAP_MAP_FADE = 0.45
+    # How far apart two badges' tops may be and still count as the same row of the lattice.
+    _SAME_ROW_PX = 6
+    # What the busiest cell on the map costs a badge, as the distance in pixels it is worth
+    # travelling to sit on flat ground instead (squared into the same units as the rest of the
+    # cost). Kept modest because the recap fades its map back anyway: it breaks ties between
+    # cells of similar distance rather than sending a badge across the frame for empty water.
+    _CLUTTER_PULL_PX = 120.0
+    # The course style does not fade its map — the badges stay up over the live route for the
+    # whole video — so there it is worth a badge travelling much further to sit on open water
+    # instead of burying the island it belongs to.
+    _CLUTTER_PULL_COURSE_PX = 400.0
+    # How far from its pin a badge still counts as sitting BESIDE it, in badge heights: inside
+    # this radius it may rest on the route line and its leader is never penalised for running
+    # along one. The whole stretch of map it can cover is its own stop's, which the badge names
+    # anyway — what the recap must not lose is the rest of the route.
+    _BADGE_BESIDE_PIN = 0.8
     # Badges are spaced further apart than cards: two sitting flush read as a pair, and
     # only stops a few metres apart should read that way (see _layout_recap_cards, which
     # puts a cluster's own badges side by side with the tighter _RECAP_CARD_GAP).
@@ -1253,11 +1296,20 @@ A connected stop-by is loose as well: the walker passes every
         route_obstacles: Optional[np.ndarray] = None,
         centers: Optional[List[Tuple[float, float]]] = None,
         gap: Optional[float] = None,
+        near_free_r: float = 0.0,
     ) -> List[Tuple[int, int]]:
         """Candidate card positions on a disjoint lattice covering the WHOLE
         frame — not just its border — minus any that would cover the route
         line, a pin, or `reserved_boxes` (the summary card's own corner,
         composited over the recap afterwards).
+
+        `near_free_r` (with `centers`) is how far from a pin the keep-off-
+        the-route rule is waived. Every stop SITS on the route, so that rule
+        leaves no slot at all beside a pin on a route that hugs a coast or a
+        street: each badge is then placed in the nearest open space, which
+        is across the water, and the frame fills with long crossing leader
+        lines. A badge resting against its own stop, over a few pixels of
+        line, reads better than a line chasing it across the map.
 
         Spanning the interior is what lets a card sit in open space near
         its own pin instead of being pushed out to the frame edge: a route
@@ -1274,7 +1326,7 @@ A connected stop-by is loose as well: the walker passes every
         if route_obstacles is not None and len(route_obstacles):
             ox, oy = route_obstacles[:, 0], route_obstacles[:, 1]
 
-        def slot_ok(x: int, y: int) -> bool:
+        def slot_ok(x: int, y: int, over_route_ok: bool = False) -> bool:
             if (
                 x < margin or y < margin or x + card_w > w - margin
                 or y + card_h > _card_bottom_limit(h, margin)
@@ -1285,7 +1337,7 @@ A connected stop-by is loose as well: the walker passes every
                 for rx1, ry1, rx2, ry2 in (reserved_boxes or ())
             ):
                 return False
-            if ox is not None and bool(
+            if not over_route_ok and ox is not None and bool(
                 np.any(
                     (ox >= x - pad) & (ox <= x + card_w + pad)
                     & (oy >= y - pad) & (oy <= y + card_h + pad)
@@ -1294,64 +1346,132 @@ A connected stop-by is loose as well: the walker passes every
                 return False
             return True
 
-        if centers is not None:
-            max_ring_r = math.hypot(w, h)
-            slots: List[Tuple[int, int]] = []
-            
-            golden_angle = math.pi * (3.0 - math.sqrt(5.0))
-            n = 0
-            # Four candidate slots per card, not two: the spiral stops as
-            # soon as the quota is met, so a tight quota leaves the pins in
-            # a crowded part of the frame with no slot of their own near
-            # them and their cards end up stranded across the map, beside
-            # a stop they have nothing to do with.
-            target_slots = len(centers) * 4
-            
-            while len(slots) < target_slots and n < 8000:
-                r = 5.0 * math.sqrt(n)
-                if r > max_ring_r:
-                    break
-                
-                theta = n * golden_angle
-                n += 1
-                
-                for cx, cy in centers:
-                    sx = int(cx + r * math.cos(theta) - card_w / 2.0)
-                    sy = int(cy + r * math.sin(theta) - card_h / 2.0)
-                    
-                    if not slot_ok(sx, sy):
-                        continue
-                        
-                    overlap = False
-                    for ex, ey in slots:
-                        if not (sx + card_w + gap <= ex or ex + card_w + gap <= sx or sy + card_h + gap <= ey or ey + card_h + gap <= sy):
-                            overlap = True
-                            break
-                    if not overlap:
-                        slots.append((sx, sy))
-                        
-            return slots
-
-        def axis(available: int, size: int) -> List[int]:
+        def axis(available: int, size: int, start: float = margin) -> List[int]:
             pitch = size + gap
             count = int((available + gap) // pitch)
             if count <= 0:
                 return []
             slack = available - (count * size + (count - 1) * gap)
-            first = margin + slack // 2
-            return [first + i * pitch for i in range(count)]
+            first = start + slack // 2
+            return [int(first + i * pitch) for i in range(count)]
 
         xs = axis(w - 2 * margin, card_w)
-        ys = axis(h - 2 * margin, card_h)
+        # Rows are laid out in the band slot_ok actually allows — below the top clearance, above
+        # the caption band — not across the whole frame height. Measured over the frame, the last
+        # row came out just below the caption band and every cell in it was then thrown away: a
+        # tall badge (the lattice is pitched for the longest NAME) lost a whole row of the frame
+        # to nine pixels, and the stops down there had no cell within reach of their pins.
+        #
+        # And per COLUMN, against whatever is reserved below it (the summary card's corner, the
+        # stop-by notice): those columns' rows stop above it, so their bottom row lands where a
+        # full-height badge still clears. One row for the whole frame instead put that row where
+        # only a short name fitted, and the longest name on the route — the one whose badge is
+        # tallest — was pushed out of the block of stops it belongs to and left on its own.
+        band_top = max(margin, tuning.OVERVIEW_TOP_CARD_CLEARANCE)
+        band_bottom = _card_bottom_limit(h, margin)
+
+        def column_rows(x: int) -> List[int]:
+            # A reserved box over the TOP of the band (the course style's headline, as wide as
+            # its longest line) shortens the column from above; one below it from below. Cutting
+            # the bottom back to a top box's own top edge left those columns with no rows at
+            # all, and the headline spans half the frame: every badge was crowded into the
+            # right-hand columns, a long way from its own pin.
+            top, bottom = band_top, band_bottom
+            for rx1, ry1, rx2, ry2 in reserved_boxes or ():
+                if x < rx2 and x + card_w > rx1 and ry2 > top:
+                    if ry1 <= top:
+                        top = ry2
+                    else:
+                        bottom = min(bottom, ry1)
+            return axis(int(bottom - top), card_h, top)
+
+        rows_for = {x: column_rows(x) for x in xs}
+        ys = sorted({y for col in rows_for.values() for y in col})
         if not xs or not ys:
             return []
 
+        if centers is not None:
+            # Every slot still comes off the one frame-wide lattice, so badges
+            # line up in columns and rows however they are matched; what
+            # `centers` changes is WHICH cells are offered: the cell each pin
+            # sits in and the ring around it, nearest pin first. A cell beside
+            # its own pin may cover the route (near_free_r) — that is the
+            # point of asking for it.
+            taken: set = set()
+            slots = []
+            for cx, cy in centers:
+                for x in xs:
+                    for y in rows_for[x]:
+                        if (x, y) in taken:
+                            continue
+                        r = math.hypot(x + card_w / 2.0 - cx, y + card_h / 2.0 - cy)
+                        if not slot_ok(x, y, over_route_ok=r <= near_free_r):
+                            continue
+                        taken.add((x, y))
+                        slots.append((int(x), int(y), r))
+            # Nearest-to-a-pin first, so a short candidate list is the close cells.
+            slots.sort(key=lambda s: s[2])
+            return [(x, y) for x, y, _ in slots]
+
         slots = []
-        for y in ys:
-            for x in xs:
+        for x in xs:
+            for y in rows_for[x]:
                 if slot_ok(x, y):
                     slots.append((int(x), int(y)))
         return slots
+
+    def plain_recap_plate(self, background: np.ndarray, path, modes=None) -> np.ndarray:
+        """The map the recap's badges sit on: the tiles faded back toward white, with the route
+        drawn on top at full strength. The recap is a page of badges, not a map to read — faded,
+        the tiles' greys and place names drop away and a badge can sit against its own stop
+        without burying anything that mattered, while the route it is a recap OF still carries.
+
+        Built from the background BEFORE the route goes on, rather than fading the finished
+        plate: fading that took the route with it, and holding a band around the route out of
+        the fade just restored a ribbon of unfaded sea around it."""
+        plain = cv2.addWeighted(
+            background, 1.0 - self._RECAP_MAP_FADE,
+            np.full_like(background, 255), self._RECAP_MAP_FADE, 0.0,
+        )
+        if path is not None and len(path) > 1:
+            # Plain (x, y) tuples: draw_path's own _mode_segments tests each point for
+            # truthiness, which a numpy row raises on.
+            self.graphics.draw_path(plain, [(int(p[0]), int(p[1])) for p in path], modes)
+        return plain
+
+    @staticmethod
+    def _clutter_cost(background: np.ndarray, slots, card_w: int, card_h: int) -> np.ndarray:
+        """How busy the map is under each candidate slot, 0 (flat: open water, a plain field, a
+        quiet block of town) to 1 (coastline, roads, place names). The route line and the pins
+        are already kept clear by `slot_ok`; this is about what the badge would BURY. Measured
+        on the background itself, so each project's own empty space is found rather than any
+        corner being assumed free.
+
+        Local contrast at 1/8 scale: flat ground reads the same as its neighbours, detail does
+        not. An integral image makes the per-slot mean a constant-time lookup."""
+        step = 8
+        small = cv2.resize(
+            background, (max(1, background.shape[1] // step), max(1, background.shape[0] // step)),
+            interpolation=cv2.INTER_AREA,
+        )
+        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY).astype(np.float32)
+        busy = np.abs(gray - cv2.blur(gray, (3, 3)))
+        integral = cv2.integral(busy)
+        sh, sw = busy.shape
+
+        def mean_over(x: int, y: int) -> float:
+            x0, y0 = max(0, x // step), max(0, y // step)
+            x1, y1 = min(sw, (x + card_w) // step + 1), min(sh, (y + card_h) // step + 1)
+            if x1 <= x0 or y1 <= y0:
+                return 0.0
+            total = (
+                integral[y1, x1] - integral[y0, x1] - integral[y1, x0] + integral[y0, x0]
+            )
+            return float(total) / ((x1 - x0) * (y1 - y0))
+
+        scores = np.array([mean_over(x, y) for x, y in slots], dtype=float)
+        top = float(scores.max()) if len(scores) else 0.0
+        return scores / top if top > 0 else scores
 
     def _layout_recap_cards(
         self,
@@ -1361,6 +1481,9 @@ A connected stop-by is loose as well: the walker passes every
         reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
         route_obstacles: Optional[np.ndarray] = None,
         card_room: bool = False,
+        background: Optional[np.ndarray] = None,
+        leaders: bool = True,
+        clutter_pull: Optional[float] = None,
     ) -> List[Dict]:
         """Places EVERY recap card at once and returns them in the order
         they should be revealed.
@@ -1400,7 +1523,12 @@ A connected stop-by is loose as well: the walker passes every
         every badge in a recap reads at the same size. "pop_up_card" uses
         the old wide photo-card footprint, tried at shrinking scales
         (_RECAP_CARD_SCALES) until enough slots fit — it can still run out
-        of room on a large route."""
+        of room on a large route.
+
+        `leaders` False (the recap): no leader line is drawn back to the pin at all — the badge
+        carries its stop's number and the pin on the map carries the same one, so the line only
+        added clutter. Nothing then has to be kept clear FOR a line, so the badges pack at the
+        tight card gap and none of the route-crossing or line-untangling work is done."""
         if not popups:
             return []
 
@@ -1410,17 +1538,20 @@ A connected stop-by is loose as well: the walker passes every
             return popup.get("pin_x", popup["x"]), popup.get("pin_y", popup["y"])
 
         card_scale = self._RECAP_CARD_SCALES[-1]
-        # Names are shown in full, never truncated — so a pill badge's
-        # lattice must be pitched for the LONGEST name among these popups
-        # (every slot has to fit the tallest badge that could land in it);
-        # a popup with a shorter name just draws a shorter (not stretched)
-        # badge inside its slot, see card_hs below.
-        max_name_chars = max(len(str(p.get("label") or "")) for p in popups)
+        # Names are shown in full, never truncated — so a pill badge's lattice must be pitched
+        # for the biggest badge among these popups (every cell has to fit the tallest and the
+        # widest that could land in it); a popup with a shorter name just draws a smaller (not
+        # stretched) badge inside its cell, see card_hs below.
         lattice_pill = pill_badge and not card_room
         if lattice_pill:
-            card_w, card_h = self.graphics.beside_card_footprint(
-                is_pill_badge=True, pill_name_chars=max_name_chars
-            )
+            foots = [
+                self.graphics.beside_card_footprint(
+                    is_pill_badge=True, pill_name_chars=len(str(p.get("label") or "")),
+                )
+                for p in popups
+            ]
+            card_w = max(fw for fw, _ in foots)
+            card_h = max(fh for _, fh in foots)
         else:
             card_w, card_h = self.graphics.beside_card_footprint(card_scale)
         slots: List[Tuple[int, int]] = []
@@ -1440,10 +1571,12 @@ A connected stop-by is loose as well: the walker passes every
                 # never read as a pair), packed tight if the frame cannot
                 # hold them all that way: a badge no one can see is worse
                 # than two sitting close.
-                for badge_gap in (self._RECAP_BADGE_GAP, self._RECAP_CARD_GAP):
+                for badge_gap in ((self._RECAP_BADGE_GAP, self._RECAP_CARD_GAP) if leaders
+                                  else (self._RECAP_CARD_GAP,)):
                     candidate = self._recap_card_slots(
                         w, h, card_w, card_h, reserved_boxes, obstacles,
                         centers=all_pins, gap=badge_gap,
+                        near_free_r=card_h * self._BADGE_BESIDE_PIN,
                     )
                     if len(candidate) > len(slots):
                         slots = candidate
@@ -1482,6 +1615,21 @@ A connected stop-by is loose as well: the walker passes every
             ordered = ordered[: len(slots)]
 
         pins_xy = [pin_of(p) for p in ordered]
+        # Each card's OWN height — for a pill badge, its real untruncated
+        # name may be shorter than the lattice's worst-case pitch, and
+        # anchoring against the inflated lattice card_h here would aim
+        # some leaders at empty space below its actual bottom edge. A
+        # pop-up card is all one fixed size at the chosen scale.
+        card_hs = (
+            [
+                self.graphics.beside_card_footprint(
+                    is_pill_badge=True, pill_name_chars=len(str(p.get("label") or "")),
+                )[1]
+                for p in ordered
+            ]
+            if pill_badge
+            else [card_h] * len(ordered)
+        )
         pin_arr = np.asarray(pins_xy, dtype=float)
         slot_arr = np.asarray(slots, dtype=float) + np.array(
             [card_w / 2.0, card_h / 2.0]
@@ -1493,6 +1641,15 @@ A connected stop-by is loose as well: the walker passes every
             (slot_arr[None, :, 0] - pin_arr[:, None, 0]) ** 2
             + (slot_arr[None, :, 1] - pin_arr[:, None, 1]) ** 2
         )
+        # Clear space first: of two cells about as far from the badge's pin, the one over flat
+        # map (open water, a quiet block) beats the one over coastline, roads and place names.
+        clutter_pen = np.zeros(len(slots))
+        if background is not None and len(slots):
+            clutter_pen = (
+                self._clutter_cost(background, slots, card_w, card_h)
+                * (self._CLUTTER_PULL_PX if clutter_pull is None else clutter_pull)
+            ) ** 2
+            cost += clutter_pen
         # A leader that runs along or across the route line is hard to follow
         # and cuts the route in two. A slot whose line would do that costs
         # _ROUTE_CROSS_PENALTY — far more than any distance on a 1920x1080
@@ -1508,8 +1665,8 @@ A connected stop-by is loose as well: the walker passes every
 
         def leader_hits(px_: float, py_: float, sidx: int) -> bool:
             """Whether the leader from (px_, py_) to this slot would be drawn
-            over the route (see _leader_over_route)."""
-            if grid is None:
+            over the route (see _leader_over_route). No leader, nothing to hit."""
+            if grid is None or not leaders:
                 return False
             sx_, sy_ = slots[sidx]
             ax_, ay_ = _anchor_point(px_, py_, sx_, sy_, card_w, card_h)
@@ -1517,31 +1674,34 @@ A connected stop-by is loose as well: the walker passes every
                 px_, py_, ax_, ay_, grid, gw_, gh_, cell, skip
             )
 
-        if grid is not None:
+        if grid is not None and leaders:
+            # Not for a slot the badge is resting against its own pin in: that leader is a stub
+            # on the stop's own spot, and penalising it is what sent the badge across the frame.
+            beside2 = (card_h * self._BADGE_BESIDE_PIN) ** 2
             for j, (px_, py_) in enumerate(pins_xy):
                 for sidx in range(len(slots)):
+                    if cost[j, sidx] <= beside2:
+                        continue
                     if leader_hits(px_, py_, sidx):
                         cost[j, sidx] += self._ROUTE_CROSS_PENALTY
 
-        # Each kind keeps to its own part of the frame: a stop-by's badge sits
-        # with the other stop-bys rather than between two numbered stops,
-        # where it reads as one of them. Two things do it — every slot is
-        # also scored on its distance to the MIDDLE of its own kind's pins
-        # (_KIND_PULL, against the pin's own distance), and the kinds are
-        # matched one at a time, stops first, so the ones that carry the
-        # route's numbering get their pick. Within a kind it is still the
-        # minimum-total matching, so its leaders stay short and uncrossed.
+        # Each kind keeps to its own part of the frame: a stop-by's badge sits with the other
+        # stop-bys rather than between two numbered stops, where it reads as one of them. The
+        # kinds are matched one at a time, stops first, so the ones carrying the route's
+        # numbering get their pick, and a run of touching badges is then ordered by kind (see
+        # below). Each slot used to be scored on its distance to the MIDDLE of its own kind's
+        # pins as well (_KIND_PULL, weighed against the badge's own pin): on a route whose
+        # stops fall in two groups — an island and the mainland — that middle is the open water
+        # between them, and a stop with no near neighbour of its kind was pulled out to sit in
+        # it, a long way from the place it marks. The run ordering does the same job locally.
         def kind(popup: Dict) -> int:
             data = popup.get("data") or {}
             return 2 if data.get("inaccessible") else 1 if data.get("is_stopby") else 0
 
         kinds = [kind(p) for p in ordered]
-        for k in set(kinds) if len(set(kinds)) > 1 else ():  # nothing to separate from
-            rows = [j for j, kj in enumerate(kinds) if kj == k]
-            mid = pin_arr[rows].mean(axis=0)
-            cost[rows] += self._KIND_PULL * (
-                (slot_arr[None, :, 0] - mid[0]) ** 2 + (slot_arr[None, :, 1] - mid[1]) ** 2
-            )
+        # Where each badge sits in the route, so a block of them reads S, 1, 2, 3 … E the way
+        # the trip was walked, not in whatever order their pins happen to fall across the frame.
+        walked = [p.get("index", 0) for p in ordered]
         slot_for = [0] * len(ordered)
         free = list(range(len(slots)))
 
@@ -1585,58 +1745,28 @@ A connected stop-by is loose as well: the walker passes every
             ax = sum(pins_xy[i][0] for i in idxs) / len(idxs)
             ay = sum(pins_xy[i][1] for i in idxs) / len(idxs)
             def shared_cost(s: int) -> float:
-                return d2(s, (ax, ay)) + (
+                return d2(s, (ax, ay)) + clutter_pen[s] + (
                     self._ROUTE_CROSS_PENALTY if leader_hits(ax, ay, s) else 0.0
                 )
 
             head = min(free, key=shared_cost)
-            # The rest go in boxes cut RIGHT BESIDE the head's, at the tight
-            # card gap — the lattice's own nearest free slot can be a long
-            # way off when the route leaves no room next door, and then the
-            # pair doesn't read as one. Whichever side is free, clear of the
-            # summary card and reached without a leader over the route.
-            margin = self._RECAP_CARD_MARGIN
-            step_x, step_y = card_w + self._RECAP_CARD_GAP, card_h + self._RECAP_CARD_GAP
-            hx, hy = slots[head]
-            near = [head]
-            for step in range(1, len(idxs)):
-                spots = []
-                for dx, dy in ((step, 0), (-step, 0), (0, step), (0, -step)):
-                    bx, by = hx + dx * step_x, hy + dy * step_y
-                    if not (margin <= bx and bx + card_w <= w - margin):
-                        continue
-                    if not (margin <= by and by + card_h <= _card_bottom_limit(h, margin)):
-                        continue
-                    if any(
-                        bx < rx2 and bx + card_w > rx1 and by < ry2 and by + card_h > ry1
-                        for rx1, ry1, rx2, ry2 in (reserved_boxes or ())
-                    ):
-                        continue
-                    spots.append((int(bx), int(by)))
-                if not spots:
-                    break
-                slots.append(spots[0])
-                sidx = len(slots) - 1
-
-                def spot_cost(spot: Tuple[int, int]) -> Tuple[float, float]:
-                    slots[sidx] = spot
-                    return (
-                        float(leader_hits(ax, ay, sidx)),
-                        d2(sidx, (ax, ay)),  # the nearest clear side, not just any
-                    )
-
-                slots[sidx] = min(spots, key=spot_cost)
-                near.append(sidx)
-            if len(near) < len(idxs):  # no room beside it: back to the lattice
-                near += sorted(
-                    (s for s in free if s != head),
-                    key=lambda s: d2(s, centre(head))
+            # The rest take the lattice cells nearest the head, so a cluster's badges sit side by
+            # side like everything else. They used to get boxes cut off-lattice right beside the
+            # head's, at the tighter card gap: those were checked against the frame and the
+            # summary card but against no box another cluster had already claimed, so two
+            # clusters at one place (a stop and a stop-by are never grouped together, so a busy
+            # corner has several) drew their badges straight over each other.
+            near = [head] + sorted(
+                (s for s in free if s != head),
+                key=lambda s: (
+                    slots[s][1] != slots[head][1],  # the cell beside it on its own row first
+                    d2(s, centre(head)) + clutter_pen[s]
                     + (self._ROUTE_CROSS_PENALTY if leader_hits(ax, ay, s) else 0.0),
-                )[: len(idxs) - len(near)]
-            # Left pin to the left box, so two neighbouring stops don't swap
-            # sides of their own pins.
+                ),
+            )[: len(idxs) - 1]
+            # Earliest stop to the left-most box, so a cluster reads in the order it was walked.
             for i, sidx in zip(
-                sorted(idxs, key=lambda i: pins_xy[i]),
+                sorted(idxs, key=lambda i: walked[i]),
                 sorted(near, key=lambda s: slots[s]),
             ):
                 slot_for[i] = sidx
@@ -1654,12 +1784,14 @@ A connected stop-by is loose as well: the walker passes every
             # ...and the slots right beside them are left empty, so the
             # cluster reads as its own group: a stop a kilometre up the road
             # packed flush against it looks like one of the pair. Given up
-            # again if the frame would then run short of slots.
+            # again if the frame would then run short of slots. Not without
+            # leaders: nothing is then reading a pair off its shared line,
+            # and the empty slot is just a hole in the block.
             edge = (card_w + self._RECAP_CARD_GAP) * self._CLUSTER_ROOM
             buffer = {
                 sidx for sidx in free
                 if any(math.dist(centre(sidx), centre(c)) < edge for c in claimed)
-            }
+            } if leaders else set()
             if len(free) - len(buffer) >= len(ordered) - len(locked):
                 free = [sidx for sidx in free if sidx not in buffer]
 
@@ -1680,21 +1812,6 @@ A connected stop-by is loose as well: the walker passes every
         # its slots traded, which shortens both — so this strictly reduces
         # total leader length and always terminates.
         n = len(ordered)
-        # Each card's OWN height — for a pill badge, its real untruncated
-        # name may be shorter than the lattice's worst-case pitch, and
-        # anchoring against the inflated lattice card_h here would aim
-        # some leaders at empty space below its actual bottom edge. A
-        # pop-up card is all one fixed size at the chosen scale.
-        card_hs = (
-            [
-                self.graphics.beside_card_footprint(
-                    is_pill_badge=True, pill_name_chars=len(str(p.get("label") or "")),
-                )[1]
-                for p in ordered
-            ]
-            if pill_badge
-            else [card_h] * n
-        )
 
         def leader(j: int) -> Tuple[Tuple[float, float], Tuple[float, float]]:
             sx, sy = slots[slot_for[j]]
@@ -1710,7 +1827,7 @@ A connected stop-by is loose as well: the walker passes every
                 and (turn(a1, a2, b1) > 0) != (turn(a1, a2, b2) > 0)
             )
 
-        for _ in range(n * n):
+        for _ in range(n * n if leaders else 0):
             swapped = False
             for a in range(n):
                 for b in range(a + 1, n):
@@ -1726,6 +1843,35 @@ A connected stop-by is loose as well: the walker passes every
             if not swapped:
                 break
 
+        # One run of badges, one kind, in the order they were walked: a block of badges sitting
+        # side by side reads S, 1, 2, 3 … E, then its stop-bys, then its closed places — a
+        # stop-by between two numbered stops reads as one of them, and numbers out of sequence
+        # read as nothing at all. Only badges in the same block trade cells, so a badge moves at
+        # most along its own block and never across the frame to join its kind; a single empty
+        # cell does not end the block (the matching leaves one in the middle of a block often
+        # enough, and the stop on the far side of it still belongs to the group), two do.
+        xs_used = sorted({slots[s][0] for s in slot_for})
+        pitch = min((b - a for a, b in zip(xs_used, xs_used[1:])), default=card_w) or card_w
+        run_gap = pitch * 2
+        # Rows are laid out per column (see _recap_card_slots), so two columns' rows can sit a
+        # pixel or two apart where what is reserved below them differs; grouped by exact y, one
+        # block would read as two.
+        rows: Dict[int, List[int]] = {}
+        for j in range(n):
+            y = slots[slot_for[j]][1]
+            near_row = next((r for r in rows if abs(r - y) <= self._SAME_ROW_PX), y)
+            rows.setdefault(near_row, []).append(j)
+        for row in rows.values():
+            run: List[int] = []
+            for j in sorted(row, key=lambda j: slots[slot_for[j]][0]) + [None]:
+                if run and (j is None or slots[slot_for[j]][0] - slots[slot_for[run[-1]]][0] > run_gap):
+                    cells = sorted((slot_for[i] for i in run), key=lambda s: slots[s][0])
+                    for i, s in zip(sorted(run, key=lambda i: (kinds[i], walked[i])), cells):
+                        slot_for[i] = s
+                    run = []
+                if j is not None:
+                    run.append(j)
+
         route_x = route_obstacles[:, 0] if route_obstacles is not None else None
         route_y = route_obstacles[:, 1] if route_obstacles is not None else None
 
@@ -1737,8 +1883,8 @@ A connected stop-by is loose as well: the walker passes every
         # same proximity clustering _layout_beside_popups' own hull-anchor
         # logic is built on (see _cluster_points_by_distance).
         cluster_anchor: Dict[int, Tuple[float, float]] = {}  # rep index -> shared pin point
-        suppressed = set()
-        for idxs in clusters:
+        suppressed = set(range(len(ordered))) if not leaders else set()
+        for idxs in clusters if leaders else ():
             if len(idxs) < 2:
                 continue
             ccx = sum(pins_xy[i][0] for i in idxs) / len(idxs)
@@ -1784,14 +1930,24 @@ A connected stop-by is loose as well: the walker passes every
             popup.pop("leader_via", None)
             if px != ax and py != ay:
                 via_h, via_v = (ax, py), (px, ay)
+                # Every other badge's box: a leader that runs into one reads as if it belonged
+                # to that badge, and since the badges are drawn over the lines it vanishes
+                # behind one and comes out the far side. Counted first, the route second.
+                boxes = [
+                    (slots[slot_for[i]][0], slots[slot_for[i]][1],
+                     slots[slot_for[i]][0] + card_w, slots[slot_for[i]][1] + card_hs[i])
+                    for i in range(n) if i != j
+                ]
 
-                def bend_clear(via: Tuple[float, float]) -> bool:
-                    return not (
-                        _leader_crosses_route(px, py, via[0], via[1], route_x, route_y)
-                        or _leader_crosses_route(via[0], via[1], ax, ay, route_x, route_y)
+                def bend_cost(via: Tuple[float, float]) -> Tuple[int, int]:
+                    legs = ((px, py, via[0], via[1]), (via[0], via[1], ax, ay))
+                    return (
+                        sum(_segment_hits_box(*leg, box) for leg in legs for box in boxes),
+                        sum(_leader_crosses_route(*leg, route_x, route_y) for leg in legs),
                     )
 
-                if not bend_clear(via_h) and bend_clear(via_v):
+                # The default elbow (no leader_via) is via_h, so only switch on a strict win.
+                if bend_cost(via_v) < bend_cost(via_h):
                     popup["leader_via"] = via_v
 
         return ordered

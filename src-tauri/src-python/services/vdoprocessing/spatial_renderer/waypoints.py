@@ -10,6 +10,7 @@ import numpy as np
 from services.logger.progress import tracker
 from services.mapfetcher.mapfetcher import MapFetcher
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
+from services.vdoprocessing.route_inputs import returns_to
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services import tuning, video_text
 
@@ -211,6 +212,9 @@ class _WaypointRenderMixin:
             _location_candidates.append(
                 (_start_pt["lat"], _start_pt.get("lng", _start_pt.get("lon")), 0, None, False)
             )
+        # {position: the number its pin shows}, the overview's own numbering: a stop-by keeps the running
+        # count (it shows a dot), a return stop repeats the number of the stop it comes back to.
+        _numbers: Dict[int, int] = {}
         _order = 0
         for _pos, _jw in enumerate(job_waypoints):
             # job_config.json's own key is "isStopBy" (camelCase, as saved
@@ -218,14 +222,16 @@ class _WaypointRenderMixin:
             # dicts built downstream (see render_step.py), never on these
             # raw job_waypoints entries.
             _is_stopby = bool(_jw.get("isStopBy", False) or _jw.get("skipAssetGeneration"))
-            if not _is_stopby:
+            _back = returns_to(job_waypoints, _pos)
+            if not _is_stopby and _back is None:
                 _order += 1
+            _numbers[_pos] = _order if _back is None else _numbers[_back]
             _wp_id = _jw.get("id")
             if _wp_id:
-                _wp_by_id[_wp_id] = (_pos + 1, _order, _is_stopby)
+                _wp_by_id[_wp_id] = (_pos + 1, _numbers[_pos], _is_stopby)
             _lat, _lng = _jw.get("lat"), _jw.get("lng", _jw.get("lon"))
             if _lat is not None and _lng is not None:
-                _location_candidates.append((_lat, _lng, _pos + 1, _order, _is_stopby))
+                _location_candidates.append((_lat, _lng, _pos + 1, _numbers[_pos], _is_stopby))
         _total_route_points = len(job_waypoints) + 2
         if _end_pt.get("lat") is not None:
             _location_candidates.append((
@@ -265,14 +271,11 @@ class _WaypointRenderMixin:
                     return best[2], best[3], best[4]
             if not label:
                 return None
-            order = 0
             for pos, jw in enumerate(job_waypoints):
-                is_stopby = bool(jw.get("isStopBy", False) or jw.get("skipAssetGeneration"))
-                if not is_stopby:
-                    order += 1
                 jw_lbl = str(jw.get("label", ""))
                 if jw_lbl and (jw_lbl in label or label in jw_lbl):
-                    return pos + 1, order, is_stopby
+                    is_stopby = bool(jw.get("isStopBy", False) or jw.get("skipAssetGeneration"))
+                    return pos + 1, _numbers[pos], is_stopby
             return None
 
         for i, res_data in enumerate(res_sequence):

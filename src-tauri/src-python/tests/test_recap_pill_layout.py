@@ -233,9 +233,10 @@ def test_near_pins_get_neighbouring_slots():
 
     pair = pops[1], pops[2]  # 38 px apart — the pair that shares a leader
     (ax, ay), (bx, by) = (p["beside_box"] for p in pair)
-    tight = _PopupMixin._RECAP_CARD_GAP
-    # Touching: one badge's width (or height) plus the tight gap, nothing between.
-    assert (abs(ax - bx), abs(ay - by)) in {(cw + tight, 0), (0, ch + tight)}
+    # Neighbouring cells of the one lattice every badge sits on, nothing between them: one
+    # badge's width plus whichever gap that lattice was cut at (see _layout_recap_cards).
+    gaps = (_PopupMixin._RECAP_CARD_GAP, _PopupMixin._RECAP_BADGE_GAP)
+    assert ay == by and abs(ax - bx) in {cw + g for g in gaps}
 
     # ...and no other badge is packed against them, or the pair stops reading
     # as a pair (寺田橋バス停, a kilometre up the road, was sitting right there).
@@ -351,3 +352,133 @@ def test_a_stop_and_a_stopby_at_the_same_spot_are_not_a_pair():
     _layout()._layout_recap_cards([stop, side], 1920, 1080)
     assert not stop.get("suppress_leader_line")
     assert not side.get("suppress_leader_line")  # each draws its own
+
+
+def test_a_badge_rests_against_its_own_stop_even_on_the_route_line():
+    """Every stop SITS on the route, so keeping badges off the line left no slot beside a pin at
+    all on a route that hugs a coast: each badge went to the nearest open space instead - across
+    the water - and the frame filled with long crossing leaders."""
+    import math
+
+    import numpy as np
+
+    route = np.array([[x, 540.0] for x in range(100, 1800, 4)])
+    pop = _popup(600, 540, "AB", 1)
+    layout = _layout()
+    assert len(layout._layout_recap_cards([pop], 1920, 1080, route_obstacles=route)) == 1
+    bx, by = pop["beside_box"]
+    cw, ch = 34, 180
+    assert math.hypot(bx + cw / 2 - 600, by + ch / 2 - 540) <= ch * layout._BADGE_BESIDE_PIN
+
+
+def test_badges_line_up_on_one_grid():
+    """Badges all come off the same frame-wide lattice, so however they are matched their tops
+    and left edges line up instead of sitting at whatever spot each pin happened to spiral into."""
+    pops = [_popup(300 + 120 * i, 400 + 37 * i, "s%d" % i, i + 1) for i in range(6)]
+    laid = _layout()._layout_recap_cards(pops, 1920, 1080)
+    assert len(laid) == 6
+    tops = {int(p["beside_box"][1]) for p in pops}
+    lefts = sorted({int(p["beside_box"][0]) for p in pops})
+    assert len(tops) <= 2  # one or two shared rows, not six different heights
+    pitches = {lefts[i + 1] - lefts[i] for i in range(len(lefts) - 1)}
+    assert all(p % 89 == 0 for p in pitches)  # 34px badge + _RECAP_BADGE_GAP
+
+
+def test_a_run_of_touching_badges_never_mixes_kinds():
+    """A block of badges sitting side by side shows its stops first, then its stop-bys: a
+    stop-by between two numbered stops reads as one of them. Only badges that actually touch
+    are ordered — an empty cell ends the run, so nothing travels the frame to join its kind.
+    Stops and stop-bys interleaved along one stretch of route."""
+    pops = []
+    for i in range(8):
+        p = _popup(260 + 150 * i, 520, "s%d" % i, i + 1)
+        if i % 2:
+            p["data"]["is_stopby"] = True
+        pops.append(p)
+    laid = _layout()._layout_recap_cards(pops, 1920, 1080)
+    assert len(laid) == 8
+
+    placed = sorted(pops, key=lambda p: (p["beside_box"][1], p["beside_box"][0]))
+    xs = sorted({p["beside_box"][0] for p in pops})
+    pitch = min((b - a for a, b in zip(xs, xs[1:])), default=1)
+    run, runs = [], []
+    for p in placed:
+        if run and (p["beside_box"][1] != run[-1]["beside_box"][1]
+                    or p["beside_box"][0] - run[-1]["beside_box"][0] > pitch):
+            runs.append(run)
+            run = []
+        run.append(p)
+    runs.append(run)
+    assert any(len(r) > 1 for r in runs)  # they do pack together, or this proves nothing
+    for r in runs:
+        kinds = [bool(p["data"].get("is_stopby")) for p in r]
+        assert kinds == sorted(kinds)  # every stop before every stop-by, never alternating
+
+
+def test_a_badge_prefers_the_clear_half_of_the_map():
+    """Of two cells about as far from the pin, the badge takes the one over flat map (open
+    water, a quiet block) rather than the one over coastline, roads and place names."""
+    import numpy as np
+
+    rng = np.random.default_rng(0)
+    background = np.full((1080, 1920, 3), 200, dtype=np.uint8)  # flat...
+    background[:, 960:] = rng.integers(0, 255, (1080, 960, 3), dtype=np.uint8)  # ...busy right
+    pop = _popup(960, 540, "AB", 1)
+    laid = _layout()._layout_recap_cards([pop], 1920, 1080, background=background)
+    assert len(laid) == 1
+    assert pop["beside_box"][0] + 34 <= 960  # wholly on the flat side
+
+
+def test_the_recap_draws_no_leader_lines():
+    """The recap ties a badge to its stop by the number they share, not by a line: with
+    leaders off nothing is kept clear for a line and every badge is marked to draw none."""
+    pops = [_popup(300 + 90 * i, 500, "s%d" % i, i + 1) for i in range(5)]
+    laid = _layout()._layout_recap_cards(pops, 1920, 1080, leaders=False)
+    assert len(laid) == 5
+    assert all(p.get("suppress_leader_line") for p in pops)
+    assert not any(p.get("leader_via") or p.get("leader_from") for p in pops)
+
+
+def test_the_course_style_badge_draws_no_leader_line():
+    """Changing the video style doesn't change how pill badges are arranged: the course
+    style lays its badges out leaderless too, and its per-frame hud honours that."""
+    from services.vdoprocessing.spatial_renderer.course import _CourseOverviewMixin
+
+    class _Course(_CourseOverviewMixin, _Layout):
+        pass
+
+    course = _Course()
+    course.config = {}
+    course.graphics = _layout().graphics
+    course.graphics.marker_color = (0, 0, 0)
+    pops = [_popup(300 + 90 * i, 500, "s%d" % i, i + 1) for i in range(4)]
+    course._layout_recap_cards(pops, 1920, 1080, leaders=False)
+    assert not any(course._course_hud(p)["draw_leader_line"] for p in pops)
+
+
+def test_a_reserved_box_at_the_top_only_shortens_its_columns():
+    """A box over the top of the badge band (the course style's headline, as wide as its
+    longest line) must not cost its columns every row: that left the whole left half of
+    the frame with no cell at all and crowded every badge into the right-hand columns."""
+    layout = _layout()
+    head = [(0.0, 0.0, 960.0, 150.0)]  # the headline, half the frame wide
+    with_head = layout._recap_card_slots(1920, 1080, 34, 283, head)
+    assert [x for x, _ in with_head if x < 960]
+    assert len(with_head) > len(layout._recap_card_slots(1920, 1080, 34, 283, None)) / 2
+
+
+def test_a_stronger_clutter_pull_buys_more_distance():
+    """The course style raises the pull (its map is never faded back), so a badge there walks
+    further off busy map than the recap's would."""
+    import numpy as np
+
+    rng = np.random.default_rng(0)
+    background = np.full((1080, 1920, 3), 200, dtype=np.uint8)
+    background[:, :1200] = rng.integers(0, 255, (1080, 1200, 3), dtype=np.uint8)  # busy left
+    layout = _layout()
+    pop = _popup(300, 540, "AB", 1)
+    busy = []
+    for pull in (0.0, 2000.0):
+        layout._layout_recap_cards([pop], 1920, 1080, background=background, clutter_pull=pull)
+        busy.append(layout._clutter_cost(background, [pop["beside_box"]], 34, 180)[0])
+    assert busy[1] < busy[0]  # the stronger pull walks further for quieter map

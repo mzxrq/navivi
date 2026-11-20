@@ -26,7 +26,7 @@ from services.mapfetcher.maplanguage import resolve_map_style
 from services.mapfetcher.street_photos import attach_cue_spans, clear_of, resolve_mapillary_token, street_view_landmarks, turn_photos
 from services.projectfiles import meta_dir, write_json_atomic
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
-from services.vdoprocessing.route_inputs import photo_inputs_hash
+from services.vdoprocessing.route_inputs import photo_inputs_hash, returns_to
 
 # Logging configuration
 logger = setup_logger("RouteAnimator")
@@ -500,8 +500,11 @@ class RouteAnimator:
             waypoints.append(entry)
 
         # Same glyphs/colors as the 2D overview and the leg clips: S green,
-        # E red, numbered stops in the marker color.
-        numbered = [wp for wp in waypoints if not wp["is_stopby"]]
+        # E red, numbered stops in the marker color. A return stop shows the
+        # pin of the stop it comes back to, and takes no number of its own.
+        places = [p for p in popups if p is not None]
+        back_of = {j: returns_to(places, j) for j in range(len(waypoints))}
+        numbered = [wp for j, wp in enumerate(waypoints) if not wp["is_stopby"] and back_of[j] is None]
         for k, wp in enumerate(numbered):
             if k == 0:
                 wp["pin_glyph"], wp["pin_color"] = "S", tuning.START_PIN_COLOR
@@ -509,6 +512,10 @@ class RouteAnimator:
                 wp["pin_glyph"], wp["pin_color"] = "E", tuning.END_PIN_COLOR
             else:
                 wp["pin_glyph"], wp["pin_color"] = str(k), self.graphics.marker_color
+        for j, back in back_of.items():
+            if back is not None:
+                waypoints[j]["pin_glyph"] = waypoints[back].get("pin_glyph")
+                waypoints[j]["pin_color"] = waypoints[back].get("pin_color")
 
         # The reference video's wide section-title caption (e.g.
         # "友ヶ島・加太をめぐる道") reads as the trip's own name — reusing
