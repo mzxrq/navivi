@@ -4,6 +4,7 @@ import pandas as pd
 
 from services.vdoprocessing.outrocard import _route_badges
 from services.vdoprocessing.route_inputs import stop_is_numbered
+from services.vdoprocessing.videopipeline.render_look import overview_pin_glyphs
 
 
 def test_outro_badges_number_stops_as_the_overview_pins_do():
@@ -19,8 +20,23 @@ def test_outro_badges_number_stops_as_the_overview_pins_do():
     ]
     # The walker passes every stop-by, connected or not, so none of them takes a number.
     assert [b for b, _ in _route_badges(wps)] == ["S", "1", "・", "・", "×", "3", "E"]  # a=1, closed=2, b=3
-    assert not stop_is_numbered({"isStopBy": True, "connectToRoute": True})
-    assert not stop_is_numbered({"skipAssetGeneration": True})
+    assert not stop_is_numbered(wps, 2)  # a stop-by, connected to the route
+    assert not stop_is_numbered([{}, {"skipAssetGeneration": True}, {}], 1)
+
+
+def test_a_return_stop_shows_the_number_it_comes_back_to():
+    wps = [
+        {"label": "S", "lat": 35.0, "lng": 139.0},
+        {"label": "a", "lat": 35.1, "lng": 139.1},
+        {"label": "b", "lat": 35.2, "lng": 139.2},
+        {"label": "a (Return)", "lat": 35.1, "lng": 139.1},
+        {"label": "c", "lat": 35.3, "lng": 139.3},
+        {"label": "E", "lat": 35.4, "lng": 139.4},
+    ]
+    # The return to "a" shows 1 again and doesn't push "c" to 4; the glyphs the legs draw agree.
+    assert [b for b, _ in _route_badges(wps)] == ["S", "1", "2", "1", "3", "E"]
+    assert not stop_is_numbered(wps, 3) and stop_is_numbered(wps, 4)
+    assert overview_pin_glyphs(wps) == {0: "S", 1: "1", 2: "2", 3: "1", 4: "3", 5: "E"}
 
 
 def test_a_leg_only_change_keeps_the_overview(tmp_path):

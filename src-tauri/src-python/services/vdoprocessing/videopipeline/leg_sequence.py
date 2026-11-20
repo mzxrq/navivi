@@ -124,13 +124,13 @@ def build_leg_sequence(
     wp_indices,
 ):
     """Fills `res_sequence` with one entry per leg (nothing for an overview-only render)."""
-    if render_mode == "overview":
-        # Overview-only: skip building the residential sequence entirely —
-        # no per-leg residential map tile fetches, no residential clips
-        # produced. res_sequence stays [] (set above), which
-        # RouteAnimator.render already treats as "nothing to render" for
-        # the residential side.
-        logger.info("Step 4: render_mode=overview — skipping residential sequence.")
+    if render_mode in ("overview", "recap_frame"):
+        # Overview-only (or just its recap frame): skip building the
+        # residential sequence entirely — no per-leg residential map tile
+        # fetches, no residential clips produced. res_sequence stays []
+        # (set above), which RouteAnimator.render already treats as
+        # "nothing to render" for the residential side.
+        logger.info("Step 4: render_mode=%s — skipping residential sequence.", render_mode)
     else:
         logger.info("Step 4: Generating residential leg sequence (lat/lon per leg)...")
         # Stop-by leg-merging is toggleable per project (default: merge —

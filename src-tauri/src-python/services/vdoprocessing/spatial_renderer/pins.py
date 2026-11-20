@@ -229,23 +229,27 @@ class _PinMixin:
             scale=scale, image=wp.get("data", {}).get("pin_image"),
         )
 
-    def _draw_recap_dot_color(self, frame: np.ndarray, px: int, py: int, color) -> None:
+    def _draw_recap_dot_color(
+        self, frame: np.ndarray, px: int, py: int, color, scale: float = 1.0,
+    ) -> None:
         """Plain color dot, no number and no teardrop tail — the recap
         family's marker shape (see _draw_recap_dot) for a caller that
         already has its own color/position rather than a waypoint dict
         (e.g. the ending highlight's own S/E marker, transitions.py)."""
-        radius = max(2, int(self.graphics.marker_radius * 0.45))
+        radius = max(2, int(self.graphics.marker_radius * 0.45 * scale))
         cv2.circle(frame, (int(px), int(py)), radius, color, -1, cv2.LINE_AA)
         cv2.circle(frame, (int(px), int(py)), radius, (255, 255, 255), 2, cv2.LINE_AA)
 
-    def _draw_recap_dot(self, frame: np.ndarray, wp: Dict, total_points: int) -> None:
+    def _draw_recap_dot(
+        self, frame: np.ndarray, wp: Dict, total_points: int, scale: float = 1.0,
+    ) -> None:
         """Plain color dot for the recap screen's "pill badge" style — no
         number, no teardrop tail. The number now lives in the badge card
         itself (see _render_pill_badge), so the pin only needs to carry
         its color; a numbered circle there would just repeat the badge."""
         _, pin_color, _ = self._pin_label_and_color(wp, total_points)
         px, py = int(wp.get("pin_x", wp["x"])), int(wp.get("pin_y", wp["y"]))
-        self._draw_recap_dot_color(frame, px, py, pin_color)
+        self._draw_recap_dot_color(frame, px, py, pin_color, scale)
 
     def _pin_label_and_color(self, wp: Dict, total_points: int):
         """Factored out of _draw_pin so other frame elements (e.g. the

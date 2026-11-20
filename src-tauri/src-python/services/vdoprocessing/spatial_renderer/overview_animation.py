@@ -853,7 +853,12 @@ class _OverviewAnimationMixin:
                 # sticking out around its own dot.
                 last_frame_of_walk = stop_popup and current_frame == len(smooth_path) - 1
                 if last_frame_of_walk:
-                    self._recap_plate = frame.copy()
+                    # The map faded back with the route redrawn on it (see plain_recap_plate),
+                    # built here because this is where the background and the walked path are
+                    # both to hand.
+                    self._recap_plate = self.plain_recap_plate(
+                        current_bg, path_history, mode_history
+                    )
                 # Every waypoint is shown once up front on the intro frame
                 # (a preview of the whole route), but from here on a pin
                 # only reappears once the traveler actually reaches it —

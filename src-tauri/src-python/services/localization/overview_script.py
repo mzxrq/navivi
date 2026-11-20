@@ -65,14 +65,15 @@ Generate = Callable[[str, int], Optional[str]]  # (prompt, max_chars) -> text
 def visible_waypoints(project: dict) -> List[dict]:
     """The waypoints that get a numbered pin, in route order: everything but
     the start pin (index 0), stop-bys, waypoints skipped in video export
-    (drawn as a stop-by dot), and the final destination pin. Their position
-    + 1 is the {n} an overview cue uses."""
+    (drawn as a stop-by dot), return stops (they show an earlier stop's
+    number again) and the final destination pin. Their position + 1 is the
+    {n} an overview cue uses."""
     from services.vdoprocessing.route_inputs import stop_is_numbered
 
     waypoints = project.get("waypoints", [])
     return [
         w for i, w in enumerate(waypoints)
-        if i != 0 and i != len(waypoints) - 1 and stop_is_numbered(w)
+        if i != 0 and i != len(waypoints) - 1 and stop_is_numbered(waypoints, i)
     ]
 
 

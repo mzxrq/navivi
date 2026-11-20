@@ -37,6 +37,8 @@
   "soon_banner": "まもなく {dest}",
   "en_route_banner": "{dest} へ{suffix}",
   "stop_progress": "{n}/{total} か所を巡っています",
+  "overview_stops_hud": "{n} / {total} か所",
+  "overview_next_hud": "次は {name}",
   "overview_remaining_hud": "残り {distance} ・ {duration}",
   "hud_minutes": "{n} 分",
   "duration_seconds": "{n}秒",

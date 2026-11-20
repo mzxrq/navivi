@@ -1578,16 +1578,20 @@ def _write_scrapbook_clip(
 
 def _route_badges(waypoints: List[Dict[str, Any]]) -> List[Tuple[str, Dict[str, Any]]]:
     """The route's stops (stop-bys only when connected) as (S / 1 / 2 … / E, waypoint), numbered as the overview
-    pins are (route_inputs.stop_is_numbered): a stop-by shows "・", a closed place "×"."""
-    from services.vdoprocessing.route_inputs import stop_is_numbered
+    pins are (route_inputs.stop_is_numbered): a stop-by shows "・", a closed place "×", a return stop the
+    number of the stop it comes back to."""
+    from services.vdoprocessing.route_inputs import returns_to, stop_is_numbered
 
     route = [wp for wp in waypoints if not wp.get("isStopBy") or wp.get("connectToRoute")]
-    out, order = [], 0
+    out, order, numbers = [], 0, {}
     for i, wp in enumerate(route):
-        if 0 < i < len(route) - 1 and stop_is_numbered(wp):
+        if 0 < i < len(route) - 1 and stop_is_numbered(route, i):
             order += 1
+        numbers[i] = order
+        back = returns_to(route, i)
         badge = ("S" if i == 0 else "E" if i == len(route) - 1 else "×" if wp.get("inaccessible")
-                 else "・" if wp.get("isStopBy") or wp.get("skipAssetGeneration") else str(order))
+                 else "・" if wp.get("isStopBy") or wp.get("skipAssetGeneration")
+                 else str(order if back is None else numbers[back]))
         out.append((badge, wp))
     return out
 

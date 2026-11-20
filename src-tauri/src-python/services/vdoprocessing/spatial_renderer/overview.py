@@ -16,7 +16,7 @@ import numpy as np
 
 from services import tuning, video_text
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
-from services.vdoprocessing.route_inputs import photo_inputs_hash, route_inputs_hash
+from services.vdoprocessing.route_inputs import photo_inputs_hash, returns_to, route_inputs_hash
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
@@ -50,7 +50,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 
 # Bump when the overview's rendering code changes what it draws, so
 # checkpointed overviews made by older code are re-rendered.
-OVERVIEW_RENDER_VERSION = 53  # v53: badges are spaced apart only while the frame can hold them all that way (a dropped badge is worse than two sitting close), the stop-by/closed notice's corner is kept clear of them, and a photo-less place takes a badge in the recap without holding a card through the walk; v52: a group is one kind only — a stop and a stop-by at the same spot are not a pair, so they neither touch nor share a leader; v51: only stops a few metres apart get badges that touch — a cluster's are cut right beside each other at the card gap, while the badge lattice itself is spaced _RECAP_BADGE_GAP apart so two unrelated stops never read as a pair; keeping off the route is a strong cost, not an absolute rule, since a stop sits ON the route and an absolute one exiled its badge across the frame; v50: a leader is never drawn over the route while any clear slot is free (the elbow's own two bends are what is tested, ignoring the stretch at the pin, which sits on the route), and a near-pin pair keeps clear space around it so the next stop along doesn't read as one of the pair; v49: the route-crossing score reads the ELBOW the leader actually draws, both bends, not the straight pin-to-slot line — it was the elbow's long leg that ran along the route; v48: a slot whose leader line would run over the route costs _ROUTE_CROSS_PENALTY_PX extra, so a badge takes a further slot rather than cut the route in two; v47: the recap lays its badges out on their own slim lattice again, so they sit side by side instead of a photo card's width apart — the staying cards keep the card-sized slots they need and the cross-fade carries each one into its badge; v46: a pair of near pins claims its slots before the rest are matched, and takes the shorter pairing — claiming them afterwards crossed the pair's own leaders and exiled whichever badge was holding one across the frame; v45: cards that stay get card-sized slots (shrunk until every stop has one) instead of being drawn full-size into badge-sized ones, and each kind of place keeps to its own part of the frame — stop-bys with stop-bys, closed with closed; v44: a closed place is a circle, not a teardrop, and shows its pill badge like every other place — the {closed} cue only holds the summary now, and a stop-by or closed place with no photo gets a badge of its own instead of a bare black name on the map; v43: the walk passes every stop-by, connected to the route or not — no pause at a connected one and no number for it, its card pops where it sits like any other stop-by's; v42: a closed place's pin is a circle, not a teardrop; the frame is widened per stop above OVERVIEW_PADDING_CROWD_STOPS so a route with many stops has somewhere to put their cards; near pins' badges are kept side by side; v41: the frame each arrival is drawn on builds its cards the same way every other frame does (walk_card_hud), so they stop blinking into pill badges for that one frame, and a staying card isn't sent looking for a second spot there; v40: a staying card fades in exactly where it belongs instead of sliding up 40 px and growing into place, so its leader line doesn't swing into position every time the walker passes a stop; v39: the hold on the finished walk (every card still up) is written by the walk itself, still compositing, so the last stop's card finishes fading in instead of being frozen half-drawn for the whole beat; v38: every stop's full card now stays up for the whole walk — none of them shrinks on the way — and the recap holds that picture for RECAP_CARD_HOLD_SECONDS before they all become pill badges together; v37: a pill badge's circle shows the same glyph its pin does (S, E, ・ or its number) and keeps its pin's colour into the recap instead of being recoloured to its leader line's; the card cross-fades into the badge rather than swapping in one frame; v36: a full card takes the nearest spot around its badge that covers no card already on screen (rings outward, not just the four corners of that badge), so the several cards a long OVERVIEW_CARD_MIN_SECONDS keeps up together can't pile on each other; v35: a stop's full card hangs off whichever corner of its badge spot leaves it covering the least route line, pin and neighbouring card, instead of always spilling right and down over them; and it stays up for at least OVERVIEW_CARD_MIN_SECONDS, so a stop the walker only passes through can still be read; v34: a stop's full card holds until the NEXT stop's card pops (a whole leg, not a fixed 1.8 s) and only then turns into its pill badge, so two stops with neighbouring badge spots never show their cards on top of each other; v33: a stop's card shrinks straight into the pill badge at its own ending-summary spot, so it never moves or resizes again; the recap draws plain dots on a pin-free plate (no teardrops left under them); near pins share one leader line; the ending zoom's card is the full pop up card the fullscreen photo grows out of; v32: walk: shrunk/preview/recap badges are all a vertical "pill badge" (number, full un-truncated name, photo) instead of a horizontal capsule; a shrunk badge stays near its own pin (no bottom tray) with its leader line still drawn; v31: walk: a shrunk badge parks in a bottom tray (left to right, wrapping rows) instead of stacking near its own pin, no leader line back to it; v30: walk: the next waypoint gets a small preview badge before it's actually reached, and shrunk badges stack near their own pin instead of spreading via the full card's spiral search; v29: walk: a flow-through card shrinks to a small badge pill (circle + label + thumbnail) once fully shown, freeing map space for later stops' cards; v28: walk: added a bottom-right map scale bar and a top-right live distance/ETA-remaining chip; v27: walk: dropped the top "next stop" banner, top clearance shrunk to a plain edge margin; v26: editorial redesign — muted pin/line/card palette, pin ground shadow, elbow leader lines (also checked against the route line), slower pop/fade pacing; v25: cards that stay go straight to their ending-summary spot; v24: walk: every stop's card stays up once shown (overview_cards_stay); v23: summary held 1 s before the ending zoom; v22: quicker ending zoom (0.65 s); v21: walk/map frame the route below a top band; v20: top band 150 px; v19: walk cards keep below the top banner band; v18: closed places get their own banner, no stop when passing one, ending zoom pins numbered as the overview; v16: walk/map: stop-bys and closed places pop up as passed; v15: cards keep off closed places' pins and names; v14: quicker ending zoom (1.0 s); v13: a walk with only {start}/{end} fits between them, closed places come in with the summary without a {closed} cue, "map" style; v12: the final stop sits on the route's last point (E pin, 3D ending zoom); v11: course: the headline names the stretch being traced ("A → B"); v10: intro cards fade out, static ending zoom aims at the stop; v9: course: stop-bys take no number, travel mode pinned to the stops; v8: course: connected stop-bys pop up with the others at {extras}, stops matched in route order; v7: course walker waits at {go} stops when named, minimum pace, no pins for return stops; v6: course headline docked top left; v5: pins on their cue, cue window, faster last stretch; v4: bottom caption band in the framing, cards clear of top/bottom bands; v3: connected stop-bys stop; ending photo goes fullscreen after the voice
+OVERVIEW_RENDER_VERSION = 57  # v57: the course style arranges its pill badges the way the recap does (no leader lines, packed tight, over the map's clear space) — only a pop_up_card recap still draws leaders there — and a reserved box over the TOP of the badge band (that style's headline) shortens its columns from above instead of wiping them out, which had crowded every badge into the right-hand half of the frame, and the clear-space pull is stronger there since that map is never faded back, and its stops are plain colour dots rather than numbered teardrops (the badge beside each one already carries the number); v56: the top HUD panels are 1.5x bigger; v55: the recap sits on a plain plate (the map faded back, the route redrawn on it), its badges run in walked order S, 1, 2 … then stop-bys then closed, each column of the lattice keeps its rows clear of whatever is reserved below it, and no badge is pulled toward the middle of its own kind's pins any more (on a route split between an island and the mainland that middle is open water, and a stop with no near neighbour of its kind was stranded out in it), the recap draws no leader lines at all (a badge's number and its pin's are the tie) and its badges pack at the tight card gap, recap badges prefer the map's own clear space (measured on the background, not assumed), the recap gets one badge per PLACE (a return stop shares the first visit's), every badge comes off one frame-wide lattice so they line up in rows and columns, a badge may rest against its own stop over the route line, a run of badges shows one kind at a time (stops, then stop-bys, then closed), and the rows fill the band the badges may actually use (the last one was being cut for nine pixels); v54: a return stop takes no number of its own — it shows again the number of the stop it comes back to, and has no {n} cue; v53: badges are spaced apart only while the frame can hold them all that way (a dropped badge is worse than two sitting close), the stop-by/closed notice's corner is kept clear of them, and a photo-less place takes a badge in the recap without holding a card through the walk; v52: a group is one kind only — a stop and a stop-by at the same spot are not a pair, so they neither touch nor share a leader; v51: only stops a few metres apart get badges that touch — a cluster's are cut right beside each other at the card gap, while the badge lattice itself is spaced _RECAP_BADGE_GAP apart so two unrelated stops never read as a pair; keeping off the route is a strong cost, not an absolute rule, since a stop sits ON the route and an absolute one exiled its badge across the frame; v50: a leader is never drawn over the route while any clear slot is free (the elbow's own two bends are what is tested, ignoring the stretch at the pin, which sits on the route), and a near-pin pair keeps clear space around it so the next stop along doesn't read as one of the pair; v49: the route-crossing score reads the ELBOW the leader actually draws, both bends, not the straight pin-to-slot line — it was the elbow's long leg that ran along the route; v48: a slot whose leader line would run over the route costs _ROUTE_CROSS_PENALTY_PX extra, so a badge takes a further slot rather than cut the route in two; v47: the recap lays its badges out on their own slim lattice again, so they sit side by side instead of a photo card's width apart — the staying cards keep the card-sized slots they need and the cross-fade carries each one into its badge; v46: a pair of near pins claims its slots before the rest are matched, and takes the shorter pairing — claiming them afterwards crossed the pair's own leaders and exiled whichever badge was holding one across the frame; v45: cards that stay get card-sized slots (shrunk until every stop has one) instead of being drawn full-size into badge-sized ones, and each kind of place keeps to its own part of the frame — stop-bys with stop-bys, closed with closed; v44: a closed place is a circle, not a teardrop, and shows its pill badge like every other place — the {closed} cue only holds the summary now, and a stop-by or closed place with no photo gets a badge of its own instead of a bare black name on the map; v43: the walk passes every stop-by, connected to the route or not — no pause at a connected one and no number for it, its card pops where it sits like any other stop-by's; v42: a closed place's pin is a circle, not a teardrop; the frame is widened per stop above OVERVIEW_PADDING_CROWD_STOPS so a route with many stops has somewhere to put their cards; near pins' badges are kept side by side; v41: the frame each arrival is drawn on builds its cards the same way every other frame does (walk_card_hud), so they stop blinking into pill badges for that one frame, and a staying card isn't sent looking for a second spot there; v40: a staying card fades in exactly where it belongs instead of sliding up 40 px and growing into place, so its leader line doesn't swing into position every time the walker passes a stop; v39: the hold on the finished walk (every card still up) is written by the walk itself, still compositing, so the last stop's card finishes fading in instead of being frozen half-drawn for the whole beat; v38: every stop's full card now stays up for the whole walk — none of them shrinks on the way — and the recap holds that picture for RECAP_CARD_HOLD_SECONDS before they all become pill badges together; v37: a pill badge's circle shows the same glyph its pin does (S, E, ・ or its number) and keeps its pin's colour into the recap instead of being recoloured to its leader line's; the card cross-fades into the badge rather than swapping in one frame; v36: a full card takes the nearest spot around its badge that covers no card already on screen (rings outward, not just the four corners of that badge), so the several cards a long OVERVIEW_CARD_MIN_SECONDS keeps up together can't pile on each other; v35: a stop's full card hangs off whichever corner of its badge spot leaves it covering the least route line, pin and neighbouring card, instead of always spilling right and down over them; and it stays up for at least OVERVIEW_CARD_MIN_SECONDS, so a stop the walker only passes through can still be read; v34: a stop's full card holds until the NEXT stop's card pops (a whole leg, not a fixed 1.8 s) and only then turns into its pill badge, so two stops with neighbouring badge spots never show their cards on top of each other; v33: a stop's card shrinks straight into the pill badge at its own ending-summary spot, so it never moves or resizes again; the recap draws plain dots on a pin-free plate (no teardrops left under them); near pins share one leader line; the ending zoom's card is the full pop up card the fullscreen photo grows out of; v32: walk: shrunk/preview/recap badges are all a vertical "pill badge" (number, full un-truncated name, photo) instead of a horizontal capsule; a shrunk badge stays near its own pin (no bottom tray) with its leader line still drawn; v31: walk: a shrunk badge parks in a bottom tray (left to right, wrapping rows) instead of stacking near its own pin, no leader line back to it; v30: walk: the next waypoint gets a small preview badge before it's actually reached, and shrunk badges stack near their own pin instead of spreading via the full card's spiral search; v29: walk: a flow-through card shrinks to a small badge pill (circle + label + thumbnail) once fully shown, freeing map space for later stops' cards; v28: walk: added a bottom-right map scale bar and a top-right live distance/ETA-remaining chip; v27: walk: dropped the top "next stop" banner, top clearance shrunk to a plain edge margin; v26: editorial redesign — muted pin/line/card palette, pin ground shadow, elbow leader lines (also checked against the route line), slower pop/fade pacing; v25: cards that stay go straight to their ending-summary spot; v24: walk: every stop's card stays up once shown (overview_cards_stay); v23: summary held 1 s before the ending zoom; v22: quicker ending zoom (0.65 s); v21: walk/map frame the route below a top band; v20: top band 150 px; v19: walk cards keep below the top banner band; v18: closed places get their own banner, no stop when passing one, ending zoom pins numbered as the overview; v16: walk/map: stop-bys and closed places pop up as passed; v15: cards keep off closed places' pins and names; v14: quicker ending zoom (1.0 s); v13: a walk with only {start}/{end} fits between them, closed places come in with the summary without a {closed} cue, "map" style; v12: the final stop sits on the route's last point (E pin, 3D ending zoom); v11: course: the headline names the stretch being traced ("A → B"); v10: intro cards fade out, static ending zoom aims at the stop; v9: course: stop-bys take no number, travel mode pinned to the stops; v8: course: connected stop-bys pop up with the others at {extras}, stops matched in route order; v7: course walker waits at {go} stops when named, minimum pace, no pins for return stops; v6: course headline docked top left; v5: pins on their cue, cue window, faster last stretch; v4: bottom caption band in the framing, cards clear of top/bottom bands; v3: connected stop-bys stop; ending photo goes fullscreen after the voice
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -444,7 +444,8 @@ class _OverviewRenderMixin:
         # own MapArea.tsx normalIndex, which only increments for waypoints
         # that aren't isStopBy.
         order = 0
-        for ap in active_popups:
+        popup_places = [ap["data"] for ap in active_popups]
+        for seq, ap in enumerate(active_popups):
             # The route's literal start ("S", index 0) isn't part of the
             # visible 1..N numbering either — same treatment as a stop-by,
             # just for a different reason (it's labeled "S" outright, see
@@ -460,6 +461,15 @@ class _OverviewRenderMixin:
                 # — excluded only from the visible count/numbering itself.
                 ap["order"] = order
                 continue
+            # A return stop ("Add return stop", a copy of an earlier stop at the
+            # same spot) is that place again, so it shows that stop's number
+            # rather than taking the next one — and has no {n} cue of its own,
+            # which is why "is_return" also drops it from the cue timing below.
+            back = returns_to(popup_places, seq) if ap["index"] != len(points) - 1 else None
+            if back is not None:
+                ap["is_return"] = True
+                ap["order"] = active_popups[back]["order"]
+                continue
             order += 1
             ap["order"] = order
 
@@ -470,7 +480,7 @@ class _OverviewRenderMixin:
         next_numbered_order = None
         for ap in reversed(active_popups):
             ap["next_numbered_order"] = next_numbered_order
-            if not ap["data"].get("is_stopby") and ap["index"] != 0:
+            if not ap["data"].get("is_stopby") and ap["index"] != 0 and not ap.get("is_return"):
                 next_numbered_order = ap["order"]
 
         # Which stop-bys ride along with which stop. An unconnected
@@ -671,7 +681,7 @@ class _OverviewRenderMixin:
         wait_frames = int(fps * float(self.config.get("overview_cue_wait_seconds", 2.0)))
         for ap in active_popups:
             numbered = (
-                ap["index"] != 0 and not ap["data"].get("is_stopby")
+                ap["index"] != 0 and not ap["data"].get("is_stopby") and not ap.get("is_return")
                 and (not stop_popup or ap["index"] != stop_popup["index"])
             )
             ap["cue_wait_frames"] = (
@@ -715,7 +725,7 @@ class _OverviewRenderMixin:
             natural_frames = {
                 ap["order"]: _estimate_frame(ap["index"])
                 for ap in active_popups
-                if ap["index"] != 0 and not ap["data"].get("is_stopby")
+                if ap["index"] != 0 and not ap["data"].get("is_stopby") and not ap.get("is_return")
                 and (not stop_popup or ap["index"] != stop_popup["index"])
             }
             # Popups that freeze the map (and stop-by batches) add frames ahead of
@@ -1078,7 +1088,7 @@ class _OverviewRenderMixin:
         for ap in active_popups:
             seconds = audio_cues.get(str(ap.get("order")))
             numbered = (
-                ap["index"] != 0 and not ap["data"].get("is_stopby")
+                ap["index"] != 0 and not ap["data"].get("is_stopby") and not ap.get("is_return")
                 and (not stop_popup or ap["index"] != stop_popup["index"])
             )
             ap["cue_frame"] = int(round(seconds * fps)) if numbered and seconds is not None else None
@@ -1146,7 +1156,17 @@ class _OverviewRenderMixin:
             for ap in self._stay_layout:
                 ap["stay_box"] = ap["beside_box"]
         if preview_recap_only:
-            pre_popup_frame = clean_frame
+            # The same plate the walk stashes at its last frame (see _animate_overview_frames),
+            # built straight from the background since no walk ran — with each point's own
+            # travel mode, so the preview colours ferry and car legs as the real render does.
+            modes = (
+                [
+                    self._mode_at_fraction(mode_breakpoints, cum_smooth_dist[i] / total_smooth_dist)
+                    for i in range(len(smooth_path))
+                ]
+                if total_smooth_dist else None
+            )
+            pre_popup_frame = self.plain_recap_plate(current_bg, smooth_path, modes)
         else:
             pre_popup_frame = self._animate_overview_frames(
                 video, current_bg, cap, is_video, w, h, fps,
@@ -1156,9 +1176,18 @@ class _OverviewRenderMixin:
 
 
         if preview_recap_only:
-            # Just render the final recap frame and save it as an image
+            # Just render the final recap frame and save it as an image —
+            # laid out exactly as _render_recap_and_summary does, so the
+            # preview is the real recap and not the walk's card spots.
             out_img = str(self.out_dir / "01_overview_recap_preview.png")
-            final_frame = self._render_recap_frame(pre_popup_frame, active_popups, group_popups=None)
+            laid_out = self._layout_recap_cards(
+                self._recap_popup_set(active_popups, stop_popup), w, h,
+                reserved_boxes=reserved_boxes, route_obstacles=recap_obstacle_arr,
+                background=pre_popup_frame, leaders=False,
+            )
+            final_frame = self._render_recap_frame(
+                pre_popup_frame, active_popups, group_popups=laid_out
+            )
             cv2.imwrite(out_img, final_frame)
             return out_img
 

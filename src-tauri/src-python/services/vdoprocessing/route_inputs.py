@@ -75,10 +75,23 @@ def photo_inputs_hash(obj) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
-def stop_is_numbered(waypoint: dict) -> bool:
-    """Whether an overview pin takes the next number (overview.py's order): every stop, never a stop-by (the
-    walker passes every one of them, connected to the route or not) and never a stop skipped in video export."""
-    return not waypoint.get("skipAssetGeneration") and not waypoint.get("isStopBy")
+def stop_is_numbered(waypoints: list, pos: int) -> bool:
+    """Whether the stop at `pos` takes the next overview pin number (overview.py's order): every stop, never a
+    stop-by (the walker passes every one of them, connected to the route or not), never a stop skipped in video
+    export, and never a return stop - it shows again the number of the stop it comes back to."""
+    waypoint = waypoints[pos]
+    return (not waypoint.get("skipAssetGeneration") and not waypoint.get("isStopBy")
+            and returns_to(waypoints, pos) is None)
+
+
+def returns_to(waypoints: list, pos: int):
+    """The position of the earlier stop that a return stop ("Add return stop": a copy at the same spot) comes
+    back to, else None. A stop-by beside an earlier stop is its own place; the trip's last stop ends the video
+    like any finish. `waypoints` may be popup dicts, which spell the flag "is_stopby"."""
+    if not 0 < pos < len(waypoints) - 1 or waypoints[pos].get("isStopBy") or waypoints[pos].get("is_stopby"):
+        return None
+    return next((i for i, w in enumerate(waypoints[:pos])
+                 if not (w.get("isStopBy") or w.get("is_stopby")) and same_place(waypoints[pos], w)), None)
 
 
 def same_place(a: dict, b: dict) -> bool:

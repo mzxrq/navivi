@@ -153,16 +153,7 @@ class _TransitionMixin:
             if base_plate is None or base_plate.shape[:2] != (h, w):  # not this render's
                 base_plate = pre_popup_frame if pre_popup_frame is not None else self.last_frame
             outro_frame = base_plate.copy()
-            all_recap_popups = [ap for ap in active_popups if self._wants_recap_card(ap)]
-            # A loop route's "E" is the exact same real-world place as "S"
-            # (see SpatialRendererBase._is_loop_route) — usually labeled
-            # "... (Return)" in job_config.json, its own popup card would
-            # otherwise show the same photo/place right next to the start
-            # card it's a duplicate of. Drop it here (by identity, not by
-            # label text) so the recap shows that place once, via its
-            # start-popup card, rather than twice.
-            if self._is_loop_route and stop_popup is not None:
-                all_recap_popups = [ap for ap in all_recap_popups if ap is not stop_popup]
+            all_recap_popups = self._recap_popup_set(active_popups, stop_popup)
             total_freeze = float(
                 stop_popup["data"].get("freeze_seconds", self._DEFAULT_FREEZE_SECONDS)
             )
@@ -180,6 +171,8 @@ class _TransitionMixin:
                     all_recap_popups, w, h,
                     reserved_boxes=reserved_boxes,
                     route_obstacles=route_obstacle_arr,
+                    background=base_plate,  # badges go where the map itself is empty
+                    leaders=False,  # the badge's number and its pin's are the tie, not a line
                 )
                 final_frame = self._render_recap_frame(
                     outro_frame, active_popups, group_popups=laid_out
@@ -325,7 +318,7 @@ class _TransitionMixin:
         order = 0
         for pos, jw in enumerate(job_waypoints):
             is_stopby = bool(jw.get("isStopBy", False) or jw.get("skipAssetGeneration"))
-            if stop_is_numbered(jw) and not (holds_ends and pos == 0):
+            if stop_is_numbered(job_waypoints, pos) and not (holds_ends and pos == 0):
                 order += 1
             # A loop route's job_config waypoints list ends with a
             # synthetic "(Return)" entry at the SAME coordinates as the

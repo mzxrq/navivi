@@ -52,8 +52,10 @@ def overview_pin_glyphs(waypoints: list) -> dict:
     """{waypoint position: the glyph its pin shows on the overview}: "S" for
     the first, "E" for the last, "・" for a stop-by, and 1, 2, 3... for the
     rest in visit order - the same numbering as spatial_renderer's
-    _pin_label_and_color (S and stop-bys don't take a number), so a leg's
-    map can show "pin 1 -> pin 2" exactly as the overview does."""
+    _pin_label_and_color (S, stop-bys and return stops don't take a number),
+    so a leg's map can show "pin 1 -> pin 2" exactly as the overview does."""
+    from services.vdoprocessing.route_inputs import returns_to
+
     glyphs = {}
     order = 0
     last = len(waypoints) - 1
@@ -65,6 +67,10 @@ def overview_pin_glyphs(waypoints: list) -> dict:
         if pos == 0:
             glyphs[pos] = "S"
             continue
+        back = returns_to(waypoints, pos)
+        if back is not None:  # back at an earlier stop: its number again, not a new one
+            glyphs[pos] = glyphs[back]
+            continue
         order += 1
         glyphs[pos] = "E" if pos == last and order != 1 else str(order)
     return glyphs
@@ -72,12 +78,10 @@ def overview_pin_glyphs(waypoints: list) -> dict:
 
 def _returns_to(waypoints: list, pos: int) -> Optional[dict]:
     """The earlier stop a return stop ("Add return stop": a copy at the same spot) comes back to, else None."""
-    # A stop-by beside an earlier stop is its own place; the trip's last stop ends the video like any finish.
-    if not 0 < pos < len(waypoints) - 1 or waypoints[pos].get("isStopBy"):
-        return None
-    from services.vdoprocessing.route_inputs import same_place
+    from services.vdoprocessing.route_inputs import returns_to
 
-    return next((w for w in waypoints[:pos] if not w.get("isStopBy") and same_place(waypoints[pos], w)), None)
+    back = returns_to(waypoints, pos)
+    return waypoints[back] if back is not None else None
 
 
 def _is_return_stop(waypoints: list, pos: int) -> bool:
