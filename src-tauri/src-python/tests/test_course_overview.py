@@ -232,8 +232,8 @@ def test_a_far_stop_by_still_visible_in_the_legs_frame_is_walked_to():
 def test_the_headline_names_the_stretch_being_traced():
     from services.vdoprocessing.spatial_renderer.course import leg_banner
 
-    stops = [(0.0, "寺田橋バス停"), (120.0, "葛木水分神社"), (300.0, "郵便名柄館"), (900.0, "玉手駅")]
-    assert leg_banner(stops, 0.0) == "寺田橋バス停 → 葛木水分神社"
-    assert leg_banner(stops, 200.0) == "葛木水分神社 → 郵便名柄館"
-    assert leg_banner(stops, 300.0) == "郵便名柄館 → 玉手駅"  # arrived: the next stretch
-    assert leg_banner(stops, 900.0) == ""  # trace done: the usual headlines again
+    stops = [(0.0, "S", "寺田橋バス停"), (120.0, "1", "葛木水分神社"), (300.0, "2", "郵便名柄館"), (900.0, "E", "玉手駅")]
+    assert leg_banner(stops, 0.0) == [("S", "寺田橋バス停"), ("1", "葛木水分神社")]
+    assert leg_banner(stops, 200.0) == [("1", "葛木水分神社"), ("2", "郵便名柄館")]
+    assert leg_banner(stops, 300.0) == [("2", "郵便名柄館"), ("E", "玉手駅")]  # arrived: the next stretch
+    assert leg_banner(stops, 900.0) == []  # trace done: the usual headlines again

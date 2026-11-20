@@ -1,6 +1,6 @@
 """End-of-video summary stat card and generic card compositing."""
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -207,14 +207,19 @@ class _CardMixin:
         body = (body_x0, body_y0, body_x0 + body_w, body_y1)
         return s, title_font, body_font, lines, ribbon, body
 
-    def stopby_notice_box(self, w: int, h: int, kind: str = "stopby") -> Tuple[int, int, int, int]:
-        """(x0, y0, x1, y1) the notice covers, so cards can be kept off it."""
+    def stopby_notice_box(
+        self, w: int, h: int, kind: str = "stopby", x_offset: int = 0,
+    ) -> Tuple[int, int, int, int]:
+        """(x0, y0, x1, y1) the notice covers, so cards can be kept off it. `x_offset` slides
+        it right of the bottom-left corner, for a second notice beside the first."""
         _, _, _, _, ribbon, body = self._stopby_notice_layout(w, h, kind)
-        return (min(ribbon[0], body[0]), ribbon[1], max(ribbon[2], body[2]), body[3])
+        return (min(ribbon[0], body[0]) + x_offset, ribbon[1],
+                max(ribbon[2], body[2]) + x_offset, body[3])
 
     def render_stopby_notice(
         self, frame: np.ndarray, alpha: float = 1.0,
         marker_color: Tuple[int, int, int] = tuning.STOPBY_PIN_COLOR, kind: str = "stopby",
+        x_offset: int = 0,
     ) -> np.ndarray:
         """Bottom-left notice for the round stop-by markers: a ribbon with
         tuning.STOPBY_NOTICE_TITLE over a white rounded card with the marker
@@ -229,6 +234,7 @@ class _CardMixin:
         if key not in cache:
             cache[key] = self._stopby_notice_sprite(w, h, marker_color, kind)
         (x0, y0), color, cover = cache[key]
+        x0 = max(0, min(x0 + x_offset, w - cover.shape[1]))
         out = frame.copy()
         roi = out[y0:y0 + cover.shape[0], x0:x0 + cover.shape[1]].astype(np.float32)
         blended = color * float(alpha) + roi * (1.0 - cover * float(alpha))
@@ -685,6 +691,7 @@ class _CardMixin:
         out_scale: float = 1.0,
         total_km: Optional[float] = None,
         total_seconds: Optional[float] = None,
+        banner_theme: bool = False,
     ) -> np.ndarray:
         """Fourth summary-card template: still split into columns like
         create_summary_card's own multi-column layout, colored per mode like
@@ -704,7 +711,12 @@ class _CardMixin:
         plus a Total column, colored via _mode_accent / self.ui["card_text"]
         — same reasoning create_summary_card's own single-vs-multi split
         uses. `total_km`/`total_seconds` override the Total column (a leg's
-        card shows the whole trip still ahead there)."""
+        card shows the whole trip still ahead there).
+
+        `banner_theme`: the card as one more of the overview's accent pills — accent ground,
+        cream content, the headline's own corner — for a frame where it sits beside the
+        headline and the totals chip rather than alone in a corner of the map. The per-mode
+        accents go with it: a blue ferry on an accent ground fights the ground."""
         scale = 2
         total_dist = distance_km if total_km is None else total_km
         total_dur = duration_seconds if total_seconds is None else total_seconds
@@ -754,6 +766,10 @@ class _CardMixin:
                 self.ui["card_text"],
             )]
 
+        if banner_theme:
+            bright = self.ui["pill_text"]
+            columns = [(lab, mode, d, t, bright) for lab, mode, d, t, _ in columns]
+
         label_ascent, _ = font_label.getmetrics()
         value_ascent, _ = font_value.getmetrics()
         time_ascent, _ = font_time.getmetrics()
@@ -792,16 +808,18 @@ class _CardMixin:
 
         canvas = Image.new("RGBA", (card_w_px, card_h_px), (0, 0, 0, 0))
         draw = ImageDraw.Draw(canvas)
-        card_radius_px = 18 * scale
+        card_radius_px = (10 if banner_theme else 18) * scale
         draw.rounded_rectangle(
             [0, 0, card_w_px - 1, card_h_px - 1],
             radius=card_radius_px,
-            fill=self.ui["card_bg"],
-            outline=border_rgba if self.card_border_thickness else None,
-            width=self.card_border_thickness * scale,
+            fill=self.ui["pill_bg"] if banner_theme else self.ui["card_bg"],
+            outline=None if banner_theme else (border_rgba if self.card_border_thickness else None),
+            width=0 if banner_theme else self.card_border_thickness * scale,
         )
 
-        divider_color = self.ui["divider"]
+        divider_color = (
+            (*self.ui["pill_text"][:3], 90) if banner_theme else self.ui["divider"]
+        )
         for i, (label_text, mode, dist_s, dur_s, color, _text_w) in enumerate(rows):
             col_x0 = col_w * i + col_pad_x
             if i > 0:
@@ -834,8 +852,89 @@ class _CardMixin:
                 (text_x, time_y + (time_row_h - time_ascent) / 2), dur_s, font=font_time, fill=color,
             )
 
-        canvas = self._add_card_shadow(canvas, card_radius_px, border_rgba[:3], scale)
+        canvas = self._add_card_shadow(
+            canvas, card_radius_px,
+            self.ui["pill_bg"][:3] if banner_theme else border_rgba[:3], scale,
+        )
         w, h = round(canvas.size[0] * out_scale / scale), round(canvas.size[1] * out_scale / scale)
+        canvas = canvas.resize((w, h), Image.Resampling.LANCZOS)
+        return np.array(canvas)[:, :, [2, 1, 0, 3]]
+
+    def create_summary_card_circles(
+        self,
+        distance_km: float,
+        duration_seconds: float,
+        mode_breakdown: Optional[Dict[str, float]] = None,
+        mode_duration: Optional[Dict[str, float]] = None,
+        out_scale: float = 1.0,
+        total_km: Optional[float] = None,
+        total_seconds: Optional[float] = None,
+    ) -> np.ndarray:
+        """Fifth summary-card template: no card behind it at all. One disc per travel mode
+        holding that mode's icon, and under each disc two chips, its distance and its time,
+        with the whole trip's own disc last. For a frame whose corners are already accent
+        pills (the headline, the totals chip): a sixth panel there would be one too many, and
+        these discs read as part of the map instead."""
+        scale = 2
+        total_dist = distance_km if total_km is None else total_km
+        total_dur = duration_seconds if total_seconds is None else total_seconds
+        font = self._load_font(
+            self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
+        )
+        mode_duration = mode_duration or {}
+        columns = [
+            (mode, dist, mode_duration.get(mode, 0.0))
+            for mode, dist in sorted((mode_breakdown or {}).items(), key=lambda kv: -kv[1])
+        ]
+        columns.append(("total", total_dist, total_dur))
+
+        def fmt_distance(km: float) -> str:
+            return f"{km * 1000:.0f} m" if km < 1 else f"{km:.1f} km"
+
+        disc_d = 112 * scale
+        chip_h = 38 * scale
+        chip_pad_x = 14 * scale
+        chip_gap = 7 * scale
+        disc_gap = 13 * scale
+        col_gap = 26 * scale
+        probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        ascent = sum(font.getmetrics())
+
+        rows = []  # (mode, [chip texts], column width)
+        for mode, dist, dur in columns:
+            chips = [fmt_distance(dist), self._format_duration_ja(dur) if dur > 0 else "--"]
+            widest = max(probe.textlength(c, font=font) for c in chips) + chip_pad_x * 2
+            rows.append((mode, chips, max(disc_d, widest)))
+
+        card_w = int(sum(r[2] for r in rows) + col_gap * (len(rows) - 1))
+        card_h = int(disc_d + disc_gap + chip_h * 2 + chip_gap)
+        canvas = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        # The disc and the chips share the card's own ground/ink pair, so the icon reads
+        # against the disc whichever theme is on.
+        ink = tuple(self.ui["card_text"][:3])
+        disc_fill = tuple(self.ui["card_bg"][:3]) + (205,)
+        chip_fill = tuple(self.ui["card_bg"][:3]) + (238,)
+
+        x = 0
+        for mode, chips, col_w in rows:
+            cx = x + col_w / 2
+            draw.ellipse([cx - disc_d / 2, 0, cx + disc_d / 2, disc_d], fill=disc_fill)
+            if mode == "total":
+                self._draw_total_icon(draw, cx, disc_d / 2, disc_d * 0.5, ink + (235,))
+            else:
+                self._draw_mode_icon(draw, mode, cx, disc_d / 2, disc_d * 0.5, ink + (235,))
+            y = disc_d + disc_gap
+            for text in chips:
+                tw = probe.textlength(text, font=font)
+                draw.rounded_rectangle(
+                    [cx - col_w / 2, y, cx + col_w / 2, y + chip_h], radius=chip_h / 2, fill=chip_fill,
+                )
+                draw.text((cx - tw / 2, y + (chip_h - ascent) / 2), text, font=font, fill=ink)
+                y += chip_h + chip_gap
+            x += col_w + col_gap
+
+        w, h = round(card_w * out_scale / scale), round(card_h * out_scale / scale)
         canvas = canvas.resize((w, h), Image.Resampling.LANCZOS)
         return np.array(canvas)[:, :, [2, 1, 0, 3]]
 
@@ -1037,10 +1136,16 @@ class _CardMixin:
         without every call site needing its own if/else."""
         style = getattr(self, "summary_card_style", tuning.DEFAULT_SUMMARY_CARD_STYLE)
         out_scale = kwargs.pop("out_scale", 1.0)
+        banner_theme = kwargs.pop("banner_theme", False)
+        if style == "circles":
+            kwargs.pop("title", None)
+            kwargs.pop("max_title_width", None)
+            return self.create_summary_card_circles(out_scale=out_scale, **kwargs)
         if style == "columns":
             kwargs.pop("title", None)
             kwargs.pop("max_title_width", None)
-            return self.create_summary_card_columns(out_scale=out_scale, **kwargs)
+            return self.create_summary_card_columns(
+                out_scale=out_scale, banner_theme=banner_theme, **kwargs)
         kwargs.pop("total_km", None)
         kwargs.pop("total_seconds", None)
         card =self._render_summary_card_style(style, card_size, **kwargs)
@@ -1051,6 +1156,10 @@ class _CardMixin:
         return card
 
     def _render_summary_card_style(self, style: str, card_size, **kwargs) -> np.ndarray:
+        if style == "circles":
+            for key in ("title", "max_title_width", "card_size", "banner_theme"):
+                kwargs.pop(key, None)
+            return self.create_summary_card_circles(**kwargs)
         if style == "taskbar":
             if card_size is not None:
                 kwargs.setdefault("min_card_width", card_size[0])
@@ -1130,6 +1239,190 @@ class _CardMixin:
             card_bgr * card_alpha[..., None] + roi * (1 - card_alpha[..., None])
         ).astype(np.uint8)
         return out
+
+    def route_headline_panel(
+        self, title: str, steps: Sequence[Tuple[str, str]], font_px: int = 22,
+    ) -> Optional[Image.Image]:
+        """The course overview's headline: the area's name on a light strip, and under it
+        the stretch being traced, each place behind the glyph its own pin shows — "S 加太駅
+        → 1 加太春日神社". `steps` is [(glyph, name), …]; with none, the strip alone.
+        Memoized on its text, since it is composited onto every frame."""
+        title, steps = drawable(title or ""), [(g, drawable(n)) for g, n in steps]
+        if not title and not steps:
+            return None
+        cache = self.__dict__.setdefault("_route_headlines", {})
+        key = (title, tuple(steps), font_px, self.theme)
+        if key in cache:
+            return cache[key]
+
+        scale = 2
+        font = self._card_font(self.FONT_CANDIDATES_BOLD, font_px * scale)
+        pad_x, pad_y, gap = int(20 * scale), int(10 * scale), int(10 * scale)
+        measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        line_h = sum(font.getmetrics())  # the font's own line box, so a CJK name is not clipped
+        chip_d = int(line_h * 1.15)
+        arrow = "  →  "
+
+        run: List[Tuple[str, str, float]] = []  # (kind, text, width)
+        for i, (glyph, name) in enumerate(steps):
+            if i:
+                run.append(("text", arrow, measure.textlength(arrow, font=font)))
+            run.append(("chip", glyph, chip_d + gap / 2))
+            run.append(("text", name, measure.textlength(name, font=font)))
+        body_w = sum(w for _, _, w in run)
+        title_w = measure.textlength(title, font=font) if title else 0
+        card_w = int(max(title_w, body_w) + pad_x * 2)
+        strip_h = int(line_h + pad_y * 2) if title else 0
+        card_h = strip_h + (int(max(line_h, chip_d) + pad_y * 2) if run else 0)
+
+        canvas = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        radius = 10 * scale
+        draw.rounded_rectangle([0, 0, card_w - 1, card_h - 1], radius=radius, fill=self.ui["pill_bg"])
+        if title:
+            draw.rounded_rectangle(
+                [0, 0, card_w - 1, strip_h - 1], radius=radius, fill=self.ui["pill_text"],
+            )
+            draw.text(
+                ((card_w - title_w) / 2, pad_y), title, font=font, fill=self.ui["pill_bg"],
+                anchor="la",
+            )
+        x, y = pad_x, strip_h + pad_y
+        for kind, text, w in run:
+            if kind == "chip":
+                cy = y + (max(line_h, chip_d) - chip_d) / 2
+                draw.ellipse([x, cy, x + chip_d, cy + chip_d], fill=self.ui["pill_text"])
+                gw = measure.textlength(text, font=font)
+                draw.text(
+                    (x + (chip_d - gw) / 2, cy + (chip_d - line_h) / 2), text, font=font,
+                    fill=self.ui["pill_bg"], anchor="la",
+                )
+            else:
+                draw.text((x, y), text, font=font, fill=self.ui["pill_text"], anchor="la")
+            x += w
+        canvas = canvas.resize((max(1, card_w // scale), max(1, card_h // scale)), Image.LANCZOS)
+        if len(cache) >= self._HUD_PANEL_CACHE_MAX:
+            cache.clear()
+        cache[key] = canvas
+        return canvas
+
+    def route_progress_rail_height(self, h: int) -> int:
+        """How tall the bottom rail is, so a caller can keep its cards off it."""
+        return int(round(h * 0.068))
+
+    def _rail_geometry(self, w: int, h: int, margin: int):
+        """(rail height, cap diameter, bar top, bar height, left x, right x) of the bottom rail,
+        shared by the track drawn per frame and the sprite of ticks and caps drawn once."""
+        rail_h = self.route_progress_rail_height(h)
+        cap_d = int(rail_h * 0.62)
+        bar_h = max(4, int(rail_h * 0.16))
+        bar_y = rail_h - cap_d // 2 - bar_h // 2  # the caps hang off the bar and still clear the edge
+        return rail_h, cap_d, bar_y, bar_h, margin + cap_d // 2, w - margin - cap_d // 2
+
+    def render_route_progress_rail(
+        self, frame: np.ndarray, fraction: float,
+        marks: Sequence[Tuple[float, str, Tuple[int, int, int]]],
+        alpha: float = 1.0, margin: int = 32,
+        mode: Optional[str] = None, frame_count: int = 0,
+    ) -> np.ndarray:
+        """The whole route as one line across the foot of the frame: a tick per stop at its
+        own share of the distance, the first and last behind their pin's glyph, and the
+        trace's progress filled in from the left. `marks` is (fraction, glyph, BGR colour)
+        per stop, in route order. The track and fill are drawn straight onto the frame (they
+        change every frame); only the ticks and end caps are a cached sprite."""
+        if alpha <= 0 or not marks:
+            return frame
+        h, w = frame.shape[:2]
+        rail_h, _, bar_y, bar_h, x0, x1 = self._rail_geometry(w, h, margin)
+        top = h - margin - rail_h
+        y = top + bar_y
+
+        out = frame.copy()
+        # self.ui holds RGB (it is mostly drawn through PIL); cv2 wants BGR.
+        track = tuple(int(c) for c in reversed(self.ui["divider"][:3]))
+        fill = tuple(int(c) for c in reversed(self.ui["pill_bg"][:3]))
+        cv2.rectangle(out, (x0, y), (x1, y + bar_h), track, -1, cv2.LINE_AA)
+        end = x0 + int(round((x1 - x0) * min(1.0, max(0.0, fraction))))
+        if end > x0:
+            cv2.rectangle(out, (x0, y), (end, y + bar_h), fill, -1, cv2.LINE_AA)
+
+        # The traveler rides the head of the fill, shrunk to the rail: the same walker,
+        # ferry or vehicle as on the map, so the two read as one journey.
+        if mode and end > x0:
+            icon = self.transport_icon_sprite(frame_count, 0.0, mode, int(rail_h * 0.62))
+            if icon is not None:
+                self.blit_sprite(out, icon, (icon.shape[1] // 2, icon.shape[0]), end, y + 1)
+
+        sprite = self._progress_rail_sprite(w, h, tuple(marks), margin)
+        roi = out[top:top + sprite.shape[0], 0:w].astype(np.float32)
+        a = sprite[:, :, 3:].astype(np.float32) / 255.0
+        out[top:top + sprite.shape[0], 0:w] = np.clip(
+            sprite[:, :, :3].astype(np.float32) * a + roi * (1 - a) + 0.5, 0, 255).astype(np.uint8)
+        # One fade for the whole rail, track and ticks together.
+        return out if alpha >= 1.0 else cv2.addWeighted(out, alpha, frame, 1.0 - alpha, 0.0)
+
+    def _progress_rail_sprite(
+        self, w: int, h: int,
+        marks: Tuple[Tuple[float, str, Tuple[int, int, int]], ...], margin: int,
+    ) -> np.ndarray:
+        """BGRA strip of the rail's ticks and its two end caps (everything that never moves)."""
+        cache = self.__dict__.setdefault("_progress_rails", {})
+        key = (w, h, marks, margin, self.theme)
+        if key in cache:
+            return cache[key]
+        rail_h, cap_d, bar_y, bar_h, x0, x1 = self._rail_geometry(w, h, margin)
+
+        scale = 2
+        canvas = Image.new("RGBA", (w * scale, rail_h * scale), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        font = self._card_font(self.FONT_CANDIDATES_BOLD, max(9, int(cap_d * 0.52)) * scale)
+        small = self._card_font(self.FONT_CANDIDATES_BOLD, max(9, int(rail_h * 0.26)) * scale)
+        label_h = sum(small.getmetrics())
+        tick_top = label_h + int(3 * scale)
+        cy = (bar_y + bar_h / 2) * scale
+        # Two stops a few metres apart put their ticks all but on top of each other, so a
+        # number that would land on the one before it slides right until it clears: the tick
+        # stays at its true distance, only the number moves.
+        last_right = -1e9
+        gap = int(4 * scale)
+        for i, (f, glyph, color) in enumerate(marks):
+            x = (x0 + (x1 - x0) * min(1.0, max(0.0, f))) * scale
+            rgb = tuple(int(c) for c in reversed(color[:3]))  # the caller passes BGR, PIL wants RGB
+            if i in (0, len(marks) - 1):
+                r = cap_d * scale / 2
+                draw.ellipse([x - r, cy - r, x + r, cy + r], fill=rgb + (255,))
+                tw = draw.textlength(glyph, font=font)
+                draw.text((x - tw / 2, cy - font.size * 0.62), glyph, font=font, fill=self.ui["pill_text"])
+                last_right = max(last_right, x + r)
+                continue
+            tw = max(1, int(2.5 * scale))
+            draw.rectangle([x - tw / 2, tick_top, x + tw / 2, bar_y * scale], fill=rgb + (235,))
+            if not glyph:
+                continue
+            lw = draw.textlength(glyph, font=small)
+            lx = max(x - lw / 2, last_right + gap)
+            if lx + lw > w * scale:
+                continue
+            draw.text((lx, 0), glyph, font=small, fill=rgb + (255,))
+            last_right = lx + lw
+        strip = np.array(canvas.resize((w, rail_h), Image.LANCZOS))[:, :, [2, 1, 0, 3]]
+        if len(cache) >= self._HUD_PANEL_CACHE_MAX:
+            cache.clear()
+        cache[key] = strip
+        return strip
+
+    def route_totals_panel(
+        self, distance_km: Optional[float], duration_seconds: Optional[float],
+    ) -> Optional[Image.Image]:
+        """The whole route's distance and time as one corner chip (the HUD panel the walk
+        overview uses for what is LEFT, here for the totals, which never change)."""
+        labels = getattr(self, "summary_card_labels", None) or video_text.current_labels()
+        parts = []
+        if distance_km is not None:
+            parts.append(f"{distance_km * 1000:.0f} m" if distance_km < 1 else f"{distance_km:.1f} km")
+        if duration_seconds is not None:
+            parts.append(self._format_duration_ja(duration_seconds))
+        return self._hud_panel(((labels["separator"].join(parts), 20, False),))
 
     def top_banner_width(self, text: str, font_px: int = 22) -> int:
         """Width in px of the pill render_top_banner draws for `text`."""
