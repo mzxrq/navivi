@@ -555,22 +555,10 @@ def generate_intro_clip(
     a pipeline run. `duration_sec` fits the intro to that length (the overview
     voice's opening, see intro_step.plan_intro_seconds). `photo_cuts` [(seconds,
     photo)] (the opening's {photo:X} cues) choose the photos and when each comes in."""
-    count = tuning.INTRO_MAX_IMAGE_COUNT if duration_sec else tuning.INTRO_IMAGE_COUNT
-    image_paths = _pick_random_images(waypoints, count)
-    if not image_paths:
-        logger.warning("No waypoint popup images available — cannot build an intro yet.")
+    plan = _plan_intro_clips(waypoints, duration_sec, photo_cuts)
+    if plan is None:
         return None
-    cued = cued_layout(duration_sec, photo_cuts) if duration_sec and photo_cuts else []
-    if cued:
-        spare = [p for p in image_paths if p not in {photo for photo, _ in cued}] or image_paths
-        image_paths = [photo or spare[0] for photo, _ in cued]
-        clip_secs = [sec for _, sec in cued]
-    else:
-        per_clip_sec = tuning.INTRO_PER_IMAGE_SECONDS
-        if duration_sec:
-            n, per_clip_sec = fitted_layout(duration_sec, len(image_paths))
-            image_paths = image_paths[:n]
-        clip_secs = [per_clip_sec] * len(image_paths)
+    image_paths, clip_secs = plan
 
     logger.info("Intro: picked %d source image(s): %s", len(image_paths), image_paths)
 
@@ -583,26 +571,16 @@ def generate_intro_clip(
     title_path: Optional[Path] = None
 
     crossfade_sec = tuning.INTRO_CROSSFADE_SECONDS
-    total_sec = sum(clip_secs) - (len(clip_secs) - 1) * crossfade_sec
-
     rendered_secs: List[float] = []
     try:
-        for idx, (image_path, clip_sec) in enumerate(zip(image_paths, clip_secs)):
-            image = _read_image_safe(image_path)
-            if image is None:
-                continue
-            raw_path = video_dir_path / f".intro_raw_{run_id}_{idx}.mp4"
-            _render_zoom_in(image, str(raw_path), clip_sec,
-                            zoom=(tuning.INTRO_ZOOM_START, tuning.INTRO_ZOOM_END if photo_motion else tuning.INTRO_ZOOM_START))
-            per_clip_raw_paths.append(str(raw_path))
-            rendered_secs.append(clip_sec)
+        _render_intro_zooms(image_paths, clip_secs, video_dir_path, run_id, photo_motion, per_clip_raw_paths, rendered_secs)
 
         if not per_clip_raw_paths:
             logger.error("Intro: none of the picked images could be read.")
             return None
 
-        # [NOTE] [Animation] A picture failing to read shrinks the slideshow — recompute
-        # the total against however many clips actually rendered.
+        # [NOTE] [Animation] A picture failing to read shrinks the slideshow, so the total
+        # is counted over the clips that actually rendered.
         total_sec = sum(rendered_secs) - (len(rendered_secs) - 1) * crossfade_sec
         _crossfade_chain(per_clip_raw_paths, rendered_secs, crossfade_sec, str(combined_path))
 
@@ -615,10 +593,7 @@ def generate_intro_clip(
                 subtitle_style=DEFAULT_SUBTITLE_STYLE.merged(subtitle_style)
                 .with_installed_font(DEFAULT_SUBTITLE_STYLE.font_family),
             )
-            from services.vdoprocessing.vdoexporter import filter_path
-
-            escaped_title_path = filter_path(title_path)
-            base = f"subtitles=filename='{escaped_title_path}':force_style='{_TITLE_STYLE.to_force_style()}'"
+            base = _title_burn_filter(title_path)
 
         if not _finish_intro(combined_path, total_sec, base, video_dir_path, run_id, output_path):
             return None
@@ -634,6 +609,51 @@ def generate_intro_clip(
 
     logger.info("Intro clip generated: %s (%d pictures)", output_path, len(per_clip_raw_paths))
     return str(output_path)
+
+
+def _plan_intro_clips(
+    waypoints: List[Dict[str, Any]], duration_sec: Optional[float], photo_cuts: Optional[List[Tuple[float, str]]],
+) -> Optional[Tuple[List[str], List[float]]]:
+    """(photos, seconds per clip) for the slideshow, or None (logged) when there is no photo to use."""
+    count = tuning.INTRO_MAX_IMAGE_COUNT if duration_sec else tuning.INTRO_IMAGE_COUNT
+    image_paths = _pick_random_images(waypoints, count)
+    if not image_paths:
+        logger.warning("No waypoint popup images available — cannot build an intro yet.")
+        return None
+    cued = cued_layout(duration_sec, photo_cuts) if duration_sec and photo_cuts else []
+    if cued:
+        spare = [p for p in image_paths if p not in {photo for photo, _ in cued}] or image_paths
+        return [photo or spare[0] for photo, _ in cued], [sec for _, sec in cued]
+    per_clip_sec = tuning.INTRO_PER_IMAGE_SECONDS
+    if duration_sec:
+        n, per_clip_sec = fitted_layout(duration_sec, len(image_paths))
+        image_paths = image_paths[:n]
+    return image_paths, [per_clip_sec] * len(image_paths)
+
+
+def _render_intro_zooms(
+    image_paths: List[str], clip_secs: List[float], video_dir: Path, run_id: str, photo_motion: bool,
+    raw_paths: List[str], rendered_secs: List[float],
+) -> None:
+    """Zoom clip per readable photo; appends to `raw_paths` / `rendered_secs` as it goes (the caller's
+    cleanup must see the files written before a failure)."""
+    for idx, (image_path, clip_sec) in enumerate(zip(image_paths, clip_secs)):
+        image = _read_image_safe(image_path)
+        if image is None:
+            continue
+        raw_path = video_dir / f".intro_raw_{run_id}_{idx}.mp4"
+        _render_zoom_in(image, str(raw_path), clip_sec,
+                        zoom=(tuning.INTRO_ZOOM_START, tuning.INTRO_ZOOM_END if photo_motion else tuning.INTRO_ZOOM_START))
+        raw_paths.append(str(raw_path))
+        rendered_secs.append(clip_sec)
+
+
+def _title_burn_filter(title_path: Path) -> str:
+    """The ffmpeg `subtitles` filter that burns the title .ass."""
+    from services.vdoprocessing.vdoexporter import filter_path
+
+    escaped_title_path = filter_path(title_path)
+    return f"subtitles=filename='{escaped_title_path}':force_style='{_TITLE_STYLE.to_force_style()}'"
 
 
 def _finish_intro(combined_path: Path, total_sec: float, base: str, video_dir: Path, run_id: str, output_path: Path) -> bool:
@@ -891,20 +911,7 @@ def generate_styled_intro(
     attraction clips (else the waypoint photos), crossfaded, faded from/to black, with the logo badge.
     The lines ride on the timeline's text track (intro_step.intro_text_items). None (logged) on failure."""
     scenes = styled_scenes(style, duration_sec, cuts)
-    densities: Dict[str, float] = {}
-    stills: Dict[str, np.ndarray] = {}  # held-photo clips: drawn like photos, with the zoom/pan
-    lengths: Dict[str, float] = {}
-    for src in _scene_sources(waypoints, attraction_videos):
-        lengths[src] = _source_seconds(src)
-        frame = _frame_at(src, 0.5, lengths[src])
-        if frame is None:
-            continue
-        densities[src] = edge_density(frame)
-        if Path(src).suffix.lower() in _VIDEO_EXTS:
-            early, late = _frame_at(src, 0.2, lengths[src]), _frame_at(src, 0.8, lengths[src])
-            if early is not None and late is not None and is_still(early, late):
-                stills[src] = frame
-                lengths[src] = float("inf")
+    densities, stills, lengths = _survey_sources(_scene_sources(waypoints, attraction_videos))
     picks = pick_scenes(densities, len(scenes))
     cued = scene_overrides(scenes, photo_cuts, waypoints, attraction_videos)
     for k, scene_cues in cued.items():
@@ -928,30 +935,8 @@ def generate_styled_intro(
     pool = [p for p in sorted(densities, key=lambda p: densities[p], reverse=True) if p not in taken]
     try:
         for idx, (scene, src) in enumerate(zip(scenes, picks)):
-            raw = str(video_dir_path / f".intro_raw_{run_id}_{idx}.mp4")
-            if len(cued.get(idx, [])) > 1:  # several {photo:X} cues in this scene: each from its cue
-                shots, secs = map(list, zip(*cued_shots(scene["seconds"], cued[idx], cf)))
-            else:
-                shots = plan_shots(scene["seconds"], src, pool, lengths, cf, idx)
-                secs = [(scene["seconds"] + (len(shots) - 1) * cf) / len(shots)] * len(shots)
-            if len(shots) > 1:
-                logger.info("Intro: scene %d (%.1fs) runs on %d shots: %s", idx + 1, scene["seconds"], len(shots), shots)
-            parts = []
-            for j, (shot, shot_sec) in enumerate(zip(shots, secs)):
-                part = raw if len(shots) == 1 else str(video_dir_path / f".intro_raw_{run_id}_{idx}_{j}.mp4")
-                raws.append(part)
-                parts.append(part)
-                if Path(shot).suffix.lower() in _VIDEO_EXTS and shot not in stills:
-                    _render_clip_slice(shot, part, shot_sec, scene["dim"], scene["sat"])
-                else:
-                    image = stills[shot] if shot in stills else _read_image_safe(shot)
-                    if image is None:
-                        return None
-                    zoom, pan = (scene["zoom"], scene["pan"]) if photo_motion else ((scene["zoom"][0],) * 2, (0.0, 0.0))
-                    _render_zoom_in(image, part, shot_sec, zoom, pan, scene["dim"], scene["sat"])
-            if len(parts) > 1:
-                _crossfade_chain(parts, secs, cf, raw)
-                raws.append(raw)
+            if not _render_scene(idx, scene, src, cued.get(idx, []), pool, lengths, stills, video_dir_path, run_id, photo_motion, raws):
+                return None
         scene_raws = [str(video_dir_path / f".intro_raw_{run_id}_{i}.mp4") for i in range(len(scenes))]
         _crossfade_chain(scene_raws, [s["seconds"] for s in scenes], cf, str(combined_path))
         if not _finish_intro(combined_path, joined_seconds(scenes), "null", video_dir_path, run_id,
@@ -965,3 +950,58 @@ def generate_styled_intro(
         for p in raws:
             Path(p).unlink(missing_ok=True)
     return str(video_dir_path / output_filename)
+
+
+def _survey_sources(sources: List[str]) -> Tuple[Dict[str, float], Dict[str, np.ndarray], Dict[str, float]]:
+    """(edge densities, held-photo frames, lengths) of the scene sources; a held-photo clip is drawn like a
+    photo (zoom/pan) and never runs out."""
+    densities: Dict[str, float] = {}
+    stills: Dict[str, np.ndarray] = {}
+    lengths: Dict[str, float] = {}
+    for src in sources:
+        lengths[src] = _source_seconds(src)
+        frame = _frame_at(src, 0.5, lengths[src])
+        if frame is None:
+            continue
+        densities[src] = edge_density(frame)
+        if Path(src).suffix.lower() in _VIDEO_EXTS:
+            early, late = _frame_at(src, 0.2, lengths[src]), _frame_at(src, 0.8, lengths[src])
+            if early is not None and late is not None and is_still(early, late):
+                stills[src] = frame
+                lengths[src] = float("inf")
+    return densities, stills, lengths
+
+
+def _render_scene(
+    idx: int, scene: Dict[str, Any], src: str, scene_cues: List[Tuple[float, str]], pool: List[str],
+    lengths: Dict[str, float], stills: Dict[str, np.ndarray], video_dir: Path, run_id: str, photo_motion: bool,
+    raws: List[str],
+) -> bool:
+    """Renders scene `idx` to its `.intro_raw_<run>_<idx>.mp4` (its shots crossfaded when there are several);
+    False when a photo can't be read. Appends every file it writes to `raws` for the caller's cleanup."""
+    cf = tuning.INTRO_CROSSFADE_SECONDS
+    raw = str(video_dir / f".intro_raw_{run_id}_{idx}.mp4")
+    if len(scene_cues) > 1:  # several {photo:X} cues in this scene: each from its cue
+        shots, secs = map(list, zip(*cued_shots(scene["seconds"], scene_cues, cf)))
+    else:
+        shots = plan_shots(scene["seconds"], src, pool, lengths, cf, idx)
+        secs = [(scene["seconds"] + (len(shots) - 1) * cf) / len(shots)] * len(shots)
+    if len(shots) > 1:
+        logger.info("Intro: scene %d (%.1fs) runs on %d shots: %s", idx + 1, scene["seconds"], len(shots), shots)
+    parts = []
+    for j, (shot, shot_sec) in enumerate(zip(shots, secs)):
+        part = raw if len(shots) == 1 else str(video_dir / f".intro_raw_{run_id}_{idx}_{j}.mp4")
+        raws.append(part)
+        parts.append(part)
+        if Path(shot).suffix.lower() in _VIDEO_EXTS and shot not in stills:
+            _render_clip_slice(shot, part, shot_sec, scene["dim"], scene["sat"])
+            continue
+        image = stills[shot] if shot in stills else _read_image_safe(shot)
+        if image is None:
+            return False
+        zoom, pan = (scene["zoom"], scene["pan"]) if photo_motion else ((scene["zoom"][0],) * 2, (0.0, 0.0))
+        _render_zoom_in(image, part, shot_sec, zoom, pan, scene["dim"], scene["sat"])
+    if len(parts) > 1:
+        _crossfade_chain(parts, secs, cf, raw)
+        raws.append(raw)
+    return True

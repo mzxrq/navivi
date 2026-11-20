@@ -769,6 +769,116 @@ def reverse_clip(path: str) -> str:
     return path
 
 
+def _walk_fallback(exc, seed, i, duration_sec, output_path, preset, halves, part):
+    """(move, prompt, preset, halves, part, keep) for the dolly that replaces a walk that failed."""
+    # Still LTX and still inside the photo: a dolly in instead of the walk.
+    fallback = tuning.LTXV_WALK_FAILED_FALLBACK
+    logger.warning("%s - LTXV %s instead.", exc, fallback)
+    move = fallback
+    prompt = prompt_for(move, seed)
+    if tuning.LTXV_CONTINUE and i == 0 and needs_second_half(duration_sec):  # two halves, like any pinned move
+        preset, halves, part = move, True, 0
+    keep = _shot_cache(output_path, seed, move if part is None else f"{move}#0", prompt)
+    return move, prompt, preset, halves, part, keep
+
+
+def _store_shot(path: str, keep: Path) -> None:
+    tmp = keep.with_name(keep.stem + ".tmp.mp4")
+    shutil.copy2(path, tmp)
+    os.replace(tmp, keep)
+
+
+def _slow_walk(path: str, duration_sec: float) -> None:
+    # Only as slow as the narration needs: a short share keeps the walk's movement.
+    from services.tts.ttsengine import FFmpegManager
+
+    walk = FFmpegManager.get_media_duration(path) or 1.0
+    slow_down(path, min(tuning.LTXV_WALK_SLOWDOWN, max(1.0, duration_sec / walk)))
+
+
+def _second_half(shots, work, preset, seed, photo_path, output_path, place, cached) -> Optional[str]:
+    """The finished clip with the move's second half joined on, or None (logged) when that half failed."""
+    from services.tts.ttsengine import FFmpegManager
+
+    path = str(work / "half1.mp4")
+    prompt = prompt_for(preset, seed)
+    keep = _shot_cache(output_path, seed, f"{preset}#1", prompt)
+    cached.append(keep)
+    try:
+        if keep.is_file():
+            shutil.copy2(keep, path)
+        else:
+            render_shot(photo_path, preset, path, work, prompt, place, part=1)
+            _store_shot(path, keep)
+        result = join_halves(shots[0], path, output_path)
+        _write_first_shot_end(output_path, FFmpegManager.get_media_duration(result))
+        for keep in cached:
+            keep.unlink(missing_ok=True)
+        return result
+    except Exception as exc:
+        logger.warning("LTXV %s second half failed (%s: %s) - keeping the first half only.",
+                       preset, type(exc).__name__, exc)
+        return None
+
+
+def _crossfade_shots(shots: List[str], output_path: str, cached: List[Path]) -> str:
+    from services.tts.ttsengine import FFmpegManager
+
+    result = crossfade(shots, output_path)
+    first = FFmpegManager.get_media_duration(shots[0])
+    _write_first_shot_end(output_path, first - tuning.LTXV_CROSSFADE_SECONDS if len(shots) > 1 else first)
+    for keep in cached:  # the photo clip is the checkpoint now
+        keep.unlink(missing_ok=True)
+    return result
+
+
+class _MovePlan:
+    """The move being rendered; a failed walk swaps in its fallback (preset) and may turn on the two halves."""
+
+    def __init__(self, preset: str, halves: bool):
+        self.preset, self.halves = preset, halves
+
+
+def _make_shot(
+    photo_path: str, output_path: str, work: Path, place: Optional[str], duration_sec: float, seed: str,
+    i: int, move: str, plan: _MovePlan, shots: List[str], cached: List[Path],
+) -> None:
+    """Shot `i` of the clip: reused from the shot cache or rendered (a walk that fails becomes its fallback
+    dolly), appended to `shots`. Only a failed first shot raises."""
+    path = str(work / f"shot{i}.mp4")
+    free = move in tuning.LTXV_FREE_MOVES
+    prompt = prompt_for(move, seed) if free else prompt_for(move, seed, second=i > 0)
+    part = 0 if plan.halves and i == 0 else None
+    keep = _shot_cache(output_path, seed, move if part is None else f"{move}#0", prompt)
+    cached.append(keep)
+    try:
+        if keep.is_file():
+            logger.info("LTXV %s shot for %s already rendered - reusing %s.",
+                        move, Path(photo_path).name, keep.name)
+            shutil.copy2(keep, path)
+        else:
+            try:
+                if free:
+                    render_walk(photo_path, move, path, work, prompt, place)
+                else:
+                    render_shot(photo_path, move, path, work, prompt, place, part)
+            except WalkFailed as exc:
+                move, prompt, plan.preset, plan.halves, part, keep = _walk_fallback(
+                    exc, seed, i, duration_sec, output_path, plan.preset, plan.halves, part)
+                free = False
+                cached[-1] = keep
+                render_shot(photo_path, move, path, work, prompt, place, part)
+            _store_shot(path, keep)
+        shots.append(path)
+        if free:
+            _slow_walk(path, duration_sec)
+    except Exception as exc:
+        if i == 0:
+            raise
+        logger.warning("LTXV %s shot failed (%s: %s) - keeping the first shot only.",
+                       move, type(exc).__name__, exc)
+
+
 def generate_ltx_move(
     photo_path: str, output_path: str, camera_pan_hint, duration_sec: float = 0.0, place: Optional[str] = None,
 ) -> str:
@@ -789,79 +899,13 @@ def generate_ltx_move(
         shots, cached = [], []
         seed = _photo_seed(photo_path)
         # A share one half covers gets the whole move in one clip (as fast as before the halves).
-        halves = tuning.LTXV_CONTINUE and preset not in tuning.LTXV_FREE_MOVES and needs_second_half(duration_sec)
+        plan = _MovePlan(preset, tuning.LTXV_CONTINUE and preset not in tuning.LTXV_FREE_MOVES and needs_second_half(duration_sec))
         for i, move in enumerate(shot_list(preset, seed, photo_path)):
-            path = str(work / f"shot{i}.mp4")
-            free = move in tuning.LTXV_FREE_MOVES
-            prompt = prompt_for(move, seed) if free else prompt_for(move, seed, second=i > 0)
-            part = 0 if halves and i == 0 else None
-            keep = _shot_cache(output_path, seed, move if part is None else f"{move}#0", prompt)
-            cached.append(keep)
-            try:
-                if keep.is_file():
-                    logger.info("LTXV %s shot for %s already rendered - reusing %s.",
-                                move, Path(photo_path).name, keep.name)
-                    shutil.copy2(keep, path)
-                else:
-                    try:
-                        if free:
-                            render_walk(photo_path, move, path, work, prompt, place)
-                        else:
-                            render_shot(photo_path, move, path, work, prompt, place, part)
-                    except WalkFailed as exc:
-                        # Still LTX and still inside the photo: a dolly in instead of the walk.
-                        fallback = tuning.LTXV_WALK_FAILED_FALLBACK
-                        logger.warning("%s - LTXV %s instead.", exc, fallback)
-                        move, free = fallback, False
-                        prompt = prompt_for(move, seed)
-                        if tuning.LTXV_CONTINUE and i == 0 and needs_second_half(duration_sec):  # two halves, like any pinned move
-                            preset, halves, part = move, True, 0
-                        keep = _shot_cache(output_path, seed, move if part is None else f"{move}#0", prompt)
-                        cached[-1] = keep
-                        render_shot(photo_path, move, path, work, prompt, place, part)
-                    tmp = keep.with_name(keep.stem + ".tmp.mp4")
-                    shutil.copy2(path, tmp)
-                    os.replace(tmp, keep)
-                shots.append(path)
-                if free:
-                    # Only as slow as the narration needs: a short share keeps the walk's movement.
-                    from services.tts.ttsengine import FFmpegManager
-
-                    walk = FFmpegManager.get_media_duration(path) or 1.0
-                    slow_down(path, min(tuning.LTXV_WALK_SLOWDOWN, max(1.0, duration_sec / walk)))
-            except Exception as exc:
-                if i == 0:
-                    raise
-                logger.warning("LTXV %s shot failed (%s: %s) - keeping the first shot only.",
-                               move, type(exc).__name__, exc)
-        from services.tts.ttsengine import FFmpegManager
-
-        if halves:
-            path = str(work / "half1.mp4")
-            prompt = prompt_for(preset, seed)
-            keep = _shot_cache(output_path, seed, f"{preset}#1", prompt)
-            cached.append(keep)
-            try:
-                if keep.is_file():
-                    shutil.copy2(keep, path)
-                else:
-                    render_shot(photo_path, preset, path, work, prompt, place, part=1)
-                    tmp = keep.with_name(keep.stem + ".tmp.mp4")
-                    shutil.copy2(path, tmp)
-                    os.replace(tmp, keep)
-                result = join_halves(shots[0], path, output_path)
-                _write_first_shot_end(output_path, FFmpegManager.get_media_duration(result))
-                for keep in cached:
-                    keep.unlink(missing_ok=True)
+            _make_shot(photo_path, output_path, work, place, duration_sec, seed, i, move, plan, shots, cached)
+        if plan.halves:
+            result = _second_half(shots, work, plan.preset, seed, photo_path, output_path, place, cached)
+            if result is not None:
                 return result
-            except Exception as exc:
-                logger.warning("LTXV %s second half failed (%s: %s) - keeping the first half only.",
-                               preset, type(exc).__name__, exc)
-        result = crossfade(shots, output_path)
-        first = FFmpegManager.get_media_duration(shots[0])
-        _write_first_shot_end(output_path, first - tuning.LTXV_CROSSFADE_SECONDS if len(shots) > 1 else first)
-        for keep in cached:  # the photo clip is the checkpoint now
-            keep.unlink(missing_ok=True)
-        return result
+        return _crossfade_shots(shots, output_path, cached)
     finally:
         shutil.rmtree(work, ignore_errors=True)

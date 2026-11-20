@@ -22,7 +22,7 @@ import asyncio
 import math
 import os
 import tempfile
-from typing import Dict, List, Tuple
+from typing import Dict, List, NamedTuple, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -351,6 +351,35 @@ def capture_pydeck_zoom_sequence(
         target_zoom - (end_view[2] if end_view is not None else target_zoom),
     )
 
+    push = _ZoomPush(
+        base_zoom, target_zoom, end_view, (target_px, target_py), (end_target_px, end_target_py),
+        target_lat, target_lon, output_size,
+    )
+    view_states, extents = _zoom_push_view_states(push, num_frames)
+    raw_frames = _capture_zoom_raw(
+        (base_lon, base_lat, base_zoom), output_size, view_states, map_style, mapbox_key
+    )
+    return _decode_zoom_frames(raw_frames, extents, output_size)
+
+
+class _ZoomPush(NamedTuple):
+    """The ends of a zoom push (base zoom/pixel to end zoom/pixel) plus the target it keeps on screen."""
+    base_zoom: float
+    target_zoom: float
+    end_view: Optional[Tuple[float, float, float]]
+    target_px: Tuple[float, float]
+    end_target_px: Tuple[float, float]
+    target_lat: float
+    target_lon: float
+    output_size: Tuple[int, int]
+
+
+def _zoom_push_view_states(push: _ZoomPush, num_frames: int):
+    """Per-frame deck.gl view states and their extents for the eased push-in."""
+    base_zoom, target_zoom, end_view = push.base_zoom, push.target_zoom, push.end_view
+    target_px, target_py = push.target_px
+    end_target_px, end_target_py = push.end_target_px
+    target_lat, target_lon, output_size = push.target_lat, push.target_lon, push.output_size
     view_states: List[Tuple[float, float, float]] = []
     extents: List[Tuple[float, float, float, float]] = []
     for i in range(max(1, num_frames)):
@@ -359,23 +388,10 @@ def capture_pydeck_zoom_sequence(
         if end_view is not None:
             end_lon, end_lat, end_zoom = end_view
             zoom = base_zoom + (end_zoom - base_zoom) * t
-            # Interpolating the CENTER directly (straight line in lon/lat)
-            # does not keep the target on screen throughout: the frame's
-            # half-width shrinks roughly exponentially with zoom while a
-            # lon/lat-interpolated center only closes the gap to the
-            # target linearly, so early in the push (zoom already rising
-            # fast, pan barely started) the target's screen offset can
-            # exceed the frame and it visibly flies off-screen before
-            # coming back into frame near the end — reported as "the
-            # waypoint is out of frame" mid-zoom even though it's in frame
-            # at both the start (whole-route wide shot) and the chosen end
-            # framing. Interpolating the TARGET'S OWN SCREEN PIXEL instead
-            # (linearly, from its pixel in the base frame to its pixel in
-            # the end frame — both guaranteed on-screen) and solving for
-            # the center that puts it there at each zoom keeps it inside
-            # the frame at every step in between too, since a straight
-            # line between two in-bounds points never leaves the
-            # rectangle.
+            # [NOTE] Interpolating the CENTER in lon/lat flies the target off-screen early in the push (the
+            # frame shrinks exponentially with zoom, the center closes linearly). Interpolate the target's own
+            # SCREEN PIXEL (base to end, both on-screen) and solve for the center instead: a straight line
+            # between two in-bounds points never leaves the rectangle.
             px = target_px + (end_target_px - target_px) * t
             py = target_py + (end_target_py - target_py) * t
             c_lon, c_lat = _center_for_fixed_screen_point(
@@ -388,7 +404,15 @@ def capture_pydeck_zoom_sequence(
             )
         view_states.append((c_lon, c_lat, zoom))
         extents.append(_extent_for_view(c_lon, c_lat, zoom, output_size))
+    return view_states, extents
 
+
+def _capture_zoom_raw(
+    base_view: Tuple[float, float, float], output_size: Tuple[int, int],
+    view_states: List[Tuple[float, float, float]], map_style: str, mapbox_key: str | None,
+) -> List[bytes]:
+    """Renders one deck.gl screenshot (PNG bytes) per view state."""
+    base_lon, base_lat, base_zoom = base_view
     view_state = pdk.ViewState(
         longitude=base_lon, latitude=base_lat, zoom=base_zoom, pitch=0, bearing=0,
     )
@@ -407,20 +431,21 @@ def capture_pydeck_zoom_sequence(
         deck.to_html(html_path)
         patch_pydeck_html(html_path)
         asyncio.run(_capture_zoom_frames(html_path, html_dir, output_size, view_states, raw_frames))
+    return raw_frames
 
+
+def _decode_zoom_frames(
+    raw_frames: List[bytes], extents: List[Tuple[float, float, float, float]], output_size: Tuple[int, int],
+) -> List[Tuple[np.ndarray, Tuple[float, float, float, float]]]:
+    """Decodes the captures and shrinks them back to output_size.
+
+    [NOTE] _capture_zoom_frames captures at 2x (device_scale_factor); INTER_AREA downsampling turns that into
+    crisper text/edges, and every downstream consumer assumes exactly output_size pixels.
+    """
     out_w, out_h = output_size
     frames: List[Tuple[np.ndarray, Tuple[float, float, float, float]]] = []
     for data, ext in zip(raw_frames, extents):
         arr = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
-        # _capture_zoom_frames' browser context captures at 2x
-        # (device_scale_factor) for a genuinely sharper/retina-quality
-        # result — downsampling that back to the caller's actual
-        # output_size here (INTER_AREA: the right choice for shrinking,
-        # unlike the upscaling interpolations used elsewhere in this
-        # codebase) is what turns the extra captured resolution into
-        # crisper text/edges instead of just a bigger array; every
-        # downstream consumer (video frames, project_latlon_to_pixel
-        # against `ext`) already assumes exactly output_size pixels.
         if arr.shape[1] != out_w or arr.shape[0] != out_h:
             arr = cv2.resize(arr, (out_w, out_h), interpolation=cv2.INTER_AREA)
         frames.append((arr, ext))

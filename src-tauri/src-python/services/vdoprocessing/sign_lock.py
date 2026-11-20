@@ -17,6 +17,7 @@ import numpy as np
 from services import tuning
 from services.logger.logger import setup_logger
 from services.vdoprocessing.clip_qc import read_image
+from services.vdoprocessing.video_frames import raw_encoder_command, read_frames
 
 logger = setup_logger("SignLock")
 
@@ -234,6 +235,30 @@ def paste(frame: np.ndarray, photo: np.ndarray, rect: Rect, quad: np.ndarray, we
     return np.clip(base * (1 - a) + fit * a, 0, 255).astype(np.uint8)
 
 
+def _encode_locked(frames: list, photo: np.ndarray, tracks: list, fps: float, out_path: str) -> bool:
+    """Encodes the frames with the photo's signs pasted back into `out_path`; False (file removed) when ffmpeg fails."""
+    h, w = frames[0].shape[:2]
+    proc = subprocess.Popen(
+        raw_encoder_command(w, h, fps, out_path, 16), stdin=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    try:
+        for i, frame in enumerate(frames):
+            for rect, quads, weights in tracks:
+                if quads[i] is not None and weights[i] > 0:
+                    frame = paste(frame, photo, rect, quads[i], weights[i])
+            proc.stdin.write(frame.tobytes())
+        proc.stdin.close()
+        if proc.wait() != 0:
+            logger.warning("Sign lock encode failed: %s", proc.stderr.read().decode("utf-8", "replace"))
+            Path(out_path).unlink(missing_ok=True)
+            return False
+    except Exception:
+        proc.kill()
+        Path(out_path).unlink(missing_ok=True)
+        raise
+    return True
+
+
 def lock_signs(video_path: str, photo_path: str) -> bool:
     """Rewrites video_path in place with the photo's signs pasted back.
     Returns False (clip untouched) when off, nothing to lock, or on failure."""
@@ -247,15 +272,8 @@ def lock_signs(video_path: str, photo_path: str) -> bool:
         if not rects:
             logger.info("No signs found in %s.", Path(photo_path).name)
             return False
-        cap = cv2.VideoCapture(video_path)
-        fps = cap.get(cv2.CAP_PROP_FPS) or float(tuning.LTXV_FPS)
-        frames = []
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                break
-            frames.append(frame)
-        cap.release()
+        frames, fps = read_frames(video_path)
+        fps = fps or float(tuning.LTXV_FPS)
         if not frames:
             return False
 
@@ -267,34 +285,9 @@ def lock_signs(video_path: str, photo_path: str) -> bool:
         if not any(q is not None for _, quads, _ in tracks for q in quads):
             return False
 
-        from services.tts.ttsengine import FFmpegManager
-
-        h, w = frames[0].shape[:2]
         out_path = str(Path(video_path).with_suffix(".signlock.mp4"))
-        proc = subprocess.Popen(
-            [
-                FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_pipe_log_args(),
-                "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}", "-r", f"{fps:.3f}", "-i", "-",
-                "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "16", "-preset", "fast",
-                "-pix_fmt", "yuv420p", out_path,
-            ],
-            stdin=subprocess.PIPE, stderr=subprocess.PIPE,
-        )
-        try:
-            for i, frame in enumerate(frames):
-                for rect, quads, weights in tracks:
-                    if quads[i] is not None and weights[i] > 0:
-                        frame = paste(frame, photo, rect, quads[i], weights[i])
-                proc.stdin.write(frame.tobytes())
-            proc.stdin.close()
-            if proc.wait() != 0:
-                logger.warning("Sign lock encode failed: %s", proc.stderr.read().decode("utf-8", "replace"))
-                Path(out_path).unlink(missing_ok=True)
-                return False
-        except Exception:
-            proc.kill()
-            Path(out_path).unlink(missing_ok=True)
-            raise
+        if not _encode_locked(frames, photo, tracks, fps, out_path):
+            return False
         Path(out_path).replace(video_path)
         return True
     except Exception as exc:

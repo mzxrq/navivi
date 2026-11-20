@@ -15,6 +15,18 @@ from .glyphs import drawable
 # chip — how far the chip's near edge sits from the pin's anchor point.
 _LABEL_CHIP_GAP: Final[int] = 4
 
+# The flat ferry pictogram, in the same normalized 0..1 coordinates as icons.py's _draw_ship_icon: a slanted
+# bow pennant, a two-tier funnel, the deckhouse block and the wider hull trapezoid below it.
+_FERRY_SHAPES: Final = (
+    ((0.431, 0.250), (0.4625, 0.250), (0.369, 0.3375)),
+    ((0.621, 0.1875), (0.735, 0.1875), (0.735, 0.255), (0.621, 0.255)),
+    ((0.621, 0.271), (0.735, 0.271), (0.735, 0.3375), (0.621, 0.3375)),
+    ((0.294, 0.3375), (0.819, 0.3375), (0.819, 0.4375), (0.8625, 0.4375), (0.8625, 0.481), (0.95, 0.481),
+     (0.95, 0.5375), (0.156, 0.5375)),
+    ((0.0, 0.575), (1.0, 0.575), (0.8625, 0.8125), (0.1375, 0.8125)),
+)
+_FERRY_WINDOW_X: Final = (0.365, 0.4525, 0.54, 0.6275)  # the four square windows, along the deckhouse
+
 
 class _SpriteMixin:
     def prebake_landmark_sprite(
@@ -160,6 +172,34 @@ class _SpriteMixin:
         cache[key] = canvas
         return canvas
 
+    @staticmethod
+    def _vehicle_body(mode: str, size: int, cx: int, cy: int) -> np.ndarray:
+        """The vehicle's body polygon: an arrowhead for "airplane", a top-down rounded rectangle for a car."""
+        if mode == "airplane":
+            return np.array(
+                [
+                    [cx + int(size * 0.46), cy],
+                    [cx - int(size * 0.30), cy - int(size * 0.32)],
+                    [cx - int(size * 0.10), cy],
+                    [cx - int(size * 0.30), cy + int(size * 0.32)],
+                ],
+                dtype=np.int32,
+            )
+        # car / driving — top-down rounded-rectangle silhouette
+        return np.array(
+            [
+                [cx + int(size * 0.42), cy - int(size * 0.10)],
+                [cx + int(size * 0.32), cy - int(size * 0.22)],
+                [cx - int(size * 0.32), cy - int(size * 0.22)],
+                [cx - int(size * 0.42), cy - int(size * 0.10)],
+                [cx - int(size * 0.42), cy + int(size * 0.10)],
+                [cx - int(size * 0.32), cy + int(size * 0.22)],
+                [cx + int(size * 0.32), cy + int(size * 0.22)],
+                [cx + int(size * 0.42), cy + int(size * 0.10)],
+            ],
+            dtype=np.int32,
+        )
+
     def _get_vehicle_sprite(self, mode: str) -> np.ndarray:
         """Builds (and caches) a simple top-down vehicle silhouette pointing
         east (angle=0), for draw_transport_icon to rotate to heading. Not
@@ -173,31 +213,7 @@ class _SpriteMixin:
         color = (*self.MODE_COLORS.get(mode, self.marker_color), 255)
         white = (255, 255, 255, 255)
         cx, cy = size // 2, size // 2
-
-        if mode == "airplane":
-            body = np.array(
-                [
-                    [cx + int(size * 0.46), cy],
-                    [cx - int(size * 0.30), cy - int(size * 0.32)],
-                    [cx - int(size * 0.10), cy],
-                    [cx - int(size * 0.30), cy + int(size * 0.32)],
-                ],
-                dtype=np.int32,
-            )
-        else:  # car / driving — top-down rounded-rectangle silhouette
-            body = np.array(
-                [
-                    [cx + int(size * 0.42), cy - int(size * 0.10)],
-                    [cx + int(size * 0.32), cy - int(size * 0.22)],
-                    [cx - int(size * 0.32), cy - int(size * 0.22)],
-                    [cx - int(size * 0.42), cy - int(size * 0.10)],
-                    [cx - int(size * 0.42), cy + int(size * 0.10)],
-                    [cx - int(size * 0.32), cy + int(size * 0.22)],
-                    [cx + int(size * 0.32), cy + int(size * 0.22)],
-                    [cx + int(size * 0.42), cy + int(size * 0.10)],
-                ],
-                dtype=np.int32,
-            )
+        body = self._vehicle_body(mode, size, cx, cy)
 
         # [NOTE] [Animation] Draws a white halo by scaling the same body polygon up 22% from its own centroid, then draws the real (smaller) colored body on top — cheaper than a stroke/outline pass and keeps the halo's shape identical to the body's.
         outline = ((body - [cx, cy]) * 1.22 + [cx, cy]).astype(np.int32)
@@ -251,41 +267,7 @@ class _SpriteMixin:
             return (cx + (nx - 0.5) * size * scale, cy + (ny - 0.5) * size * scale)
 
         def polys(scale: float):
-            return [
-                np.array(
-                    [pt(0.431, 0.250, scale), pt(0.4625, 0.250, scale), pt(0.369, 0.3375, scale)],
-                    dtype=np.int32,
-                ),
-                np.array(
-                    [
-                        pt(0.621, 0.1875, scale), pt(0.735, 0.1875, scale),
-                        pt(0.735, 0.255, scale), pt(0.621, 0.255, scale),
-                    ],
-                    dtype=np.int32,
-                ),
-                np.array(
-                    [
-                        pt(0.621, 0.271, scale), pt(0.735, 0.271, scale),
-                        pt(0.735, 0.3375, scale), pt(0.621, 0.3375, scale),
-                    ],
-                    dtype=np.int32,
-                ),
-                np.array(
-                    [
-                        pt(0.294, 0.3375, scale), pt(0.819, 0.3375, scale), pt(0.819, 0.4375, scale),
-                        pt(0.8625, 0.4375, scale), pt(0.8625, 0.481, scale), pt(0.95, 0.481, scale),
-                        pt(0.95, 0.5375, scale), pt(0.156, 0.5375, scale),
-                    ],
-                    dtype=np.int32,
-                ),
-                np.array(
-                    [
-                        pt(0.0, 0.575, scale), pt(1.0, 0.575, scale),
-                        pt(0.8625, 0.8125, scale), pt(0.1375, 0.8125, scale),
-                    ],
-                    dtype=np.int32,
-                ),
-            ]
+            return [np.array([pt(nx, ny, scale) for nx, ny in shape], dtype=np.int32) for shape in _FERRY_SHAPES]
 
         # Halo first (scaled up 15% from the sprite's own center, same
         # trick _get_vehicle_sprite uses), then the real silhouette on top.
@@ -296,7 +278,7 @@ class _SpriteMixin:
 
         win = 0.045 * size
         win_y = pt(0, 0.4375)[1]
-        for wx_n in (0.365, 0.4525, 0.54, 0.6275):
+        for wx_n in _FERRY_WINDOW_X:
             wx = pt(wx_n, 0)[0]
             cv2.rectangle(
                 canvas,

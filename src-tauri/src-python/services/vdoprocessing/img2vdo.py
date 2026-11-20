@@ -13,6 +13,7 @@ import os
 import json
 import shutil
 import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final, List, Optional, Tuple, Union
 
@@ -25,6 +26,43 @@ from services.vdoprocessing.videopipeline.helpers import output_is_valid, projec
 
 # Logging configuration
 logger = setup_logger("AttractionVideoGenerator")
+
+
+def _remove_quietly(path) -> None:
+    """Deletes `path` when it exists; a file that cannot be deleted is left alone."""
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+@dataclass
+class _ClipPlan:
+    """What one stop's clip is built from.
+
+    The stop's own footage comes first, then its photos; `sources`, `is_video`, `prompts`, `pans` and `keys`
+    run in parallel over both.
+    """
+
+    image_list: List[str]  # the photos left after the footage took the first ones
+    prompt_list: List[str]
+    video_list: List[str]
+    keep_sound: List[bool]  # per video: keep its own sound
+    ai_flags: Optional[List[bool]]  # per photo: animate it with ComfyUI
+    sources: List[str] = field(default_factory=list)
+    is_video: List[bool] = field(default_factory=list)
+    prompts: List[str] = field(default_factory=list)
+    pans: List[str] = field(default_factory=list)
+    keys: List[str] = field(default_factory=list)
+
+    @property
+    def video_count(self) -> int:
+        return len(self.video_list)
+
+    def ai_for(self, photo_index: int) -> Optional[bool]:
+        """Photo `photo_index`'s own ComfyUI tick, or None when it has none."""
+        return self.ai_flags[photo_index] if self.ai_flags and photo_index < len(self.ai_flags) else None
 
 
 # [NOTE] [Animation] AttractionVideoGenerator manages Image-to-Video generation and synchronization for attractions.
@@ -360,44 +398,63 @@ class AttractionVideoGenerator:
             return self._parallax_clip(local_image_path, str(save_path), duration_sec, prompt_text)
 
         if normalize_camera_pan(prompt_text) in tuning.ATTRACTION_JUMP_CUT_PRESETS:
-            from services.vdoprocessing.jump_cut import generate_jump_cut, upscaled_photo
-
-            photo = upscaled_photo(local_image_path, getattr(self.config, "config_path", None))
-            if tuning.ATTRACTION_ZOOM_STYLE == "dolly":
-                return self._parallax_clip(photo, str(save_path), duration_sec, prompt_text)
-            return generate_jump_cut(photo, str(save_path), duration_sec, normalize_camera_pan(prompt_text))
+            return self._jump_cut_clip(local_image_path, str(save_path), duration_sec, prompt_text)
 
         if normalize_camera_pan(prompt_text) in tuning.ATTRACTION_LTX_PRESETS:
-            from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
-            from services.vdoprocessing.ltx_keyframed import generate_ltx_move
-
-            for attempt in range(1, tuning.LTXV_CLIP_ATTEMPTS + 1):
-                try:
-                    return generate_ltx_move(local_image_path, str(save_path), prompt_text, duration_sec, place)
-                except Exception as exc:
-                    last = attempt == tuning.LTXV_CLIP_ATTEMPTS
-                    logger.warning(
-                        "LTXV clip failed for %s (%s: %s) - %s.", local_image_path, type(exc).__name__, exc,
-                        "3D photo instead" if last else f"trying again on a fresh server ({attempt}/{tuning.LTXV_CLIP_ATTEMPTS})",
-                        exc_info=last,
-                    )
-                    if not last:
-                        ComfyUII2VClient.stop_server()
-            return self._parallax_clip(local_image_path, str(save_path), duration_sec, prompt_text)
+            return self._ltx_clip(local_image_path, str(save_path), duration_sec, prompt_text, place)
 
         if tuning.ATTRACTION_GENERATOR in ("shots", "parallax"):
-            if tuning.ATTRACTION_GENERATOR == "shots":
-                from services.vdoprocessing.shot_builder import build_shots
+            return self._shots_clip(local_image_path, str(save_path), duration_sec, prompt_text)
 
-                try:
-                    return build_shots(local_image_path, str(save_path), duration_sec, prompt_text)
-                except Exception as exc:
-                    logger.warning(
-                        "Shot building failed for %s (%s: %s) - parallax only.",
-                        local_image_path, type(exc).__name__, exc,
-                    )
-            return self._parallax_clip(local_image_path, str(save_path), duration_sec, prompt_text)
+        return self._wan_clip(local_image_path, str(save_path), duration_sec, prompt_text)
 
+    def _jump_cut_clip(self, local_image_path: str, save_path: str, duration_sec: float, prompt_text: str) -> Optional[str]:
+        """Zoom In / Zoom Out as a jump cut (or, in the "dolly" style, a 3D photo move)."""
+        from services.vdoprocessing.camera_pan import normalize_camera_pan
+        from services.vdoprocessing.jump_cut import generate_jump_cut, upscaled_photo
+
+        photo = upscaled_photo(local_image_path, getattr(self.config, "config_path", None))
+        if tuning.ATTRACTION_ZOOM_STYLE == "dolly":
+            return self._parallax_clip(photo, save_path, duration_sec, prompt_text)
+        return generate_jump_cut(photo, save_path, duration_sec, normalize_camera_pan(prompt_text))
+
+    def _ltx_clip(
+        self, local_image_path: str, save_path: str, duration_sec: float, prompt_text: str, place: Optional[str],
+    ) -> Optional[str]:
+        """An LTXV camera move, tried again on a fresh server when it fails, then the 3D photo."""
+        from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
+        from services.vdoprocessing.ltx_keyframed import generate_ltx_move
+
+        for attempt in range(1, tuning.LTXV_CLIP_ATTEMPTS + 1):
+            try:
+                return generate_ltx_move(local_image_path, save_path, prompt_text, duration_sec, place)
+            except Exception as exc:
+                last = attempt == tuning.LTXV_CLIP_ATTEMPTS
+                logger.warning(
+                    "LTXV clip failed for %s (%s: %s) - %s.", local_image_path, type(exc).__name__, exc,
+                    "3D photo instead" if last else f"trying again on a fresh server ({attempt}/{tuning.LTXV_CLIP_ATTEMPTS})",
+                    exc_info=last,
+                )
+                if not last:
+                    ComfyUII2VClient.stop_server()
+        return self._parallax_clip(local_image_path, save_path, duration_sec, prompt_text)
+
+    def _shots_clip(self, local_image_path: str, save_path: str, duration_sec: float, prompt_text: str) -> Optional[str]:
+        """Wan shots from the photo (settings "shots"), or the 3D photo ("parallax" / when shot building fails)."""
+        if tuning.ATTRACTION_GENERATOR == "shots":
+            from services.vdoprocessing.shot_builder import build_shots
+
+            try:
+                return build_shots(local_image_path, save_path, duration_sec, prompt_text)
+            except Exception as exc:
+                logger.warning(
+                    "Shot building failed for %s (%s: %s) - parallax only.",
+                    local_image_path, type(exc).__name__, exc,
+                )
+        return self._parallax_clip(local_image_path, save_path, duration_sec, prompt_text)
+
+    def _wan_clip(self, local_image_path: str, save_path: str, duration_sec: float, prompt_text: str) -> Optional[str]:
+        """A Wan2.2 clip from ComfyUI, its colors matched back to the photo; the 3D photo when ComfyUI fails."""
         from services.gpu_cooldown import wait_for_gpu_cooldown
         from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
 
@@ -406,7 +463,7 @@ class AttractionVideoGenerator:
         try:
             ComfyUII2VClient().generate_clip(
                 image_path=local_image_path,
-                output_path=str(save_path),
+                output_path=save_path,
                 duration_sec=duration_sec,
                 camera_pan_hint=prompt_text,
             )
@@ -421,10 +478,10 @@ class AttractionVideoGenerator:
             # between segments); put the photo's own colours back.
             from services.vdoprocessing.color_match import match_clip_to_photo
 
-            match_clip_to_photo(str(save_path), local_image_path)
-            return str(save_path)
+            match_clip_to_photo(save_path, local_image_path)
+            return save_path
 
-        return self._parallax_clip(local_image_path, str(save_path), duration_sec, prompt_text)
+        return self._parallax_clip(local_image_path, save_path, duration_sec, prompt_text)
 
     def _cpu_only(self, ai: Optional[bool] = None) -> bool:
         """settings.photo_clip_engine "cpu": no ComfyUI, the 3D photo move for every preset.
@@ -552,32 +609,10 @@ class AttractionVideoGenerator:
         trim_to, hold_to = self._resolve_duration_fit(
             video_path, target_audio_duration, overshoot_tolerance, generation_cap
         )
-        # A moving preset whose Wan clip falls short (the segment cap) keeps
-        # moving via slow_move.py instead of freezing; see _fill_with_slow_move.
-        from services.tts.ttsengine import FFmpegManager
-        from services.vdoprocessing.slow_move import extend_with_slow_move, is_moving_preset
-
         moved_path = self.output_dir / f"moved_{Path(output_filename).stem}.mp4"
-        on_photo = self._end_on_photo(video_path, target_audio_duration, camera_pan, photo_path, moved_path)
-        if on_photo:
-            video_path = on_photo
-            trim_to, hold_to = self._resolve_duration_fit(
-                video_path, target_audio_duration, overshoot_tolerance, generation_cap=False
-            )
-        elif (
-            hold_to is not None and target_audio_duration > 0 and is_moving_preset(camera_pan)
-            and self._fill_with_slow_move(
-                target_audio_duration - FFmpegManager.get_media_duration(video_path)
-            )
-        ):
-            moved = extend_with_slow_move(
-                video_path, target_audio_duration, camera_pan, str(moved_path), photo_path=photo_path,
-            )
-            if moved:
-                video_path = moved
-                trim_to, hold_to = self._resolve_duration_fit(
-                    video_path, target_audio_duration, overshoot_tolerance, generation_cap=False
-                )
+        video_path, trim_to, hold_to = self._extend_short_clip(
+            video_path, trim_to, hold_to, target_audio_duration, overshoot_tolerance, camera_pan, photo_path, moved_path
+        )
 
         final_path = self.output_dir / output_filename
         work_path = self._partial_path(final_path)
@@ -625,6 +660,41 @@ class AttractionVideoGenerator:
             moved_path.unlink(missing_ok=True)
             work_path.unlink(missing_ok=True)
 
+    def _extend_short_clip(
+        self, video_path: str, trim_to: Optional[float], hold_to: Optional[float], target_audio_duration: float,
+        overshoot_tolerance: float, camera_pan, photo_path: Optional[str], moved_path: Path,
+    ) -> Tuple[str, Optional[float], Optional[float]]:
+        """(clip, trim_to, hold_to) after ending the clip on its photo, or letting a moving preset
+        keep moving where its clip falls short, instead of freezing the last frame.
+
+        A moving preset whose Wan clip falls short (the segment cap) keeps
+        moving via slow_move.py instead of freezing; see _fill_with_slow_move.
+        """
+        from services.tts.ttsengine import FFmpegManager
+        from services.vdoprocessing.slow_move import extend_with_slow_move, is_moving_preset
+
+        on_photo = self._end_on_photo(video_path, target_audio_duration, camera_pan, photo_path, moved_path)
+        if on_photo:
+            video_path = on_photo
+            trim_to, hold_to = self._resolve_duration_fit(
+                video_path, target_audio_duration, overshoot_tolerance, generation_cap=False
+            )
+        elif (
+            hold_to is not None and target_audio_duration > 0 and is_moving_preset(camera_pan)
+            and self._fill_with_slow_move(
+                target_audio_duration - FFmpegManager.get_media_duration(video_path)
+            )
+        ):
+            moved = extend_with_slow_move(
+                video_path, target_audio_duration, camera_pan, str(moved_path), photo_path=photo_path,
+            )
+            if moved:
+                video_path = moved
+                trim_to, hold_to = self._resolve_duration_fit(
+                    video_path, target_audio_duration, overshoot_tolerance, generation_cap=False
+                )
+        return video_path, trim_to, hold_to
+
     # [Core] Slow-path fallback for _fit_and_finalize: the original
     # three-separate-ffmpeg-passes implementation, kept so a fused-pass
     # failure (e.g. an unusual filter-graph edge case) degrades to something
@@ -638,6 +708,15 @@ class AttractionVideoGenerator:
         final_path: Path,
         place_label: Optional[str] = None,
     ) -> str:
+        self._fit_stage(video_path, trim_to, hold_to, final_path)
+        final_output = str(final_path)
+        self._upscale_stage(final_output)
+        if place_label:
+            self._label_stage(final_output, place_label)
+        return final_output
+
+    def _fit_stage(self, video_path: str, trim_to: Optional[float], hold_to: Optional[float], final_path: Path) -> None:
+        """Stagewise fallback, stage 1: the clip trimmed or held to its length, copied to `final_path`."""
         temp_fitted_video: Optional[str] = None
         if trim_to is not None:
             trimmed_name = f"temp_trimmed_{uuid.uuid4().hex[:8]}.mp4"
@@ -667,13 +746,11 @@ class AttractionVideoGenerator:
             # temp_trimmed_*/temp_scaled_* was copied from, not moved —
             # without this it's left behind on disk permanently every time
             # this fallback path runs.
-            if temp_fitted_video and os.path.exists(temp_fitted_video):
-                try:
-                    os.remove(temp_fitted_video)
-                except OSError:
-                    pass
-        final_output = str(final_path)
+            if temp_fitted_video:
+                _remove_quietly(temp_fitted_video)
 
+    def _upscale_stage(self, final_output: str) -> None:
+        """Stagewise fallback, stage 2: the clip scaled up in place; a failure keeps the original resolution."""
         try:
             upscale_tmp = str(
                 Path(final_output).with_name(f"upscaled_{uuid.uuid4().hex[:6]}.mp4")
@@ -692,25 +769,25 @@ class AttractionVideoGenerator:
                 exc,
             )
 
-        if place_label:
-            try:
-                labeled_tmp = str(
-                    Path(final_output).with_name(f"labeled_{uuid.uuid4().hex[:6]}.mp4")
-                )
-                VideoExporter.burn_static_label(
-                    input_video_path=final_output,
-                    text=place_label,
-                    output_video_path=labeled_tmp,
-                )
-                os.replace(labeled_tmp, final_output)
-            except Exception as exc:
-                logger.warning(
-                    "Place-name label burn failed for %s (%s) — keeping clip unlabeled.",
-                    final_output,
-                    exc,
-                )
-
-        return final_output
+    @staticmethod
+    def _label_stage(final_output: str, place_label: str) -> None:
+        """Stagewise fallback, stage 3: the place name burned in place; a failure keeps the clip unlabeled."""
+        try:
+            labeled_tmp = str(
+                Path(final_output).with_name(f"labeled_{uuid.uuid4().hex[:6]}.mp4")
+            )
+            VideoExporter.burn_static_label(
+                input_video_path=final_output,
+                text=place_label,
+                output_video_path=labeled_tmp,
+            )
+            os.replace(labeled_tmp, final_output)
+        except Exception as exc:
+            logger.warning(
+                "Place-name label burn failed for %s (%s) — keeping clip unlabeled.",
+                final_output,
+                exc,
+            )
 
     # [NOTE] [Animation] Combines previously-generated attraction clips into
     # one waypoint video, once the frontend has reviewed and approved them.
@@ -758,25 +835,13 @@ class AttractionVideoGenerator:
             # temp_concat_* was only ever an intermediate input to
             # _fit_and_finalize, never cleaned up afterward — leaked to disk
             # on every multi-clip finalize otherwise.
-            if temp_combined_video and os.path.exists(temp_combined_video):
-                try:
-                    os.remove(temp_combined_video)
-                except OSError:
-                    pass
+            if temp_combined_video:
+                _remove_quietly(temp_combined_video)
 
         for clip in valid_clips:
-            if os.path.exists(clip) and clip != final_output:
-                try:
-                    os.remove(clip)
-                except OSError:
-                    pass
-
-        manifest_path = self._pending_manifest_path(output_filename)
-        if manifest_path.exists():
-            try:
-                manifest_path.unlink()
-            except OSError:
-                pass
+            if clip != final_output:
+                _remove_quietly(clip)
+        _remove_quietly(self._pending_manifest_path(output_filename))
 
         logger.info(f"Waypoint video deliverable complete (finalized): {final_output}")
         return final_output
@@ -862,6 +927,26 @@ class AttractionVideoGenerator:
             tuning.COMFYUI_FPS,
         )
 
+    def _fit_to_shares(
+        self, clips: List[str], presets: List, share: Optional[float], shares: Optional[List[float]],
+        photos: Optional[List[str]], stem: str, temps: List[str],
+    ) -> List[str]:
+        """Each clip fitted to its share of the narration (the clip itself when there is no narration yet);
+        the files made on the way are added to `temps` for the caller to delete."""
+        fitted = []
+        for i, (clip, preset) in enumerate(zip(clips, presets)):
+            if share is None:
+                fitted.append(clip)
+                continue
+            path = self._fit_clip_to_share(
+                clip, shares[i] if shares else share, preset, self.output_dir / f"share_{stem}_{i:02d}.mp4",
+                photo_path=photos[i] if photos else None,
+            )
+            if path != clip:
+                temps.append(path)
+            fitted.append(path)
+        return fitted
+
     def _combine_clips(
         self,
         clips: List[str],
@@ -879,18 +964,7 @@ class AttractionVideoGenerator:
         share = target_audio_duration / len(clips) if target_audio_duration > 0 else None
         temps: List[str] = []
         try:
-            fitted = []
-            for i, (clip, preset) in enumerate(zip(clips, presets)):
-                if share is None:
-                    fitted.append(clip)
-                    continue
-                path = self._fit_clip_to_share(
-                    clip, shares[i] if shares else share, preset, self.output_dir / f"share_{stem}_{i:02d}.mp4",
-                    photo_path=photos[i] if photos else None,
-                )
-                if path != clip:
-                    temps.append(path)
-                fitted.append(path)
+            fitted = self._fit_to_shares(clips, presets, share, shares, photos, stem, temps)
             combined = str(self.output_dir / f"combined_{stem}.mp4")
             temps.append(combined)
             self._concat_reencoded(fitted, combined)
@@ -914,6 +988,240 @@ class AttractionVideoGenerator:
 
         # Raw photo clips are kept: a later run reuses unchanged photos.
         self._pending_manifest_path(output_filename).unlink(missing_ok=True)
+        logger.info(f"Waypoint video deliverable complete: {final_output}")
+        return final_output
+
+    @staticmethod
+    def _existing_images(popup_image_entry: Union[str, List[str]]) -> Optional[List[str]]:
+        """The photos of the entry (a list or one path) that exist on disk; None when the entry is invalid."""
+        if isinstance(popup_image_entry, list):
+            return [img for img in popup_image_entry if img and os.path.exists(img)]
+        if isinstance(popup_image_entry, str) and os.path.exists(popup_image_entry):
+            return [popup_image_entry]
+        logger.error(f"Invalid image entry: {popup_image_entry}")
+        return None
+
+    def _clip_plan(
+        self, image_list: List[str], prompt_text: Union[str, List[str]], videos: Optional[List[str]],
+        video_sound: Optional[List[bool]], ai_flags: Optional[List[bool]],
+    ) -> "_ClipPlan":
+        """What the stop's clip is built from: its own footage first, then its photos, each with a prompt,
+        camera preset and cache key."""
+        # The stop's own footage takes the place of its first photos (1 video + 3 photos = the footage, then photos
+        # 2 and 3) and plays first; the rest of the clip is built from the photos that are left.
+        video_list = [v for v in (videos or []) if v and os.path.exists(v)]
+        keep_sound = [bool(video_sound[i]) if video_sound and i < len(video_sound) else False
+                      for i in range(len(video_list))]
+        if video_list:
+            per_photo = isinstance(prompt_text, list) and len(prompt_text) == len(image_list)
+            image_list = image_list[len(video_list):]
+            prompt_text = prompt_text[len(video_list):] if per_photo else prompt_text
+            ai_flags = ai_flags[len(video_list):] if ai_flags else ai_flags
+
+        # "Sharpen photos": ComfyUI animates the sharpened copy (its clip key follows the new file).
+        from services.config.upscaled_images import upscale_enabled
+
+        config_path = getattr(self.config, "config_path", None)
+        if config_path is not None and upscale_enabled(self.config.get_settings() or {}):
+            from services.vdoprocessing.photo_sharpen import sharpened_photo
+
+            image_list = [sharpened_photo(img, Path(config_path).parent) for img in image_list]
+
+        if isinstance(prompt_text, str):
+            prompt_list = [prompt_text]
+        elif isinstance(prompt_text, list):
+            prompt_list = prompt_text
+        else:
+            prompt_list = [""]
+
+        from services.vdoprocessing.camera_pan import STILL_PRESET, normalize_camera_pan
+
+        pans = [
+            normalize_camera_pan(prompt_list[min(i, len(prompt_list) - 1)] if prompt_list else "")
+            for i in range(len(image_list))
+        ]
+        plan = _ClipPlan(image_list=image_list, prompt_list=prompt_list, video_list=video_list,
+                         keep_sound=keep_sound, ai_flags=ai_flags)
+
+        # A CPU-only clip is another clip than the AI one: switching the setting (or one photo's own tick) makes
+        # that photo's move again, and only that one.
+        cpu_of = [self._cpu_only(plan.ai_for(i)) for i in range(len(image_list))]
+        keys = [
+            self._clip_key(img, pan) + ("c3" if cpu_of[i] and pan != STILL_PRESET else "")
+            for i, (img, pan) in enumerate(zip(image_list, pans))
+        ]
+        # Footage is one more clip of the same stop: the same share split, one fit and one label for the whole
+        # thing. Keyed by the file itself, so it is only normalised once.
+        plan.sources = [*video_list, *image_list]
+        plan.is_video = [True] * len(video_list) + [False] * len(image_list)
+        plan.prompts = [STILL_PRESET] * len(video_list) + [
+            prompt_list[idx] if idx < len(prompt_list) else (prompt_list[-1] if prompt_list else "")
+            for idx in range(len(image_list))
+        ]
+        plan.pans = [STILL_PRESET] * len(video_list) + pans
+        plan.keys = [self._video_key(v) for v in video_list] + keys
+        return plan
+
+    @staticmethod
+    def _inputs_changed(recorded: dict, keys: List[str], pans: List[str], output_filename: str) -> bool:
+        """Whether the photos or camera presets differ from the ones the deliverable was made from."""
+        if "keys" in recorded:
+            changed = recorded["keys"] != keys
+        elif "pans" in recorded:
+            changed = recorded["pans"] != pans
+        else:
+            changed = False  # made before this check: keep it, adopt current inputs
+        if changed:
+            logger.info(
+                "Photos or camera presets changed for %s — rebuilding it "
+                "(unchanged photos reuse their clips).", output_filename,
+            )
+        return changed
+
+    def _checkpoint(
+        self, final_path: Path, recorded: dict, cuts: Optional[List[float]], keys: List[str], pans: List[str],
+        output_filename: str, target_audio_duration: float,
+    ) -> Tuple[Optional[str], bool]:
+        """(the finished deliverable's path when it is still good, whether it only needs a refit)."""
+        # A changed tail style or {next} cue refits from the kept clips (CPU only), like a narration change.
+        tail_changed = "keys" in recorded and recorded.get("tail") != self._tail_signature()
+        tail_changed = tail_changed or ("keys" in recorded and recorded.get("cuts") != cuts)
+        if not tail_changed and self._fits_narration(final_path, recorded, target_audio_duration):
+            if "keys" not in recorded:
+                self._write_inputs(output_filename, keys, pans)
+            logger.info(
+                "Waypoint deliverable already exists — skipping generation: %s",
+                final_path,
+            )
+            return str(final_path), False
+        logger.info(
+            "Refitting %s to its %.1fs narration from the kept photo clips "
+            "(nothing is generated again).", output_filename, target_audio_duration,
+        )
+        return None, True
+
+    def _prepare_raw_clips(
+        self, output_filename: str, stem: str, keys: List[str], pans: List[str], recorded: dict, force: bool,
+    ) -> None:
+        """Rebuilding: drops the old deliverable/pending manifest. Raw photo clips stay for reuse, unless force=True."""
+        self._clear_stale_outputs(output_filename)
+        if force:
+            for stale_raw in self.output_dir.glob(f"raw_{stem}_*.mp4"):
+                try:
+                    stale_raw.unlink()
+                    Path(str(stale_raw) + ".signlock").unlink(missing_ok=True)
+                except OSError:
+                    pass
+        else:
+            self._migrate_index_named_raws(stem, keys, pans, recorded.get("pans"))
+            self._adopt_raws_by_key(stem, keys)
+
+    def _render_raw(
+        self, plan: "_ClipPlan", idx: int, raw_work: Path, per_clip_duration: float, place_label: Optional[str],
+    ) -> Optional[str]:
+        """Renders one source (the stop's footage or one photo) into `raw_work`; the clip's path, or None on failure."""
+        if plan.is_video[idx]:
+            from services.vdoprocessing.user_videos import normalise_video
+
+            return str(raw_work) if normalise_video(plan.sources[idx], str(raw_work)) else None
+        return self._generate_single_clip(
+            plan.sources[idx], plan.prompts[idx], per_clip_duration, save_path=str(raw_work), place=place_label,
+            ai=plan.ai_for(idx - plan.video_count),
+        )
+
+    def _raw_clip_for(
+        self, plan: "_ClipPlan", idx: int, stem: str, per_clip_duration: float, requested_by_key: dict,
+        force: bool, place_label: Optional[str],
+    ) -> Optional[str]:
+        """The raw clip of source `idx`: the kept one when it still covers its share, else a new render.
+        None when the render failed. `requested_by_key` records the length asked for a new render."""
+        key, img_path = plan.keys[idx], plan.sources[idx]
+        raw_clip_path = self.output_dir / f"raw_{stem}_{key}.mp4"
+        if not force and self._raw_clip_covers(raw_clip_path, requested_by_key.get(key), per_clip_duration):
+            logger.info(
+                "   -> Image %d/%d already rendered — reusing %s",
+                idx + 1, len(plan.sources), raw_clip_path,
+            )
+            if not plan.is_video[idx]:
+                self._lock_signs(str(raw_clip_path), img_path, plan.pans[idx])
+            return str(raw_clip_path)
+
+        # Rendered aside and swapped in only when done: a kept clip survives a cancel.
+        raw_work = self._partial_path(raw_clip_path)
+        raw_work.unlink(missing_ok=True)
+        logger.info(
+            f"   -> Rendering clip {idx + 1}/{len(plan.sources)}: {img_path} with prompt: '{plan.prompts[idx]}'"
+        )
+        clip = self._render_raw(plan, idx, raw_work, per_clip_duration, place_label)
+        if not (clip and os.path.exists(clip)):
+            raw_work.unlink(missing_ok=True)
+            return None
+        Path(str(raw_clip_path) + ".signlock").unlink(missing_ok=True)
+        Path(str(raw_clip_path) + ".shots.json").unlink(missing_ok=True)
+        if os.path.exists(clip + ".shots.json"):
+            os.replace(clip + ".shots.json", str(raw_clip_path) + ".shots.json")
+        os.replace(clip, raw_clip_path)
+        clip = str(raw_clip_path)
+        if not plan.is_video[idx]:
+            self._lock_signs(clip, img_path, plan.pans[idx])
+        requested_by_key[key] = per_clip_duration
+        return clip
+
+    def _render_raw_clips(
+        self, plan: "_ClipPlan", stem: str, shares: Optional[List[float]], target_audio_duration: float,
+        requested_by_key: dict, force: bool, place_label: Optional[str],
+    ) -> Tuple[List[str], List[str], List[str]]:
+        """(raw clips, their presets, their keys) for every source that got a clip."""
+        # Split the target narration duration evenly across multiple images
+        # in one waypoint (so the concatenated result lands near the target
+        # instead of badly overshooting); fall back to a reasonable default
+        # when there's no narration yet to size against.
+        # No narration: one normal Wan generation per photo (a single
+        # COMFYUI_MAX_FRAMES segment, ~3.7s), no extension.
+        default_clip_seconds = tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_GEN_FPS
+        equal_share = min(
+            (target_audio_duration / len(plan.sources)) if target_audio_duration > 0 else default_clip_seconds,
+            self._MAX_EXTENDED_CLIP_SECONDS,
+        )
+        generated_clips: List[str] = []
+        clip_presets: List[str] = []
+        built_keys: List[str] = []
+        for idx in range(len(plan.sources)):
+            per_clip_duration = min(shares[idx], self._MAX_EXTENDED_CLIP_SECONDS) if shares else equal_share
+            clip = self._raw_clip_for(plan, idx, stem, per_clip_duration, requested_by_key, force, place_label)
+            if clip:
+                generated_clips.append(clip)
+                clip_presets.append(plan.prompts[idx])
+                built_keys.append(plan.keys[idx])
+        return generated_clips, clip_presets, built_keys
+
+    def _assemble_deliverable(
+        self, plan: "_ClipPlan", generated_clips: List[str], clip_presets: List[str], built_keys: List[str],
+        shares: Optional[List[float]], target_audio_duration: float, output_filename: str, place_label: Optional[str],
+    ) -> Optional[str]:
+        """Several clips are combined in order, each photo taking its share of the narration, so the whole clip
+        lasts as long as the narration; a single one is fitted, placed at output_filename and upscaled.
+
+        (It used to be parked for an approval step nothing in the app ever triggers, so these waypoints had no
+        attraction video at all.) Narration audio is NOT muxed in here — see process_attraction_video.
+        """
+        at = [plan.keys.index(k) for k in built_keys]
+        if len(generated_clips) > 1:
+            return self._combine_clips(
+                generated_clips, clip_presets, target_audio_duration, output_filename, place_label,
+                photos=[None if plan.is_video[i] else plan.sources[i] for i in at],
+                shares=[shares[i] for i in at] if shares and len(built_keys) == len(plan.keys) else None,
+            )
+        final_output = self._fit_and_finalize(
+            generated_clips[0],
+            target_audio_duration,
+            output_filename,
+            overshoot_tolerance=self._AUDIO_DURATION_TOLERANCE_SECONDS,
+            place_label=place_label,
+            camera_pan=clip_presets[0],
+            photo_path=None if plan.is_video[at[0]] else plan.sources[at[0]],
+            generated_pan=None if plan.is_video[at[0]] else clip_presets[0],
+        )
         logger.info(f"Waypoint video deliverable complete: {final_output}")
         return final_output
 
@@ -962,250 +1270,72 @@ class AttractionVideoGenerator:
         if not popup_image_entry:
             logger.warning("No popup image provided for waypoint.")
             return None
-
-        # --- Check list vs string for images ---
-        if isinstance(popup_image_entry, list):
-            image_list = [
-                img for img in popup_image_entry if img and os.path.exists(img)
-            ]
-        elif isinstance(popup_image_entry, str) and os.path.exists(popup_image_entry):
-            image_list = [popup_image_entry]
-        else:
-            logger.error(f"Invalid image entry: {popup_image_entry}")
-            return None
-
+        image_list = self._existing_images(popup_image_entry)
         if not image_list:
             return None
-
-        # The stop's own footage takes the place of its first photos (1 video + 3 photos = the footage, then photos
-        # 2 and 3) and plays first; the rest of the clip is built from the photos that are left.
-        video_list = [v for v in (videos or []) if v and os.path.exists(v)]
-        keep_sound = [bool(video_sound[i]) if video_sound and i < len(video_sound) else False
-                      for i in range(len(video_list))]
-        if video_list:
-            per_photo = isinstance(prompt_text, list) and len(prompt_text) == len(image_list)
-            image_list = image_list[len(video_list):]
-            prompt_text = prompt_text[len(video_list):] if per_photo else prompt_text
-            ai_flags = ai_flags[len(video_list):] if ai_flags else ai_flags
-
-        # "Sharpen photos": ComfyUI animates the sharpened copy (its clip key follows the new file).
-        from services.config.upscaled_images import upscale_enabled
-
-        config_path = getattr(self.config, "config_path", None)
-        if config_path is not None and upscale_enabled(self.config.get_settings() or {}):
-            from services.vdoprocessing.photo_sharpen import sharpened_photo
-
-            image_list = [sharpened_photo(img, Path(config_path).parent) for img in image_list]
-
-        if isinstance(prompt_text, str):
-            prompt_list = [prompt_text]
-        elif isinstance(prompt_text, list):
-            prompt_list = prompt_text
-        else:
-            prompt_list = [""]
-
-        from services.vdoprocessing.camera_pan import normalize_camera_pan
-
-        pans = [
-            normalize_camera_pan(prompt_list[min(i, len(prompt_list) - 1)] if prompt_list else "")
-            for i in range(len(image_list))
-        ]
-        from services.vdoprocessing.camera_pan import STILL_PRESET
-
-        # A CPU-only clip is another clip than the AI one: switching the setting (or one photo's own tick) makes
-        # that photo's move again, and only that one.
-        ai_of = lambda i: (ai_flags[i] if ai_flags and i < len(ai_flags) else None)  # noqa: E731
-        cpu_of = [self._cpu_only(ai_of(i)) for i in range(len(image_list))]
-        keys = [
-            self._clip_key(img, pan) + ("c3" if cpu_of[i] and pan != STILL_PRESET else "")
-            for i, (img, pan) in enumerate(zip(image_list, pans))
-        ]
-        # Footage is one more clip of the same stop: the same share split, one fit and one label for the whole
-        # thing. Keyed by the file itself, so it is only normalised once.
-        sources = [*video_list, *image_list]
-        is_video = [True] * len(video_list) + [False] * len(image_list)
-        prompts = [STILL_PRESET] * len(video_list) + [
-            prompt_list[idx] if idx < len(prompt_list) else (prompt_list[-1] if prompt_list else "")
-            for idx in range(len(image_list))
-        ]
-        pans = [STILL_PRESET] * len(video_list) + pans
-        keys = [self._video_key(v) for v in video_list] + keys
+        plan = self._clip_plan(image_list, prompt_text, videos, video_sound, ai_flags)
 
         recorded = self._read_inputs(output_filename)
-        if "keys" in recorded:
-            inputs_changed = recorded["keys"] != keys
-        elif "pans" in recorded:
-            inputs_changed = recorded["pans"] != pans
-        else:
-            inputs_changed = False  # made before this check: keep it, adopt current inputs
-        if inputs_changed:
-            logger.info(
-                "Photos or camera presets changed for %s — rebuilding it "
-                "(unchanged photos reuse their clips).", output_filename,
-            )
+        inputs_changed = self._inputs_changed(recorded, plan.keys, plan.pans, output_filename)
 
         # shortcut: {next} cues are counted per photo, so a stop mixing footage in splits evenly instead.
-        shares = self.photo_shares(target_audio_duration, len(sources), None if video_list else photo_cuts)
+        shares = self.photo_shares(target_audio_duration, len(plan.sources), None if plan.video_list else photo_cuts)
         cuts = [round(float(c), 2) for c in photo_cuts] if shares else None
         final_path = self.output_dir / output_filename
         refit = False
         if not force and not inputs_changed and output_is_valid(final_path):
-            # A changed tail style or {next} cue refits from the kept clips (CPU only), like a narration change.
-            tail_changed = "keys" in recorded and recorded.get("tail") != self._tail_signature()
-            tail_changed = tail_changed or ("keys" in recorded and recorded.get("cuts") != cuts)
-            if not tail_changed and self._fits_narration(final_path, recorded, target_audio_duration):
-                if "keys" not in recorded:
-                    self._write_inputs(output_filename, keys, pans)
-                logger.info(
-                    "Waypoint deliverable already exists — skipping generation: %s",
-                    final_path,
-                )
-                return str(final_path)
-            refit = True
-            logger.info(
-                "Refitting %s to its %.1fs narration from the kept photo clips "
-                "(nothing is generated again).", output_filename, target_audio_duration,
+            reused, refit = self._checkpoint(
+                final_path, recorded, cuts, plan.keys, plan.pans, output_filename, target_audio_duration
             )
+            if reused:
+                return reused
 
-        # Rebuilding: drop the old deliverable/pending manifest. Raw photo
-        # clips stay for reuse, unless force=True.
-        self._clear_stale_outputs(output_filename)
         stem = Path(output_filename).stem
-        if force:
-            for stale_raw in self.output_dir.glob(f"raw_{stem}_*.mp4"):
-                try:
-                    stale_raw.unlink()
-                    Path(str(stale_raw) + ".signlock").unlink(missing_ok=True)
-                except OSError:
-                    pass
-        else:
-            self._migrate_index_named_raws(stem, keys, pans, recorded.get("pans"))
-            self._adopt_raws_by_key(stem, keys)
-        if refit and not all(output_is_valid(self.output_dir / f"raw_{stem}_{k}.mp4") for k in keys):
+        self._prepare_raw_clips(output_filename, stem, plan.keys, plan.pans, recorded, force)
+        if refit and not all(output_is_valid(self.output_dir / f"raw_{stem}_{k}.mp4") for k in plan.keys):
             return self._refit_deliverable(
                 final_path, target_audio_duration, output_filename, place_label,
-                prompt_list[0] if len(image_list) == 1 and prompt_list else None, recorded,
+                plan.prompt_list[0] if len(plan.image_list) == 1 and plan.prompt_list else None, recorded,
             )
 
-        logger.info(f"Processing waypoint with {len(image_list)} image(s)...")
-
-        # 1. Generate video clips for each image
-        # Split the target narration duration evenly across multiple images
-        # in one waypoint (so the concatenated result lands near the target
-        # instead of badly overshooting); fall back to a reasonable default
-        # when there's no narration yet to size against.
-        # No narration: one normal Wan generation per photo (a single
-        # COMFYUI_MAX_FRAMES segment, ~3.7s), no extension.
-        _DEFAULT_CLIP_SECONDS = tuning.COMFYUI_MAX_FRAMES / tuning.COMFYUI_GEN_FPS
-        per_clip_duration = (
-            (target_audio_duration / len(sources))
-            if target_audio_duration > 0
-            else _DEFAULT_CLIP_SECONDS
-        )
-        per_clip_duration = min(per_clip_duration, self._MAX_EXTENDED_CLIP_SECONDS)
-
-        generated_clips = []
-        clip_presets = []
-        built_keys = []
+        logger.info(f"Processing waypoint with {len(plan.image_list)} image(s)...")
         requested_by_key = dict(recorded.get("requested") or {})
-        equal_share = per_clip_duration
-        for idx, img_path in enumerate(sources):
-            per_clip_duration = min(shares[idx], self._MAX_EXTENDED_CLIP_SECONDS) if shares else equal_share
-            current_prompt = prompts[idx]
-
-            raw_clip_path = self.output_dir / f"raw_{stem}_{keys[idx]}.mp4"
-            if not force and self._raw_clip_covers(
-                raw_clip_path, requested_by_key.get(keys[idx]), per_clip_duration
-            ):
-                logger.info(
-                    "   -> Image %d/%d already rendered — reusing %s",
-                    idx + 1, len(sources), raw_clip_path,
-                )
-                if not is_video[idx]:
-                    self._lock_signs(str(raw_clip_path), img_path, pans[idx])
-                generated_clips.append(str(raw_clip_path))
-                clip_presets.append(current_prompt)
-                built_keys.append(keys[idx])
-                continue
-
-            # Rendered aside and swapped in only when done: a kept clip survives a cancel.
-            raw_work = self._partial_path(raw_clip_path)
-            raw_work.unlink(missing_ok=True)
-            logger.info(
-                f"   -> Rendering clip {idx + 1}/{len(sources)}: {img_path} with prompt: '{current_prompt}'"
-            )
-            if is_video[idx]:
-                from services.vdoprocessing.user_videos import normalise_video
-
-                clip = str(raw_work) if normalise_video(img_path, str(raw_work)) else None
-            else:
-                clip = self._generate_single_clip(
-                    img_path, current_prompt, per_clip_duration, save_path=str(raw_work), place=place_label,
-                    ai=ai_of(idx - len(video_list)),
-                )
-            if clip and os.path.exists(clip):
-                Path(str(raw_clip_path) + ".signlock").unlink(missing_ok=True)
-                Path(str(raw_clip_path) + ".shots.json").unlink(missing_ok=True)
-                if os.path.exists(clip + ".shots.json"):
-                    os.replace(clip + ".shots.json", str(raw_clip_path) + ".shots.json")
-                os.replace(clip, raw_clip_path)
-                clip = str(raw_clip_path)
-            else:
-                raw_work.unlink(missing_ok=True)
-                clip = None
-            if clip:
-                if not is_video[idx]:
-                    self._lock_signs(clip, img_path, pans[idx])
-                generated_clips.append(clip)
-                clip_presets.append(current_prompt)
-                built_keys.append(keys[idx])
-                requested_by_key[keys[idx]] = per_clip_duration
-
+        generated_clips, clip_presets, built_keys = self._render_raw_clips(
+            plan, stem, shares, target_audio_duration, requested_by_key, force, place_label
+        )
         if not generated_clips:
             logger.error("Failed to generate any video clips.")
             return None
 
-        # 2. Multiple images -> combined here, in order, each photo taking an
-        # equal share of the narration, so the whole clip lasts as long as
-        # the narration. (It used to be parked for an approval step nothing
-        # in the app ever triggers, so these waypoints had no attraction
-        # video at all.)
-        at = [keys.index(k) for k in built_keys]
-        if len(generated_clips) > 1:
-            final_output = self._combine_clips(
-                generated_clips, clip_presets, target_audio_duration, output_filename, place_label,
-                photos=[None if is_video[i] else sources[i] for i in at],
-                shares=[shares[i] for i in at] if shares and len(built_keys) == len(keys) else None,
-            )
-        else:
-            # 3. Single image: fit duration, place at output_filename, upscale.
-            # Narration audio is NOT muxed in here — see docstring.
-            final_output = self._fit_and_finalize(
-                generated_clips[0],
-                target_audio_duration,
-                output_filename,
-                overshoot_tolerance=self._AUDIO_DURATION_TOLERANCE_SECONDS,
-                place_label=place_label,
-                camera_pan=clip_presets[0],
-                photo_path=None if is_video[at[0]] else sources[at[0]],
-                generated_pan=None if is_video[at[0]] else clip_presets[0],
-            )
-            logger.info(f"Waypoint video deliverable complete: {final_output}")
-
+        final_output = self._assemble_deliverable(
+            plan, generated_clips, clip_presets, built_keys, shares, target_audio_duration, output_filename, place_label
+        )
         if final_output:
-            self._write_kept_sound(
-                final_output, target_audio_duration,
-                [(sources[i] if is_video[i] and keep_sound[i] else None) for i in at],
-                [shares[i] for i in at] if shares else None, generated_clips,
+            self._record_deliverable(
+                plan, built_keys, generated_clips, shares, cuts, requested_by_key, target_audio_duration,
+                output_filename, final_output, stem,
             )
-            # Only the photos that made it in: a failed photo is retried next run.
-            self._write_inputs(
-                output_filename, built_keys, pans,
-                {k: requested_by_key[k] for k in built_keys if k in requested_by_key},
-                target=target_audio_duration, cuts=cuts,
-            )
-            self._remove_orphan_raws(stem, keys)
         return final_output
+
+    def _record_deliverable(
+        self, plan: "_ClipPlan", built_keys: List[str], generated_clips: List[str], shares: Optional[List[float]],
+        cuts: Optional[List[float]], requested_by_key: dict, target_audio_duration: float, output_filename: str,
+        final_output: str, stem: str,
+    ) -> None:
+        """Kept-sound sidecar and the inputs record for a finished deliverable; orphaned raw clips dropped."""
+        at = [plan.keys.index(k) for k in built_keys]
+        self._write_kept_sound(
+            final_output, target_audio_duration,
+            [(plan.sources[i] if plan.is_video[i] and plan.keep_sound[i] else None) for i in at],
+            [shares[i] for i in at] if shares else None, generated_clips,
+        )
+        # Only the photos that made it in: a failed photo is retried next run.
+        self._write_inputs(
+            output_filename, built_keys, plan.pans,
+            {k: requested_by_key[k] for k in built_keys if k in requested_by_key},
+            target=target_audio_duration, cuts=cuts,
+        )
+        self._remove_orphan_raws(stem, plan.keys)
 
     @staticmethod
     def _fits_narration(final_path: Path, recorded: dict, target: float) -> bool:

@@ -25,6 +25,42 @@ from .timeline_step import build_timeline
 from .upscale_step import upscale_waypoint_images
 
 
+def _voice_sub_course(sub_path, cleaned: dict, settings: dict, force: bool) -> dict:
+    """The sub course's narration (and where its cues fall); the TTS server is stopped afterwards."""
+    tracker.show("Sub course: voicing its stops...")
+    add_default_cues(str(sub_path))
+    audio = generate_audio(cleaned, str(sub_path), force=force)
+    if bool(settings.get("use_narration_cues", True)):
+        record_cue_times(str(sub_path), audio)
+    stop_tts_server()
+    return audio
+
+
+def _sub_course_subtitles(waypoints: list, audio: dict, sub_dir, force: bool) -> tuple:
+    """(leg subtitles, attraction subtitles) of the sub course."""
+    apply_cued_scripts(waypoints, sub_dir)
+    subtitle_dir = str(project_subtitle_dir(sub_dir))
+    subtitles = build_subtitles(waypoints, audio.get("audio_paths", []), subtitle_dir, force=force)
+    attraction_subtitles = build_attraction_subtitles(
+        waypoints, audio.get("attraction_audio_paths", []), subtitle_dir, force=force,
+    )
+    return subtitles, attraction_subtitles
+
+
+def _sub_course_attractions(sub_path, audio: dict, force: bool) -> list:
+    """The sub course's attraction clips; ComfyUI's server is stopped afterwards."""
+    tracker.show("Sub course: attraction videos...")
+    attraction_videos = render_attraction_videos(
+        str(sub_path),
+        audio_durations=audio.get("attraction_audio_durations"),
+        audio_paths=audio.get("attraction_audio_paths"),
+        force=force,
+    )
+    from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
+    ComfyUII2VClient.stop_server()
+    return attraction_videos
+
+
 def render_sub_course(main_config_path: str, force: bool, attractions_on: bool, fast_render: bool) -> Optional[str]:
     """Makes the sub course's voice, subtitles, attraction clips and legs; returns its own timeline.json, or None
     when the project has no sub course. The main project's config is active again afterwards."""
@@ -36,39 +72,14 @@ def render_sub_course(main_config_path: str, force: bool, attractions_on: bool, 
         tracker.show("Sub course: parsing its track...")
         cleaned = process_gps(str(sub_path))
         settings = JobConfigManager(sub_path).get("settings", {})
-        use_cues = bool(settings.get("use_narration_cues", True))
-        audio = {}
-        if not fast_render:
-            tracker.show("Sub course: voicing its stops...")
-            add_default_cues(str(sub_path))
-            audio = generate_audio(cleaned, str(sub_path), force=force)
-            if use_cues:
-                record_cue_times(str(sub_path), audio)
-            stop_tts_server()
+        audio = {} if fast_render else _voice_sub_course(sub_path, cleaned, settings, force)
 
         waypoints = copy.deepcopy(JobConfigManager(sub_path).get("waypoints", []))
-        subtitles, attraction_subtitles = [], []
-        if not fast_render:
-            apply_cued_scripts(waypoints, sub_dir)
-            subtitle_dir = str(project_subtitle_dir(sub_dir))
-            subtitles = build_subtitles(waypoints, audio.get("audio_paths", []), subtitle_dir, force=force)
-            attraction_subtitles = build_attraction_subtitles(
-                waypoints, audio.get("attraction_audio_paths", []), subtitle_dir, force=force,
-            )
+        subtitles, attraction_subtitles = ([], []) if fast_render else _sub_course_subtitles(waypoints, audio, sub_dir, force)
         if upscale_enabled(settings):
             upscale_waypoint_images(str(sub_path), force=force)
 
-        attraction_videos = []
-        if attractions_on:
-            tracker.show("Sub course: attraction videos...")
-            attraction_videos = render_attraction_videos(
-                str(sub_path),
-                audio_durations=audio.get("attraction_audio_durations"),
-                audio_paths=audio.get("attraction_audio_paths"),
-                force=force,
-            )
-            from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
-            ComfyUII2VClient.stop_server()
+        attraction_videos = _sub_course_attractions(sub_path, audio, force) if attractions_on else []
 
         tracker.show("Sub course: rendering its legs...")
         video_paths = render_route_video(

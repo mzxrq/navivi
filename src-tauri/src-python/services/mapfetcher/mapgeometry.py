@@ -6,7 +6,7 @@ Extracted from mapfetcher.py to improve modularity.
 ---------------------------------------------------------------------------
 """
 # [I/O] Import libraries for map fetching and geometry processing
-from typing import Any, Final, Optional, Tuple, List, Dict
+from typing import Any, Final, NamedTuple, Optional, Tuple, List, Dict
 import numpy as np
 import pandas as pd
 from scipy.interpolate import make_interp_spline
@@ -236,6 +236,106 @@ def _visible_run_length(
     return (hi - lo) * spacing
 
 
+class _FocusFrame(NamedTuple):
+    """Output size and the target's Mercator position."""
+    out_w: int
+    out_h: int
+    tx: float
+    ty: float
+
+
+class _FocusSearch(NamedTuple):
+    """Everything `_focus_best_at` needs: the local route, the optional bias point, the extra points to fit."""
+    frame: _FocusFrame
+    samples: Any
+    spacing: float
+    target_index: int
+    bias: Optional[Tuple[float, float]]
+    must_fit_m: Optional[np.ndarray]
+
+
+def _focus_view_at(cx: float, cy: float, zoom: float):
+    return (cx / (EARTH_RADIUS_METERS * math.pi / 180.0), _inverse_mercator_y(cy), zoom)
+
+
+def _focus_with_vertical_bias(frame: _FocusFrame, cx: float, cy: float, zoom: float):
+    mpp = _EARTH_CIRCUMFERENCE_M / (_TILE_SIZE_PX * (2.0 ** zoom))
+    half_h = (frame.out_h / 2.0) * mpp * (1.0 - 2.0 * _FOCUS_MARGIN_FRAC)
+    cy = cy + _FOCUS_VERTICAL_BIAS_FRAC * half_h
+    # Keep the target itself within the same safe inset the search
+    # already respected — the bias only redistributes where in it the
+    # target sits, it never pushes the target out of frame.
+    cy = min(frame.ty + half_h, max(frame.ty - half_h, cy))
+    return _focus_view_at(cx, cy, zoom)
+
+
+def _focus_bias_point(frame: _FocusFrame, next_lat: Optional[float], next_lon: Optional[float]):
+    if next_lat is None or next_lon is None:
+        return None
+    nx, ny = _mercator_x(next_lon), _mercator_y(next_lat)
+    # The midpoint, not the next point itself — biasing all the way to
+    # the next stop would fight the "keep the target in the safe
+    # inset" constraint for anything but a very close next stop.
+    return (frame.tx + nx) / 2.0, (frame.ty + ny) / 2.0
+
+
+def _focus_must_fit_mercator(must_fit_latlon):
+    if not must_fit_latlon:
+        return None
+    return np.asarray(
+        [(_mercator_x(lon), _mercator_y(lat)) for lat, lon in must_fit_latlon],
+        dtype=float,
+    )
+
+
+def _focus_scan_candidates(search: _FocusSearch, half_w: float, half_h: float):
+    """Scores every grid centre: ([(length, cx, cy, fit_count)], best_length)."""
+    frame, must_fit_m = search.frame, search.must_fit_m
+    candidates = []
+    best_length = 0.0
+    # The camera may sit anywhere that still leaves the target inside
+    # the safe inset — i.e. its centre within one half-window of it.
+    for cx in np.linspace(frame.tx - half_w, frame.tx + half_w, _FOCUS_CENTER_GRID):
+        for cy in np.linspace(frame.ty - half_h, frame.ty + half_h, _FOCUS_CENTER_GRID):
+            length = _visible_run_length(
+                search.samples, search.spacing, search.target_index, cx, cy, half_w, half_h
+            )
+            fit_count = 0
+            if must_fit_m is not None and len(must_fit_m):
+                fit_count = int(np.count_nonzero(
+                    (np.abs(must_fit_m[:, 0] - cx) <= half_w)
+                    & (np.abs(must_fit_m[:, 1] - cy) <= half_h)
+                ))
+            candidates.append((length, cx, cy, fit_count))
+            best_length = max(best_length, length)
+    return candidates, best_length
+
+
+def _focus_best_at(search: _FocusSearch, zoom: float):
+    """(length, cx, cy) of the best centre at one zoom level."""
+    frame = search.frame
+    mpp = _EARTH_CIRCUMFERENCE_M / (_TILE_SIZE_PX * (2.0 ** zoom))
+    half_w = (frame.out_w / 2.0) * mpp * (1.0 - 2.0 * _FOCUS_MARGIN_FRAC)
+    half_h = (frame.out_h / 2.0) * mpp * (1.0 - 2.0 * _FOCUS_MARGIN_FRAC)
+    candidates, best_length = _focus_scan_candidates(search, half_w, half_h)
+    if best_length <= 0:
+        return (0.0, frame.tx, frame.ty)
+    if search.bias is None:
+        # Fit count first — among centres tied on it, the one showing
+        # more route line wins (must_fit is a reward, never a requirement).
+        best = max(candidates, key=lambda c: (c[3], c[0]))
+        return best[0], best[1], best[2]
+    # Among everything within tolerance of this zoom's best route length,
+    # prefer the most extra points fitted, then closeness to the bias point.
+    bias_mx, bias_my = search.bias
+    threshold = best_length * _FOCUS_BIAS_TOLERANCE
+    near_best = [c for c in candidates if c[0] >= threshold]
+    max_fit = max(c[3] for c in near_best)
+    near_best = [c for c in near_best if c[3] == max_fit]
+    best = min(near_best, key=lambda c: (c[1] - bias_mx) ** 2 + (c[2] - bias_my) ** 2)
+    return best[0], best[1], best[2]
+
+
 def choose_route_focus_view(
     route_latlon,
     target_lat: float,
@@ -303,109 +403,44 @@ def choose_route_focus_view(
     when there's no route geometry to frame against."""
     out_w, out_h = output_size
     tx, ty = _mercator_x(target_lon), _mercator_y(target_lat)
-
-    def view_at(cx: float, cy: float, zoom: float):
-        return (
-            cx / (EARTH_RADIUS_METERS * math.pi / 180.0), _inverse_mercator_y(cy), zoom,
-        )
+    frame = _FocusFrame(out_w, out_h, tx, ty)
 
     if max_zoom < min_zoom:
         min_zoom, max_zoom = max_zoom, min_zoom
     widest_mpp = _EARTH_CIRCUMFERENCE_M / (_TILE_SIZE_PX * (2.0 ** min_zoom))
     radius_m = math.hypot(out_w, out_h) * widest_mpp
 
-    def with_vertical_bias(cx: float, cy: float, zoom: float):
-        mpp = _EARTH_CIRCUMFERENCE_M / (_TILE_SIZE_PX * (2.0 ** zoom))
-        half_h = (out_h / 2.0) * mpp * (1.0 - 2.0 * _FOCUS_MARGIN_FRAC)
-        cy = cy + _FOCUS_VERTICAL_BIAS_FRAC * half_h
-        # Keep the target itself within the same safe inset the search
-        # already respected — the bias only redistributes where in it the
-        # target sits, it never pushes the target out of frame.
-        cy = min(ty + half_h, max(ty - half_h, cy))
-        return view_at(cx, cy, zoom)
-
     local = _resample_local_route(route_latlon, tx, ty, radius_m)
     if local is None:
-        return with_vertical_bias(tx, ty, max_zoom)
+        return _focus_with_vertical_bias(frame, tx, ty, max_zoom)
     samples, spacing, target_index = local
 
-    bias_mx = bias_my = None
-    if next_lat is not None and next_lon is not None:
-        nx, ny = _mercator_x(next_lon), _mercator_y(next_lat)
-        # The midpoint, not the next point itself — biasing all the way to
-        # the next stop would fight the "keep the target in the safe
-        # inset" constraint for anything but a very close next stop, and
-        # defeats the point of this being a close-up ON the target.
-        bias_mx, bias_my = (tx + nx) / 2.0, (ty + ny) / 2.0
-
-    must_fit_m = None
-    if must_fit_latlon:
-        must_fit_m = np.asarray(
-            [(_mercator_x(lon), _mercator_y(lat)) for lat, lon in must_fit_latlon],
-            dtype=float,
-        )
-
-    def best_at(zoom: float):
-        mpp = _EARTH_CIRCUMFERENCE_M / (_TILE_SIZE_PX * (2.0 ** zoom))
-        half_w = (out_w / 2.0) * mpp * (1.0 - 2.0 * _FOCUS_MARGIN_FRAC)
-        half_h = (out_h / 2.0) * mpp * (1.0 - 2.0 * _FOCUS_MARGIN_FRAC)
-        # The camera may sit anywhere that still leaves the target inside
-        # the safe inset — i.e. its centre within one half-window of it.
-        candidates = []
-        best_length = 0.0
-        for cx in np.linspace(tx - half_w, tx + half_w, _FOCUS_CENTER_GRID):
-            for cy in np.linspace(ty - half_h, ty + half_h, _FOCUS_CENTER_GRID):
-                length = _visible_run_length(
-                    samples, spacing, target_index, cx, cy, half_w, half_h
-                )
-                fit_count = 0
-                if must_fit_m is not None and len(must_fit_m):
-                    fit_count = int(np.count_nonzero(
-                        (np.abs(must_fit_m[:, 0] - cx) <= half_w)
-                        & (np.abs(must_fit_m[:, 1] - cy) <= half_h)
-                    ))
-                candidates.append((length, cx, cy, fit_count))
-                best_length = max(best_length, length)
-        if best_length <= 0:
-            return (0.0, tx, ty)
-        if bias_mx is None:
-            # Fit count first — among centres tied on it, the one showing
-            # more route line wins (see the docstring on must_fit_latlon:
-            # a reward, never a requirement, so this still degrades to
-            # pure length-maximizing when nothing was passed in).
-            best = max(candidates, key=lambda c: (c[3], c[0]))
-            return best[0], best[1], best[2]
-        # Among everything within tolerance of this zoom's own best route
-        # length, prefer whichever fits the most extra points, then break
-        # any remaining tie by closeness to the bias point — see the
-        # docstring.
-        threshold = best_length * _FOCUS_BIAS_TOLERANCE
-        near_best = [c for c in candidates if c[0] >= threshold]
-        max_fit = max(c[3] for c in near_best)
-        near_best = [c for c in near_best if c[3] == max_fit]
-        best = min(near_best, key=lambda c: (c[1] - bias_mx) ** 2 + (c[2] - bias_my) ** 2)
-        return best[0], best[1], best[2]
+    search = _FocusSearch(
+        frame, samples, spacing, target_index,
+        _focus_bias_point(frame, next_lat, next_lon),
+        _focus_must_fit_mercator(must_fit_latlon),
+    )
 
     # The widest allowed view is the yardstick: nothing tighter can show
     # more route than this, so it defines what "as much as possible" is
     # worth in metres before deciding how much of it to trade for zoom.
-    reference = best_at(min_zoom)[0]
+    reference = _focus_best_at(search, min_zoom)[0]
     if reference <= 0:
-        return with_vertical_bias(tx, ty, max_zoom)
+        return _focus_with_vertical_bias(frame, tx, ty, max_zoom)
     wanted = reference * _FOCUS_VISIBLE_RATIO
 
     zoom = max_zoom
     fallback = None
     while zoom >= min_zoom - 1e-9:
-        length, cx, cy = best_at(zoom)
+        length, cx, cy = _focus_best_at(search, zoom)
         if fallback is None or length > fallback[0]:
             fallback = (length, cx, cy, zoom)
         if length >= wanted:
-            return with_vertical_bias(cx, cy, zoom)
+            return _focus_with_vertical_bias(frame, cx, cy, zoom)
         zoom -= _FOCUS_ZOOM_STEP
 
     _, cx, cy, zoom = fallback
-    return with_vertical_bias(cx, cy, zoom)
+    return _focus_with_vertical_bias(frame, cx, cy, zoom)
 
 
 def bbox_for_view(

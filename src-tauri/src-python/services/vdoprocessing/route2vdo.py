@@ -15,7 +15,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, NamedTuple, Optional, Tuple
 
 from services.mapfetcher.graphicengine import GraphicsEngine
 from services.logger.logger import setup_logger
@@ -276,6 +276,45 @@ def restore_leg(variant_dir: Path, inputs_name: str, leg_parts: Dict[str, str], 
     return [out_dir / p.name for p in clips]
 
 
+class _ResContext(NamedTuple):
+    """What every leg of one residential render shares."""
+
+    wp_by_id: Dict[Any, Dict[str, Any]]
+    waypoint_id_to_idx: Dict[str, int]
+    attraction_dir: Optional[Path]
+    context_path: Optional[list]
+    mode_speed_kmh: Dict[str, float]
+    street_views: List[List[Dict[str, Any]]]
+    leg_totals: List[Tuple[float, float]]
+
+
+class _LegPhotos(NamedTuple):
+    dest_image: Optional[str]
+    dest_freeze: Optional[float]
+    dest_narration: Optional[float]
+    dest_display: str
+    dest_quiet: bool
+    start_image: Optional[str]
+    start_freeze: Optional[float]
+    start_narration: Optional[float]
+
+
+class _LegPlan(NamedTuple):
+    kwargs: Dict[str, Any]
+    num: int
+    prefix: str
+    output_path: str
+    connected_ids: List[Optional[str]]
+    dest_id: Optional[str]
+
+
+class _LegReuse(NamedTuple):
+    files: List[Path]
+    stale: List[Path]
+    changed: List[str]
+    parts: Dict[str, str]
+
+
 class RouteAnimator:
     """Orchestrates the animation pipeline by bridging configurations with Renderers."""
 
@@ -447,6 +486,46 @@ class RouteAnimator:
             settings = None
         return resolve_mapbox_token(settings if isinstance(settings, dict) else None)
 
+    @staticmethod
+    def _overview_waypoints(points: List, labels: List, popups: List, extent, w: int, h: int) -> List[Dict[str, Any]]:
+        from services.mapfetcher.mapgeometry import RouteGeometryProcessor
+
+        waypoints = []
+        order = 0
+        for i, popup in enumerate(popups):
+            if popup is None:
+                continue
+            is_stopby = bool(popup.get("is_stopby"))
+            lat, lon = RouteGeometryProcessor.pixel_to_latlon(points[i][0], points[i][1], extent, w, h)
+            # [NOTE] A stop-by isn't part of the visible 1..N numbering (see _pin_layers/overview.py's own matching
+            # rule) - order still gets set (the pre-increment count) so it's never missing, just not incremented.
+            entry = {"lat": lat, "lon": lon, "order": order, "label": labels[i], "is_stopby": is_stopby}
+            if popup.get("pin_image"):
+                entry["pin_image"] = popup["pin_image"]
+            if not is_stopby:
+                order += 1
+                entry["order"] = order
+            waypoints.append(entry)
+        return waypoints
+
+    def _assign_overview_pins(self, waypoints: List[Dict[str, Any]], popups: List) -> None:
+        """Same glyphs/colors as the 2D overview and the leg clips: S green, E red, numbered stops in the marker
+        color. A return stop shows the pin of the stop it comes back to, and takes no number of its own."""
+        places = [p for p in popups if p is not None]
+        back_of = {j: returns_to(places, j) for j in range(len(waypoints))}
+        numbered = [wp for j, wp in enumerate(waypoints) if not wp["is_stopby"] and back_of[j] is None]
+        for k, wp in enumerate(numbered):
+            if k == 0:
+                wp["pin_glyph"], wp["pin_color"] = "S", tuning.START_PIN_COLOR
+            elif k == len(numbered) - 1 and k != 1:
+                wp["pin_glyph"], wp["pin_color"] = "E", tuning.END_PIN_COLOR
+            else:
+                wp["pin_glyph"], wp["pin_color"] = str(k), self.graphics.marker_color
+        for j, back in back_of.items():
+            if back is not None:
+                waypoints[j]["pin_glyph"] = waypoints[back].get("pin_glyph")
+                waypoints[j]["pin_color"] = waypoints[back].get("pin_color")
+
     def _render_overview_pydeck(
         self, img_path: str, points: List, labels: List, popups: List,
         extent: Optional[Tuple[float, float, float, float]], fps: int,
@@ -480,42 +559,8 @@ class RouteAnimator:
             RouteGeometryProcessor.pixel_to_latlon(p[0], p[1], extent, w, h) for p in points
         ]
 
-        waypoints = []
-        order = 0
-        for i, popup in enumerate(popups):
-            if popup is None:
-                continue
-            is_stopby = bool(popup.get("is_stopby"))
-            lat, lon = RouteGeometryProcessor.pixel_to_latlon(points[i][0], points[i][1], extent, w, h)
-            # A stop-by isn't part of the visible 1..N numbering (see
-            # _pin_layers/overview.py's own matching rule) — order still
-            # gets set (as the pre-increment count) so it's never missing,
-            # just not incremented for it.
-            entry = {"lat": lat, "lon": lon, "order": order, "label": labels[i], "is_stopby": is_stopby}
-            if popup.get("pin_image"):
-                entry["pin_image"] = popup["pin_image"]
-            if not is_stopby:
-                order += 1
-                entry["order"] = order
-            waypoints.append(entry)
-
-        # Same glyphs/colors as the 2D overview and the leg clips: S green,
-        # E red, numbered stops in the marker color. A return stop shows the
-        # pin of the stop it comes back to, and takes no number of its own.
-        places = [p for p in popups if p is not None]
-        back_of = {j: returns_to(places, j) for j in range(len(waypoints))}
-        numbered = [wp for j, wp in enumerate(waypoints) if not wp["is_stopby"] and back_of[j] is None]
-        for k, wp in enumerate(numbered):
-            if k == 0:
-                wp["pin_glyph"], wp["pin_color"] = "S", tuning.START_PIN_COLOR
-            elif k == len(numbered) - 1 and k != 1:
-                wp["pin_glyph"], wp["pin_color"] = "E", tuning.END_PIN_COLOR
-            else:
-                wp["pin_glyph"], wp["pin_color"] = str(k), self.graphics.marker_color
-        for j, back in back_of.items():
-            if back is not None:
-                waypoints[j]["pin_glyph"] = waypoints[back].get("pin_glyph")
-                waypoints[j]["pin_color"] = waypoints[back].get("pin_color")
+        waypoints = self._overview_waypoints(points, labels, popups, extent, w, h)
+        self._assign_overview_pins(waypoints, popups)
 
         # The reference video's wide section-title caption (e.g.
         # "友ヶ島・加太をめぐる道") reads as the trip's own name — reusing
@@ -563,102 +608,37 @@ class RouteAnimator:
         return render
 
     def _render_residential_pydeck(self, res_sequence: List[Dict], fps: int) -> List[str]:
-        """GeoJsonLayer-driven alternative to SpatialRenderer.render_waypoints
-        (flat top-down): a pedestrian-scale chase camera with a turn-by-turn HUD, one clip per leg.
+        """GeoJsonLayer-driven alternative to SpatialRenderer.render_waypoints (flat top-down): a pedestrian-scale
+        chase camera, one clip per leg.
 
-        Reuses each res_sequence entry's own real `lats`/`lons` arrays
-        (already resolved by render_step.py — including ferry-leg cached
-        geometry and stop-by-merged legs — no pixel reprojection needed
-        here, unlike the overview path) and mirrors waypoints.py's own
-        `02_waypoint_{start_pos+1:02d}_{safe_suffix}.mp4` filename
-        convention so downstream audio-muxing/timeline lookups (which parse
-        that number back out of the filename) keep working unmodified.
+        Reuses each res_sequence entry's own real `lats`/`lons` (already resolved by render_step.py, including
+        ferry-leg cached geometry and stop-by-merged legs) and mirrors waypoints.py's
+        `02_waypoint_{start_pos+1:02d}_{safe_suffix}.mp4` filename convention so downstream audio-muxing/timeline
+        lookups (which parse that number back out of the filename) keep working unmodified.
 
-        Mixed per leg, not all-or-nothing: a leg whose mode is in
-        tuning.RESIDENTIAL_2D_FALLBACK_MODES (currently just airplane —
-        ferry now gets the chase camera too, via pedestrian.py's own
-        "ferry" HUD mode) is handed to the flat 2D renderer for that leg
-        alone, and the legs either side of
-        it still get the chase camera. render_waypoints names its output
-        from each leg's own `start_pos` rather than its position in the list
-        it was given, so rendering a single leg through it produces exactly
-        the same filename it would have had in a full-sequence run.
+        Mixed per leg: a leg whose mode is in tuning.RESIDENTIAL_2D_FALLBACK_MODES (currently just airplane) is handed
+        to the flat 2D renderer for that leg alone; render_waypoints names its output from the leg's own `start_pos`,
+        so it gets the same filename it would have had in a full-sequence run.
         """
-        from services.vdoprocessing.pydeckrecorder.pedestrian import render_residential_leg_pydeck
-        from services.vdoprocessing.videopipeline.helpers import attraction_output_filename
-
-        # Maps a waypoint's stable job_config "id" to its RAW 0-based
-        # position in job_config's own "waypoints" array -- the same index
-        # helpers.attraction_output_filename names that waypoint's
-        # attraction-video file with. Built once here (not from
-        # render_step.py's own res_waypoints, which can have a synthetic
-        # start/end point PREPENDED -- see render_step.py's own comment on
-        # that -- shifting every real position by one) so a connected
-        # stop-by's attraction-video lookup below always matches the file
-        # the attraction pipeline actually produced.
-        waypoint_id_to_idx: Dict[str, int] = {}
-        attraction_dir = None
-        _raw_job_config: Dict[str, Any] = {}
-        wp_by_id: Dict[Any, Dict[str, Any]] = {}
-        from services.vdoprocessing.videopipeline.audio_step import no_narration_stop
-        job_config_path = self.config.get("res_route_path")
-        if job_config_path and os.path.exists(job_config_path):
-            try:
-                with open(job_config_path, "r", encoding="utf-8") as f:
-                    _raw_job_config = json.load(f)
-                wp_by_id = {w.get("id"): w for w in _raw_job_config.get("waypoints", []) if isinstance(w, dict)}
-                for _idx, _wp in enumerate(_raw_job_config.get("waypoints", [])):
-                    if _wp.get("id"):
-                        waypoint_id_to_idx[_wp["id"]] = _idx
-                # Route and attraction outputs are SIBLING subfolders under
-                # the same assets/video/ parent (see helpers.py's own
-                # project_route_video_dir/project_attraction_video_dir) --
-                # self.out_dir IS project_route_video_dir already, so its
-                # sibling is exactly project_attraction_video_dir without
-                # needing to re-derive the project root path.
-                attraction_dir = self.out_dir.parent / "attraction"
-            except (OSError, json.JSONDecodeError) as e:
-                logger.warning(f"Could not read job_config for attraction-video lookup: {e}")
-        # A sub course's legs show the main course faint under them.
+        raw_job_config, wp_by_id, waypoint_id_to_idx, attraction_dir = self._read_res_job_config()
         from services.config.sub_course import main_route_lonlat
 
-        context_path = main_route_lonlat(_raw_job_config)
-
-        def _attraction_video_for(waypoint_id: Optional[str], label: Optional[str]) -> Optional[str]:
-            if not waypoint_id or waypoint_id not in waypoint_id_to_idx or attraction_dir is None:
-                return None
-            idx = waypoint_id_to_idx[waypoint_id]
-            candidate = attraction_dir / attraction_output_filename(idx, label or f"waypoint_{idx}")
-            return str(candidate) if candidate.exists() else None
-
+        context_path = main_route_lonlat(raw_job_config)  # a sub course's legs show the main course faint under them
         mode_speed_kmh = self.spatial_renderer.mode_speed_kmh
-        brief_legs: List[Dict[str, Any]] = []
-        if self.config.get("overview_style") == "course" and self.config.get("res_route_path"):
-            # The course overview's card adds up the brief's legs, not the GPS track.
-            from services.localization.route_brief import load_brief
-            try:
-                brief_legs = load_brief(self.config["res_route_path"])["legs"]
-            except (OSError, ValueError, KeyError) as e:
-                logger.warning(f"Could not load the route brief for the leg cards: {e}")
+        brief_legs = self._course_brief_legs()
         leg_totals = [_leg_distance_and_seconds(r, mode_speed_kmh, brief_legs) for r in res_sequence]
         output_paths = []
-        # Was only ever set once, well before this loop ("Rendering
-        # residential video...") -- gps_commands.py's test_residential_video
-        # (and the real pipeline the same way) then sat on that one static
-        # line for the ENTIRE multi-minute render, across every leg, with no
-        # further tracker calls anywhere in this function, looking frozen
-        # even though work was actively happening. begin_substeps/show_item
-        # give it a live per-leg "[i/N] rendering leg -> label" line instead
-        # -- pedestrian.py's own tracker calls inside render_residential_leg_
-        # pydeck further subdivide THIS leg's own share of that line.
         # Street view waypoints: a pop-up photo card on the leg passing nearest, timed by its {view} cues.
         # shortcut: a one-leg re-render only weighs that leg, so a street view near its ends can land on it; fine for now.
+        job_config_path = self.config.get("res_route_path")
         street_views = street_view_landmarks(
-            _raw_job_config.get("street_views") or [],
+            raw_job_config.get("street_views") or [],
             [list(zip(r.get("lats"), r.get("lons"))) if r.get("lats") is not None else [] for r in res_sequence],
             Path(job_config_path).parent if job_config_path else Path("."),
             [r.get("street_view_cues") or [] for r in res_sequence],
         )
+        ctx = _ResContext(wp_by_id, waypoint_id_to_idx, attraction_dir, context_path, mode_speed_kmh, street_views, leg_totals)
+        # begin_substeps/show_item give a live per-leg "[i/N] rendering leg -> label" line for the whole render.
         tracker.begin_substeps(len(res_sequence))
         prev_end_view = None
         for i, res_data in enumerate(res_sequence):
@@ -685,362 +665,415 @@ class RouteAnimator:
                     self.spatial_renderer.render_waypoints([res_data], fps)
                 )
                 continue
-            # The leg's own already-computed VIDEO length (narration-synced
-            # when audio exists, else a paced distance fallback — see
-            # render_step.py's res_sequence build) — real routes range from
-            # a few meters to several kilometers per leg, so animating at
-            # literal real-world walking/ferry pace would make clips
-            # anywhere from seconds to literal HOURS long. Does not affect
-            # the HUD's own displayed remaining-time estimate, which stays
-            # real-world (see render_residential_leg_pydeck's docstring).
-            target_duration = res_data.get("travel_duration") or res_data.get("segment_duration")
-
-            landmarks = [
-                {
-                    "lat": m["lat"], "lon": m.get("lng", m.get("lon")), "label": m.get("label"),
-                    # "connectToRoute" stop-bys (job_config.json's own
-                    # per-waypoint toggle -- see mapfetcher.py's own
-                    # "connect_to_route" field) get the full fullscreen
-                    # photo-pause treatment as the walker passes them,
-                    # mirroring the overview's own rule that a connected
-                    # stop-by acts like a real waypoint rather than a
-                    # silent pass-through pin (see render_residential_leg_
-                    # pydeck's `landmarks` docstring).
-                    "connect_to_route": bool(m.get("connect_to_route", False)),
-                    # Only when set: other legs' landmarks (and fingerprints) stay as they were.
-                    **({"inaccessible": True} if m.get("inaccessible") else {}),
-                    # Nothing to tell here: its photo only pops up as a card, never fullscreen — the same rule a
-                    # normal stop already follows (audio_step.no_narration_stop, `quiet_stop_transition`).
-                    **({"quiet": True} if no_narration_stop(wp_by_id.get(m.get("waypoint_id")) or {}) else {}),
-                    "popup_image": m.get("popup_image"),
-                    "freeze_seconds": m.get("freeze_seconds"),
-                    # Residential legs are always fullscreen.
-                    "image_display": "fullscreen",
-                    # This stop-by's own real narration length (see
-                    # mapfetcher.py's "narration_audio_seconds") -- lets
-                    # pedestrian.py hold its fullscreen photo-pause at least
-                    # this long instead of cutting away at the short fixed
-                    # freeze_seconds cap while the narration is still
-                    # playing underneath.
-                    "narration_audio_seconds": m.get("narration_audio_seconds"),
-                    # Only set when this connected stop-by's waypoint
-                    # already has a GENERATED attraction video on disk (the
-                    # separate img2vdo.py/attraction_step.py pipeline stage
-                    # -- residential rendering never generates one itself).
-                    # When set, the fullscreen photo-pause cuts the leg
-                    # clip instead of shrinking back to resume the walk in
-                    # place -- see pedestrian.py's `landmarks` docstring.
-                    "attraction_video": _attraction_video_for(m.get("waypoint_id"), m.get("label")),
-                    # The photo ends fullscreen and the attraction video
-                    # dissolves in from it (no hold, no blur-out here).
-                    "dissolve_into_attraction": bool(self.config.get("dissolve_into_attraction", False)),
-                    # Audio-first timing of the walk TOWARD this stop and how long
-                    # it waits here for the voice (render_step.py's piece plan).
-                    "walk_seconds": m.get("walk_seconds"),
-                    "wait_seconds": m.get("wait_seconds"),
-                    "pops_after": m.get("pops_after"),
-                    "waypoint_id": m.get("waypoint_id"),
-                }
-                for m in res_data.get("mid_markers", [])
-                if m.get("lat") is not None and m.get("lng", m.get("lon")) is not None
-            ]
-            mapillary_token = resolve_mapillary_token()
-            if (leg_mode == "walking" and mapillary_token and self.config.get("res_route_path")
-                    and self.config.get("street_photos_at_turns", tuning.STREET_PHOTOS_AT_TURNS)):
-                photo_dir = meta_dir(Path(self.config["res_route_path"]).parent) / "streetview"
-                landmarks += attach_cue_spans(clear_of(
-                    turn_photos([list(p) for p in leg_latlon], photo_dir, mapillary_token),
-                    street_views[i], tuning.STREET_VIEW_REPLACES_TURN_PHOTO_M,
-                ), res_data.get("turn_cues") or [])
-            landmarks += street_views[i]
-
-            # Every connectToRoute landmark in THIS leg, in the same order
-            # `landmarks` (and therefore pedestrian.py's own cut sequence)
-            # visits them -- each one cuts the leg into one more piece (see
-            # `landmarks` docstring above). Each piece is the WALK TOWARD
-            # its own next stop, so piece[k] (0-based) "targets" landmark[k]
-            # -- its own narration plays during that walk, and its own
-            # fullscreen pause (which follows immediately) holds until that
-            # narration finishes -- except the LAST piece, which has no
-            # landmark ahead of it and targets the leg's actual destination
-            # waypoint instead. Written out as a small sidecar JSON below so
-            # leg_pieces.py's narration split (done later, once audio_paths
-            # are available -- this method has no access to them) knows
-            # which waypoint's own narration belongs to which piece.
-            connected_landmark_ids = cut_landmark_ids(res_data.get("mid_markers", []))
-            leg_destination_id = res_data.get("end_waypoint_id")
-
-            def _write_piece_plan(piece_paths) -> None:
-                plan = {
-                    "pieces": [
-                        {
-                            "file": Path(p).name,
-                            "target_waypoint_id": (
-                                connected_landmark_ids[idx]
-                                if idx < len(connected_landmark_ids)
-                                else leg_destination_id
-                            ),
-                        }
-                        for idx, p in enumerate(piece_paths)
-                    ]
-                }
-                plan_path = self.out_dir / f"02_waypoint_{leg_file_num:02d}_pieces.json"
-                try:
-                    write_json_atomic(plan_path, plan, indent=None)
-                except OSError:
-                    pass
-
-            # render_step.py stashes the destination waypoint's own popup
-            # data as the LAST entry of this leg's "popups" list (every
-            # other position is None — a residential clip only ever ends
-            # its route on the arrival stop, never the departure one). Its
-            # photo opens this leg's clip full-bleed before shrinking down
-            # to the normal card size (see render_residential_leg_pydeck's
-            # `dest_popup_image` docstring).
-            dest_popup = next(
-                (p for p in (res_data.get("popups") or []) if p), None
-            ) or {}
-            # "popup_image_last" (not "popup_image") -- residential shows
-            # the LAST of a multi-image waypoint's photos; the overview
-            # animation reads "popup_image" (the first) for this same
-            # waypoint and is unaffected by this choice.
-            # The leg ends on this photo and the destination's attraction video
-            # follows it (timeline_step.py, with a dissolve): that video opens on
-            # the waypoint's FIRST image, so with attraction videos on, the
-            # leg shows the first image too and the two meet on the same frame.
-            # Without them, the last image, as before.
-            dest_popup_image = (
-                dest_popup.get("popup_image")
-                if self.config.get("enable_attraction_videos", True)
-                else dest_popup.get("popup_image_last")
-            ) or dest_popup.get("popup_image_last") or dest_popup.get("popup_image")
-            dest_freeze_seconds = dest_popup.get("freeze_seconds")
-            dest_narration_seconds = dest_popup.get("audio_duration")
-            # A return stop only pops its photo up as a card: its place had its fullscreen visit already.
-            # So does a place with nothing to tell (no attraction clip follows): the walk goes on.
-            dest_wp = wp_by_id.get(res_data.get("end_waypoint_id"))
-            dest_quiet = dest_wp is not None and no_narration_stop(dest_wp)
-            dest_image_display = "pip" if res_data.get("dest_is_return") or dest_quiet else "fullscreen"
-            if not dest_popup_image:
-                # A trailing synthetic end_point leg's own destination has
-                # no popup of its own (see render_step.py's
-                # "trip_end_popup" comment) -- fall back to the last REAL
-                # waypoint's own photo so the video's truly final clip still
-                # arrives on a photo instead of nothing. No-op (same value
-                # dest_popup already held) whenever the last real waypoint
-                # IS this leg's own destination, since there's no trailing
-                # synthetic leg in that case.
-                end_popup = res_data.get("trip_end_popup") or {}
-                dest_popup_image = end_popup.get("popup_image_last") or end_popup.get("popup_image")
-                dest_freeze_seconds = end_popup.get("freeze_seconds")
-                dest_narration_seconds = end_popup.get("audio_duration")
-
-            # Every leg's own departure waypoint's popup (see render_step.py's
-            # "leg_start_popup" comment) -- shown at THIS leg's own opening,
-            # independent of whether the previous leg's arrival preview
-            # already showed the same waypoint's photo once.
-            start_popup = res_data.get("leg_start_popup") or {}
-            start_popup_image = start_popup.get("popup_image_last") or start_popup.get("popup_image")
-            start_freeze_seconds = start_popup.get("freeze_seconds")
-            start_narration_seconds = start_popup.get("audio_duration")
-
-            safe_suffix = (
-                "".join(c for c in str(dest_label) if c.isalnum() or c in (" ", "_", "-"))
-                .strip()
-                .replace(" ", "_")
-                or f"leg{i + 1}"
-            )
-            leg_file_num = res_data.get("start_pos")
-            leg_file_num = (leg_file_num + 1) if leg_file_num is not None else (i + 1)
-            chunk_filename = f"02_waypoint_{leg_file_num:02d}_{safe_suffix}.mp4"
-
-            output_path = str(self.out_dir / chunk_filename)
-
-            # Checkpoint: a connected stop-by can split ONE leg into
-            # several output files sharing this leg's "02_waypoint_{N:02d}_"
-            # prefix (see the comment just below), so "already rendered" is
-            # checked by that whole prefix, not just the base filename —
-            # otherwise a previously-cut leg would look unfinished (base
-            # file missing) even though every _contN piece is there, and
-            # get re-rendered from scratch. Simple existence check, no
-            # content hash — same resume-not-diff semantics as the overview
-            # checkpoint above.
-            leg_glob_prefix = f"02_waypoint_{leg_file_num:02d}_"
-            leg_kwargs = dict(
-                mode=leg_mode,
-                travel_speed_kmh=_reported_speed_kmh(mode_speed_kmh, leg_mode),
-                # No reserve for the burned caption's band: it squeezed tall/vertical legs for little benefit
-                # (the user's call -- LEG_FRAME_BOTTOM_PIN_PX already keeps the start pin's own label clear).
-                bottom_reserve_px=0,
-                walker_color=res_data.get("line_color"),
-                target_duration_seconds=target_duration,
-                landmarks=landmarks, route_chain=leg_labels or None, context_path=context_path,
-                # Straight-down bird's-eye chase cam (still follows/rotates
-                # with the walker, just never tilts) rather than the
-                # angled 55deg default — settings.res_follow_pitch lets a
-                # project opt back into the tilted look.
-                follow_pitch=self.config.get("res_follow_pitch", 0.0),
-                dest_popup_image=dest_popup_image,
-                dest_popup_freeze_seconds=dest_freeze_seconds,
-                dest_popup_narration_seconds=dest_narration_seconds,
-                start_popup_image=start_popup_image,
-                start_popup_freeze_seconds=start_freeze_seconds,
-                start_popup_narration_seconds=start_narration_seconds,
-                start_cue_seconds=res_data.get("start_cue_seconds"),
-                arrival_photo_hold_seconds=self.config.get("arrival_photo_hold_seconds"),
-                arrival_wait_seconds=res_data.get("arrival_wait_seconds"),
-                dest_image_display=dest_image_display,
-                start_pin=res_data.get("start_pin"),
-                dest_pin=res_data.get("dest_pin"),
-                total_stops=res_data.get("total_stops"),
-                theme=self.graphics.theme,
-            )
-            if res_data.get("pace_cues"):  # only with {slow}/{fast}/{stop}, so other legs keep their fingerprint
-                leg_kwargs["pace_cues"] = {
-                    "spans": res_data["pace_cues"],
-                    "slow": float(self.config.get("pace_slow_factor") or tuning.PACE_SLOW_FACTOR),
-                    "fast": float(self.config.get("pace_fast_factor") or tuning.PACE_FAST_FACTOR),
-                }
-            if res_data.get("at_cues"):  # only with {at N}, so other legs keep their fingerprint
-                leg_kwargs["at_cues"] = res_data["at_cues"]
-            if self.config.get("mapbox_style_id"):  # only a chosen style, so a finished leg's fingerprint stays as it was
-                leg_kwargs["map_style"] = resolve_map_style(self.config, "mapbox/outdoors-v12")
-            if res_data.get("elevations"):  # only with the heatmap on, so a finished leg's fingerprint stays as it was
-                leg_kwargs["leg_elevations"] = res_data["elevations"]
-            if self.config.get("overview_style") == "course":  # likewise: the walker slows down before each stop
-                leg_kwargs["arrival_slow_seconds"] = tuning.COURSE_ARRIVAL_SLOW_SECONDS
-            # A return stop's photo never opens a leg fullscreen (only set then, so other legs stay as rendered).
-            start_wp = wp_by_id.get(res_data.get("start_waypoint_id"))
-            start_quiet = start_wp is not None and no_narration_stop(start_wp)  # no fullscreen came before this leg
-            if (res_data.get("start_is_return") or (res_data.get("dest_is_return") and not start_popup_image)
-                    or start_quiet):
-                leg_kwargs["opening_photo"] = False
-            # Legs joined at a return stop: this leg's last frame is the next one's first.
-            next_leg = res_sequence[i + 1] if i + 1 < len(res_sequence) else {}
-            # So are legs joined at a stop with nothing to tell (no attraction clip between them).
-            # "zoom": legs at such a stop open and close like any other (no slide, no carried card).
-            slide = self.config.get("quiet_stop_transition", "slide") != "zoom"
-            if (res_data.get("dest_is_return") and next_leg.get("start_is_return")) or (dest_quiet and slide):
-                leg_kwargs["end_view_path"] = str(self.out_dir / f"{leg_glob_prefix}endview.json")
-            if dest_quiet and slide and dest_popup_image:
-                leg_kwargs["hold_end_card"] = True
-            if (res_data.get("start_is_return") or (start_quiet and slide)) and prev_end_view:
-                try:
-                    leg_kwargs["opening_view"] = json.loads(Path(prev_end_view).read_text(encoding="utf-8"))
-                except (OSError, ValueError):
-                    pass
-            if start_quiet and slide and i > 0:
-                # The walk goes on through a stop with nothing to tell: the leg before stays drawn as walked,
-                # and the camera glides into this leg's framing quickly.
-                prev = res_sequence[i - 1]
-                if prev.get("lats") is not None and prev.get("lons") is not None:
-                    leg_kwargs["prior_trail"] = [[float(a), float(b)] for a, b in zip(prev["lats"], prev["lons"])]
-                leg_kwargs["topdown_transition_seconds"] = tuning.LEG_CONTINUE_GLIDE_SECONDS
-            prev_end_view = leg_kwargs.get("end_view_path")
-            # Marks a join at a stop with nothing to tell: the timeline cuts there (same frame), no dissolve.
-            no_fade = self.out_dir / f"{leg_glob_prefix}nofade"
-            if dest_quiet and slide:
-                no_fade.touch()
-            else:
-                no_fade.unlink(missing_ok=True)
-            # Everything this leg's clip is made from. Existing files are
-            # only reused when it matches what they were rendered from: a
-            # bare existence check kept legs rendered with an old walk
-            # timing (e.g. before the arrival cue moved) forever.
-            if self.config.get("only_leg_file") is not None and leg_file_num != self.config["only_leg_file"]:
+            plan = self._plan_leg(ctx, i, res_data, res_sequence, leg_latlon, dest_label, leg_mode, leg_labels, prev_end_view)
+            prev_end_view = plan.kwargs.get("end_view_path")
+            if self.config.get("only_leg_file") is not None and plan.num != self.config["only_leg_file"]:
                 continue  # "Make again" for one leg: the others were only needed for what this one takes from them
-            leg_fingerprint = _leg_fingerprint(leg_latlon, dest_label, leg_kwargs)
-            fingerprint_path = self.out_dir / f"{leg_glob_prefix}inputs.json"
-            existing_leg_files = (
-                leg_clips(self.out_dir, f"{leg_glob_prefix}*.mp4") if self.config.get("checkpoint_enabled", False) else []
-            )
-            if existing_leg_files and not pieces_complete(existing_leg_files):
-                logger.info("Residential leg %d is missing a piece — rendering it again.", leg_file_num)
-                existing_leg_files = []
-            leg_parts = _leg_fingerprint_parts(
-                leg_latlon, dest_label, leg_kwargs, route_inputs=res_data.get("route_inputs"),
-            )
-            stored_inputs = _stored_leg_inputs(fingerprint_path)
-            old_parts = stored_inputs.get("parts") or {}
-            changed = sorted(k for k in set(leg_parts) | set(old_parts) if leg_parts.get(k) != old_parts.get(k))
-            if old_parts:
-                path_changed = leg_changed_parts(leg_parts, old_parts)
-            elif stored_inputs.get("fingerprint") != leg_fingerprint:
-                path_changed = ["no per-input record from the earlier render"]
-            else:
-                path_changed = []
-            if existing_leg_files and path_changed:
-                logger.info(
-                    "Residential leg %d path changed since it was rendered (%s) — re-rendering.",
-                    leg_file_num, ", ".join(path_changed),
-                )
-                # Old pieces are removed only after the re-render succeeds,
-                # so a killed run keeps the previous clip.
-                stale_leg_files = [
-                    old for old in self.out_dir.glob(f"{leg_glob_prefix}*")
-                    if old.suffix in (".mp4", ".json") and old.name != fingerprint_path.name
-                ]
-                # One earlier variant per leg is kept: switching a setting back (the heatmap off and on again)
-                # restores it instead of rendering the leg again.
-                variant_dir = self.out_dir / ".variants" / leg_glob_prefix.rstrip("_")
-                existing_leg_files = restore_leg(
-                    variant_dir, fingerprint_path.name, leg_parts, stale_leg_files + [fingerprint_path], self.out_dir,
-                )
-                if existing_leg_files:
-                    logger.info("Residential leg %d: restored the version rendered from these inputs.", leg_file_num)
-                    stale_leg_files, changed = [], []
-                else:
-                    stash_leg(stale_leg_files + [fingerprint_path], variant_dir)
-            else:
-                stale_leg_files = []
-            if existing_leg_files:
-                logger.info(
-                    "Residential leg %d already rendered (%d file(s)) — skipping.%s",
-                    leg_file_num, len(existing_leg_files),
-                    f" Ignored changes: {', '.join(changed)}" if changed else "",
-                )
-                # Rewritten even on a checkpoint skip -- cheap (no ffmpeg),
-                # and keeps it in sync with job_config's CURRENT
-                # connectToRoute/landmark data even when the video itself
-                # wasn't re-rendered this run.
-                _write_piece_plan([str(p) for p in existing_leg_files])
-                output_paths.extend(str(p) for p in existing_leg_files)
-                continue
-
-            # A connected stop-by's fullscreen photo pause (see pedestrian.
-            # py's `landmarks` docstring) can cut this ONE leg into more
-            # than one output file -- render_residential_leg_pydeck always
-            # returns a LIST now, every entry sharing this same leg's own
-            # "02_waypoint_{N:02d}_" filename prefix (just a "_cont{n}"
-            # suffix added per cut), so downstream (timeline_step.py) still
-            # resolves each one back to this leg by filename -- and, when
-            # there's more than one piece, splits this leg's own narration/
-            # subtitle across them (see leg_pieces.py), each landmark's own
-            # piece opening on ITS OWN narration before continuing the
-            # leg's departure narration, instead of the same departure
-            # narration restarting on every piece.
-            leg_paths = render_residential_leg_pydeck(
-                leg_latlon, dest_label, output_path,
-                hud_card_png=self._leg_hud_card_png(
-                    leg_mode, leg_totals[i],
-                    after=(sum(km for km, _ in leg_totals[i + 1:]), sum(s for _, s in leg_totals[i + 1:])),
-                ),
-                # Not in leg_kwargs: a token change must not re-render finished legs (see the fingerprint above).
-                mapbox_key=self._mapbox_token(), **leg_kwargs,
-            )
-            if leg_paths:
-                keep = {Path(p).resolve() for p in leg_paths}
-                keep |= {Path(p).with_suffix(".timing.json").resolve() for p in leg_paths}
-                if leg_kwargs.get("end_view_path"):
-                    keep.add(Path(leg_kwargs["end_view_path"]).resolve())  # just written for the next leg: not stale
-                for old in stale_leg_files:
-                    if old.resolve() not in keep:
-                        old.unlink(missing_ok=True)
-                write_json_atomic(fingerprint_path, {"fingerprint": leg_fingerprint, "parts": leg_parts}, indent=None)
-            _write_piece_plan(leg_paths)
-            output_paths.extend(leg_paths)
+            output_paths.extend(self._run_leg(ctx, i, plan, res_data, leg_latlon, dest_label))
 
         return output_paths
+
+    def _read_res_job_config(self) -> Tuple[Dict[str, Any], Dict[Any, Dict[str, Any]], Dict[str, int], Optional[Path]]:
+        """(raw job_config, waypoints by id, id -> RAW 0-based index in job_config's "waypoints", attraction dir).
+        [NOTE] The index is the one helpers.attraction_output_filename names a waypoint's attraction video with. It is
+        built here, not from render_step's res_waypoints (which can have a synthetic start/end PREPENDED and shift every
+        position by one), so a connected stop-by's attraction lookup matches the file the pipeline produced."""
+        waypoint_id_to_idx: Dict[str, int] = {}
+        attraction_dir = None
+        raw_job_config: Dict[str, Any] = {}
+        wp_by_id: Dict[Any, Dict[str, Any]] = {}
+        job_config_path = self.config.get("res_route_path")
+        if job_config_path and os.path.exists(job_config_path):
+            try:
+                with open(job_config_path, "r", encoding="utf-8") as f:
+                    raw_job_config = json.load(f)
+                wp_by_id = {w.get("id"): w for w in raw_job_config.get("waypoints", []) if isinstance(w, dict)}
+                for _idx, _wp in enumerate(raw_job_config.get("waypoints", [])):
+                    if _wp.get("id"):
+                        waypoint_id_to_idx[_wp["id"]] = _idx
+                # Route and attraction outputs are sibling folders under assets/video/; out_dir is the route one.
+                attraction_dir = self.out_dir.parent / "attraction"
+            except (OSError, json.JSONDecodeError) as e:
+                logger.warning(f"Could not read job_config for attraction-video lookup: {e}")
+        return raw_job_config, wp_by_id, waypoint_id_to_idx, attraction_dir
+
+    def _course_brief_legs(self) -> List[Dict[str, Any]]:
+        """The course overview's card adds up the brief's legs, not the GPS track."""
+        if not (self.config.get("overview_style") == "course" and self.config.get("res_route_path")):
+            return []
+        from services.localization.route_brief import load_brief
+        try:
+            return load_brief(self.config["res_route_path"])["legs"]
+        except (OSError, ValueError, KeyError) as e:
+            logger.warning(f"Could not load the route brief for the leg cards: {e}")
+            return []
+
+    @staticmethod
+    def _attraction_video_for(ctx: "_ResContext", waypoint_id: Optional[str], label: Optional[str]) -> Optional[str]:
+        from services.vdoprocessing.videopipeline.helpers import attraction_output_filename
+
+        if not waypoint_id or waypoint_id not in ctx.waypoint_id_to_idx or ctx.attraction_dir is None:
+            return None
+        idx = ctx.waypoint_id_to_idx[waypoint_id]
+        candidate = ctx.attraction_dir / attraction_output_filename(idx, label or f"waypoint_{idx}")
+        return str(candidate) if candidate.exists() else None
+
+    def _landmark_entry(self, ctx: "_ResContext", m: Dict[str, Any]) -> Dict[str, Any]:
+        from services.vdoprocessing.videopipeline.audio_step import no_narration_stop
+
+        return {
+            "lat": m["lat"], "lon": m.get("lng", m.get("lon")), "label": m.get("label"),
+            # A "connectToRoute" stop-by gets the full fullscreen photo-pause as the walker passes it.
+            "connect_to_route": bool(m.get("connect_to_route", False)),
+            # Only when set: other legs' landmarks (and fingerprints) stay as they were.
+            **({"inaccessible": True} if m.get("inaccessible") else {}),
+            # Nothing to tell here: its photo only pops up as a card, never fullscreen (as a normal stop with
+            # no_narration_stop / `quiet_stop_transition`).
+            **({"quiet": True} if no_narration_stop(ctx.wp_by_id.get(m.get("waypoint_id")) or {}) else {}),
+            "popup_image": m.get("popup_image"),
+            "freeze_seconds": m.get("freeze_seconds"),
+            "image_display": "fullscreen",  # residential legs are always fullscreen
+            # Its own narration length: pedestrian holds the fullscreen pause at least this long.
+            "narration_audio_seconds": m.get("narration_audio_seconds"),
+            # Set only when this stop-by already has a GENERATED attraction video: the photo pause then cuts the
+            # leg clip instead of shrinking back to resume the walk in place.
+            "attraction_video": self._attraction_video_for(ctx, m.get("waypoint_id"), m.get("label")),
+            # The photo ends fullscreen and the attraction video dissolves in from it.
+            "dissolve_into_attraction": bool(self.config.get("dissolve_into_attraction", False)),
+            # Audio-first timing of the walk TOWARD this stop and how long it waits here for the voice.
+            "walk_seconds": m.get("walk_seconds"),
+            "wait_seconds": m.get("wait_seconds"),
+            "pops_after": m.get("pops_after"),
+            "waypoint_id": m.get("waypoint_id"),
+        }
+
+    def _leg_landmarks(
+        self, ctx: "_ResContext", i: int, res_data: Dict[str, Any], leg_mode: str, leg_latlon: List,
+    ) -> List[Dict[str, Any]]:
+        landmarks = [
+            self._landmark_entry(ctx, m)
+            for m in res_data.get("mid_markers", [])
+            if m.get("lat") is not None and m.get("lng", m.get("lon")) is not None
+        ]
+        mapillary_token = resolve_mapillary_token()
+        if (leg_mode == "walking" and mapillary_token and self.config.get("res_route_path")
+                and self.config.get("street_photos_at_turns", tuning.STREET_PHOTOS_AT_TURNS)):
+            photo_dir = meta_dir(Path(self.config["res_route_path"]).parent) / "streetview"
+            landmarks += attach_cue_spans(clear_of(
+                turn_photos([list(p) for p in leg_latlon], photo_dir, mapillary_token),
+                ctx.street_views[i], tuning.STREET_VIEW_REPLACES_TURN_PHOTO_M,
+            ), res_data.get("turn_cues") or [])
+        landmarks += ctx.street_views[i]
+        return landmarks
+
+    def _leg_photos(self, ctx: "_ResContext", res_data: Dict[str, Any]) -> "_LegPhotos":
+        """The photos that open and close a leg. render_step stashes the destination's popup as the LAST entry of the
+        leg's "popups" (a clip only ever ends its route on the arrival stop)."""
+        from services.vdoprocessing.videopipeline.audio_step import no_narration_stop
+
+        dest_popup = next((p for p in (res_data.get("popups") or []) if p), None) or {}
+        # The leg ends on this photo and the destination's attraction video (dissolve) opens on the waypoint's FIRST
+        # image: with attraction videos on the leg shows the first image too, else the last one.
+        dest_popup_image = (
+            dest_popup.get("popup_image")
+            if self.config.get("enable_attraction_videos", True)
+            else dest_popup.get("popup_image_last")
+        ) or dest_popup.get("popup_image_last") or dest_popup.get("popup_image")
+        dest_freeze_seconds = dest_popup.get("freeze_seconds")
+        dest_narration_seconds = dest_popup.get("audio_duration")
+        # A return stop only pops its photo up as a card (its place had its fullscreen visit already); so does a
+        # place with nothing to tell (no attraction clip follows): the walk goes on.
+        dest_wp = ctx.wp_by_id.get(res_data.get("end_waypoint_id"))
+        dest_quiet = dest_wp is not None and no_narration_stop(dest_wp)
+        dest_image_display = "pip" if res_data.get("dest_is_return") or dest_quiet else "fullscreen"
+        if not dest_popup_image:
+            # A trailing synthetic end_point leg has no popup of its own: fall back to the last REAL waypoint's photo.
+            end_popup = res_data.get("trip_end_popup") or {}
+            dest_popup_image = end_popup.get("popup_image_last") or end_popup.get("popup_image")
+            dest_freeze_seconds = end_popup.get("freeze_seconds")
+            dest_narration_seconds = end_popup.get("audio_duration")
+        # The departure waypoint's popup (render_step's "leg_start_popup"), shown at this leg's own opening.
+        start_popup = res_data.get("leg_start_popup") or {}
+        return _LegPhotos(
+            dest_image=dest_popup_image, dest_freeze=dest_freeze_seconds, dest_narration=dest_narration_seconds,
+            dest_display=dest_image_display, dest_quiet=dest_quiet,
+            start_image=start_popup.get("popup_image_last") or start_popup.get("popup_image"),
+            start_freeze=start_popup.get("freeze_seconds"), start_narration=start_popup.get("audio_duration"),
+        )
+
+    def _leg_base_kwargs(
+        self, ctx: "_ResContext", res_data: Dict[str, Any], leg_mode: str, leg_labels: List[str],
+        landmarks: List[Dict[str, Any]], photos: "_LegPhotos",
+    ) -> Dict[str, Any]:
+        # Narration-synced video length (else a paced distance fallback, see render_step's res_sequence build); real
+        # legs run from meters to kilometers, so literal walking pace would make clips seconds to HOURS long. The HUD's
+        # remaining-time estimate stays real-world.
+        target_duration = res_data.get("travel_duration") or res_data.get("segment_duration")
+        return dict(
+            mode=leg_mode,
+            travel_speed_kmh=_reported_speed_kmh(ctx.mode_speed_kmh, leg_mode),
+            # No reserve for the burned caption's band: it squeezed tall/vertical legs for little benefit
+            # (LEG_FRAME_BOTTOM_PIN_PX already keeps the start pin's own label clear).
+            bottom_reserve_px=0,
+            walker_color=res_data.get("line_color"),
+            target_duration_seconds=target_duration,
+            landmarks=landmarks, route_chain=leg_labels or None, context_path=ctx.context_path,
+            # Straight-down chase cam (still follows/rotates, never tilts); settings.res_follow_pitch opts into a tilt.
+            follow_pitch=self.config.get("res_follow_pitch", 0.0),
+            dest_popup_image=photos.dest_image,
+            dest_popup_freeze_seconds=photos.dest_freeze,
+            dest_popup_narration_seconds=photos.dest_narration,
+            start_popup_image=photos.start_image,
+            start_popup_freeze_seconds=photos.start_freeze,
+            start_popup_narration_seconds=photos.start_narration,
+            start_cue_seconds=res_data.get("start_cue_seconds"),
+            arrival_photo_hold_seconds=self.config.get("arrival_photo_hold_seconds"),
+            arrival_wait_seconds=res_data.get("arrival_wait_seconds"),
+            dest_image_display=photos.dest_display,
+            start_pin=res_data.get("start_pin"),
+            dest_pin=res_data.get("dest_pin"),
+            total_stops=res_data.get("total_stops"),
+            theme=self.graphics.theme,
+        )
+
+    def _add_optional_leg_kwargs(self, leg_kwargs: Dict[str, Any], res_data: Dict[str, Any]) -> None:
+        """Each only when set, so the other legs keep their fingerprint."""
+        if res_data.get("pace_cues"):
+            leg_kwargs["pace_cues"] = {
+                "spans": res_data["pace_cues"],
+                "slow": float(self.config.get("pace_slow_factor") or tuning.PACE_SLOW_FACTOR),
+                "fast": float(self.config.get("pace_fast_factor") or tuning.PACE_FAST_FACTOR),
+            }
+        if res_data.get("at_cues"):
+            leg_kwargs["at_cues"] = res_data["at_cues"]
+        if self.config.get("mapbox_style_id"):
+            leg_kwargs["map_style"] = resolve_map_style(self.config, "mapbox/outdoors-v12")
+        if res_data.get("elevations"):  # the heatmap is on
+            leg_kwargs["leg_elevations"] = res_data["elevations"]
+        if self.config.get("overview_style") == "course":  # the walker slows down before each stop
+            leg_kwargs["arrival_slow_seconds"] = tuning.COURSE_ARRIVAL_SLOW_SECONDS
+
+    def _add_leg_joins(
+        self, leg_kwargs: Dict[str, Any], ctx: "_ResContext", i: int, res_data: Dict[str, Any],
+        res_sequence: List[Dict], photos: "_LegPhotos", prev_end_view: Optional[str], leg_glob_prefix: str,
+    ) -> None:
+        """How this leg opens and closes against its neighbours (return stops, stops with nothing to tell)."""
+        from services.vdoprocessing.videopipeline.audio_step import no_narration_stop
+
+        # A return stop's photo never opens a leg fullscreen.
+        start_wp = ctx.wp_by_id.get(res_data.get("start_waypoint_id"))
+        start_quiet = start_wp is not None and no_narration_stop(start_wp)  # no fullscreen came before this leg
+        if (res_data.get("start_is_return") or (res_data.get("dest_is_return") and not photos.start_image)
+                or start_quiet):
+            leg_kwargs["opening_photo"] = False
+        # Legs joined at a return stop, or at a stop with nothing to tell: this leg's last frame is the next one's first.
+        next_leg = res_sequence[i + 1] if i + 1 < len(res_sequence) else {}
+        # "zoom": legs at such a stop open and close like any other (no slide, no carried card).
+        slide = self.config.get("quiet_stop_transition", "slide") != "zoom"
+        if (res_data.get("dest_is_return") and next_leg.get("start_is_return")) or (photos.dest_quiet and slide):
+            leg_kwargs["end_view_path"] = str(self.out_dir / f"{leg_glob_prefix}endview.json")
+        if photos.dest_quiet and slide and photos.dest_image:
+            leg_kwargs["hold_end_card"] = True
+        if (res_data.get("start_is_return") or (start_quiet and slide)) and prev_end_view:
+            try:
+                leg_kwargs["opening_view"] = json.loads(Path(prev_end_view).read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
+        if start_quiet and slide and i > 0:
+            # The walk goes on through a stop with nothing to tell: the leg before stays drawn as walked and the
+            # camera glides into this leg's framing quickly.
+            prev = res_sequence[i - 1]
+            if prev.get("lats") is not None and prev.get("lons") is not None:
+                leg_kwargs["prior_trail"] = [[float(a), float(b)] for a, b in zip(prev["lats"], prev["lons"])]
+            leg_kwargs["topdown_transition_seconds"] = tuning.LEG_CONTINUE_GLIDE_SECONDS
+
+    def _plan_leg(
+        self, ctx: "_ResContext", i: int, res_data: Dict[str, Any], res_sequence: List[Dict],
+        leg_latlon: List, dest_label: str, leg_mode: str, leg_labels: List[str], prev_end_view: Optional[str],
+    ) -> "_LegPlan":
+        landmarks = self._leg_landmarks(ctx, i, res_data, leg_mode, leg_latlon)
+        # Each connectToRoute landmark cuts the leg into one more piece, piece[k] being the walk TOWARD landmark[k] (the
+        # last piece targets the leg's destination). Written as a sidecar JSON so leg_pieces.py's narration split knows
+        # which waypoint's narration belongs to which piece.
+        connected_landmark_ids = cut_landmark_ids(res_data.get("mid_markers", []))
+        photos = self._leg_photos(ctx, res_data)
+        safe_suffix = (
+            "".join(c for c in str(dest_label) if c.isalnum() or c in (" ", "_", "-"))
+            .strip()
+            .replace(" ", "_")
+            or f"leg{i + 1}"
+        )
+        leg_file_num = res_data.get("start_pos")
+        leg_file_num = (leg_file_num + 1) if leg_file_num is not None else (i + 1)
+        # A connected stop-by can split ONE leg into several files sharing this "02_waypoint_{N:02d}_" prefix, so
+        # "already rendered" is checked by the whole prefix.
+        leg_glob_prefix = f"02_waypoint_{leg_file_num:02d}_"
+        leg_kwargs = self._leg_base_kwargs(ctx, res_data, leg_mode, leg_labels, landmarks, photos)
+        self._add_optional_leg_kwargs(leg_kwargs, res_data)
+        self._add_leg_joins(leg_kwargs, ctx, i, res_data, res_sequence, photos, prev_end_view, leg_glob_prefix)
+        # Marks a join at a stop with nothing to tell: the timeline cuts there (same frame), no dissolve.
+        no_fade = self.out_dir / f"{leg_glob_prefix}nofade"
+        if photos.dest_quiet and self.config.get("quiet_stop_transition", "slide") != "zoom":
+            no_fade.touch()
+        else:
+            no_fade.unlink(missing_ok=True)
+        return _LegPlan(
+            kwargs=leg_kwargs, num=leg_file_num, prefix=leg_glob_prefix,
+            output_path=str(self.out_dir / f"{leg_glob_prefix}{safe_suffix}.mp4"),
+            connected_ids=connected_landmark_ids, dest_id=res_data.get("end_waypoint_id"),
+        )
+
+    def _write_piece_plan(self, plan: "_LegPlan", piece_paths) -> None:
+        pieces = {
+            "pieces": [
+                {
+                    "file": Path(p).name,
+                    "target_waypoint_id": (
+                        plan.connected_ids[idx] if idx < len(plan.connected_ids) else plan.dest_id
+                    ),
+                }
+                for idx, p in enumerate(piece_paths)
+            ]
+        }
+        plan_path = self.out_dir / f"02_waypoint_{plan.num:02d}_pieces.json"
+        try:
+            write_json_atomic(plan_path, pieces, indent=None)
+        except OSError:
+            pass
+
+    def _reusable_leg_files(
+        self, plan: "_LegPlan", leg_latlon: List, dest_label: str, res_data: Dict[str, Any], leg_fingerprint: str,
+    ) -> "_LegReuse":
+        """Files to reuse, stale files to remove after a re-render, ignored changes and the leg's parts. Existing files are only reused
+        when they match what they were rendered from: a bare existence check kept legs rendered with an old walk
+        timing forever."""
+        leg_kwargs, leg_file_num, leg_glob_prefix = plan.kwargs, plan.num, plan.prefix
+        fingerprint_path = self.out_dir / f"{leg_glob_prefix}inputs.json"
+        existing_leg_files = (
+            leg_clips(self.out_dir, f"{leg_glob_prefix}*.mp4") if self.config.get("checkpoint_enabled", False) else []
+        )
+        if existing_leg_files and not pieces_complete(existing_leg_files):
+            logger.info("Residential leg %d is missing a piece — rendering it again.", leg_file_num)
+            existing_leg_files = []
+        leg_parts = _leg_fingerprint_parts(
+            leg_latlon, dest_label, leg_kwargs, route_inputs=res_data.get("route_inputs"),
+        )
+        stored_inputs = _stored_leg_inputs(fingerprint_path)
+        old_parts = stored_inputs.get("parts") or {}
+        changed = sorted(k for k in set(leg_parts) | set(old_parts) if leg_parts.get(k) != old_parts.get(k))
+        if old_parts:
+            path_changed = leg_changed_parts(leg_parts, old_parts)
+        elif stored_inputs.get("fingerprint") != leg_fingerprint:
+            path_changed = ["no per-input record from the earlier render"]
+        else:
+            path_changed = []
+        stale_leg_files: List[Path] = []
+        if existing_leg_files and path_changed:
+            logger.info(
+                "Residential leg %d path changed since it was rendered (%s) — re-rendering.",
+                leg_file_num, ", ".join(path_changed),
+            )
+            # Old pieces are removed only after the re-render succeeds, so a killed run keeps the previous clip.
+            stale_leg_files = [
+                old for old in self.out_dir.glob(f"{leg_glob_prefix}*")
+                if old.suffix in (".mp4", ".json") and old.name != fingerprint_path.name
+            ]
+            # One earlier variant per leg is kept: switching a setting back (the heatmap off and on again) restores it.
+            variant_dir = self.out_dir / ".variants" / leg_glob_prefix.rstrip("_")
+            existing_leg_files = restore_leg(
+                variant_dir, fingerprint_path.name, leg_parts, stale_leg_files + [fingerprint_path], self.out_dir,
+            )
+            if existing_leg_files:
+                logger.info("Residential leg %d: restored the version rendered from these inputs.", leg_file_num)
+                stale_leg_files, changed = [], []
+            else:
+                stash_leg(stale_leg_files + [fingerprint_path], variant_dir)
+        return _LegReuse(existing_leg_files, stale_leg_files, changed, leg_parts)
+
+    def _run_leg(
+        self, ctx: "_ResContext", i: int, plan: "_LegPlan", res_data: Dict[str, Any], leg_latlon: List,
+        dest_label: str,
+    ) -> List[str]:
+        from services.vdoprocessing.pydeckrecorder.pedestrian import render_residential_leg_pydeck
+
+        leg_kwargs = plan.kwargs
+        leg_fingerprint = _leg_fingerprint(leg_latlon, dest_label, leg_kwargs)
+        fingerprint_path = self.out_dir / f"{plan.prefix}inputs.json"
+        reuse = self._reusable_leg_files(plan, leg_latlon, dest_label, res_data, leg_fingerprint)
+        existing_leg_files, stale_leg_files, changed = reuse.files, reuse.stale, reuse.changed
+        if existing_leg_files:
+            logger.info(
+                "Residential leg %d already rendered (%d file(s)) — skipping.%s",
+                plan.num, len(existing_leg_files),
+                f" Ignored changes: {', '.join(changed)}" if changed else "",
+            )
+            # Rewritten even on a skip (cheap, no ffmpeg): keeps it in sync with job_config's CURRENT landmark data.
+            self._write_piece_plan(plan, [str(p) for p in existing_leg_files])
+            return [str(p) for p in existing_leg_files]
+
+        # render_residential_leg_pydeck always returns a LIST: a connected stop-by's pause can cut one leg into
+        # several files sharing this prefix ("_cont{n}" per cut); leg_pieces.py splits the leg's narration across them.
+        leg_paths = render_residential_leg_pydeck(
+            leg_latlon, dest_label, plan.output_path,
+            hud_card_png=self._leg_hud_card_png(
+                leg_kwargs["mode"], ctx.leg_totals[i],
+                after=(sum(km for km, _ in ctx.leg_totals[i + 1:]), sum(s for _, s in ctx.leg_totals[i + 1:])),
+            ),
+            # Not in leg_kwargs: a token change must not re-render finished legs (see the fingerprint).
+            mapbox_key=self._mapbox_token(), **leg_kwargs,
+        )
+        if leg_paths:
+            keep = {Path(p).resolve() for p in leg_paths}
+            keep |= {Path(p).with_suffix(".timing.json").resolve() for p in leg_paths}
+            if leg_kwargs.get("end_view_path"):
+                keep.add(Path(leg_kwargs["end_view_path"]).resolve())  # just written for the next leg: not stale
+            for old in stale_leg_files:
+                if old.resolve() not in keep:
+                    old.unlink(missing_ok=True)
+            write_json_atomic(fingerprint_path, {"fingerprint": leg_fingerprint, "parts": reuse.parts}, indent=None)
+        self._write_piece_plan(plan, leg_paths)
+        return leg_paths
+
+    def _overview_clip(
+        self, img_path: str, points: List, labels: List, popups: List, fps: int, summary: Optional[Dict],
+        point_modes: Optional[List[str]], point_colors: Optional[List], kwargs: Dict[str, Any],
+    ) -> Optional[str]:
+        """[NOTE] [Core] The GeoJsonLayer pydeck overview (_render_overview_pydeck) renders on the GPU and does not
+        follow the narration's cues (stop holds, stop-by timing, ending fitted to the voice) - the 2D spatial_renderer
+        path does; settings.use_pydeck_overview selects it (tuning.DEFAULT_USE_PYDECK_OVERVIEW). The "course"
+        overview exists only in the 2D renderer."""
+        if (
+            self.config.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW)
+            and self.config.get("overview_style") != "course"
+        ):
+            logger.info("Rendering Overview using GeoJsonLayer PyDeck...")
+            return self._render_overview_pydeck(
+                img_path, points, labels, popups,
+                extent=kwargs.get("overview_extent"), fps=fps,
+            )
+        return self.spatial_renderer.render_overview(
+            img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes,
+            point_colors=point_colors,
+            bounding_box=kwargs.get("overview_bounding_box"),
+            extent=kwargs.get("overview_extent"),
+        )
+
+    def _hold_overview_end(self, overview_path: str) -> None:
+        """Skips the extra hold when the clip already ended itself on a blur-out (that blur is its last frame) or
+        was reused."""
+        hold_seconds = self.config.get("summary_hold", DEFAULT_SUMMARY_HOLD_SECONDS)
+        if self.config.get("overview_audio_seconds") and self.config.get("overview_cue_seconds"):
+            # Narrated: the renderer already fitted the ending to the voice (overview_timing.fit_ending); a fixed
+            # hold would run past it. Only an unspoken gap left (the voice still going) is held - the mux holds that too.
+            rendered = getattr(self.spatial_renderer, "last_rendered_seconds", None)
+            hold_seconds = max(
+                0.0, float(self.config["overview_audio_seconds"]) - float(rendered or 0.0)
+            ) if rendered else 0.0
+            if hold_seconds < 0.1:  # a rounding remainder, not worth a re-encode
+                hold_seconds = 0.0
+        reused = getattr(self.spatial_renderer, "last_overview_reused", False)
+        if not reused and not self.spatial_renderer.last_ending_hard_ended:
+            self._freeze_video_end(overview_path, hold_seconds=hold_seconds)
 
     def render(
         self,
@@ -1083,57 +1116,15 @@ class RouteAnimator:
             )
             self._commit_overview_checkpoint()
             output_paths.append(overview_path)
-            
+
         elif render_mode != "residential":
             tracker.show("Rendering overview video...")
-            # [NOTE] [Core] The GeoJsonLayer pydeck overview
-            # (_render_overview_pydeck/render_overview_video_pydeck in
-            # pydeckrecorder.pedestrian) is the default
-            # (tuning.DEFAULT_USE_PYDECK_OVERVIEW), independent of
-            # use_pydeck_pedestrian (which governs residential below).
-            # It renders on the GPU and does not follow the narration's cues
-            # (stop holds, stop-by timing, ending fitted to the voice) — the
-            # 2D spatial_renderer path below does; settings.use_pydeck_overview
-            # = false selects it.
-            # The "course" overview exists only in the 2D renderer.
-            if (
-                self.config.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW)
-                and self.config.get("overview_style") != "course"
-            ):
-                logger.info("Rendering Overview using GeoJsonLayer PyDeck...")
-                overview_path = self._render_overview_pydeck(
-                    img_path, points, labels, popups,
-                    extent=kwargs.get("overview_extent"), fps=fps,
-                )
-            else:
-                overview_path = self.spatial_renderer.render_overview(
-                    img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes,
-                    point_colors=point_colors,
-                    bounding_box=kwargs.get("overview_bounding_box"),
-                    extent=kwargs.get("overview_extent"),
-                )
+            overview_path = self._overview_clip(
+                img_path, points, labels, popups, fps, summary, point_modes, point_colors, kwargs,
+            )
             tracker.clear()
             if overview_path:
-                # Skip the extra hold when the clip already ended itself on
-                # a blur-out (see SpatialRenderer._render_ending_highlight) —
-                # that blur is meant to be the video's actual last frame, so
-                # freezing on top of it just makes playback linger instead
-                # of ending right when the blur finishes.
-                hold_seconds = self.config.get("summary_hold", DEFAULT_SUMMARY_HOLD_SECONDS)
-                if self.config.get("overview_audio_seconds") and self.config.get("overview_cue_seconds"):
-                    # Narrated: the renderer already fitted the ending to the
-                    # voice (overview_timing.fit_ending); a fixed hold here
-                    # would run the video past it. Only an unspoken gap left
-                    # (the voice still going) is held - the mux holds that too.
-                    rendered = getattr(self.spatial_renderer, "last_rendered_seconds", None)
-                    hold_seconds = max(
-                        0.0, float(self.config["overview_audio_seconds"]) - float(rendered or 0.0)
-                    ) if rendered else 0.0
-                    if hold_seconds < 0.1:  # a rounding remainder, not worth a re-encode
-                        hold_seconds = 0.0
-                reused = getattr(self.spatial_renderer, "last_overview_reused", False)
-                if not reused and not self.spatial_renderer.last_ending_hard_ended:
-                    self._freeze_video_end(overview_path, hold_seconds=hold_seconds)
+                self._hold_overview_end(overview_path)
                 self._commit_overview_checkpoint()
                 output_paths.append(overview_path)
 
@@ -1157,7 +1148,7 @@ class RouteAnimator:
         return output_paths
 
 
-def main():
+def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--map", required=True)
     parser.add_argument("--route", required=True)
@@ -1173,8 +1164,54 @@ def main():
     parser.add_argument("--summary-json", default=None)
     parser.add_argument("--summary-hold", type=float, default=4.0)
     parser.add_argument("--summary-fade", type=float, default=0.5)
+    return parser.parse_args()
 
-    args = parser.parse_args()
+
+def _apply_job_config_labels(output: str, res_labels: List) -> None:
+    """[HACK] [IO] Walks up from the output dir looking for job_config.json since this CLI has no direct reference
+    to the job — swallows any read failure and just falls back to the raw route labels."""
+    try:
+        out_path = Path(output)
+        job_paths = [
+            out_path / "job_config.json",
+            out_path.parent / "job_config.json",
+        ]
+
+        for job_config_path in job_paths:
+            if job_config_path.exists():
+                with open(job_config_path, "r", encoding="utf-8") as f:
+                    job_data = json.load(f)
+                    start_lbl = job_data.get("start_point", {}).get("label")
+                    end_lbl = job_data.get("end_point", {}).get("label")
+
+                    if start_lbl and len(res_labels) > 0:
+                        res_labels[0] = start_lbl
+                    if end_lbl and len(res_labels) > 1:
+                        res_labels[-1] = end_lbl
+                break
+    except Exception as e:
+        logger.warning(
+            f"Could not read labels from job_config.json for residential map: {e}"
+        )
+
+
+def _cli_res_sequence(animator: RouteAnimator, args: argparse.Namespace) -> Optional[List[Dict[str, Any]]]:
+    if not (args.res_route and args.res_map):
+        return None
+    res_points, res_labels, res_popups, _ = animator.load_route_data(args.res_route)
+    _apply_job_config_labels(args.output, res_labels)
+    return [
+        {
+            "img_path": args.res_map,
+            "points": res_points,
+            "labels": res_labels,
+            "popups": res_popups,
+        }
+    ]
+
+
+def main():
+    args = _parse_args()
 
     config = {
         "output_dir": args.output,
@@ -1196,45 +1233,7 @@ def main():
         "marker_radius", DEFAULT_MARKER_RADIUS
     )
 
-    res_sequence = None
-    if args.res_route and args.res_map:
-        res_points, res_labels, res_popups, _ = animator.load_route_data(args.res_route)
-
-        # [HACK] [IO] Walks up from the output dir looking for job_config.json
-        # since this CLI has no direct reference to the job — swallows any
-        # read failure and just falls back to the raw route labels.
-        try:
-            out_path = Path(args.output)
-            job_paths = [
-                out_path / "job_config.json",
-                out_path.parent / "job_config.json",
-            ]
-
-            for job_config_path in job_paths:
-                if job_config_path.exists():
-                    with open(job_config_path, "r", encoding="utf-8") as f:
-                        job_data = json.load(f)
-                        start_lbl = job_data.get("start_point", {}).get("label")
-                        end_lbl = job_data.get("end_point", {}).get("label")
-
-                        if start_lbl and len(res_labels) > 0:
-                            res_labels[0] = start_lbl
-                        if end_lbl and len(res_labels) > 1:
-                            res_labels[-1] = end_lbl
-                    break
-        except Exception as e:
-            logger.warning(
-                f"Could not read labels from job_config.json for residential map: {e}"
-            )
-
-        res_sequence = [
-            {
-                "img_path": args.res_map,
-                "points": res_points,
-                "labels": res_labels,
-                "popups": res_popups,
-            }
-        ]
+    res_sequence = _cli_res_sequence(animator, args)
 
     summary = (
         json.load(open(args.summary_json, "r", encoding="utf-8"))

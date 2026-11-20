@@ -13,6 +13,86 @@ from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
 
+_POPUP_RATIO = 16.0 / 9.0
+
+
+def _crop_to_popup_ratio(pop_img: np.ndarray) -> np.ndarray:
+    """Center-crops the popup image to a fixed 16:9 ratio (trimming whichever axis is oversized) so it fills the
+    frame with no letterboxing once scaled up."""
+    ph, pw = pop_img.shape[:2]
+    current_ratio = pw / float(ph)
+    if current_ratio > _POPUP_RATIO:
+        new_w = int(ph * _POPUP_RATIO)
+        offset = (pw - new_w) // 2
+        return pop_img[:, offset : offset + new_w]
+    if current_ratio < _POPUP_RATIO:
+        new_h = int(pw / _POPUP_RATIO)
+        offset = (ph - new_h) // 2
+        return pop_img[offset : offset + new_h, :]
+    return pop_img
+
+
+def _scale_up_frames(
+    base_frame: np.ndarray, hi_res_popup: np.ndarray, box: Tuple[int, int, int, int], scale_frames: int,
+) -> List[np.ndarray]:
+    """The card growing from its small box (x, y, w, h) to the whole frame over `scale_frames` frames.
+
+    [NOTE] [Animation] Cubic ease-out (1 - (1-progress)^3): fast at the start, settling gently into the
+    fullscreen size instead of a linear, mechanical-feeling scale.
+    """
+    h, w = base_frame.shape[:2]
+    start_x, start_y, target_img_w, target_img_h = box
+    frames = []
+    for t in range(scale_frames):
+        progress = t / float(scale_frames - 1) if scale_frames > 1 else 1.0
+        ease = 1 - (1 - progress) ** 3
+        curr_w = int(target_img_w + (w - target_img_w) * ease)
+        curr_h = int(target_img_h + (h - target_img_h) * ease)
+        curr_x = int(start_x + (0 - start_x) * ease)
+        curr_y = int(start_y + (0 - start_y) * ease)
+
+        frame = base_frame.copy()
+        bg_fade = 1.0 - (0.8 * ease)
+        frame = (frame * bg_fade).astype(np.uint8)
+
+        resized_popup = cv2.resize(hi_res_popup, (curr_w, curr_h))
+
+        # Rack-focus blur: sharp at rest, blurred while mid-scale — the
+        # snap from small card to fullscreen reads as a deliberate
+        # whip/zoom rather than a plain resize. Blur strength eases out
+        # to 0 as the scale-up finishes.
+        blur_amount = int(31 * (1.0 - ease))
+        if blur_amount > 0:
+            k = blur_amount | 1  # cv2.GaussianBlur needs an odd kernel size
+            resized_popup = cv2.GaussianBlur(resized_popup, (k, k), 0)
+
+        x0, y0 = max(0, curr_x), max(0, curr_y)
+        x1, y1 = min(w, curr_x + curr_w), min(h, curr_y + curr_h)
+        px0, py0 = x0 - curr_x, y0 - curr_y
+        px1, py1 = px0 + (x1 - x0), py0 + (y1 - y0)
+
+        if x0 < x1 and y0 < y1:
+            frame[y0:y1, x0:x1] = resized_popup[py0:py1, px0:px1]
+        frames.append(frame)
+    return frames
+
+
+def _cover_crop(frame: np.ndarray, target_w: int, target_h: int) -> np.ndarray:
+    """"Cover" scaling: scales by the LARGER of the two ratios so the frame fully fills target_w x target_h with
+    no letterboxing, then center-crops the overflow off whichever axis ends up oversized.
+
+    [NOTE] [Animation] Rounded UP (ceil, not truncated) so the scaled frame can never come out a pixel short of
+    target_w/target_h and leave a sliver of whatever's behind it exposed at the crop's edge.
+    """
+    fh, fw = frame.shape[:2]
+    scale = max(target_w / fw, target_h / fh)
+    new_w, new_h = math.ceil(fw * scale), math.ceil(fh * scale)
+    resized = cv2.resize(frame, (new_w, new_h))
+
+    y_offset = (new_h - target_h) // 2
+    x_offset = (new_w - target_w) // 2
+    return resized[y_offset : y_offset + target_h, x_offset : x_offset + target_w]
+
 
 class _FullscreenMixin:
     def generate_fullscreen_popup_transition(
@@ -34,20 +114,7 @@ class _FullscreenMixin:
         if pop_img is None:
             return frames
 
-        ph, pw = pop_img.shape[:2]
-        target_ratio = 16.0 / 9.0
-        current_ratio = pw / float(ph)
-
-        # [NOTE] [Animation] Center-crops the popup image to a fixed 16:9 ratio (trimming whichever axis is oversized) so it fills the frame with no letterboxing once scaled up.
-        if current_ratio > target_ratio:
-            new_w = int(ph * target_ratio)
-            offset = (pw - new_w) // 2
-            pop_img = pop_img[:, offset : offset + new_w]
-        elif current_ratio < target_ratio:
-            new_h = int(pw / target_ratio)
-            offset = (ph - new_h) // 2
-            pop_img = pop_img[offset : offset + new_h, :]
-
+        pop_img = _crop_to_popup_ratio(pop_img)
         hi_res_popup = cv2.resize(pop_img, (w, h))
 
         # Same geometry render_popup_box itself used to draw the card this
@@ -59,44 +126,10 @@ class _FullscreenMixin:
         box_x, box_y, total_w, total_h = self.popup_card_geometry(
             popup_info, w, h
         )
-        target_img_w = total_w
-        target_img_h = int(target_img_w / target_ratio)
-
-        start_x, start_y = box_x, box_y
+        target_img_h = int(total_w / _POPUP_RATIO)
 
         scale_frames = max(1, int(duration_sec * fps))
-        # [NOTE] [Animation] Cubic ease-out (1 - (1-progress)^3): fast at the start, settling gently into the fullscreen size instead of a linear, mechanical-feeling scale.
-        for t in range(scale_frames):
-            progress = t / float(scale_frames - 1) if scale_frames > 1 else 1.0
-            ease = 1 - (1 - progress) ** 3
-            curr_w = int(target_img_w + (w - target_img_w) * ease)
-            curr_h = int(target_img_h + (h - target_img_h) * ease)
-            curr_x = int(start_x + (0 - start_x) * ease)
-            curr_y = int(start_y + (0 - start_y) * ease)
-
-            frame = base_frame.copy()
-            bg_fade = 1.0 - (0.8 * ease)
-            frame = (frame * bg_fade).astype(np.uint8)
-
-            resized_popup = cv2.resize(hi_res_popup, (curr_w, curr_h))
-
-            # Rack-focus blur: sharp at rest, blurred while mid-scale — the
-            # snap from small card to fullscreen reads as a deliberate
-            # whip/zoom rather than a plain resize. Blur strength eases out
-            # to 0 as the scale-up finishes.
-            blur_amount = int(31 * (1.0 - ease))
-            if blur_amount > 0:
-                k = blur_amount | 1  # cv2.GaussianBlur needs an odd kernel size
-                resized_popup = cv2.GaussianBlur(resized_popup, (k, k), 0)
-
-            x0, y0 = max(0, curr_x), max(0, curr_y)
-            x1, y1 = min(w, curr_x + curr_w), min(h, curr_y + curr_h)
-            px0, py0 = x0 - curr_x, y0 - curr_y
-            px1, py1 = px0 + (x1 - x0), py0 + (y1 - y0)
-
-            if x0 < x1 and y0 < y1:
-                frame[y0:y1, x0:x1] = resized_popup[py0:py1, px0:px1]
-            frames.append(frame)
+        frames = _scale_up_frames(base_frame, hi_res_popup, (box_x, box_y, total_w, target_img_h), scale_frames)
 
         full_screen_frame = frames[-1].copy() if frames else hi_res_popup.copy()
 
@@ -144,17 +177,7 @@ class _FullscreenMixin:
             if not ret:
                 break
 
-            fh, fw = frame.shape[:2]
-            # [NOTE] [Animation] "Cover" scaling: scales by the LARGER of the two ratios so the frame fully fills target_w x target_h with no letterboxing, then center-crops the overflow off whichever axis ends up oversized. Rounded UP (ceil, not truncated) so the scaled frame can never come out a pixel short of target_w/target_h and leave a sliver of whatever's behind it exposed at the crop's edge.
-            scale = max(target_w / fw, target_h / fh)
-            new_w, new_h = math.ceil(fw * scale), math.ceil(fh * scale)
-            resized = cv2.resize(frame, (new_w, new_h))
-
-            y_offset = (new_h - target_h) // 2
-            x_offset = (new_w - target_w) // 2
-            cropped = resized[
-                y_offset : y_offset + target_h, x_offset : x_offset + target_w
-            ]
+            cropped = _cover_crop(frame, target_w, target_h)
             if count < fade_frames:
                 alpha = count / fade_frames
                 video_out.write(cv2.addWeighted(cropped, alpha, enter_frame, 1 - alpha, 0))
@@ -173,6 +196,19 @@ class _FullscreenMixin:
                 video_out.write(cv2.addWeighted(f, alpha, exit_frame, 1 - alpha, 0))
             else:
                 video_out.write(f)
+
+    @staticmethod
+    def _write_blur_out(video: VideoExporter, full_frame: np.ndarray, blur_t: float, fps: int) -> np.ndarray:
+        """The progressive blur that ends the sequence (the last blurred frame is returned)."""
+        blur_frames = max(1, int(blur_t * fps))
+        # [NOTE] [Animation] Kernel size scales with the frame's shorter dimension so the blur reads consistently regardless of output resolution; `| 1` forces it odd, which cv2.GaussianBlur requires.
+        max_ksize = max(3, (min(full_frame.shape[:2]) // 20) | 1)
+        blurred = full_frame
+        for i in range(blur_frames):
+            ksize = max(1, round((i + 1) / blur_frames * max_ksize)) | 1
+            blurred = cv2.GaussianBlur(full_frame, (ksize, ksize), 0)
+            video.write(blurred)
+        return blurred
 
     def play_fullscreen_popup_sequence(
         self,
@@ -222,14 +258,4 @@ class _FullscreenMixin:
                 video.write(freeze_frame)
             return freeze_frame, False
 
-        full_frame = t_frames[-1]
-        blur_frames = max(1, int(blur_t * fps))
-        # [NOTE] [Animation] Kernel size scales with the frame's shorter dimension so the blur reads consistently regardless of output resolution; `| 1` forces it odd, which cv2.GaussianBlur requires.
-        max_ksize = max(3, (min(full_frame.shape[:2]) // 20) | 1)
-        blurred = full_frame
-        for i in range(blur_frames):
-            ksize = max(1, round((i + 1) / blur_frames * max_ksize)) | 1
-            blurred = cv2.GaussianBlur(full_frame, (ksize, ksize), 0)
-            video.write(blurred)
-
-        return blurred, False
+        return self._write_blur_out(video, t_frames[-1], blur_t, fps), False

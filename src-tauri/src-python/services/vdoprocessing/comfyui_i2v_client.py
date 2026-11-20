@@ -257,6 +257,60 @@ def _a14b_expert(unet_name: str, lora_name: str) -> Dict[str, Any]:
     }
 
 
+def _a14b_image_to_video_node() -> Dict[str, Any]:
+    return {
+        "inputs": {
+            "width": tuning.COMFYUI_WIDTH,
+            "height": tuning.COMFYUI_HEIGHT,
+            "length": None,  # set per-call
+            "batch_size": 1,
+            "positive": ["6", 0],
+            "negative": ["7", 0],
+            "vae": ["39", 0],
+            "start_image": ["56", 0],
+        },
+        "class_type": "WanImageToVideo",
+    }
+
+
+def _a14b_samplers() -> Dict[str, Any]:
+    sampler = {
+        "steps": tuning.COMFYUI_STEPS,
+        "cfg": tuning.COMFYUI_CFG,
+        "sampler_name": tuning.COMFYUI_SAMPLER,
+        "scheduler": tuning.COMFYUI_SCHEDULER,
+        "positive": ["55", 0],
+        "negative": ["55", 1],
+    }
+    high = {
+        "inputs": {
+            **sampler,
+            "add_noise": "enable",
+            "noise_seed": None,  # set per-call: randomized
+            "start_at_step": 0,
+            "end_at_step": tuning.COMFYUI_A14B_SPLIT_STEP,
+            "return_with_leftover_noise": "enable",
+            "model": ["shift_high", 0],
+            "latent_image": ["55", 2],
+        },
+        "class_type": "KSamplerAdvanced",
+    }
+    low = {
+        "inputs": {
+            **sampler,
+            "add_noise": "disable",
+            "noise_seed": 0,
+            "start_at_step": tuning.COMFYUI_A14B_SPLIT_STEP,
+            "end_at_step": tuning.COMFYUI_STEPS,
+            "return_with_leftover_noise": "disable",
+            "model": ["shift_low", 0],
+            "latent_image": ["3", 0],
+        },
+        "class_type": "KSamplerAdvanced",
+    }
+    return {"3": high, "3_low": low}
+
+
 def _a14b_template() -> Dict[str, Any]:
     """Wiring from ComfyUI's "Wan 2.2 14B I2V" template (video_wan2_2_14B_i2v)
     with its 4-step Lightx2v path on: the high-noise expert samples steps
@@ -274,53 +328,8 @@ def _a14b_template() -> Dict[str, Any]:
     for node_id in ("38", "56", "6", "7", "8", "57", "58"):
         graph[node_id] = copy.deepcopy(_WORKFLOW_TEMPLATE[node_id])
     graph["39"] = {"inputs": {"vae_name": tuning.COMFYUI_VAE_NAME}, "class_type": "VAELoader"}
-    graph["55"] = {
-        "inputs": {
-            "width": tuning.COMFYUI_WIDTH,
-            "height": tuning.COMFYUI_HEIGHT,
-            "length": None,  # set per-call
-            "batch_size": 1,
-            "positive": ["6", 0],
-            "negative": ["7", 0],
-            "vae": ["39", 0],
-            "start_image": ["56", 0],
-        },
-        "class_type": "WanImageToVideo",
-    }
-    sampler = {
-        "steps": tuning.COMFYUI_STEPS,
-        "cfg": tuning.COMFYUI_CFG,
-        "sampler_name": tuning.COMFYUI_SAMPLER,
-        "scheduler": tuning.COMFYUI_SCHEDULER,
-        "positive": ["55", 0],
-        "negative": ["55", 1],
-    }
-    graph["3"] = {
-        "inputs": {
-            **sampler,
-            "add_noise": "enable",
-            "noise_seed": None,  # set per-call: randomized
-            "start_at_step": 0,
-            "end_at_step": tuning.COMFYUI_A14B_SPLIT_STEP,
-            "return_with_leftover_noise": "enable",
-            "model": ["shift_high", 0],
-            "latent_image": ["55", 2],
-        },
-        "class_type": "KSamplerAdvanced",
-    }
-    graph["3_low"] = {
-        "inputs": {
-            **sampler,
-            "add_noise": "disable",
-            "noise_seed": 0,
-            "start_at_step": tuning.COMFYUI_A14B_SPLIT_STEP,
-            "end_at_step": tuning.COMFYUI_STEPS,
-            "return_with_leftover_noise": "disable",
-            "model": ["shift_low", 0],
-            "latent_image": ["3", 0],
-        },
-        "class_type": "KSamplerAdvanced",
-    }
+    graph["55"] = _a14b_image_to_video_node()
+    graph.update(_a14b_samplers())
     graph["8"]["inputs"]["samples"] = ["3_low", 0]
     graph["57"]["inputs"]["fps"] = tuning.COMFYUI_GEN_FPS
     return graph
@@ -656,50 +665,53 @@ class ComfyUII2VClient:
                     "server — waiting for it instead of starting a second copy."
                 )
             else:
-                logger.info(
-                    "Bundled ComfyUI not reachable at %s — starting it as a "
-                    "subprocess...",
-                    self.base_url,
-                )
-                port = urlsplit(self.base_url).port or 8189
-                popen_kwargs: Dict[str, Any] = {}
-                if os.name == "nt":
-                    # CREATE_NO_WINDOW (not DETACHED_PROCESS) — a fully
-                    # detached process has NO console at all, which some of
-                    # ComfyUI's Fortran/MKL-linked dependencies (numpy/scipy)
-                    # crash under on Windows ("forrtl: error (200): program
-                    # aborting due to window-CLOSE event"). CREATE_NO_WINDOW
-                    # still shows no visible window but keeps a (hidden)
-                    # console allocated.
-                    popen_kwargs["creationflags"] = (
-                        subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
-                    )
-                else:
-                    popen_kwargs["start_new_session"] = True
-                log_path = self._SERVER_DIR / "comfyui_server.log"
-                log_file = open(log_path, "ab")
-                ComfyUII2VClient._server_process = subprocess.Popen(
-                    [
-                        str(self._SERVER_VENV_PYTHON), "main.py",
-                        "--listen", "127.0.0.1", "--port", str(port),
-                        "--disable-auto-launch",
-                        *(
-                            ["--reserve-vram", str(tuning.COMFYUI_RESERVE_VRAM_GB)]
-                            if tuning.COMFYUI_RESERVE_VRAM_GB else []
-                        ),
-                    ],
-                    cwd=str(self._SERVER_DIR),
-                    stdout=log_file,
-                    stderr=subprocess.STDOUT,
-                    env=server_environ(),  # no API keys for ComfyUI's custom nodes
-                    **popen_kwargs,
-                )
-                log_file.close()  # the child has its own copy; ours would keep the log locked for the life of this process
-                self._PIDFILE.write_text(str(ComfyUII2VClient._server_process.pid))
-                self._touch_activity()
-                self._start_idle_watchdog(ComfyUII2VClient._server_process.pid)
+                self._spawn_server()
 
         _ServerLogReporter("ComfyUI").show("starting server")
+        self._wait_until_server_up()
+
+    def _spawn_server(self) -> None:
+        """Starts the ComfyUI subprocess, records its PID and arms the idle watchdog."""
+        logger.info(
+            "Bundled ComfyUI not reachable at %s — starting it as a "
+            "subprocess...",
+            self.base_url,
+        )
+        port = urlsplit(self.base_url).port or 8189
+        popen_kwargs: Dict[str, Any] = {}
+        if os.name == "nt":
+            # [NOTE] [ComfyUI] CREATE_NO_WINDOW, not DETACHED_PROCESS: with no console at all, numpy/scipy's
+            # Fortran/MKL libs abort ("forrtl: error (200)"); this keeps a hidden console.
+            popen_kwargs["creationflags"] = (
+                subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+            )
+        else:
+            popen_kwargs["start_new_session"] = True
+        log_path = self._SERVER_DIR / "comfyui_server.log"
+        log_file = open(log_path, "ab")
+        ComfyUII2VClient._server_process = subprocess.Popen(
+            [
+                str(self._SERVER_VENV_PYTHON), "main.py",
+                "--listen", "127.0.0.1", "--port", str(port),
+                "--disable-auto-launch",
+                *(
+                    ["--reserve-vram", str(tuning.COMFYUI_RESERVE_VRAM_GB)]
+                    if tuning.COMFYUI_RESERVE_VRAM_GB else []
+                ),
+            ],
+            cwd=str(self._SERVER_DIR),
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            env=server_environ(),  # no API keys for ComfyUI's custom nodes
+            **popen_kwargs,
+        )
+        log_file.close()  # the child has its own copy; ours would keep the log locked for the life of this process
+        self._PIDFILE.write_text(str(ComfyUII2VClient._server_process.pid))
+        self._touch_activity()
+        self._start_idle_watchdog(ComfyUII2VClient._server_process.pid)
+
+    def _wait_until_server_up(self) -> None:
+        """Polls until the server answers; raises RuntimeError if it exits, its starter dies, or the timeout passes."""
         deadline = time.monotonic() + tuning.COMFYUI_SERVER_START_TIMEOUT_SECONDS
         while time.monotonic() < deadline:
             if self._is_server_up():
@@ -774,8 +786,7 @@ class ComfyUII2VClient:
     def _start_idle_watchdog(self, server_pid: int) -> None:
         popen_kwargs: Dict[str, Any] = {}
         if os.name == "nt":
-            # See _ensure_server_running's comment on CREATE_NO_WINDOW vs
-            # DETACHED_PROCESS above.
+            # See _spawn_server's comment on CREATE_NO_WINDOW vs DETACHED_PROCESS.
             popen_kwargs["creationflags"] = (
                 subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
             )
@@ -911,46 +922,11 @@ class ComfyUII2VClient:
                 # A job longer than COMFYUI_IDLE_TIMEOUT_SECONDS is not idle: the watchdog killed the server mid-job.
                 self._touch_activity()
             except httpx.TransportError as exc:
-                # Refused for a minute: the server is gone, waiting out the timeout cannot bring the job back.
-                if isinstance(exc, httpx.ConnectError):
-                    down_since = down_since or time.monotonic()
-                    if time.monotonic() - down_since > self._SERVER_GONE_SECONDS:
-                        raise RuntimeError(f"ComfyUI stopped while making prompt {prompt_id}.") from exc
-                # A generation can take several minutes of real GPU work
-                # (hundreds of 2s polls on the same pooled keep-alive
-                # connection) — observed in the wild as a `ReadError:
-                # [WinError 10054] An existing connection was forcibly
-                # closed by the remote host` roughly 10 minutes in, well
-                # before the job itself was actually done. httpx's own
-                # connection pool doesn't retry a read failure on a stale
-                # reused connection (only connect-phase failures), so
-                # without this the whole ~10 minutes of already-completed
-                # GPU work gets thrown away and the clip falls back to the
-                # much slower local generator over what's really just one
-                # transient dropped connection. Retrying opens a fresh
-                # connection and keeps waiting on the SAME prompt_id — the
-                # generation itself is unaffected, ComfyUI keeps running
-                # server-side regardless of whether anyone's polling it.
-                logger.warning(
-                    "Transient connection error polling ComfyUI for prompt %s "
-                    "(%s: %s) — retrying.",
-                    prompt_id, type(exc).__name__, exc,
-                )
-                time.sleep(self._POLL_INTERVAL_SECONDS)
+                down_since = self._retry_after_transport_error(exc, prompt_id, down_since)
                 continue
-            history = response.json()
-            entry = history.get(prompt_id)
+            entry = response.json().get(prompt_id)
             if entry:
-                status = entry.get("status", {})
-                if status.get("status_str") == "error" or any(
-                    m[0] == "execution_error" for m in status.get("messages", [])
-                ):
-                    reporter.report(log_tail.poll())
-                    raise RuntimeError(
-                        f"ComfyUI execution failed for prompt {prompt_id}: "
-                        f"{status.get('messages')}"
-                    )
-                outputs = entry.get("outputs", {})
+                outputs = self._outputs_of_history_entry(entry, prompt_id, reporter, log_tail)
                 if output_node in outputs:
                     return outputs[output_node]
             time.sleep(self._POLL_INTERVAL_SECONDS)
@@ -959,6 +935,43 @@ class ComfyUII2VClient:
             f"ComfyUI generation for prompt {prompt_id} did not finish within "
             f"{timeout:.0f}s."
         )
+
+    def _retry_after_transport_error(
+        self, exc: httpx.TransportError, prompt_id: str, down_since: Optional[float]
+    ) -> Optional[float]:
+        """Logs a dropped poll and sleeps; returns the updated connection-refused-since time, or raises once the server is gone."""
+        # Refused for a minute: the server is gone, waiting out the timeout cannot bring the job back.
+        if isinstance(exc, httpx.ConnectError):
+            down_since = down_since or time.monotonic()
+            if time.monotonic() - down_since > self._SERVER_GONE_SECONDS:
+                raise RuntimeError(f"ComfyUI stopped while making prompt {prompt_id}.") from exc
+        # [NOTE] [ComfyUI] A stale pooled keep-alive connection can drop mid-generation (seen as a WinError 10054
+        # ~10 min in) and httpx doesn't retry read failures on it; giving up would throw away the finished GPU work
+        # and fall back to the slow local generator. Retrying on a fresh connection keeps waiting on the SAME
+        # prompt_id, since ComfyUI keeps running server-side.
+        logger.warning(
+            "Transient connection error polling ComfyUI for prompt %s "
+            "(%s: %s) — retrying.",
+            prompt_id, type(exc).__name__, exc,
+        )
+        time.sleep(self._POLL_INTERVAL_SECONDS)
+        return down_since
+
+    @staticmethod
+    def _outputs_of_history_entry(
+        entry: Dict[str, Any], prompt_id: str, reporter: _ServerLogReporter, log_tail: _ServerLogTail
+    ) -> Dict[str, Any]:
+        """The entry's outputs; raises RuntimeError (after flushing the server log) when the job failed."""
+        status = entry.get("status", {})
+        if status.get("status_str") == "error" or any(
+            m[0] == "execution_error" for m in status.get("messages", [])
+        ):
+            reporter.report(log_tail.poll())
+            raise RuntimeError(
+                f"ComfyUI execution failed for prompt {prompt_id}: "
+                f"{status.get('messages')}"
+            )
+        return entry.get("outputs", {})
 
     def run_image_graph(
         self,

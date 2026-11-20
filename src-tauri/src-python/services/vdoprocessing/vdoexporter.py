@@ -187,35 +187,23 @@ def _text_box_events(item: dict, play_w: int) -> list:
     return events
 
 
-def write_caption_ass(
-    cues: list, shared_style: Optional[dict], frame_size: Optional[Tuple[int, int]], path: Path,
-    check_font: bool = True,
-    texts: Optional[list] = None,
-) -> Path:
-    """Burned captions as .ass: every cue gets the shared style (settings.caption_style)
-    with its own `style` overrides on top, so lines can differ in font, colour and place.
-    `texts` are text-track items (an animated title + subtitle, centred), drawn on top."""
-    from services.vdoprocessing.introclip import (
-        DEFAULT_KICKER_STYLE,
-        DEFAULT_SUBTITLE_STYLE,
-        DEFAULT_TITLE_STYLE,
-        TEXT_DEFAULT_MARGIN_PX,
-        text_block_center_y,
-        title_events,
-    )
+class _FontResolver:
+    """Swaps a style's font for an installed one (cached per family), so libass never substitutes one silently."""
 
-    shared = DEFAULT_CAPTION_STYLE.merged(shared_style)
-    w, h = frame_size or (1920, 1080)
-    play_w = round(1080 * w / h)
-    fonts: dict = {}
+    def __init__(self, check_font: bool):
+        self.check_font = check_font
+        self.fonts: dict = {}
 
-    def installed(style: TextStyle, fallback: str) -> TextStyle:
-        if not check_font:
+    def __call__(self, style: TextStyle, fallback: str) -> TextStyle:
+        if not self.check_font:
             return style
-        if style.font_family not in fonts:
-            fonts[style.font_family] = style.with_installed_font(fallback).font_family
-        return replace(style, font_family=fonts[style.font_family])
+        if style.font_family not in self.fonts:
+            self.fonts[style.font_family] = style.with_installed_font(fallback).font_family
+        return replace(style, font_family=self.fonts[style.font_family])
 
+
+def _cue_events(cues: list, shared: TextStyle, installed: _FontResolver, play_w: int) -> Tuple[dict, list]:
+    """(the caption styles used by name, the Dialogue lines) of the timed captions."""
     styles: dict = {}
     events = []
     for cue in sorted(cues, key=lambda c: float(c["start"])):
@@ -227,50 +215,68 @@ def write_caption_ass(
         if box:
             events.append(f"Dialogue: 0,{when},{name},,0,0,0,,{box_event_text(style, box)}")
         events.append(f"Dialogue: 1,{when},{name},,0,0,0,,{text_position_tag(box) if box else ''}{_ass_text(shown)}")
-    # burned_in: already drawn into its clip (the scrapbook outro's title, so the logo doors close over it).
-    for item in sorted((x for x in texts or [] if not x.get("burned_in")), key=lambda x: float(x["start"])):
-        events.extend(_text_box_events(item, play_w))
-        title, subtitle, kicker = item.get("title") or {}, item.get("subtitle") or {}, item.get("kicker") or {}
-        title_text, sub_text = str(title.get("text") or ""), str(subtitle.get("text") or "")
-        kicker_text = str(kicker.get("text") or "")
-        title_style = installed(DEFAULT_TITLE_STYLE.merged(title.get("style")), DEFAULT_TITLE_STYLE.font_family)
-        sub_style = installed(DEFAULT_SUBTITLE_STYLE.merged(subtitle.get("style")), DEFAULT_SUBTITLE_STYLE.font_family)
-        kicker_style = installed(DEFAULT_KICKER_STYLE.merged(kicker.get("style")), DEFAULT_KICKER_STYLE.font_family)
-        def px(key: str) -> float:
-            v = item.get(key)
-            return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else TEXT_DEFAULT_MARGIN_PX
+    return styles, events
 
-        cy = text_block_center_y(
-            str(item.get("position") or "middle"), px("margin_v"),
-            title_style.font_size, sub_style.font_size, bool(title_text.strip()), bool(sub_text.strip()),
-            kicker_size=kicker_style.font_size if kicker_text.strip() else 0,
+
+def _text_item_events(item: dict, play_w: int, installed: _FontResolver) -> list:
+    """The Dialogue lines of one text-track item (an animated title + subtitle, centred), drawn above the captions."""
+    from services.vdoprocessing.introclip import (
+        DEFAULT_KICKER_STYLE,
+        DEFAULT_SUBTITLE_STYLE,
+        DEFAULT_TITLE_STYLE,
+        TEXT_DEFAULT_MARGIN_PX,
+        text_block_center_y,
+        title_events,
+    )
+
+    events = list(_text_box_events(item, play_w))
+    title, subtitle, kicker = item.get("title") or {}, item.get("subtitle") or {}, item.get("kicker") or {}
+    title_text, sub_text = str(title.get("text") or ""), str(subtitle.get("text") or "")
+    kicker_text = str(kicker.get("text") or "")
+    title_style = installed(DEFAULT_TITLE_STYLE.merged(title.get("style")), DEFAULT_TITLE_STYLE.font_family)
+    sub_style = installed(DEFAULT_SUBTITLE_STYLE.merged(subtitle.get("style")), DEFAULT_SUBTITLE_STYLE.font_family)
+    kicker_style = installed(DEFAULT_KICKER_STYLE.merged(kicker.get("style")), DEFAULT_KICKER_STYLE.font_family)
+
+    def px(key: str) -> float:
+        v = item.get(key)
+        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else TEXT_DEFAULT_MARGIN_PX
+
+    cy = text_block_center_y(
+        str(item.get("position") or "middle"), px("margin_v"),
+        title_style.font_size, sub_style.font_size, bool(title_text.strip()), bool(sub_text.strip()),
+        kicker_size=kicker_style.font_size if kicker_text.strip() else 0,
+    )
+    align = item.get("align") if item.get("align") in ("left", "right") else "center"
+    cx = {"left": px("margin_h"), "right": play_w - px("margin_h")}.get(align, play_w / 2)
+    for a, b, text in title_events(
+        title_text, sub_text, float(item["start"]), float(item["end"]),
+        title_style, sub_style, int(round(cx)), cy, align=align,
+        animation=item_animation(item),
+        title_motion={"animation": title.get("animation"), "delay": title.get("delay")},
+        subtitle_motion={"animation": subtitle.get("animation"), "delay": subtitle.get("delay")},
+        kicker=kicker_text, kicker_style=kicker_style,
+        kicker_motion={"animation": kicker.get("animation"), "delay": kicker.get("delay")},
+        position=str(item.get("position") or "middle"),
+        margins=tuple(_line_margin(line) for line in (kicker, title, subtitle)),
+    ):
+        # Layer 1: above captions. Every look is in the event's own tags. A title alone with a background
+        # (a photo credit) sits in a box: the TextBox style's opaque border, coloured by \3c, padded by \bord.
+        boxed = title_style.background and not sub_text.strip() and not kicker_text.strip()
+        if boxed:
+            from services.localization.text_style import _bgr
+
+            alpha = 255 - int(round(title_style.background_opacity * 255))
+            text = text.replace("}", f"\\3c&H{_bgr(title_style.background_color)}&\\3a&H{alpha:02X}&}}", 1)
+        events.append(
+            f"Dialogue: 1,{_ass_timestamp(a)},{_ass_timestamp(b)},{'TextBox' if boxed else 'Text'},,0,0,0,,"
+            f"{_wipe_tag(item, a, play_w)}{text}"
         )
-        align = item.get("align") if item.get("align") in ("left", "right") else "center"
-        cx = {"left": px("margin_h"), "right": play_w - px("margin_h")}.get(align, play_w / 2)
-        for a, b, text in title_events(
-            title_text, sub_text, float(item["start"]), float(item["end"]),
-            title_style, sub_style, int(round(cx)), cy, align=align,
-            animation=item_animation(item),
-            title_motion={"animation": title.get("animation"), "delay": title.get("delay")},
-            subtitle_motion={"animation": subtitle.get("animation"), "delay": subtitle.get("delay")},
-            kicker=kicker_text, kicker_style=kicker_style,
-            kicker_motion={"animation": kicker.get("animation"), "delay": kicker.get("delay")},
-            position=str(item.get("position") or "middle"),
-            margins=tuple(_line_margin(line) for line in (kicker, title, subtitle)),
-        ):
-            # Layer 1: above captions. Every look is in the event's own tags. A title alone with a background
-            # (a photo credit) sits in a box: the TextBox style's opaque border, coloured by \3c, padded by \bord.
-            boxed = title_style.background and not sub_text.strip() and not kicker_text.strip()
-            if boxed:
-                from services.localization.text_style import _bgr
+    return events
 
-                alpha = 255 - int(round(title_style.background_opacity * 255))
-                text = text.replace("}", f"\\3c&H{_bgr(title_style.background_color)}&\\3a&H{alpha:02X}&}}", 1)
-            events.append(
-                f"Dialogue: 1,{_ass_timestamp(a)},{_ass_timestamp(b)},{'TextBox' if boxed else 'Text'},,0,0,0,,"
-                f"{_wipe_tag(item, a, play_w)}{text}"
-            )
-    path.write_text(
+
+def _ass_document(play_w: int, styles: dict, events: list) -> str:
+    """The whole .ass file: script info, the caption styles, the two text styles and the events."""
+    return (
         "[Script Info]\nScriptType: v4.00+\nWrapStyle: 0\nScaledBorderAndShadow: yes\n"
         # 1080 lines tall, as wide as the frame's aspect, so style px read as 1080p px.
         f"PlayResX: {play_w}\nPlayResY: 1080\n\n"
@@ -282,9 +288,28 @@ def write_caption_ass(
         + "Style: Text,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1\n"
         + "Style: TextBox,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,3,0,0,5,0,0,0,1\n"
         + "\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
-        + "".join(e + "\n" for e in events),
-        encoding="utf-8",
+        + "".join(e + "\n" for e in events)
     )
+
+
+def write_caption_ass(
+    cues: list, shared_style: Optional[dict], frame_size: Optional[Tuple[int, int]], path: Path,
+    check_font: bool = True,
+    texts: Optional[list] = None,
+) -> Path:
+    """Burned captions as .ass: every cue gets the shared style (settings.caption_style)
+    with its own `style` overrides on top, so lines can differ in font, colour and place.
+    `texts` are text-track items (an animated title + subtitle, centred), drawn on top."""
+    shared = DEFAULT_CAPTION_STYLE.merged(shared_style)
+    w, h = frame_size or (1920, 1080)
+    play_w = round(1080 * w / h)
+    installed = _FontResolver(check_font)
+
+    styles, events = _cue_events(cues, shared, installed, play_w)
+    # burned_in: already drawn into its clip (the scrapbook outro's title, so the logo doors close over it).
+    for item in sorted((x for x in texts or [] if not x.get("burned_in")), key=lambda x: float(x["start"])):
+        events.extend(_text_item_events(item, play_w, installed))
+    path.write_text(_ass_document(play_w, styles, events), encoding="utf-8")
     return path
 
 
@@ -437,6 +462,14 @@ class VideoExporter:
     def resolve_ffmpeg() -> Optional[str]:
         return runtime_paths.ffmpeg_exe()
 
+    @staticmethod
+    def _require_ffmpeg() -> str:
+        """The FFmpeg binary's path; raises when there is none."""
+        ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
+        if not ffmpeg_cmd:
+            raise RuntimeError("FFmpeg binary not found.")
+        return ffmpeg_cmd
+
     def _open_ffmpeg_writer(self, output_path: str) -> Optional[subprocess.Popen]:
         ffmpeg_cmd = self.resolve_ffmpeg()
         if ffmpeg_cmd is None:
@@ -521,53 +554,55 @@ class VideoExporter:
                 "No active video writer available (ffmpeg died and no OpenCV fallback configured)."
             )
 
-    def release(self, output_path: str) -> str:
-        if self.proc is not None:
-            if self.proc.stdin:
-                try:
-                    self.proc.stdin.close()
-                except (BrokenPipeError, OSError):
-                    pass  # already dead; communicate() below still reaps it safely
-
-            # [NOTE] [Editor] communicate() instead of wait() — deadlock-safe stderr
-            # drain, see module docstring.
-            _, stderr_bytes = self.proc.communicate()
-
-            # [NOTE] [Editor] Actually check the exit code. This was previously
-            # ignored entirely, so a failed encode looked identical to a
-            # successful one to every caller downstream.
-            if self.proc.returncode != 0:
-                stderr_text = self._decode_tail(stderr_bytes)
-                logger.error(
-                    "FFmpeg exited %d while producing '%s'\n%s",
-                    self.proc.returncode,
-                    output_path,
-                    stderr_text,
-                )
-                Path(self._temp_path).unlink(missing_ok=True)
-                raise RuntimeError(
-                    f"FFmpeg failed (exit {self.proc.returncode}) while producing "
-                    f"'{output_path}'.\n--- ffmpeg stderr (tail) ---\n{stderr_text}"
-                )
-            # The only moment output_path itself is ever touched — an
-            # atomic rename (same directory/filesystem, see
-            # _make_temp_path) onto the real destination, now that ffmpeg
-            # has confirmed the encode actually finished. A process
-            # killed at any point before this line leaves whatever was
-            # already at output_path completely untouched.
+    def _finish_ffmpeg_output(self, output_path: str) -> str:
+        """Closes ffmpeg's input, checks it succeeded, and renames the finished temp file onto `output_path`."""
+        if self.proc.stdin:
             try:
-                _replace_with_retry(self._temp_path, output_path)
-            except OSError:
-                # Every retry was denied (a persistent file lock outliving
-                # the whole retry window) — clean up the fully-encoded
-                # temp file before re-raising, same as the two error paths
-                # above (broken pipe, nonzero exit) already do, so a
-                # failure here doesn't leave an orphaned hidden
-                # ".name.<uuid>.tmp.mp4" behind in the output directory.
-                Path(self._temp_path).unlink(missing_ok=True)
-                raise
-            return output_path
+                self.proc.stdin.close()
+            except (BrokenPipeError, OSError):
+                pass  # already dead; communicate() below still reaps it safely
 
+        # [NOTE] [Editor] communicate() instead of wait() — deadlock-safe stderr
+        # drain, see module docstring.
+        _, stderr_bytes = self.proc.communicate()
+
+        # [NOTE] [Editor] Actually check the exit code. This was previously
+        # ignored entirely, so a failed encode looked identical to a
+        # successful one to every caller downstream.
+        if self.proc.returncode != 0:
+            stderr_text = self._decode_tail(stderr_bytes)
+            logger.error(
+                "FFmpeg exited %d while producing '%s'\n%s",
+                self.proc.returncode,
+                output_path,
+                stderr_text,
+            )
+            Path(self._temp_path).unlink(missing_ok=True)
+            raise RuntimeError(
+                f"FFmpeg failed (exit {self.proc.returncode}) while producing "
+                f"'{output_path}'.\n--- ffmpeg stderr (tail) ---\n{stderr_text}"
+            )
+        # The only moment output_path itself is ever touched — an
+        # atomic rename (same directory/filesystem, see
+        # _make_temp_path) onto the real destination, now that ffmpeg
+        # has confirmed the encode actually finished. A process
+        # killed at any point before this line leaves whatever was
+        # already at output_path completely untouched.
+        try:
+            _replace_with_retry(self._temp_path, output_path)
+        except OSError:
+            # Every retry was denied (a persistent file lock outliving
+            # the whole retry window) — clean up the fully-encoded
+            # temp file before re-raising, same as the two error paths
+            # above (broken pipe, nonzero exit) already do, so a
+            # failure here doesn't leave an orphaned hidden
+            # ".name.<uuid>.tmp.mp4" behind in the output directory.
+            Path(self._temp_path).unlink(missing_ok=True)
+            raise
+        return output_path
+
+    def _finish_fallback_output(self, output_path: str) -> str:
+        """Finishes the OpenCV fallback writer: H.264 when the output is an .mp4 and it can be re-encoded, else an .avi."""
         if self._fallback_writer:
             self._fallback_writer.release()
 
@@ -584,6 +619,11 @@ class VideoExporter:
         if self._fallback_path:
             _replace_with_retry(self._fallback_path, avi_path)
         return avi_path
+
+    def release(self, output_path: str) -> str:
+        if self.proc is not None:
+            return self._finish_ffmpeg_output(output_path)
+        return self._finish_fallback_output(output_path)
 
     @staticmethod
     def _decode_tail(stderr_bytes: Optional[bytes]) -> str:
@@ -646,6 +686,169 @@ class VideoExporter:
         return f"crop={w}:{h - d}:0:{d},pad={w}:{h}:0:0:color={bg}"
 
     @staticmethod
+    def _hold_extra_seconds(
+        index: int, video_path: Path, audio_path: Optional[str], has_audio: bool, audio_offset: float,
+        duration: Optional[float], trim_in: float, trim_out: Optional[float], end_hold: float,
+    ) -> float:
+        """Seconds the last frame is held so the picture lasts as long as its sound.
+
+        The narration (plus its start delay) can outlast the video: the
+        picture would end while the voice is still speaking, and every clip
+        after it would drift against its sound. Hold the last frame until the
+        voice is done, and a little beyond (tuning.AUDIO_END_HOLD_SECONDS).
+        An editor timeline states each clip's length (as its preview plays it), used as is: no end_hold either,
+        or everything placed after it (the outro title) came out 1 s early (2026-10-23).
+        end_hold: extra seconds on the last frame (the goodbye before the outro, tuning.ENDING_HOLD_SECONDS).
+        """
+        hold_extra = 0.0
+        if has_audio or duration:
+            try:
+                from services.tts.ttsengine import FFmpegManager
+
+                if duration:
+                    needed = duration
+                else:
+                    needed = (
+                        max(0.0, audio_offset)
+                        + FFmpegManager.get_media_duration(str(audio_path))
+                        + tuning.AUDIO_END_HOLD_SECONDS
+                    )
+                video_len = FFmpegManager.get_media_duration(str(video_path))
+                if trim_out is not None or trim_in > 0:
+                    video_len = min(video_len, trim_out if trim_out is not None else video_len) - trim_in
+                hold_extra = needed - video_len
+            except (RuntimeError, OSError) as exc:
+                logger.warning("concat_from_timeline: could not probe track %d for its audio end: %s", index, exc)
+            if hold_extra < 0.05:
+                hold_extra = 0.0
+        if end_hold and not duration:
+            hold_extra += end_hold
+        return hold_extra
+
+    @staticmethod
+    def _fade_out_timing(
+        index: int, video_path: Path, duration: Optional[float], trim_in: float, trim_out: Optional[float],
+        hold_extra: float, fade_out: float,
+    ) -> Tuple[Optional[float], float]:
+        """(when the closing fade starts, its length): the video's last clip fades to black and silence.
+        The start is None when there is no fade."""
+        fade_start = None
+        if fade_out > 0:
+            try:
+                from services.tts.ttsengine import FFmpegManager
+
+                length = duration or (
+                    min(FFmpegManager.get_media_duration(str(video_path)), trim_out or float("inf")) - trim_in + hold_extra
+                )
+                fade_out = min(fade_out, length / 2.0)
+                fade_start = max(0.0, length - fade_out)
+            except (RuntimeError, OSError) as exc:
+                logger.warning("concat_from_timeline: no fade-out on track %d: %s", index, exc)
+        return fade_start, fade_out
+
+    @staticmethod
+    def _segment_video_filters(
+        index: int, video_path: Path, target_size: Optional[Tuple[int, int]], target_fps: Optional[float],
+        content_shift: float, hold_extra: float, fade_start: Optional[float], fade_out: float,
+    ) -> List[str]:
+        """The video filters that give one segment the shared picture size and frame rate, hold and fade."""
+        # Every segment must have the same picture size: the concat step below
+        # stream-copies, and a clip of another size (the 1280x704 intro/outro
+        # cards among 1920x1080 clips) would break the joined video. A clip of
+        # another size is scaled to fit and letterboxed.
+        filters: List[str] = []
+        if target_size:
+            size = VideoExporter._video_size(video_path)
+            if size and size != target_size:
+                tw, th = target_size
+                filters.append(
+                    f"scale={tw}:{th}:force_original_aspect_ratio=decrease,"
+                    f"pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2,setsar=1"
+                )
+                logger.info("Track %d: %s scaled to %dx%d.", index, f"{size[0]}x{size[1]}", tw, th)
+        # The outro's content pushed down (up) by its title box's height change, in 1080-line px.
+        shift = VideoExporter._content_shift_filter(content_shift, target_size or VideoExporter._video_size(video_path))
+        if shift:
+            filters.append(shift)
+        # ...and the same frame rate: segments at 24/25/30 fps joined by stream
+        # copy lose their timing (the video ended minutes before the audio).
+        if target_fps:
+            clip_fps = VideoExporter._video_fps(video_path)
+            if clip_fps and abs(clip_fps - target_fps) > 0.01:
+                filters.append(f"fps={target_fps:g}")
+                logger.info("Track %d: %.3g fps converted to %g fps.", index, clip_fps, target_fps)
+        if hold_extra:
+            logger.info("Track %d: holding its last frame %.2fs so the video lasts as long as its audio.", index, hold_extra)
+            filters.append(f"tpad=stop_mode=clone:stop_duration={hold_extra:.3f}")
+        if fade_start is not None:
+            filters.append(f"fade=t=out:st={fade_start:.3f}:d={fade_out:.3f}")
+        return filters
+
+    @staticmethod
+    def _segment_input_args(
+        video_path: Path, audio_path: Optional[str], has_audio: bool, trim_in: float, trim_out: Optional[float],
+        extra_audio: Optional[str], extra: bool,
+    ) -> List[str]:
+        """The inputs (picture, narration or silence, the footage's own sound) and stream maps of one segment."""
+        cmd: List[str] = []
+        if trim_in > 0.01:
+            cmd += ["-ss", f"{trim_in:.3f}"]
+        if trim_out is not None:
+            cmd += ["-t", f"{max(0.1, trim_out - trim_in):.3f}"]
+        cmd += ["-i", str(video_path)]
+        if has_audio:
+            cmd += ["-i", str(Path(audio_path).resolve())]
+        else:
+            cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
+        if extra:
+            # The footage's sound is cut like its picture, so it stays in sync and stops on a held frame.
+            if trim_in > 0.01:
+                cmd += ["-ss", f"{trim_in:.3f}"]
+            if trim_out is not None:
+                cmd += ["-t", f"{max(0.1, trim_out - trim_in):.3f}"]
+            cmd += ["-i", str(Path(extra_audio).resolve())]
+            cmd += ["-map", "0:v:0"]
+        else:
+            cmd += ["-map", "0:v:0", "-map", "1:a:0"]
+        return cmd
+
+    @staticmethod
+    def _segment_audio_args(
+        has_audio: bool, audio_offset: float, volume: float, muted: bool, fade_start: Optional[float],
+        fade_out: float, extra: bool, extra_volume: float,
+    ) -> List[str]:
+        """The audio filter arguments of one segment (delay, volume, padding, fade, and the footage's sound mixed under).
+
+        The narration starts `audio_offset` seconds into the clip (a leg's
+        silent opening, see services/vdoprocessing/cliptiming.py), so the
+        voice begins with the walk instead of at the first frame. The audio
+        is then padded with silence up to the video's end (-shortest cuts at
+        the video): every segment's audio must last exactly as long as its
+        video, or each later clip's sound starts early in the joined video.
+        """
+        audio_filters = []
+        if has_audio and audio_offset > 0.01:
+            delay_ms = int(round(audio_offset * 1000))
+            audio_filters.append(f"adelay={delay_ms}|{delay_ms}")
+        if has_audio and (muted or abs(volume - 1.0) > 0.01):
+            audio_filters.append(f"volume={0.0 if muted else max(0.0, volume):.3f}")
+        if has_audio:
+            audio_filters.append("apad")
+        audio_fade = f",afade=t=out:st={fade_start:.3f}:d={fade_out:.3f}" if fade_start is not None else ""
+        if has_audio and audio_fade and not extra:
+            audio_filters.append(audio_fade[1:])
+        if extra:
+            # Narration (or silence) plus the footage's own sound, mixed under it.
+            voice_chain = ",".join(audio_filters) if audio_filters else "anull"
+            return [
+                "-filter_complex",
+                f"[1:a]{voice_chain}[v];[2:a]volume={max(0.0, extra_volume):.3f}[e];"
+                f"[v][e]amix=inputs=2:duration=longest:normalize=0,apad{audio_fade}[a]",
+                "-map", "[a]",
+            ]
+        return ["-af", ",".join(audio_filters)] if audio_filters else []
+
+    @staticmethod
     def _mux_track_for_concat(
         ffmpeg_cmd: str, video_path: Path, audio_path: Optional[str], tmp_dir: Path, index: int,
         audio_offset: float = 0.0, target_size: Optional[Tuple[int, int]] = None,
@@ -677,105 +880,20 @@ class VideoExporter:
         has_audio = bool(audio_path and Path(audio_path).exists())
         tmp_out = tmp_dir / f"seg_{index:04d}{video_path.suffix or '.mp4'}"
 
-        # The narration (plus its start delay) can outlast the video: the
-        # picture would end while the voice is still speaking, and every clip
-        # after it would drift against its sound. Hold the last frame until the
-        # voice is done, and a little beyond (tuning.AUDIO_END_HOLD_SECONDS).
-        # An editor timeline states each clip's length (as its preview plays it), used as is: no end_hold either,
-        # or everything placed after it (the outro title) came out 1 s early (2026-10-23).
-        # end_hold: extra seconds on the last frame (the goodbye before the outro, tuning.ENDING_HOLD_SECONDS).
-        hold_extra = 0.0
-        if has_audio or duration:
-            try:
-                from services.tts.ttsengine import FFmpegManager
+        hold_extra = VideoExporter._hold_extra_seconds(
+            index, video_path, audio_path, has_audio, audio_offset, duration, trim_in, trim_out, end_hold
+        )
+        fade_start, fade_out = VideoExporter._fade_out_timing(
+            index, video_path, duration, trim_in, trim_out, hold_extra, fade_out
+        )
+        filters = VideoExporter._segment_video_filters(
+            index, video_path, target_size, target_fps, content_shift, hold_extra, fade_start, fade_out
+        )
 
-                if duration:
-                    needed = duration
-                else:
-                    needed = (
-                        max(0.0, audio_offset)
-                        + FFmpegManager.get_media_duration(str(audio_path))
-                        + tuning.AUDIO_END_HOLD_SECONDS
-                    )
-                video_len = FFmpegManager.get_media_duration(str(video_path))
-                if trim_out is not None or trim_in > 0:
-                    video_len = min(video_len, trim_out if trim_out is not None else video_len) - trim_in
-                hold_extra = needed - video_len
-            except (RuntimeError, OSError) as exc:
-                logger.warning("concat_from_timeline: could not probe track %d for its audio end: %s", index, exc)
-            if hold_extra < 0.05:
-                hold_extra = 0.0
-        if end_hold and not duration:
-            hold_extra += end_hold
-
-        # fade_out: the video's last clip fades to black and silence.
-        fade_start = None
-        if fade_out > 0:
-            try:
-                from services.tts.ttsengine import FFmpegManager
-
-                length = duration or (
-                    min(FFmpegManager.get_media_duration(str(video_path)), trim_out or float("inf")) - trim_in + hold_extra
-                )
-                fade_out = min(fade_out, length / 2.0)
-                fade_start = max(0.0, length - fade_out)
-            except (RuntimeError, OSError) as exc:
-                logger.warning("concat_from_timeline: no fade-out on track %d: %s", index, exc)
-
-        # Every segment must have the same picture size: the concat step below
-        # stream-copies, and a clip of another size (the 1280x704 intro/outro
-        # cards among 1920x1080 clips) would break the joined video. A clip of
-        # another size is scaled to fit and letterboxed.
-        filters: List[str] = []
-        if target_size:
-            size = VideoExporter._video_size(video_path)
-            if size and size != target_size:
-                tw, th = target_size
-                filters.append(
-                    f"scale={tw}:{th}:force_original_aspect_ratio=decrease,"
-                    f"pad={tw}:{th}:(ow-iw)/2:(oh-ih)/2,setsar=1"
-                )
-                logger.info("Track %d: %s scaled to %dx%d.", index, f"{size[0]}x{size[1]}", tw, th)
-        # The outro's content pushed down (up) by its title box's height change, in 1080-line px.
-        shift = VideoExporter._content_shift_filter(content_shift, target_size or VideoExporter._video_size(video_path))
-        if shift:
-            filters.append(shift)
-        # ...and the same frame rate: segments at 24/25/30 fps joined by stream
-        # copy lose their timing (the video ended minutes before the audio).
-        if target_fps:
-            clip_fps = VideoExporter._video_fps(video_path)
-            if clip_fps and abs(clip_fps - target_fps) > 0.01:
-                filters.append(f"fps={target_fps:g}")
-                logger.info("Track %d: %.3g fps converted to %g fps.", index, clip_fps, target_fps)
-        if hold_extra:
-            logger.info("Track %d: holding its last frame %.2fs so the video lasts as long as its audio.", index, hold_extra)
-            filters.append(f"tpad=stop_mode=clone:stop_duration={hold_extra:.3f}")
-        if fade_start is not None:
-            filters.append(f"fade=t=out:st={fade_start:.3f}:d={fade_out:.3f}")
-
-        trimmed = trim_in > 0.01 or trim_out is not None
-        cmd = [ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args()]
-        if trim_in > 0.01:
-            cmd += ["-ss", f"{trim_in:.3f}"]
-        if trim_out is not None:
-            cmd += ["-t", f"{max(0.1, trim_out - trim_in):.3f}"]
-        cmd += ["-i", str(video_path)]
-        if has_audio:
-            cmd += ["-i", str(Path(audio_path).resolve())]
-        else:
-            cmd += ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]
         extra = bool(extra_audio and Path(extra_audio).exists() and extra_volume > 0.001)
-        if extra:
-            # The footage's sound is cut like its picture, so it stays in sync and stops on a held frame.
-            if trim_in > 0.01:
-                cmd += ["-ss", f"{trim_in:.3f}"]
-            if trim_out is not None:
-                cmd += ["-t", f"{max(0.1, trim_out - trim_in):.3f}"]
-            cmd += ["-i", str(Path(extra_audio).resolve())]
-            cmd += ["-map", "0:v:0"]
-        else:
-            cmd += ["-map", "0:v:0", "-map", "1:a:0"]
-        if filters or trimmed:
+        cmd = [ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args()]
+        cmd += VideoExporter._segment_input_args(video_path, audio_path, has_audio, trim_in, trim_out, extra_audio, extra)
+        if filters or trim_in > 0.01 or trim_out is not None:
             if filters:
                 cmd += ["-vf", ",".join(filters)]
             cmd += [
@@ -784,34 +902,9 @@ class VideoExporter:
         else:
             cmd += ["-c:v", "copy"]
         cmd += ["-c:a", "aac", "-ar", "44100", "-ac", "2"]
-        # The narration starts `audio_offset` seconds into the clip (a leg's
-        # silent opening, see services/vdoprocessing/cliptiming.py), so the
-        # voice begins with the walk instead of at the first frame. The audio
-        # is then padded with silence up to the video's end (-shortest cuts at
-        # the video): every segment's audio must last exactly as long as its
-        # video, or each later clip's sound starts early in the joined video.
-        audio_filters = []
-        if has_audio and audio_offset > 0.01:
-            delay_ms = int(round(audio_offset * 1000))
-            audio_filters.append(f"adelay={delay_ms}|{delay_ms}")
-        if has_audio and (muted or abs(volume - 1.0) > 0.01):
-            audio_filters.append(f"volume={0.0 if muted else max(0.0, volume):.3f}")
-        if has_audio:
-            audio_filters.append("apad")
-        audio_fade = f",afade=t=out:st={fade_start:.3f}:d={fade_out:.3f}" if fade_start is not None else ""
-        if has_audio and audio_fade and not extra:
-            audio_filters.append(audio_fade[1:])
-        if extra:
-            # Narration (or silence) plus the footage's own sound, mixed under it.
-            voice_chain = ",".join(audio_filters) if audio_filters else "anull"
-            cmd += [
-                "-filter_complex",
-                f"[1:a]{voice_chain}[v];[2:a]volume={max(0.0, extra_volume):.3f}[e];"
-                f"[v][e]amix=inputs=2:duration=longest:normalize=0,apad{audio_fade}[a]",
-                "-map", "[a]",
-            ]
-        elif audio_filters:
-            cmd += ["-af", ",".join(audio_filters)]
+        cmd += VideoExporter._segment_audio_args(
+            has_audio, audio_offset, volume, muted, fade_start, fade_out, extra, extra_volume
+        )
         if duration:
             cmd += ["-t", f"{duration:.3f}"]
         cmd += ["-shortest", "-video_track_timescale", str(_TIMESCALE)]
@@ -937,6 +1030,126 @@ class VideoExporter:
         return out
 
     @staticmethod
+    def _check_clips_exist(tracks: list) -> None:
+        """[NOTE] [Editor] The strict pre-flight check, run BEFORE opening any files —
+        catching a missing clip early gives a clear error instead of a
+        partially-built concat manifest pointing at a file that doesn't exist."""
+        for track in tracks:
+            clip_path = Path(track["file_path"]).resolve()
+            if not clip_path.exists():
+                raise FileNotFoundError(
+                    f"Missing atomic clip! Cannot compile video because this file is missing: {clip_path}"
+                )
+
+    @staticmethod
+    def _remove_stale_temp_folders(output_dir: Path) -> None:
+        """A cancelled export (process tree killed) never reaches its cleanup; old leftovers go here."""
+        for old in [*Path(tempfile.gettempdir()).glob("navivi_concat_*"), *output_dir.glob(".navivi_concat_*")]:
+            try:
+                if time.time() - old.stat().st_mtime > 6 * 3600:
+                    shutil.rmtree(old, ignore_errors=True)
+            except OSError:
+                pass
+
+    @staticmethod
+    def _mux_all_tracks(
+        ffmpeg_cmd: str, tracks: list, tmp_dir: Path, target_size: Optional[Tuple[int, int]],
+        target_fps: float, report: Callable[[float], None], mux_end: float,
+    ) -> List[Path]:
+        """Every track's video muxed with its own audio into one segment file each."""
+        weights = [float(t.get("duration") or 0.0) or 1.0 for t in tracks]
+        muxed_paths: List[Path] = []
+        for i, track in enumerate(tracks):
+            muxed_paths.append(VideoExporter._mux_track_for_concat(
+                ffmpeg_cmd, Path(track["file_path"]).resolve(), track.get("audio_path"), tmp_dir, i,
+                audio_offset=float(track.get("audio_offset") or 0.0), target_size=target_size,
+                target_fps=target_fps,
+                trim_in=float(track.get("trim_in") or 0.0),
+                trim_out=float(track["trim_out"]) if track.get("trim_out") else None,
+                volume=float(track.get("volume", 1.0)), muted=bool(track.get("muted")),
+                extra_audio=track.get("extra_audio_path"),
+                extra_volume=float(track.get("extra_audio_volume") if track.get("extra_audio_volume") is not None else 0.5),
+                duration=float(track["duration"]) if track.get("duration") else None,
+                content_shift=float(track.get("content_shift") or 0.0),
+                end_hold=tuning.ENDING_HOLD_SECONDS
+                if i == len(tracks) - 2 and Path(tracks[-1]["file_path"]).name == tuning.OUTRO_OUTPUT_FILENAME
+                and Path(track["file_path"]).name != tuning.FINALE_OUTPUT_FILENAME else 0.0,
+                fade_out=tuning.VIDEO_END_FADE_SECONDS if i == len(tracks) - 1 else 0.0,
+            ))
+            report(mux_end * sum(weights[: i + 1]) / sum(weights))
+        return muxed_paths
+
+    @staticmethod
+    def _join_crossfades(
+        ffmpeg_cmd: str, tracks: list, muxed_paths: List[Path], tmp_dir: Path, target_fps: float,
+        report: Callable[[float], None], mux_end: float, join_end: float,
+    ) -> List[Path]:
+        """The segments with every track marked fade_into_next_seconds (see timeline_step)
+        dissolved into the track after it: the pair becomes one segment."""
+        joined_paths: List[Path] = []
+        skip_next = False
+        fades = [i for i, t in enumerate(tracks[:-1]) if float(t.get("fade_into_next_seconds") or 0.0) > 0]
+        for i, muxed in enumerate(muxed_paths):
+            if skip_next:
+                skip_next = False
+                continue
+            fade = float(tracks[i].get("fade_into_next_seconds") or 0.0)
+            if fade > 0 and i + 1 < len(muxed_paths):
+                merged = VideoExporter._crossfade_pair(
+                    ffmpeg_cmd, muxed, muxed_paths[i + 1], fade, tmp_dir, i, target_fps=target_fps
+                )
+                done = sum(1 for k in fades if k <= i)
+                report(mux_end + (join_end - mux_end) * done / max(1, len(fades)))
+                if merged is not None:
+                    joined_paths.append(merged)
+                    skip_next = True
+                    continue
+            joined_paths.append(muxed)
+        return joined_paths
+
+    @staticmethod
+    def _stitch_segments(ffmpeg_cmd: str, muxed_paths: List[Path], output_dir: Path, partial: Path) -> None:
+        """Joins the segments into `partial` with FFmpeg's concat demuxer (a stream copy), checking the result."""
+        concat_txt = output_dir / f"timeline_{uuid.uuid4().hex}.txt"
+
+        # 2. Write Absolute Paths
+        with open(concat_txt, "w", encoding="utf-8") as f:
+            f.writelines(concat_entry(str(clip_path)) for clip_path in muxed_paths)
+
+        # 3. Execute the seamless stitch
+        result = subprocess.run(
+            [
+                ffmpeg_cmd,
+                "-y", *tuning.ffmpeg_log_args(),
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(concat_txt),
+                "-c",
+                "copy",
+                str(partial),
+            ],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+
+        # Clean up the temporary FFmpeg text file
+        concat_txt.unlink(missing_ok=True)
+
+        # 4. Strict Post-flight Check
+        if result.returncode != 0:
+            logger.error("concat_from_timeline failed: %s", result.stderr)
+            raise RuntimeError(f"FFmpeg concat failed: {result.stderr}")
+
+        if not partial.exists() or partial.stat().st_size == 0:
+            raise RuntimeError(
+                f"FFmpeg reported success, but the output file is missing or 0 bytes! STDERR: {result.stderr}"
+            )
+
+    @staticmethod
     def concat_from_timeline(
         timeline_data: dict, output_path: str,
         on_progress: Optional[Callable[[float], None]] = None,
@@ -954,31 +1167,12 @@ class VideoExporter:
         tracks = timeline_data.get("video_tracks", [])
         if not tracks:
             raise ValueError("Timeline data has no 'video_tracks' to stitch.")
-
-        # [NOTE] [Editor] Run the strict pre-flight check BEFORE opening any files —
-        # catching a missing clip early gives a clear error instead of a
-        # partially-built concat manifest pointing at a file that doesn't exist.
-        for track in tracks:
-            clip_path = Path(track["file_path"]).resolve()
-            if not clip_path.exists():
-                raise FileNotFoundError(
-                    f"Missing atomic clip! Cannot compile video because this file is missing: {clip_path}"
-                )
+        VideoExporter._check_clips_exist(tracks)
 
         output_dir = Path(output_path).parent
         output_dir.mkdir(parents=True, exist_ok=True)
-
-        ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
-        if not ffmpeg_cmd:
-            raise RuntimeError("FFmpeg binary not found.")
-
-        # A cancelled export (process tree killed) never reaches its cleanup; old leftovers go here.
-        for old in [*Path(tempfile.gettempdir()).glob("navivi_concat_*"), *output_dir.glob(".navivi_concat_*")]:
-            try:
-                if time.time() - old.stat().st_mtime > 6 * 3600:
-                    shutil.rmtree(old, ignore_errors=True)
-            except OSError:
-                pass
+        ffmpeg_cmd = VideoExporter._require_ffmpeg()
+        VideoExporter._remove_stale_temp_folders(output_dir)
         # Beside the output, not in the system temp folder: the music/subtitle passes are renamed onto the
         # output, and Windows refuses a rename from C:'s temp folder to a project on another drive.
         tmp_dir = Path(tempfile.mkdtemp(prefix=".navivi_concat_", dir=output_dir))
@@ -993,90 +1187,13 @@ class VideoExporter:
         report = on_progress or (lambda _pct: None)
         burning = bool(VideoExporter._burn_cues(timeline_data))
         mux_end, join_end, music_end = (26.0, 49.0, 50.0) if burning else (53.0, 97.0, 99.0)
-        weights = [float(t.get("duration") or 0.0) or 1.0 for t in tracks]
         report(0.0)
         try:
-            muxed_paths: List[Path] = []
-            for i, track in enumerate(tracks):
-                muxed_paths.append(VideoExporter._mux_track_for_concat(
-                    ffmpeg_cmd, Path(track["file_path"]).resolve(), track.get("audio_path"), tmp_dir, i,
-                    audio_offset=float(track.get("audio_offset") or 0.0), target_size=target_size,
-                    target_fps=target_fps,
-                    trim_in=float(track.get("trim_in") or 0.0),
-                    trim_out=float(track["trim_out"]) if track.get("trim_out") else None,
-                    volume=float(track.get("volume", 1.0)), muted=bool(track.get("muted")),
-                    extra_audio=track.get("extra_audio_path"),
-                    extra_volume=float(track.get("extra_audio_volume") if track.get("extra_audio_volume") is not None else 0.5),
-                    duration=float(track["duration"]) if track.get("duration") else None,
-                    content_shift=float(track.get("content_shift") or 0.0),
-                    end_hold=tuning.ENDING_HOLD_SECONDS
-                    if i == len(tracks) - 2 and Path(tracks[-1]["file_path"]).name == tuning.OUTRO_OUTPUT_FILENAME
-                    and Path(track["file_path"]).name != tuning.FINALE_OUTPUT_FILENAME else 0.0,
-                    fade_out=tuning.VIDEO_END_FADE_SECONDS if i == len(tracks) - 1 else 0.0,
-                ))
-                report(mux_end * sum(weights[: i + 1]) / sum(weights))
-
-            # A track marked fade_into_next_seconds dissolves into the track
-            # after it (see timeline_step): the pair becomes one segment.
-            joined_paths: List[Path] = []
-            skip_next = False
-            fades = [i for i, t in enumerate(tracks[:-1]) if float(t.get("fade_into_next_seconds") or 0.0) > 0]
-            for i, muxed in enumerate(muxed_paths):
-                if skip_next:
-                    skip_next = False
-                    continue
-                fade = float(tracks[i].get("fade_into_next_seconds") or 0.0)
-                if fade > 0 and i + 1 < len(muxed_paths):
-                    merged = VideoExporter._crossfade_pair(
-                        ffmpeg_cmd, muxed, muxed_paths[i + 1], fade, tmp_dir, i, target_fps=target_fps
-                    )
-                    done = sum(1 for k in fades if k <= i)
-                    report(mux_end + (join_end - mux_end) * done / max(1, len(fades)))
-                    if merged is not None:
-                        joined_paths.append(merged)
-                        skip_next = True
-                        continue
-                joined_paths.append(muxed)
-            muxed_paths = joined_paths
-
-            concat_txt = output_dir / f"timeline_{uuid.uuid4().hex}.txt"
-
-            # 2. Write Absolute Paths
-            with open(concat_txt, "w", encoding="utf-8") as f:
-                f.writelines(concat_entry(str(clip_path)) for clip_path in muxed_paths)
-
-            # 3. Execute the seamless stitch
-            result = subprocess.run(
-                [
-                    ffmpeg_cmd,
-                    "-y", *tuning.ffmpeg_log_args(),
-                    "-f",
-                    "concat",
-                    "-safe",
-                    "0",
-                    "-i",
-                    str(concat_txt),
-                    "-c",
-                    "copy",
-                    str(partial),
-                ],
-                capture_output=True,
-                encoding="utf-8",
-                errors="replace",
+            muxed_paths = VideoExporter._mux_all_tracks(ffmpeg_cmd, tracks, tmp_dir, target_size, target_fps, report, mux_end)
+            muxed_paths = VideoExporter._join_crossfades(
+                ffmpeg_cmd, tracks, muxed_paths, tmp_dir, target_fps, report, mux_end, join_end
             )
-
-            # Clean up the temporary FFmpeg text file
-            concat_txt.unlink(missing_ok=True)
-
-            # 4. Strict Post-flight Check
-            if result.returncode != 0:
-                logger.error("concat_from_timeline failed: %s", result.stderr)
-                raise RuntimeError(f"FFmpeg concat failed: {result.stderr}")
-
-            if not partial.exists() or partial.stat().st_size == 0:
-                raise RuntimeError(
-                    f"FFmpeg reported success, but the output file is missing or 0 bytes! STDERR: {result.stderr}"
-                )
+            VideoExporter._stitch_segments(ffmpeg_cmd, muxed_paths, output_dir, partial)
 
             report(join_end)
             VideoExporter._finish_timeline_output(
@@ -1216,10 +1333,7 @@ class VideoExporter:
         # Ensure output directory exists
         out_path = Path(output_video_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-
-        ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
-        if not ffmpeg_cmd:
-            raise RuntimeError("FFmpeg binary not found.")
+        ffmpeg_cmd = VideoExporter._require_ffmpeg()
 
         safe_sub_path = filter_path(sub_path)
         sub_filter = f"subtitles='{safe_sub_path}'"
@@ -1272,10 +1386,7 @@ class VideoExporter:
 
         out_path = Path(output_video_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-
-        ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
-        if not ffmpeg_cmd:
-            raise RuntimeError("FFmpeg binary not found.")
+        ffmpeg_cmd = VideoExporter._require_ffmpeg()
 
         result = subprocess.run(
             [
@@ -1301,7 +1412,36 @@ class VideoExporter:
 
         return str(out_path)
 
-    # [Core/Animation] Burns a persistent corner label (e.g. an attraction's place name) into a video
+    @staticmethod
+    def _format_srt_timestamp(seconds: float) -> str:
+        """Formats a timestamp in seconds as the SRT timestamp format (HH:MM:SS,mmm)."""
+        total_ms = max(0, int(round(seconds * 1000)))
+        hours, rem_ms = divmod(total_ms, 3_600_000)
+        minutes, rem_ms = divmod(rem_ms, 60_000)
+        secs, ms = divmod(rem_ms, 1000)
+        return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"
+
+    @staticmethod
+    def _label_style(style: Optional[SubtitleStyle]) -> SubtitleStyle:
+        """`style`, or the attraction place-name label's default (bold, outlined, top-left)."""
+        return style or SubtitleStyle(
+            font_size=tuning.ATTRACTION_LABEL_FONT_SIZE,
+            bold=True,
+            alignment=5,  # old-SSA top-left — see SubtitleStyle.alignment's note
+            outline=tuning.ATTRACTION_LABEL_OUTLINE,
+            shadow=1.0,
+            margin_v=tuning.ATTRACTION_LABEL_MARGIN_TOP,
+            margin_l=tuning.ATTRACTION_LABEL_MARGIN_LEFT,
+        )
+
+    @staticmethod
+    def _write_label_srt(out_dir: Path, text: str, duration: float) -> Path:
+        """A one-cue .srt that shows `text` for `duration` seconds, beside the output; the caller deletes it."""
+        srt_path = out_dir / f".label_{uuid.uuid4().hex[:8]}.srt"
+        end_ts = VideoExporter._format_srt_timestamp(duration)
+        srt_path.write_text(f"1\n00:00:00,000 --> {end_ts}\n{text}\n", encoding="utf-8")
+        return srt_path
+
     @staticmethod
     def burn_static_label(
         input_video_path: str,
@@ -1322,29 +1462,13 @@ class VideoExporter:
 
         out_path = Path(output_video_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-
-        ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
-        if not ffmpeg_cmd:
-            raise RuntimeError("FFmpeg binary not found.")
+        ffmpeg_cmd = VideoExporter._require_ffmpeg()
 
         from services.tts.ttsengine import FFmpegManager
 
         duration = FFmpegManager.get_media_duration(str(video_path))
-
-        style = style or SubtitleStyle(
-            font_size=tuning.ATTRACTION_LABEL_FONT_SIZE,
-            bold=True,
-            alignment=5,  # old-SSA top-left — see SubtitleStyle.alignment's note
-            outline=tuning.ATTRACTION_LABEL_OUTLINE,
-            shadow=1.0,
-            margin_v=tuning.ATTRACTION_LABEL_MARGIN_TOP,
-            margin_l=tuning.ATTRACTION_LABEL_MARGIN_LEFT,
-        )
-
-        srt_path = out_path.parent / f".label_{uuid.uuid4().hex[:8]}.srt"
-        end_ts = VideoExporter._format_srt_timestamp(duration)
-        srt_path.write_text(f"1\n00:00:00,000 --> {end_ts}\n{text}\n", encoding="utf-8")
-
+        style = VideoExporter._label_style(style)
+        srt_path = VideoExporter._write_label_srt(out_path.parent, text, duration)
         escaped_srt = filter_path(srt_path)
 
         try:
@@ -1371,16 +1495,55 @@ class VideoExporter:
 
         return str(out_path)
 
-    # [Util] Formats a timestamp in seconds to the SRT timestamp format (HH:MM:SS,mmm)
     @staticmethod
-    def _format_srt_timestamp(seconds: float) -> str:
-        total_ms = max(0, int(round(seconds * 1000)))
-        hours, rem_ms = divmod(total_ms, 3_600_000)
-        minutes, rem_ms = divmod(rem_ms, 60_000)
-        secs, ms = divmod(rem_ms, 1000)
-        return f"{hours:02d}:{minutes:02d}:{secs:02d},{ms:03d}"
+    def _hold_filter(video_path: Path, hold_to: float) -> Optional[str]:
+        """A tpad filter that freezes the final frame until `hold_to` seconds, or None when the clip is already that long."""
+        from services.tts.ttsengine import FFmpegManager
 
-    # [Core/Animation] Fuses duration-fit + upscale + label burn into one ffmpeg pass
+        current_duration = FFmpegManager.get_media_duration(str(video_path))
+        if current_duration <= 0:
+            raise RuntimeError(
+                f"ffprobe reported non-positive duration for '{video_path}'"
+            )
+        pad_seconds = hold_to - current_duration
+        return f"tpad=stop_mode=clone:stop_duration={pad_seconds:.3f}" if pad_seconds > 0 else None
+
+    @staticmethod
+    def _finalize_filters(
+        video_path: Path, out_path: Path, trim_to: Optional[float], hold_to: Optional[float],
+        scale_to: Optional[Tuple[int, int]], sharpen: bool, label_text: Optional[str],
+        label_style: Optional[SubtitleStyle], denoise: Optional[str],
+    ) -> Tuple[List[str], Optional[Path]]:
+        """The video filters of finalize_clip, and the label's temporary .srt (the caller deletes it) when it has one."""
+        from services.tts.ttsengine import FFmpegManager
+
+        vf_parts: List[str] = [denoise] if denoise else []
+
+        if hold_to is not None:
+            hold = VideoExporter._hold_filter(video_path, hold_to)
+            if hold:
+                vf_parts.append(hold)
+
+        if scale_to is not None:
+            target_width, target_height = scale_to
+            vf_parts.append(f"scale={target_width}:{target_height}:flags=lanczos")
+            if sharpen:
+                # Mild luma-only unsharp mask — just enough to counter a
+                # lanczos upscale's softening, not a stylistic sharpen.
+                vf_parts.append("unsharp=5:5:0.5:5:5:0.0")
+
+        srt_path: Optional[Path] = None
+        if label_text:
+            output_duration = trim_to or hold_to
+            if output_duration is None:
+                output_duration = FFmpegManager.get_media_duration(str(video_path))
+            style = VideoExporter._label_style(label_style)
+            srt_path = VideoExporter._write_label_srt(out_path.parent, label_text, output_duration)
+            vf_parts.append(
+                f"subtitles=filename='{filter_path(srt_path)}':force_style='{style.to_force_style()}'"
+            )
+        return vf_parts, srt_path
+
     @staticmethod
     def finalize_clip(
         input_video_path: str,
@@ -1394,7 +1557,9 @@ class VideoExporter:
         label_style: Optional[SubtitleStyle] = None,
         denoise: Optional[str] = None,
     ) -> str:
-        """`denoise`: an ffmpeg filter run first, at the clip's own size (tuning.ATTRACTION_DENOISE).
+        """Fuses duration-fit + upscale + label burn into one ffmpeg pass.
+
+        `denoise`: an ffmpeg filter run first, at the clip's own size (tuning.ATTRACTION_DENOISE).
 
         Combines what used to be up to three sequential ffmpeg re-encodes
         — trim_video_duration, upscale_video, and burn_static_label, each a
@@ -1429,57 +1594,11 @@ class VideoExporter:
 
         out_path = Path(output_video_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
+        ffmpeg_cmd = VideoExporter._require_ffmpeg()
 
-        ffmpeg_cmd = VideoExporter.resolve_ffmpeg()
-        if not ffmpeg_cmd:
-            raise RuntimeError("FFmpeg binary not found.")
-
-        from services.tts.ttsengine import FFmpegManager
-
-        vf_parts: List[str] = [denoise] if denoise else []
-
-        if hold_to is not None:
-            current_duration = FFmpegManager.get_media_duration(str(video_path))
-            if current_duration <= 0:
-                raise RuntimeError(
-                    f"ffprobe reported non-positive duration for '{video_path}'"
-                )
-            pad_seconds = hold_to - current_duration
-            if pad_seconds > 0:
-                vf_parts.append(f"tpad=stop_mode=clone:stop_duration={pad_seconds:.3f}")
-
-        if scale_to is not None:
-            target_width, target_height = scale_to
-            vf_parts.append(f"scale={target_width}:{target_height}:flags=lanczos")
-            if sharpen:
-                # Mild luma-only unsharp mask — just enough to counter a
-                # lanczos upscale's softening, not a stylistic sharpen.
-                vf_parts.append("unsharp=5:5:0.5:5:5:0.0")
-
-        srt_path: Optional[Path] = None
-        if label_text:
-            output_duration = trim_to or hold_to
-            if output_duration is None:
-                output_duration = FFmpegManager.get_media_duration(str(video_path))
-
-            style = label_style or SubtitleStyle(
-                font_size=tuning.ATTRACTION_LABEL_FONT_SIZE,
-                bold=True,
-                alignment=5,  # old-SSA top-left — see SubtitleStyle.alignment's note
-                outline=tuning.ATTRACTION_LABEL_OUTLINE,
-                shadow=1.0,
-                margin_v=tuning.ATTRACTION_LABEL_MARGIN_TOP,
-                margin_l=tuning.ATTRACTION_LABEL_MARGIN_LEFT,
-            )
-            srt_path = out_path.parent / f".label_{uuid.uuid4().hex[:8]}.srt"
-            end_ts = VideoExporter._format_srt_timestamp(output_duration)
-            srt_path.write_text(
-                f"1\n00:00:00,000 --> {end_ts}\n{label_text}\n", encoding="utf-8"
-            )
-            escaped_srt = filter_path(srt_path)
-            vf_parts.append(
-                f"subtitles=filename='{escaped_srt}':force_style='{style.to_force_style()}'"
-            )
+        vf_parts, srt_path = VideoExporter._finalize_filters(
+            video_path, out_path, trim_to, hold_to, scale_to, sharpen, label_text, label_style, denoise
+        )
 
         cmd = [ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(), "-i", str(video_path)]
         if vf_parts:
@@ -1506,3 +1625,4 @@ class VideoExporter:
             raise RuntimeError(f"FFmpeg finalize_clip failed: {result.stderr}")
 
         return str(out_path)
+

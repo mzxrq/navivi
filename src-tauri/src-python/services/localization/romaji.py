@@ -9,6 +9,7 @@ using the pykakasi library. It includes lazy loading of the converter and error 
 import json
 import re
 from pathlib import Path
+from typing import Dict, Tuple
 
 from services.logger.logger import setup_logger
 
@@ -33,6 +34,48 @@ except ImportError:
 _DEFAULT_GLOSSARY_PATH = (
     Path(__file__).resolve().parent.parent / "data" / "glossary.json"
 )
+
+
+# [HACK] [Translation] Pattern tolerates pykakasi inserting stray spaces inside the
+# "__PLACE_i__" placeholder token (e.g. "p l a c e") when it transliterates it character-by-character.
+_PLACEHOLDER_PATTERN = re.compile(r"_*\s*p\s*l\s*a\s*c\s*e\s*_*\s*(\d+)\s*_*", re.IGNORECASE)
+
+
+def _protect_glossary_terms(text: str, glossary: dict) -> Tuple[str, Dict[str, str]]:
+    """`text` with each glossary term swapped for a placeholder token, and the romaji each token stands for.
+
+    [NOTE] [Translation] Glossary terms are swapped for placeholder tokens before pykakasi runs,
+    since pykakasi would otherwise transliterate proper nouns phonetically instead of using the curated romaji/en value.
+    """
+    processed_text = text
+    placeholder_map: Dict[str, str] = {}
+    for i, (jp_name, raw_value) in enumerate(glossary.items()):
+        if jp_name in processed_text:
+            placeholder = f"__PLACE_{i}__"
+
+            # Resolve mapping (prioritizes a specific "romaji" key over "en")
+            if isinstance(raw_value, dict):
+                resolved_value = raw_value.get(
+                    "romaji", raw_value.get("en", jp_name)
+                )
+            else:
+                resolved_value = str(raw_value)
+
+            placeholder_map[str(i)] = resolved_value
+            processed_text = processed_text.replace(jp_name, placeholder)
+    return processed_text, placeholder_map
+
+
+def _restore_glossary_terms(romaji: str, placeholder_map: Dict[str, str]) -> str:
+    """`romaji` with every placeholder token swapped back for its curated value."""
+
+    def replace_placeholder(match):
+        index = match.group(1)
+        replacement = placeholder_map.get(index, match.group(0))
+        # Force a space before and after the protected word
+        return f" {replacement} "
+
+    return _PLACEHOLDER_PATTERN.sub(replace_placeholder, romaji)
 
 
 # [Core] RomajiConverter Class
@@ -72,26 +115,7 @@ class RomajiConverter:
 
         try:
             glossary = RomajiConverter.load_glossary()
-            processed_text = text
-            placeholder_map = {}
-
-            # [NOTE] [Translation] Glossary terms are swapped for placeholder tokens before pykakasi runs,
-            # since pykakasi would otherwise transliterate proper nouns phonetically instead of using the curated romaji/en value.
-            # Pre-process: Swap glossary terms with placeholders
-            for i, (jp_name, raw_value) in enumerate(glossary.items()):
-                if jp_name in processed_text:
-                    placeholder = f"__PLACE_{i}__"
-
-                    # Resolve mapping (prioritizes a specific "romaji" key over "en")
-                    if isinstance(raw_value, dict):
-                        resolved_value = raw_value.get(
-                            "romaji", raw_value.get("en", jp_name)
-                        )
-                    else:
-                        resolved_value = str(raw_value)
-
-                    placeholder_map[str(i)] = resolved_value
-                    processed_text = processed_text.replace(jp_name, placeholder)
+            processed_text, placeholder_map = _protect_glossary_terms(text, glossary)
 
             # Convert remaining text using pykakasi
             kks = RomajiConverter.get_converter()
@@ -99,19 +123,7 @@ class RomajiConverter:
             romaji_tokens = [item["hepburn"] for item in result]
             formatted_romaji = " ".join(romaji_tokens).title()
 
-            # Post-process: Safely swap placeholders back using regex
-            def replace_placeholder(match):
-                index = match.group(1)
-                replacement = placeholder_map.get(index, match.group(0))
-                # Force a space before and after the protected word
-                return f" {replacement} "
-
-            # [HACK] [Translation] Pattern tolerates pykakasi inserting stray spaces inside the
-            # "__PLACE_i__" placeholder token (e.g. "p l a c e") when it transliterates it character-by-character.
-            pattern = re.compile(
-                r"_*\s*p\s*l\s*a\s*c\s*e\s*_*\s*(\d+)\s*_*", re.IGNORECASE
-            )
-            formatted_romaji = pattern.sub(replace_placeholder, formatted_romaji)
+            formatted_romaji = _restore_glossary_terms(formatted_romaji, placeholder_map)
 
             # Clean up formatting (remove double spaces, fix punctuation gaps)
             formatted_romaji = re.sub(r"\s+", " ", formatted_romaji)

@@ -29,6 +29,22 @@ _CONT_SUFFIX_RE = re.compile(r"_cont\d+$")
 _USER_FOLDERS = {"music", "custom", "user"}
 
 
+def _group_by_leg(residential_paths: List[str]) -> List[List[str]]:
+    """Residential clips grouped by leg (the "_contN" suffix stripped), in the renderer's own output order.
+
+    It already renders leg 0, 1, 2... in travel order, appending each leg's own
+    continuation parts right after its main part before moving to the next leg.
+    """
+    leg_groups: List[List[str]] = []
+    for path in residential_paths:
+        base = _CONT_SUFFIX_RE.sub("", Path(path).stem)
+        if leg_groups and _CONT_SUFFIX_RE.sub("", Path(leg_groups[-1][0]).stem) == base:
+            leg_groups[-1].append(path)
+        else:
+            leg_groups.append([path])
+    return leg_groups
+
+
 def _order_like_timeline(
     project_dir: Path,
     overview_paths: List[str],
@@ -53,18 +69,7 @@ def _order_like_timeline(
         for item in attraction_results
         if not item.get("pending") and item.get("video_path")
     }
-
-    # Group residential clips by leg (strip the "_contN" suffix), preserving
-    # the renderer's own output order — it already renders leg 0, 1, 2...
-    # in travel order, appending each leg's own continuation parts right
-    # after its main part before moving to the next leg.
-    leg_groups: List[List[str]] = []
-    for path in residential_paths:
-        base = _CONT_SUFFIX_RE.sub("", Path(path).stem)
-        if leg_groups and _CONT_SUFFIX_RE.sub("", Path(leg_groups[-1][0]).stem) == base:
-            leg_groups[-1].append(path)
-        else:
-            leg_groups.append([path])
+    leg_groups = _group_by_leg(residential_paths)
 
     waypoint_ids = _waypoint_ids(str(project_dir))
     ordered = list(overview_paths)
@@ -132,6 +137,22 @@ def test_video_concat(
     }
 
 
+def _move_into_dir(output_path: str, output_video_dir: str) -> str:
+    """Moves `output_path` into `output_video_dir` (created if needed); returns its new path.
+
+    mux_audio_to_video always resolves under <project>/assets/video/
+    (VideoEditor._resolve_output_path) — move it if the caller asked for
+    somewhere else.
+    """
+    target_dir = Path(output_video_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / Path(output_path).name
+    if Path(output_path).resolve() != target_path.resolve():
+        shutil.move(output_path, str(target_path))
+        return str(target_path)
+    return output_path
+
+
 def test_mux_audio(
     job_config_path: str,
     video_path: str,
@@ -169,16 +190,8 @@ def test_mux_audio(
     output_path = editor.mux_audio_to_video(str(video_p), str(audio_p), output_filename)
     _tracker.clear()
 
-    # mux_audio_to_video always resolves under <project>/assets/video/
-    # (VideoEditor._resolve_output_path) — move it if the caller asked for
-    # somewhere else.
     if output_video_dir:
-        target_dir = Path(output_video_dir)
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / Path(output_path).name
-        if Path(output_path).resolve() != target_path.resolve():
-            shutil.move(output_path, str(target_path))
-            output_path = str(target_path)
+        output_path = _move_into_dir(output_path, output_video_dir)
 
     return {
         "success": True,
@@ -202,51 +215,12 @@ def test_transition_editor(
     }
 
 
-def test_all(
-    job_config_path: str,
-    output_dir: str | None = None,
-    force: bool = False,
-) -> Dict[str, Any]:
-    """Runs every isolated stage in run_full_pipeline's order and with its
-    settings (skip_rich_media, enable_attraction_videos), then concatenates
-    them in timeline order. No timeline.json and no audio in the concat:
-    use full_pipeline for the real thing.
-
-    Checkpointing: by default (`force=False`) nothing is wiped up front —
-    each stage below skips any of its own outputs that already exist on
-    disk. Pass `force=True` to wipe audio/video/subtitles and regenerate
-    everything from scratch.
-    """
-    import time
-
-    from services import tuning
-    from services.vdoprocessing.videopipeline.helpers import (
-        attraction_videos_enabled,
-        skip_rich_media,
-    )
-    from .helpers import _apply_pipeline_settings
-
-    config_path = Path(job_config_path)
-    if not config_path.exists():
-        raise FileNotFoundError(f"job_config.json not found: {config_path}")
-
-    project_dir = config_path.parent
-    audio_dir = project_audio_dir(project_dir)
-    video_dir = Path(output_dir) if output_dir else project_video_dir(project_dir)
-    subtitle_dir = project_subtitle_dir(project_dir)
-    route_dir = video_dir / "route"
-    attraction_dir = video_dir / "attraction"
-
-    settings = _apply_pipeline_settings(config_path)
-    rich_media = not skip_rich_media(settings)
-    attractions_on = attraction_videos_enabled(settings)
-    # Clearing/checking, overview, residential, intro/outro, concat, plus two stages each for rich media and attractions.
-    total_stages = 5 + (2 if rich_media else 1) + (2 if attractions_on else 1)
-
+def _prepare_output_dirs(force: bool, total_stages: int, dirs: tuple) -> None:
+    """Wipes the generated outputs (`force`) or just makes sure the folders exist, as test_all's first stage."""
     if force:
         # [HACK] [IO] Per-waypoint cleanup only deletes files matching current labels/order, so a renamed or removed waypoint would leave stale files behind — brute-force wipe the generated outputs instead.
         _tracker.stage("Clearing stale outputs...", total=total_stages)
-        for stale_dir in (audio_dir, video_dir, subtitle_dir):
+        for stale_dir in dirs:
             for child in list(stale_dir.iterdir()) if stale_dir.exists() else []:
                 if child.name in _USER_FOLDERS:
                     continue
@@ -257,9 +231,19 @@ def test_all(
             stale_dir.mkdir(parents=True, exist_ok=True)
     else:
         _tracker.stage("Checking existing outputs...", total=total_stages)
-        for stale_dir in (audio_dir, video_dir, subtitle_dir):
+        for stale_dir in dirs:
             stale_dir.mkdir(parents=True, exist_ok=True)
     _tracker.clear()
+
+
+def _run_media_stages(
+    config_path: Path, audio_dir: Path, subtitle_dir: Path, attraction_dir: Path,
+    force: bool, rich_media: bool, attractions_on: bool,
+) -> tuple:
+    """test_all's voice, subtitle and attraction-video stages; (tts, subtitles, attractions) results."""
+    import time
+
+    from services import tuning
 
     tts_result = subtitle_result = None
     attraction_result = {"results": [], "video_paths": [], "pending_indices": []}
@@ -279,6 +263,68 @@ def test_all(
         time.sleep(tuning.GPU_STAGE_COOLDOWN_SECONDS)
     else:
         _tracker.stage("Skipping attraction videos (disabled for this project)...")
+    return tts_result, subtitle_result, attraction_result
+
+
+def _concat_in_timeline_order(
+    config_path: Path, video_dir: Path, overview_result: dict, attraction_result: dict,
+    residential_result: dict, intro_result: dict, outro_result: dict,
+) -> dict:
+    """test_all's last stage: every clip joined in the pipeline's timeline order, intro first and outro last."""
+    videos_to_concat = _order_like_timeline(
+        config_path.parent,
+        overview_result["video_paths"],
+        attraction_result["results"],
+        residential_result["video_paths"],
+    )
+    if intro_result.get("video_path"):
+        videos_to_concat = [intro_result["video_path"]] + videos_to_concat
+    if outro_result.get("video_path"):
+        videos_to_concat = videos_to_concat + [outro_result["video_path"]]
+    return test_video_concat(str(config_path), str(video_dir), videos_to_concat)
+
+
+def test_all(
+    job_config_path: str,
+    output_dir: str | None = None,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Runs every isolated stage in run_full_pipeline's order and with its
+    settings (skip_rich_media, enable_attraction_videos), then concatenates
+    them in timeline order. No timeline.json and no audio in the concat:
+    use full_pipeline for the real thing.
+
+    Checkpointing: by default (`force=False`) nothing is wiped up front —
+    each stage below skips any of its own outputs that already exist on
+    disk. Pass `force=True` to wipe audio/video/subtitles and regenerate
+    everything from scratch.
+    """
+    from services.vdoprocessing.videopipeline.helpers import (
+        attraction_videos_enabled,
+        skip_rich_media,
+    )
+    from .helpers import _apply_pipeline_settings
+
+    config_path = Path(job_config_path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"job_config.json not found: {config_path}")
+
+    project_dir = config_path.parent
+    audio_dir = project_audio_dir(project_dir)
+    video_dir = Path(output_dir) if output_dir else project_video_dir(project_dir)
+    subtitle_dir = project_subtitle_dir(project_dir)
+    route_dir = video_dir / "route"
+
+    settings = _apply_pipeline_settings(config_path)
+    rich_media = not skip_rich_media(settings)
+    attractions_on = attraction_videos_enabled(settings)
+    # Clearing/checking, overview, residential, intro/outro, concat, plus two stages each for rich media and attractions.
+    total_stages = 5 + (2 if rich_media else 1) + (2 if attractions_on else 1)
+    _prepare_output_dirs(force, total_stages, (audio_dir, video_dir, subtitle_dir))
+
+    tts_result, subtitle_result, attraction_result = _run_media_stages(
+        config_path, audio_dir, subtitle_dir, video_dir / "attraction", force, rich_media, attractions_on
+    )
 
     _tracker.stage("Rendering overview video...")
     overview_result = test_overview_video(str(config_path), str(route_dir), force=force)
@@ -291,17 +337,9 @@ def test_all(
     outro_result = test_outro_video(str(config_path))
 
     _tracker.stage("Concatenating final video...")
-    videos_to_concat = _order_like_timeline(
-        project_dir,
-        overview_result["video_paths"],
-        attraction_result["results"],
-        residential_result["video_paths"],
+    concat_result = _concat_in_timeline_order(
+        config_path, video_dir, overview_result, attraction_result, residential_result, intro_result, outro_result
     )
-    if intro_result.get("video_path"):
-        videos_to_concat = [intro_result["video_path"]] + videos_to_concat
-    if outro_result.get("video_path"):
-        videos_to_concat = videos_to_concat + [outro_result["video_path"]]
-    concat_result = test_video_concat(str(config_path), str(video_dir), videos_to_concat)
 
     return {
         "success": True,
@@ -314,3 +352,5 @@ def test_all(
         "outro": outro_result,
         "concat": concat_result,
     }
+
+

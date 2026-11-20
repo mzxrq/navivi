@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from services.projectfiles import tile_cache_dir
 from PIL import Image
 import math
-from typing import Dict, Optional, Tuple
+from typing import Dict, NamedTuple, Optional, Tuple
 import pandas as pd
 import numpy as np
 
@@ -72,6 +72,109 @@ def _evict_stale_tiles(cache_dir: Path, max_age_days: float = _TILE_CACHE_MAX_AG
             )
     except OSError as exc:
         logger.warning("Tile cache eviction skipped for %s: %s", cache_dir, exc)
+
+
+_METERS_PER_DEG_LAT = 111_320.0
+# 20% breathing room on top of the half-extent: covers the pin+label graphic (which extends past its anchor) and
+# the unpredictable trim the tile-grid snapping and _crop_to_aspect_ratio add on any edge.
+_RESIDENTIAL_BOX_PAD = 0.20
+
+
+class _Pins(NamedTuple):
+    """Latitude/longitude of a leg's start and end pins."""
+    start_lat: float
+    start_lon: float
+    end_lat: float
+    end_lon: float
+
+
+def _residential_half_extent(
+    chunk_df: pd.DataFrame, pins: _Pins, bbox_multiplier: float, apply_min_zoom: bool,
+) -> Tuple[float, float, float, float]:
+    """(center_lat, center_lon, half_lat, half_lon) of the leg's whole path.
+
+    Centered on the path's point-density MEAN, not its bbox midpoint: a boomerang-shaped leg left the corner away
+    from the bend empty when centered on the bbox. Half-extent is the larger one-sided distance from that mean.
+    """
+    lat_min, lat_max = chunk_df["latitude"].min(), chunk_df["latitude"].max()
+    lon_min, lon_max = chunk_df["longitude"].min(), chunk_df["longitude"].max()
+    center_lat = chunk_df["latitude"].mean()
+    center_lon = chunk_df["longitude"].mean()
+
+    # [NOTE] The wide shot's multiplier (2.5) suits a multi-km leg; on a short local leg it swallowed whole
+    # neighboring hills, so those legs get the tapered LOCAL multiplier (never the tight tile: multiplier 1.0).
+    pin_dist_lon_scale = math.cos(math.radians((pins.start_lat + pins.end_lat) / 2.0))
+    pin_distance_for_taper_m = math.hypot(
+        (pins.end_lat - pins.start_lat) * 111_320.0,
+        (pins.end_lon - pins.start_lon) * 111_320.0 * pin_dist_lon_scale,
+    )
+    if not apply_min_zoom and pin_distance_for_taper_m <= tuning.RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M:
+        bbox_multiplier = min(bbox_multiplier, tuning.RESIDENTIAL_WIDE_BBOX_MULTIPLIER_LOCAL)
+
+    half_lat = max(center_lat - lat_min, lat_max - center_lat, 1e-9) * bbox_multiplier
+    half_lon = max(center_lon - lon_min, lon_max - center_lon, 1e-9) * bbox_multiplier
+
+    # [NOTE] A ramp loop or switchback can inflate the path bbox far past what the pins need; scale BOTH axes
+    # down together (keeps the aspect) once the path diagonal exceeds RESIDENTIAL_LOOP_ZOOM_CAP x the pin diagonal.
+    # Floored in absolute degrees so near-coincident pins don't cap the box to nothing.
+    lon_scale_for_cap = math.cos(math.radians(center_lat))
+    pin_diag = math.hypot(
+        abs(pins.end_lat - pins.start_lat), abs(pins.end_lon - pins.start_lon) * lon_scale_for_cap
+    )
+    path_diag = math.hypot(half_lat, half_lon * lon_scale_for_cap)
+    max_diag = max(
+        pin_diag * tuning.RESIDENTIAL_LOOP_ZOOM_CAP,
+        tuning.RESIDENTIAL_LOOP_ZOOM_CAP_MIN_DEGREES,
+    )
+    if path_diag > max_diag:
+        shrink = max_diag / path_diag
+        half_lat *= shrink
+        half_lon *= shrink
+    return center_lat, center_lon, half_lat, half_lon
+
+
+def _fit_box_to_ratio(
+    w: float, s: float, e: float, n: float, center_lat: float, target_ratio: float,
+) -> Tuple[float, float, float, float]:
+    """Widens or heightens the (w, s, e, n) box to the target aspect ratio."""
+    lon_scale = math.cos(math.radians(center_lat))
+    current_ratio = ((e - w) * lon_scale) / (n - s)
+    if current_ratio < target_ratio:
+        expansion = (((n - s) * target_ratio) / lon_scale - (e - w)) / 2.0
+        return w - expansion, s, e + expansion, n
+    expansion = (((e - w) * lon_scale) / target_ratio - (n - s)) / 2.0
+    return w, s - expansion, e, n + expansion
+
+
+def _bias_box_upward(s: float, n: float, center_lat: float) -> Tuple[float, float]:
+    """Moves the box so the route's center sits in the upper part of the frame, leaving room for the summary bar."""
+    lat_span = n - s
+    target_fraction_from_top = 0.5 - tuning.RESIDENTIAL_MAP_BOTTOM_BAR_FRACTION / 2.0
+    new_n = center_lat + target_fraction_from_top * lat_span
+    return new_n - lat_span, new_n
+
+
+def _clamp_box_to_pins(
+    w: float, s: float, e: float, n: float, pins: _Pins,
+) -> Tuple[float, float, float, float]:
+    """Translates the box (span, so zoom, untouched) until neither pin is within RESIDENTIAL_PIN_EDGE_MARGIN of an edge.
+
+    A zigzag leaning one way can drag the path-centered box far enough to nearly cut a pin off.
+    """
+    lat_span, lon_span = n - s, e - w
+    margin = tuning.RESIDENTIAL_PIN_EDGE_MARGIN
+    for pin_lat, pin_lon in ((pins.start_lat, pins.start_lon), (pins.end_lat, pins.end_lon)):
+        lo, hi = s + lat_span * margin, n - lat_span * margin
+        if pin_lat < lo:
+            s, n = s - (lo - pin_lat), n - (lo - pin_lat)
+        elif pin_lat > hi:
+            s, n = s + (pin_lat - hi), n + (pin_lat - hi)
+        lo, hi = w + lon_span * margin, e - lon_span * margin
+        if pin_lon < lo:
+            w, e = w - (lo - pin_lon), e - (lo - pin_lon)
+        elif pin_lon > hi:
+            w, e = w + (pin_lon - hi), e + (pin_lon - hi)
+    return w, s, e, n
 
 
 class TileDownloader:
@@ -389,122 +492,42 @@ class TileDownloader:
         if chunk_df.empty:
             raise ValueError("Chunk DataFrame is empty.")
 
-        # 1. Calculate a Bounding Box Centered on the Leg's FULL PATH
-        #
-        # Centered on the path's own min/max extent (every point of the
-        # actual route, not just its two endpoints) — the whole route
-        # line stays centered and fully in-frame. The tradeoff (and it IS
-        # one — see git history if this needs revisiting): a leg whose
-        # path loops or bulges well to one side of the straight line
-        # between its start/end pins can leave one of those pins sitting
-        # closer to an edge than the other, since the box is sized and
-        # centered around the path's own shape rather than symmetric
-        # around the two pins.
-        start_lat, end_lat = chunk_df["latitude"].iloc[0], chunk_df["latitude"].iloc[-1]
-        start_lon, end_lon = chunk_df["longitude"].iloc[0], chunk_df["longitude"].iloc[-1]
-        lat_min, lat_max = chunk_df["latitude"].min(), chunk_df["latitude"].max()
-        lon_min, lon_max = chunk_df["longitude"].min(), chunk_df["longitude"].max()
-        # Centered on the path's own POINT-DENSITY MEAN, not the midpoint
-        # of its bounding box's corners — those coincide for a path that's
-        # roughly a straight line or symmetric loop, but a curved/
-        # "boomerang" leg (most of its points bunched along one arc, with
-        # the bbox's opposite corner reached only briefly) used to center
-        # on that corner-midpoint anyway, leaving the frame's corner away
-        # from the bend looking mostly empty even though the box was
-        # technically "centered". Centering on the mean instead pulls the
-        # frame toward where the route actually spends its length.
-        center_lat = chunk_df["latitude"].mean()
-        center_lon = chunk_df["longitude"].mean()
-
-        # The wide establishing shot's own multiplier (bbox_multiplier,
-        # normally RESIDENTIAL_WIDE_BBOX_MULTIPLIER=2.5) is tuned for a
-        # genuinely long leg (a multi-km ferry/hike stretch), where zooming
-        # out that much still reads as "establishing". Applied unscaled to
-        # a short, local/residential-scale leg (pins within
-        # RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M of each other — the same
-        # "local" threshold the tight tile's own min-zoom floor uses) it
-        # zoomed out far enough to swallow whole neighboring hills/bays
-        # having nothing to do with this leg's actual walk. Tapered down to
-        # RESIDENTIAL_WIDE_BBOX_MULTIPLIER_LOCAL for those short legs only
-        # (never for the tight tile itself, apply_min_zoom=True, which
-        # always calls in with bbox_multiplier=1.0 anyway).
-        pin_dist_lon_scale = math.cos(math.radians((start_lat + end_lat) / 2.0))
-        pin_distance_for_taper_m = math.hypot(
-            (end_lat - start_lat) * 111_320.0,
-            (end_lon - start_lon) * 111_320.0 * pin_dist_lon_scale,
+        pins = _Pins(
+            chunk_df["latitude"].iloc[0], chunk_df["longitude"].iloc[0],
+            chunk_df["latitude"].iloc[-1], chunk_df["longitude"].iloc[-1],
         )
-        if not apply_min_zoom and pin_distance_for_taper_m <= tuning.RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M:
-            bbox_multiplier = min(bbox_multiplier, tuning.RESIDENTIAL_WIDE_BBOX_MULTIPLIER_LOCAL)
-
-        # Half-extent from the path's own full bounding box — not the
-        # straight-line distance between just the two pins — so a loop or
-        # detour is guaranteed to stay in frame instead of running off an
-        # edge. `bbox_multiplier` widens this for the wide establishing
-        # shot (fetch_residential_wide) without duplicating any of this
-        # logic. Measured as the LARGER of the two one-sided distances
-        # from the new mean-based center (not half the corner-to-corner
-        # span) — since the mean center isn't necessarily equidistant
-        # from both extremes, halving the raw span could leave the
-        # farther extreme outside the box.
-        half_lat = max(center_lat - lat_min, lat_max - center_lat, 1e-9) * bbox_multiplier
-        half_lon = max(center_lon - lon_min, lon_max - center_lon, 1e-9) * bbox_multiplier
-
-        # Capped against the straight-line pin distance — an on/off-ramp
-        # loop or a wide switchback can inflate the path's own bounding
-        # box far beyond what the two pins actually need, zooming the
-        # whole leg out to fit a loop that only briefly swings wide
-        # (leaving most of the frame empty the rest of the time). Scaling
-        # BOTH axes down together (not clamping each independently, which
-        # would distort the box's own aspect ratio) once the path's
-        # diagonal extent exceeds RESIDENTIAL_LOOP_ZOOM_CAP times the
-        # pins' own diagonal distance keeps the center on the path's
-        # shape (per the framing above) while still stopping a loop from
-        # dominating the frame the way it did before this cap existed.
-        lon_scale_for_cap = math.cos(math.radians(center_lat))
-        pin_diag = math.hypot(
-            abs(end_lat - start_lat), abs(end_lon - start_lon) * lon_scale_for_cap
+        center_lat, center_lon, half_lat, half_lon = _residential_half_extent(
+            chunk_df, pins, bbox_multiplier, apply_min_zoom
         )
-        path_diag = math.hypot(half_lat, half_lon * lon_scale_for_cap)
-        # Floored in absolute degrees (not just scaled off pin_diag) so a
-        # leg whose two pins sit almost on top of each other (a loop that
-        # returns nearly to its own start) doesn't get capped down to a
-        # near-zero box — RESIDENTIAL_LOOP_ZOOM_CAP_MIN_DEGREES is roughly
-        # 55m, a sane lower bound on how tight the cap itself can squeeze.
-        max_diag = max(
-            pin_diag * tuning.RESIDENTIAL_LOOP_ZOOM_CAP,
-            tuning.RESIDENTIAL_LOOP_ZOOM_CAP_MIN_DEGREES,
+        s, n = center_lat - half_lat * (1 + _RESIDENTIAL_BOX_PAD), center_lat + half_lat * (1 + _RESIDENTIAL_BOX_PAD)
+        w, e = center_lon - half_lon * (1 + _RESIDENTIAL_BOX_PAD), center_lon + half_lon * (1 + _RESIDENTIAL_BOX_PAD)
+        optimal_zoom = self._residential_zoom(
+            (w, s, e, n), center_lat, pins, output_size[0], apply_min_zoom
         )
-        if path_diag > max_diag:
-            shrink = max_diag / path_diag
-            half_lat *= shrink
-            half_lon *= shrink
 
-        # 20% breathing room on top of that half-extent — covers both the
-        # pin+label graphic (which extends past its anchor point) and the
-        # further, not-precisely-predictable trim the fetch-then-crop
-        # steps below (tile-grid snapping, then _crop_to_aspect_ratio) can
-        # each add on any edge.
-        _PAD = 0.20
-        s, n = center_lat - half_lat * (1 + _PAD), center_lat + half_lat * (1 + _PAD)
-        w, e = center_lon - half_lon * (1 + _PAD), center_lon + half_lon * (1 + _PAD)
+        out_w, out_h = output_size
+        target_ratio = out_w / out_h
+        w, s, e, n = _fit_box_to_ratio(w, s, e, n, center_lat, target_ratio)
+        # The summary bar is only composited over the per-frame chunk tile, never the wide shot.
+        if apply_min_zoom:
+            s, n = _bias_box_upward(s, n, center_lat)
+        w, s, e, n = _clamp_box_to_pins(w, s, e, n, pins)
+        return w, s, e, n, optimal_zoom, target_ratio
+
+    def _residential_zoom(
+        self, box: Tuple[float, float, float, float], center_lat: float, pins: _Pins,
+        out_w: int, apply_min_zoom: bool,
+    ) -> int:
+        """Zoom for the padded (w, s, e, n) box's physical span.
+
+        Same density-calibrated formula as fetch_overview_image (see _optimal_zoom_for_span), capped by the
+        provider's MAX_ZOOM_LEVEL and RESIDENTIAL_MAX_ZOOM (a "looks good" ceiling: too close reads as a block crop).
+        """
+        w, s, e, n = box
         lat_span, lon_span = n - s, e - w
+        meters_per_deg_lon = _METERS_PER_DEG_LAT * math.cos(math.radians(center_lat))
+        span_meters = max(lat_span * _METERS_PER_DEG_LAT, lon_span * meters_per_deg_lon)
 
-        # 2. Determine Optimal Zoom based on physical span — thresholds
-        # shifted down (vs. the overview's table) so the same physical span
-        # picks a higher zoom level here, capped by the provider's own
-        # MAX_ZOOM_LEVEL just like fetch_overview_image does.
-        meters_per_deg_lat = 111_320.0
-        meters_per_deg_lon = 111_320.0 * math.cos(math.radians(center_lat))
-        span_meters = max(lat_span * meters_per_deg_lat, lon_span * meters_per_deg_lon)
-
-        # Same density-calibrated formula fetch_overview_image uses (see
-        # _optimal_zoom_for_span's docstring) instead of the old fixed
-        # span-threshold table: that table was tuned for plain 256px tiles
-        # and, unaware of this provider's ~2.537x/5.073x (retina) pixel
-        # density, picked a zoom that over-fetched relative to output_size
-        # — the extra LANCZOS downsampling on resize crushed place-name
-        # labels the same way it did on the overview map before that fix.
-        out_w, _out_h_unused = output_size
         is_retina = bool(self.provider.get("r")) if hasattr(self.provider, "get") else False
         tilesize_512_quirk = (
             hasattr(self.provider, "get") and self.provider.get("tileSize") == 512
@@ -512,83 +535,20 @@ class TileDownloader:
         optimal_zoom = self._optimal_zoom_for_span(
             span_meters, out_w, retina=is_retina, tilesize_512_quirk=tilesize_512_quirk
         )
-        # Ceiling independent of the provider's own MAX_ZOOM_LEVEL (a
-        # capability limit, not a "looks good" limit) — a very short/tight
-        # leg's span could otherwise reach right up to that provider
-        # ceiling, framing so close the map reads as an abstract
-        # block-level crop instead of a recognizable street view.
         optimal_zoom = min(optimal_zoom, self.MAX_ZOOM_LEVEL, tuning.RESIDENTIAL_MAX_ZOOM)
 
-        # Zoom floor only for genuinely short/local legs — gated on the
-        # straight-line distance between the two pins (immune to a
-        # detour/loop inflating the padded span above) so a long car/ferry
-        # leg never gets dragged up to a street-level zoom, which would
-        # multiply its tile count ~4x per zoom level jumped. Skipped
-        # entirely for the wide establishing shot (apply_min_zoom=False) —
-        # that tile is meant to look zoomed OUT, so a min-zoom floor would
-        # defeat its whole purpose.
+        # [NOTE] Zoom floor only for short/local legs, judged on the pin distance (immune to a detour inflating
+        # the span) so a long leg isn't dragged to street level; skipped for the wide shot, which should look zoomed out.
         if apply_min_zoom:
             pin_distance_meters = math.hypot(
-                (end_lat - start_lat) * meters_per_deg_lat,
-                (end_lon - start_lon) * meters_per_deg_lon,
+                (pins.end_lat - pins.start_lat) * _METERS_PER_DEG_LAT,
+                (pins.end_lon - pins.start_lon) * meters_per_deg_lon,
             )
             if pin_distance_meters <= tuning.RESIDENTIAL_MIN_ZOOM_MAX_PIN_DISTANCE_M:
                 optimal_zoom = max(
                     optimal_zoom, min(tuning.RESIDENTIAL_MIN_ZOOM, self.MAX_ZOOM_LEVEL)
                 )
-
-        # 3. Adjust Bounding Box to Target Aspect Ratio
-        out_w, out_h = output_size
-        target_ratio = out_w / out_h
-        lon_scale = math.cos(math.radians(center_lat))
-        current_ratio = ((e - w) * lon_scale) / (n - s)
-
-        if current_ratio < target_ratio:
-            expansion = (((n - s) * target_ratio) / lon_scale - (e - w)) / 2.0
-            w, e = w - expansion, e + expansion
-        else:
-            expansion = (((e - w) * lon_scale) / target_ratio - (n - s)) / 2.0
-            s, n = s - expansion, n + expansion
-
-        # Bias the box upward (toward higher latitude) so the route's own
-        # center lands in the upper portion of the frame instead of dead
-        # center — leaves genuine breathing room at the bottom for the
-        # summary bar to sit over without visually cutting into what
-        # would otherwise read as a centered route. Only for the actual
-        # per-frame chunk tile (apply_min_zoom=True) — the wide
-        # establishing shot never has the bar composited on top of it.
-        if apply_min_zoom:
-            lat_span = n - s
-            target_fraction_from_top = 0.5 - tuning.RESIDENTIAL_MAP_BOTTOM_BAR_FRACTION / 2.0
-            new_n = center_lat + target_fraction_from_top * lat_span
-            s, n = new_n - lat_span, new_n
-
-        # Safety clamp: neither pin is allowed to end up within
-        # RESIDENTIAL_PIN_EDGE_MARGIN of any edge, however the box above
-        # got centered/capped — a zigzagging path (several switchbacks
-        # all leaning the same direction, none of them a single dominant
-        # loop the cap above would catch) can still drag the path-bbox
-        # center far enough that a pin ends up almost cut off. Translates
-        # the box (same span, so zoom is untouched) just enough to bring
-        # an offending pin back to that margin — path-centered framing is
-        # still the default the rest of this function computes, this
-        # only intervenes in the specific case a pin would otherwise be
-        # nearly or fully out of frame.
-        lat_span, lon_span = n - s, e - w
-        margin = tuning.RESIDENTIAL_PIN_EDGE_MARGIN
-        for pin_lat, pin_lon in ((start_lat, start_lon), (end_lat, end_lon)):
-            lo, hi = s + lat_span * margin, n - lat_span * margin
-            if pin_lat < lo:
-                s, n = s - (lo - pin_lat), n - (lo - pin_lat)
-            elif pin_lat > hi:
-                s, n = s + (pin_lat - hi), n + (pin_lat - hi)
-            lo, hi = w + lon_span * margin, e - lon_span * margin
-            if pin_lon < lo:
-                w, e = w - (lo - pin_lon), e - (lo - pin_lon)
-            elif pin_lon > hi:
-                w, e = w + (pin_lon - hi), e + (pin_lon - hi)
-
-        return w, s, e, n, optimal_zoom, target_ratio
+        return optimal_zoom
 
     # [Map/Util] Fetch (with zoom-decrement fallback), crop, resize, and
     # save — the actual network + image-IO half of a residential fetch,

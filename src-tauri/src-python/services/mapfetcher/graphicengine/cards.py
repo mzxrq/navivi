@@ -48,6 +48,25 @@ def merge_summary_card_labels(overrides: Optional[Dict]) -> Dict:
     return merged
 
 
+def _fmt_distance(km: float) -> str:
+    """A distance for a card: metres under a kilometre, else kilometres."""
+    return f"{km * 1000:.0f} m" if km < 1 else f"{km:.1f} km"
+
+
+def _blend_card(out: np.ndarray, card_bgra: np.ndarray, x0: int, y0: int, alpha: float) -> None:
+    """Alpha-blends `card_bgra` onto `out` at (x0, y0) in place: the card's own per-pixel alpha channel
+    together with the caller-supplied fade-in/out `alpha`, so the card can both have soft edges and fade as a whole."""
+    ch, cw = card_bgra.shape[:2]
+    card_bgr, card_alpha = (
+        card_bgra[:, :, :3].astype(np.float32),
+        (card_bgra[:, :, 3].astype(np.float32) / 255.0) * alpha,
+    )
+    roi = out[y0 : y0 + ch, x0 : x0 + cw].astype(np.float32)
+    out[y0 : y0 + ch, x0 : x0 + cw] = (
+        card_bgr * card_alpha[..., None] + roi * (1 - card_alpha[..., None])
+    ).astype(np.uint8)
+
+
 class _CardMixin:
     @staticmethod
     def _draw_clock_icon(draw: ImageDraw.ImageDraw, cx: float, cy: float, size: float, color: Tuple):
@@ -241,8 +260,9 @@ class _CardMixin:
         out[y0:y0 + cover.shape[0], x0:x0 + cover.shape[1]] = np.clip(blended + 0.5, 0, 255).astype(np.uint8)
         return out
 
-    def _stopby_notice_sprite(self, w: int, h: int, marker_color: Tuple[int, int, int], kind: str = "stopby"):
-        """((x, y), premultiplied BGR, coverage 0..1) of the notice with its marker, cropped to what it covers."""
+    def _stopby_notice_layer(self, w: int, h: int, kind: str):
+        """The notice's RGBA layer (soft shadow, body card with its text, titled ribbon) and where its marker goes:
+        (layer, marker x, marker y, marker icon diameter, layout scale)."""
         s, title_font, body_font, lines, ribbon, body = self._stopby_notice_layout(w, h, kind)
         layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
 
@@ -280,7 +300,11 @@ class _CardMixin:
         tb = d.textbbox((0, 0), notice_title, font=title_font)
         d.text((ribbon[0] + int(22 * s), (ribbon[1] + ribbon[3]) // 2 - (tb[1] + tb[3]) // 2),
                notice_title, font=title_font, fill=(255, 255, 255, 255))
+        return layer, cx, cy, icon_d, s
 
+    def _stopby_notice_sprite(self, w: int, h: int, marker_color: Tuple[int, int, int], kind: str = "stopby"):
+        """((x, y), premultiplied BGR, coverage 0..1) of the notice with its marker, cropped to what it covers."""
+        layer, cx, cy, icon_d, s = self._stopby_notice_layer(w, h, kind)
         x0, y0, x1, y1 = layer.getbbox()
         rgba = np.asarray(layer.crop((x0, y0, x1, y1))).astype(np.float32)
         card_cover = rgba[:, :, 3:4] / 255.0
@@ -299,6 +323,279 @@ class _CardMixin:
         cover = 1.0 - (1.0 - card_cover) * (1.0 - mark_cover)
         return (x0, y0), color, cover
 
+    def _fmt_duration(self, seconds: float) -> str:
+        """A duration for a card ("--" when there is none)."""
+        return self._format_duration_ja(seconds) if seconds > 0 else "--"
+
+    def _summary_columns(
+        self, distance_km: float, duration_seconds: float, mode_breakdown: Optional[Dict[str, float]],
+        mode_duration: Optional[Dict[str, float]],
+    ) -> List[Tuple[str, str, float, float]]:
+        """(label, mode, distance, duration) per travel mode actually used, longest first, plus a Total column."""
+        mode_duration = mode_duration or {}
+        columns: List[Tuple[str, str, float, float]] = []
+        if mode_breakdown:
+            for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1]):
+                columns.append(
+                    (self._mode_name_ja(mode), mode.lower(), dist, mode_duration.get(mode, 0.0))
+                )
+        # A single mode's own column already IS the total (same distance,
+        # same time) — appending "Total" too would just repeat it. Only
+        # add it when there's more than one mode to actually total up, or
+        # none at all (nothing else to show).
+        if not mode_breakdown or len(mode_breakdown) > 1:
+            columns.append((self.summary_card_labels["total_label"], "total", distance_km, duration_seconds))
+        return columns
+
+    def _summary_pill(self, column: Tuple[str, str, float, float], border_rgba: tuple, scale: int):
+        """The single-mode card: a light, fully-rounded "pill" — icon on the left of each stat, its
+        label/value stacked to the right. Returns (canvas, corner radius px)."""
+        bg_color = self.ui["card_bg"]
+        text_color, label_color = self.ui["card_text"], self.ui["card_label"]
+        icon_color = self.ui["card_text"]
+
+        # Bold, not regular — Noto Sans's regular weight read as too
+        # thin for this small a caption; size/color still separate it
+        # from the (also bold) value below it.
+        font_label = self._load_font(
+            self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
+        )
+        font_value = self._load_font(
+            self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_VALUE_FONT_SIZE * scale
+        )
+
+        tiles = self._pill_tiles(column)
+
+        icon_size = 36 * scale
+        icon_text_gap = 14 * scale
+        line_gap = 12 * scale
+        group_gap = 46 * scale
+        # Margin around the content — was a fixed 560x150 box regardless
+        # of how little a 2-tile pill actually needs, reading as mostly
+        # empty padding. Sized to the content instead, with just enough
+        # margin to keep the rounded corners/border from crowding it.
+        margin_x, margin_y = 34 * scale, 22 * scale
+
+        # Measured on a throwaway canvas (real canvas doesn't exist yet
+        # — its size depends on this measurement) so the whole row can
+        # be centered once the actual card is created at content size.
+        probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        label_ascent, _ = font_label.getmetrics()
+        value_ascent, _ = font_value.getmetrics()
+        content_h = max(icon_size, label_ascent + line_gap + value_ascent)
+        widths = [
+            self._draw_stat_group(
+                probe_draw, 0, content_h / 2, icon_size, icon_fn, icon_color,
+                tile_label, font_label, label_color, tile_value, font_value,
+                text_color, icon_text_gap, line_gap,
+            )
+            for icon_fn, tile_label, tile_value in tiles
+        ]
+        content_w = sum(widths) + group_gap * (len(tiles) - 1)
+
+        card_w_px = int(content_w + margin_x * 2)
+        card_h_px = int(content_h + margin_y * 2)
+        card_radius_px = 22 * scale
+        canvas, draw = self._rounded_card(
+            card_w_px, card_h_px, card_radius_px, bg_color,
+            border_rgba if self.card_border_thickness else None, self.card_border_thickness * scale,
+        )
+
+        center_y = card_h_px / 2
+        x = (card_w_px - content_w) / 2
+        for (icon_fn, tile_label, tile_value), group_w in zip(tiles, widths):
+            self._draw_stat_group(
+                draw, x, center_y, icon_size, icon_fn, icon_color,
+                tile_label, font_label, label_color, tile_value, font_value,
+                text_color, icon_text_gap, line_gap,
+            )
+            x += group_w + group_gap
+        return canvas, card_radius_px
+
+    def _pill_tiles(self, column: Tuple[str, str, float, float]) -> list:
+        """The pill's two stats as (icon_fn, label, value): the mode's time, then the distance."""
+        label, mode, dist, dur = column
+        distance_str = f"{dist * 1000:.0f} m" if dist < 1 else f"{dist:.1f} km"
+        dur_str = self._format_duration_ja(dur) if dur > 0 else "--"
+        time_icon = lambda d, cx, cy, sz, col: self._draw_mode_icon(d, mode, cx, cy, sz, col)
+
+        return [
+            (time_icon, self._mode_duration_label(mode), dur_str),
+            (self._draw_ruler_icon, self.summary_card_labels["distance_label"], distance_str),
+        ]
+
+    @staticmethod
+    def _rounded_card(card_w_px: int, card_h_px: int, radius: int, fill, outline, width: int):
+        """A transparent canvas with the card's rounded, filled (and optionally outlined) body; returns (canvas, draw)."""
+        canvas = Image.new("RGBA", (int(card_w_px), card_h_px), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        draw.rounded_rectangle(
+            [0, 0, card_w_px - 1, card_h_px - 1], radius=radius, fill=fill, outline=outline, width=width,
+        )
+        return canvas, draw
+
+    def _mode_column_width(
+        self, columns: list, font_label, font_label_time, font_value, stat_icon_d: int, icon_text_gap: int,
+    ) -> float:
+        """The widest line of any mode column: each column is sized to fit its own text, then all share the widest."""
+        probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        col_content_w = 0.0
+        for label, _mode, dist, dur in columns:
+            distance_str = f"{dist * 1000:.0f} m" if dist < 1 else f"{dist:.1f} km"
+            dur_str = self._format_duration_ja(dur) if dur > 0 else None
+            widths = [
+                probe_draw.textlength(label, font=font_label),
+                probe_draw.textlength(distance_str, font=font_value),
+            ]
+            if dur_str:
+                widths.append(
+                    stat_icon_d + icon_text_gap
+                    + probe_draw.textlength(dur_str, font=font_label_time)
+                )
+            col_content_w = max(col_content_w, *widths)
+        return col_content_w
+
+    def _draw_mode_column(
+        self, draw, i: int, column: tuple, col_w: float, icon_cy: float, h: int, scale: int, fonts: tuple,
+        sizes: tuple, colors: tuple,
+    ) -> None:
+        """One mode's column: divider, icon, label, distance, and the duration with its clock."""
+        label, mode, dist, dur = column
+        font_label, font_label_time, font_value_2 = fonts
+        icon_size, icon_text_gap, stat_icon_d, label_gap, value_gap, row_gap = sizes
+        text_color, label_color, divider_color = colors
+        col_cx = col_w * i + col_w / 2
+        col_accent = self._mode_accent(mode)
+        if i > 0:
+            x_div = col_w * i
+            draw.line(
+                [(x_div, 22 * scale), (x_div, h * scale - 22 * scale)],
+                fill=divider_color,
+                width=2 * scale,
+            )
+
+        if mode == "total":
+            self._draw_total_icon(draw, col_cx, icon_cy, icon_size, text_color)
+        else:
+            self._draw_mode_icon(draw, mode, col_cx, icon_cy, icon_size, col_accent)
+
+        label_w = draw.textlength(label, font=font_label)
+        label_y = icon_cy + icon_size / 2 + label_gap
+        draw.text(
+            (col_cx - label_w / 2, label_y), label, font=font_label, fill=label_color
+        )
+
+        distance_str = f"{dist * 1000:.0f} m" if dist < 1 else f"{dist:.1f} km"
+        value_w = draw.textlength(distance_str, font=font_value_2)
+        value_y = label_y + value_gap
+        draw.text(
+            (col_cx - value_w / 2, value_y),
+            distance_str,
+            font=font_value_2,
+            fill=col_accent,
+        )
+
+        dur_str = self._format_duration_ja(dur) if dur > 0 else None
+        if dur_str:
+            row_y = value_y + row_gap
+            dur_w = draw.textlength(dur_str, font=font_label_time)
+            line_x = col_cx - (stat_icon_d + icon_text_gap + dur_w) / 2
+            self._draw_clock_icon(
+                draw, line_x + stat_icon_d / 2, row_y + stat_icon_d / 2,
+                stat_icon_d, col_accent,
+            )
+            draw.text(
+                (line_x + stat_icon_d + icon_text_gap, row_y),
+                dur_str, font=font_label_time, fill=label_color,
+            )
+
+    def _summary_modes(self, columns: list, w: int, h: int, border_rgba: tuple, scale: int):
+        """The multi-mode card: the same light "residential" theme as the single-mode pill (white glass, dark
+        text, thin neutral border); only the layout (one column per mode) differs. Returns (canvas, corner radius px)."""
+        bg_color = self.ui["card_bg"]
+        text_color, label_color = self.ui["card_text"], self.ui["card_label"]
+        divider_color = self.ui["divider"]
+
+        # Mode header ("Draw"/"Walking"/"Driving"/"Total") is Regular —
+        # LINE Seed JP's regular weight reads fine at this size, unlike
+        # the old Kosugi Maru default this comment used to justify Bold
+        # for. Kept bold for the per-column time caption below it
+        # (font_label_time) and the big distance value, so those two
+        # still stand out from the plain mode name above them.
+        font_label = self._load_font(
+            self.FONT_CANDIDATES_REGULAR, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
+        )
+        font_label_time = self._load_font(
+            self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
+        )
+        font_value_2 = self._load_font(
+            self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_VALUE_FONT_SIZE * scale
+        )
+
+        icon_size = 26 * scale
+        icon_text_gap = 6 * scale
+        stat_icon_d = 15 * scale
+
+        # Card width used to be a fixed 560px split evenly across
+        # however many columns there were — fine for 2-3 columns, but a
+        # 4+ column trip (e.g. Draw/Walking/Driving/Total) squeezed each
+        # column well below what its own value/time text actually
+        # needed, so neighboring columns' text ran together with no gap
+        # between them. Size each column to fit its own widest line
+        # instead (same content-driven approach the single-mode pill
+        # card above already uses), then every column gets the same
+        # width — the widest one's — so the divider lines still land
+        # evenly.
+        num_columns = len(columns)
+        col_content_w = self._mode_column_width(
+            columns, font_label, font_label_time, font_value_2, stat_icon_d, icon_text_gap
+        )
+        col_padding = 20 * scale
+        col_w = max((w * scale) / num_columns, col_content_w + col_padding * 2)
+        card_w_px, card_h_px = int(col_w * num_columns), h * scale
+
+        card_radius_px = 18 * scale
+        canvas = Image.new("RGBA", (card_w_px, card_h_px), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
+        draw.rounded_rectangle(
+            [0, 0, card_w_px - 1, card_h_px - 1],
+            radius=card_radius_px,
+            fill=bg_color,
+            outline=border_rgba if self.card_border_thickness else None,
+            width=self.card_border_thickness * scale,
+        )
+        # label_gap was 6*scale — the icon and the mode label ("Draw",
+        # "Walking", ...) sat almost touching with no visible breathing
+        # room, unlike the single-mode pill card's own label/value gap
+        # (line_gap = 12*scale) above. Matched to that same spacing.
+        label_gap = 12 * scale
+        value_gap = 18 * scale
+        row_gap = 36 * scale
+
+        # The icon/label/value/time stack used to anchor near the top
+        # (icon_cy fixed at 32*scale) regardless of the card's actual
+        # height, leaving the value and time rows crowded near the top
+        # border with a lot of unused space below them. Center the
+        # whole stack in the card instead, so it has even breathing
+        # room from both the top and bottom borders. Mirrors the same
+        # relative offsets the per-column drawing below uses, just
+        # measured from icon_cy = 0 first to find where icon_cy should
+        # actually land.
+        icon_top_rel = -icon_size / 2
+        content_bottom_rel = (
+            icon_size / 2 + label_gap + value_gap + row_gap + stat_icon_d
+        )
+        # [NOTE] [Animation] Vertically centers the icon/label/value/time stack by measuring its relative extents from a hypothetical icon_cy=0 first, then solving for the real icon_cy.
+        icon_cy = h * scale / 2 - (icon_top_rel + content_bottom_rel) / 2
+
+        for i, column in enumerate(columns):
+            self._draw_mode_column(
+                draw, i, column, col_w, icon_cy, h, scale, (font_label, font_label_time, font_value_2),
+                (icon_size, icon_text_gap, stat_icon_d, label_gap, value_gap, row_gap),
+                (text_color, label_color, divider_color),
+            )
+        return canvas, card_radius_px
+
     def create_summary_card(
         self,
         distance_km: float,
@@ -313,22 +610,11 @@ class _CardMixin:
         mode column would just repeat it."""
         w, h = card_size
         scale = 2
-
-        mode_duration = mode_duration or {}
-        columns: List[Tuple[str, str, float, float]] = []
-        if mode_breakdown:
-            for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1]):
-                columns.append(
-                    (self._mode_name_ja(mode), mode.lower(), dist, mode_duration.get(mode, 0.0))
-                )
-        # A single mode's own column already IS the total (same distance,
-        # same time) — appending "Total" too would just repeat it. Only
-        # add it when there's more than one mode to actually total up, or
-        # none at all (nothing else to show).
-        if not mode_breakdown or len(mode_breakdown) > 1:
-            columns.append((self.summary_card_labels["total_label"], "total", distance_km, duration_seconds))
-
-        num_columns = len(columns)
+        columns = self._summary_columns(distance_km, duration_seconds, mode_breakdown, mode_duration)
+        # BGR, like every other color in job_config.json's settings —
+        # reversed here since the canvas is RGBA->BGR swapped as a
+        # whole at the end (see _mode_accent's own comment).
+        border_rgba = tuple(reversed(self.card_border_color)) + (255,)
 
         # A single mode gets a light, fully-rounded "pill" card — icon on
         # the left of each stat, its label/value stacked to the right —
@@ -336,229 +622,10 @@ class _CardMixin:
         # trips keep the denser dark glass card with one column per mode,
         # since that layout (mode header + big number + small time row)
         # doesn't fit the pill style once there's more than one stat pair.
-        if num_columns == 1:
-            bg_color = self.ui["card_bg"]
-            text_color, label_color = self.ui["card_text"], self.ui["card_label"]
-            icon_color = self.ui["card_text"]
-            # BGR, like every other color in job_config.json's settings —
-            # reversed here since the canvas is RGBA->BGR swapped as a
-            # whole at the end (see _mode_accent's own comment).
-            border_rgba = tuple(reversed(self.card_border_color)) + (255,)
-
-            # Bold, not regular — Noto Sans's regular weight read as too
-            # thin for this small a caption; size/color still separate it
-            # from the (also bold) value below it.
-            font_label = self._load_font(
-                self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
-            )
-            font_value = self._load_font(
-                self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_VALUE_FONT_SIZE * scale
-            )
-
-            label, mode, dist, dur = columns[0]
-            distance_str = f"{dist * 1000:.0f} m" if dist < 1 else f"{dist:.1f} km"
-            dur_str = self._format_duration_ja(dur) if dur > 0 else "--"
-            time_icon = lambda d, cx, cy, sz, col: self._draw_mode_icon(d, mode, cx, cy, sz, col)
-
-            tiles = [
-                (time_icon, self._mode_duration_label(mode), dur_str),
-                (self._draw_ruler_icon, self.summary_card_labels["distance_label"], distance_str),
-            ]
-
-            icon_size = 36 * scale
-            icon_text_gap = 14 * scale
-            line_gap = 12 * scale
-            group_gap = 46 * scale
-            # Margin around the content — was a fixed 560x150 box regardless
-            # of how little a 2-tile pill actually needs, reading as mostly
-            # empty padding. Sized to the content instead, with just enough
-            # margin to keep the rounded corners/border from crowding it.
-            margin_x, margin_y = 34 * scale, 22 * scale
-
-            # Measured on a throwaway canvas (real canvas doesn't exist yet
-            # — its size depends on this measurement) so the whole row can
-            # be centered once the actual card is created at content size.
-            probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-            label_ascent, _ = font_label.getmetrics()
-            value_ascent, _ = font_value.getmetrics()
-            content_h = max(icon_size, label_ascent + line_gap + value_ascent)
-            widths = [
-                self._draw_stat_group(
-                    probe_draw, 0, content_h / 2, icon_size, icon_fn, icon_color,
-                    tile_label, font_label, label_color, tile_value, font_value,
-                    text_color, icon_text_gap, line_gap,
-                )
-                for icon_fn, tile_label, tile_value in tiles
-            ]
-            content_w = sum(widths) + group_gap * (len(tiles) - 1)
-
-            card_w_px = int(content_w + margin_x * 2)
-            card_h_px = int(content_h + margin_y * 2)
-            canvas = Image.new("RGBA", (card_w_px, card_h_px), (0, 0, 0, 0))
-            draw = ImageDraw.Draw(canvas)
-            w, h = card_w_px // scale, card_h_px // scale
-
-            card_radius_px = 22 * scale
-            draw.rounded_rectangle(
-                [0, 0, card_w_px - 1, card_h_px - 1],
-                radius=card_radius_px,
-                fill=bg_color,
-                outline=border_rgba if self.card_border_thickness else None,
-                width=self.card_border_thickness * scale,
-            )
-
-            center_y = card_h_px / 2
-            x = (card_w_px - content_w) / 2
-            for (icon_fn, tile_label, tile_value), group_w in zip(tiles, widths):
-                self._draw_stat_group(
-                    draw, x, center_y, icon_size, icon_fn, icon_color,
-                    tile_label, font_label, label_color, tile_value, font_value,
-                    text_color, icon_text_gap, line_gap,
-                )
-                x += group_w + group_gap
+        if len(columns) == 1:
+            canvas, card_radius_px = self._summary_pill(columns[0], border_rgba, scale)
         else:
-            # Same light "residential" card theme as the single-mode pill
-            # above (white glass, dark text, thin neutral border) rather
-            # than a separate dark-glass/yellow-accent look — only the
-            # layout (one column per mode) differs between the two.
-            bg_color = self.ui["card_bg"]
-            text_color, label_color = self.ui["card_text"], self.ui["card_label"]
-            divider_color = self.ui["divider"]
-            # BGR, like every other color in job_config.json's settings —
-            # reversed here since the canvas is RGBA->BGR swapped as a
-            # whole at the end (see _mode_accent's own comment).
-            border_rgba = tuple(reversed(self.card_border_color)) + (255,)
-
-            # Mode header ("Draw"/"Walking"/"Driving"/"Total") is Regular —
-            # LINE Seed JP's regular weight reads fine at this size, unlike
-            # the old Kosugi Maru default this comment used to justify Bold
-            # for. Kept bold for the per-column time caption below it
-            # (font_label_time) and the big distance value, so those two
-            # still stand out from the plain mode name above them.
-            font_label = self._load_font(
-                self.FONT_CANDIDATES_REGULAR, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
-            )
-            font_label_time = self._load_font(
-                self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
-            )
-            font_value_2 = self._load_font(
-                self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_VALUE_FONT_SIZE * scale
-            )
-
-            icon_size = 26 * scale
-            icon_text_gap = 6 * scale
-            stat_icon_d = 15 * scale
-
-            # Card width used to be a fixed 560px split evenly across
-            # however many columns there were — fine for 2-3 columns, but a
-            # 4+ column trip (e.g. Draw/Walking/Driving/Total) squeezed each
-            # column well below what its own value/time text actually
-            # needed, so neighboring columns' text ran together with no gap
-            # between them. Size each column to fit its own widest line
-            # instead (same content-driven approach the single-mode pill
-            # card above already uses), then every column gets the same
-            # width — the widest one's — so the divider lines still land
-            # evenly.
-            probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-            col_content_w = 0.0
-            for label, _mode, dist, dur in columns:
-                distance_str = f"{dist * 1000:.0f} m" if dist < 1 else f"{dist:.1f} km"
-                dur_str = self._format_duration_ja(dur) if dur > 0 else None
-                widths = [
-                    probe_draw.textlength(label, font=font_label),
-                    probe_draw.textlength(distance_str, font=font_value_2),
-                ]
-                if dur_str:
-                    widths.append(
-                        stat_icon_d + icon_text_gap
-                        + probe_draw.textlength(dur_str, font=font_label_time)
-                    )
-                col_content_w = max(col_content_w, *widths)
-
-            col_padding = 20 * scale
-            col_w = max((w * scale) / num_columns, col_content_w + col_padding * 2)
-            card_w_px, card_h_px = int(col_w * num_columns), h * scale
-
-            card_radius_px = 18 * scale
-            canvas = Image.new("RGBA", (card_w_px, card_h_px), (0, 0, 0, 0))
-            draw = ImageDraw.Draw(canvas)
-            draw.rounded_rectangle(
-                [0, 0, card_w_px - 1, card_h_px - 1],
-                radius=card_radius_px,
-                fill=bg_color,
-                outline=border_rgba if self.card_border_thickness else None,
-                width=self.card_border_thickness * scale,
-            )
-            w = card_w_px // scale
-            # label_gap was 6*scale — the icon and the mode label ("Draw",
-            # "Walking", ...) sat almost touching with no visible breathing
-            # room, unlike the single-mode pill card's own label/value gap
-            # (line_gap = 12*scale) above. Matched to that same spacing.
-            label_gap = 12 * scale
-            value_gap = 18 * scale
-            row_gap = 36 * scale
-
-            # The icon/label/value/time stack used to anchor near the top
-            # (icon_cy fixed at 32*scale) regardless of the card's actual
-            # height, leaving the value and time rows crowded near the top
-            # border with a lot of unused space below them. Center the
-            # whole stack in the card instead, so it has even breathing
-            # room from both the top and bottom borders. Mirrors the same
-            # relative offsets the per-column drawing below uses, just
-            # measured from icon_cy = 0 first to find where icon_cy should
-            # actually land.
-            icon_top_rel = -icon_size / 2
-            content_bottom_rel = (
-                icon_size / 2 + label_gap + value_gap + row_gap + stat_icon_d
-            )
-            # [NOTE] [Animation] Vertically centers the icon/label/value/time stack by measuring its relative extents from a hypothetical icon_cy=0 first, then solving for the real icon_cy.
-            icon_cy = h * scale / 2 - (icon_top_rel + content_bottom_rel) / 2
-
-            for i, (label, mode, dist, dur) in enumerate(columns):
-                col_cx = col_w * i + col_w / 2
-                col_accent = self._mode_accent(mode)
-                if i > 0:
-                    x_div = col_w * i
-                    draw.line(
-                        [(x_div, 22 * scale), (x_div, h * scale - 22 * scale)],
-                        fill=divider_color,
-                        width=2 * scale,
-                    )
-
-                if mode == "total":
-                    self._draw_total_icon(draw, col_cx, icon_cy, icon_size, text_color)
-                else:
-                    self._draw_mode_icon(draw, mode, col_cx, icon_cy, icon_size, col_accent)
-
-                label_w = draw.textlength(label, font=font_label)
-                label_y = icon_cy + icon_size / 2 + label_gap
-                draw.text(
-                    (col_cx - label_w / 2, label_y), label, font=font_label, fill=label_color
-                )
-
-                distance_str = f"{dist * 1000:.0f} m" if dist < 1 else f"{dist:.1f} km"
-                value_w = draw.textlength(distance_str, font=font_value_2)
-                value_y = label_y + value_gap
-                draw.text(
-                    (col_cx - value_w / 2, value_y),
-                    distance_str,
-                    font=font_value_2,
-                    fill=col_accent,
-                )
-
-                dur_str = self._format_duration_ja(dur) if dur > 0 else None
-                if dur_str:
-                    row_y = value_y + row_gap
-                    dur_w = draw.textlength(dur_str, font=font_label_time)
-                    line_x = col_cx - (stat_icon_d + icon_text_gap + dur_w) / 2
-                    self._draw_clock_icon(
-                        draw, line_x + stat_icon_d / 2, row_y + stat_icon_d / 2,
-                        stat_icon_d, col_accent,
-                    )
-                    draw.text(
-                        (line_x + stat_icon_d + icon_text_gap, row_y),
-                        dur_str, font=font_label_time, fill=label_color,
-                    )
+            canvas, card_radius_px = self._summary_modes(columns, w, h, border_rgba, scale)
 
         # Same elevated-card shadow every popup card gets — see
         # _add_card_shadow's own comment on why the summary card was
@@ -570,6 +637,50 @@ class _CardMixin:
         # [NOTE] [Animation] Downscales the 2x supersampled canvas for anti-aliasing, then swaps RGBA -> BGRA to match OpenCV's channel order.
         canvas = canvas.resize((w, h), Image.Resampling.LANCZOS)
         return np.array(canvas)[:, :, [2, 1, 0, 3]]
+
+    def _stacked_blocks(
+        self, distance_km: float, duration_seconds: float, mode_breakdown: Optional[Dict[str, float]],
+        mode_duration: Optional[Dict[str, float]], row_gap: int, scale: int,
+    ) -> Tuple[List[List[Tuple]], int]:
+        """(blocks of (icon drawer, text, color) rows, the gap between blocks) of the stacked card.
+
+        A single-mode trip (or no mode_breakdown at all) is two rows: a walking figure beside the total
+        distance, a clock beside the total duration; more than one mode gets a block per mode plus a Total block.
+        """
+        mode_duration = mode_duration or {}
+        if bool(mode_breakdown) and len(mode_breakdown) > 1:
+            blocks: List[List[Tuple]] = []
+            for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1]):
+                accent = self._mode_accent(mode)
+                mode_icon = (lambda d, cx, cy, sz, col, m=mode: self._draw_mode_icon(d, m, cx, cy, sz, col))
+                blocks.append([
+                    (mode_icon, _fmt_distance(dist), accent),
+                    (self._draw_clock_icon, self._fmt_duration(mode_duration.get(mode, 0.0)), accent),
+                ])
+            blocks.append([
+                (self._draw_ruler_icon, _fmt_distance(distance_km), self.ui["card_text"]),
+                (self._draw_clock_icon, self._fmt_duration(duration_seconds), self.ui["card_text"]),
+            ])
+            return blocks, 22 * scale
+        blocks = [[
+            (self._draw_walking_icon, _fmt_distance(distance_km), self.ui["card_text"]),
+            (self._draw_clock_icon, self._fmt_duration(duration_seconds), self.ui["card_text"]),
+        ]]
+        return blocks, row_gap
+
+    def _draw_stacked_rows(self, draw, blocks: list, font_value, sizes: tuple) -> None:
+        """Each block's rows top to bottom: icon, then its text; a wider gap between blocks than between a block's own rows."""
+        margin_x, margin_y, row_h, row_gap, block_gap, icon_size, icon_text_gap = sizes
+        text_ascent = font_value.getmetrics()[0]
+        row_cy = margin_y + row_h / 2
+        for block_idx, block in enumerate(blocks):
+            for row_idx, (icon_fn, text, color) in enumerate(block):
+                icon_fn(draw, margin_x + icon_size / 2, row_cy, icon_size, color)
+                text_x = margin_x + icon_size + icon_text_gap
+                draw.text((text_x, row_cy - text_ascent / 2), text, font=font_value, fill=color)
+                row_cy += row_h + (row_gap if row_idx < len(block) - 1 else 0)
+            if block_idx < len(blocks) - 1:
+                row_cy += block_gap
 
     def create_summary_card_stacked(
         self,
@@ -598,46 +709,18 @@ class _CardMixin:
         font_value = self._load_font(
             self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_VALUE_FONT_SIZE * scale
         )
-
-        def fmt_distance(km: float) -> str:
-            return f"{km * 1000:.0f} m" if km < 1 else f"{km:.1f} km"
-
-        def fmt_duration(seconds: float) -> str:
-            return self._format_duration_ja(seconds) if seconds > 0 else "--"
-
-        mode_duration = mode_duration or {}
-        multi_mode = bool(mode_breakdown) and len(mode_breakdown) > 1
         icon_size = 34 * scale
         icon_text_gap = 16 * scale
         row_gap = 14 * scale
         margin_x, margin_y = 26 * scale, 20 * scale
         border_rgba = tuple(reversed(self.card_border_color)) + (255,)
 
-        # blocks: a list of rows, each (icon_fn, text, color); block_sizes
-        # says how many consecutive rows belong to the same mode, so the
+        # blocks: a list of rows, each (icon_fn, text, color); the
         # (slightly larger) gap between blocks can be told apart from the
         # (smaller) gap between a mode's own distance/time rows.
-        if multi_mode:
-            blocks: List[List[Tuple]] = []
-            for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1]):
-                accent = self._mode_accent(mode)
-                mode_icon = (lambda d, cx, cy, sz, col, m=mode: self._draw_mode_icon(d, m, cx, cy, sz, col))
-                blocks.append([
-                    (mode_icon, fmt_distance(dist), accent),
-                    (self._draw_clock_icon, fmt_duration(mode_duration.get(mode, 0.0)), accent),
-                ])
-            blocks.append([
-                (self._draw_ruler_icon, fmt_distance(distance_km), self.ui["card_text"]),
-                (self._draw_clock_icon, fmt_duration(duration_seconds), self.ui["card_text"]),
-            ])
-            block_gap = 22 * scale
-        else:
-            blocks = [[
-                (self._draw_walking_icon, fmt_distance(distance_km), self.ui["card_text"]),
-                (self._draw_clock_icon, fmt_duration(duration_seconds), self.ui["card_text"]),
-            ]]
-            block_gap = row_gap
-
+        blocks, block_gap = self._stacked_blocks(
+            distance_km, duration_seconds, mode_breakdown, mode_duration, row_gap, scale
+        )
         rows = [row for block in blocks for row in block]
 
         probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
@@ -654,33 +737,102 @@ class _CardMixin:
 
         card_w_px = int(content_w + margin_x * 2)
         card_h_px = int(content_h + margin_y * 2)
-        canvas = Image.new("RGBA", (card_w_px, card_h_px), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(canvas)
-
         card_radius_px = 20 * scale
-        draw.rounded_rectangle(
-            [0, 0, card_w_px - 1, card_h_px - 1],
-            radius=card_radius_px,
-            fill=self.ui["card_bg"],
-            outline=border_rgba if self.card_border_thickness else None,
-            width=self.card_border_thickness * scale,
+        canvas, draw = self._rounded_card(
+            card_w_px, card_h_px, card_radius_px, self.ui["card_bg"],
+            border_rgba if self.card_border_thickness else None, self.card_border_thickness * scale,
         )
 
-        text_ascent = font_value.getmetrics()[0]
-        row_cy = margin_y + row_h / 2
-        for block_idx, block in enumerate(blocks):
-            for row_idx, (icon_fn, text, color) in enumerate(block):
-                icon_fn(draw, margin_x + icon_size / 2, row_cy, icon_size, color)
-                text_x = margin_x + icon_size + icon_text_gap
-                draw.text((text_x, row_cy - text_ascent / 2), text, font=font_value, fill=color)
-                row_cy += row_h + (row_gap if row_idx < len(block) - 1 else 0)
-            if block_idx < len(blocks) - 1:
-                row_cy += block_gap
+        self._draw_stacked_rows(
+            draw, blocks, font_value, (margin_x, margin_y, row_h, row_gap, block_gap, icon_size, icon_text_gap)
+        )
 
         canvas = self._add_card_shadow(canvas, card_radius_px, border_rgba[:3], scale)
         w, h = canvas.size[0] // scale, canvas.size[1] // scale
         canvas = canvas.resize((w, h), Image.Resampling.LANCZOS)
         return np.array(canvas)[:, :, [2, 1, 0, 3]]
+
+    def _columns_spec(
+        self, distance_km: float, duration_seconds: float, mode_breakdown: Optional[Dict[str, float]],
+        mode_duration: Optional[Dict[str, float]], total_dist: float, total_dur: float, banner_theme: bool,
+    ) -> list:
+        """(label, mode, distance, duration, color) per column of the columns card: one per mode plus a Total
+        when there is more than one, a lone mode with its own total, or just the distance without a breakdown."""
+        mode_duration = mode_duration or {}
+        multi_mode = bool(mode_breakdown) and len(mode_breakdown) > 1
+        if multi_mode:
+            columns = [
+                (self._mode_name_ja(mode), mode, dist, mode_duration.get(mode, 0.0), self._mode_accent(mode))
+                for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1])
+            ]
+            columns.append((
+                self.summary_card_labels["total_label"], "total", total_dist, total_dur,
+                self.ui["card_text"],
+            ))
+        elif mode_breakdown and len(mode_breakdown) == 1:
+            # The total is shown even when it repeats the one mode (user's choice).
+            (single_mode,) = mode_breakdown.keys()
+            columns = [
+                (
+                    self._mode_name_ja(single_mode), single_mode, distance_km, duration_seconds,
+                    self._mode_accent(single_mode),
+                ),
+                (
+                    self.summary_card_labels["total_label"], "total", total_dist, total_dur,
+                    self.ui["card_text"],
+                ),
+            ]
+        else:
+            columns = [(
+                self.summary_card_labels["distance_label"], "walking", distance_km, duration_seconds,
+                self.ui["card_text"],
+            )]
+
+        if banner_theme:
+            bright = self.ui["pill_text"]
+            columns = [(lab, mode, d, t, bright) for lab, mode, d, t, _ in columns]
+        return columns
+
+    def _draw_stat_column(
+        self, draw, i: int, row: tuple, col_w: float, card_h_px: int, scale: int, fonts: tuple, metrics: tuple,
+        divider_color,
+    ) -> None:
+        """One column of the columns card: divider, the mode icon and the clock icon on one vertical line,
+        then label, distance and time sharing one left edge."""
+        label_text, mode, dist_s, dur_s, color, _text_w = row
+        font_label, font_value, font_time = fonts
+        (label_ascent, time_ascent, line_gap, row_gap, group_h, icon_size, clock_icon_size, time_row_h,
+         icon_col_w, icon_col_gap, col_pad_x, margin_y) = metrics
+        col_x0 = col_w * i + col_pad_x
+        if i > 0:
+            x_div = col_w * i
+            draw.line(
+                [(x_div, 18 * scale), (x_div, card_h_px - 18 * scale)],
+                fill=divider_color, width=2 * scale,
+            )
+
+        icon_fn = (
+            self._draw_total_icon if mode == "total"
+            else (lambda d, cx, cy, sz, col, m=mode: self._draw_mode_icon(d, m, cx, cy, sz, col))
+        )
+        icon_cx = col_x0 + icon_col_w / 2  # both icons share this x - vertical alignment
+        # Mode icon, centered on the label/value pair's own height.
+        icon_fn(draw, icon_cx, margin_y + group_h / 2, icon_size, color)
+        # Clock icon, directly below it, centered on the time line's
+        # height - same icon_cx, so the two icons line up vertically.
+        time_y = margin_y + group_h + row_gap
+        self._draw_clock_icon(draw, icon_cx, time_y + time_row_h / 2, clock_icon_size, color)
+
+        # Text column: one shared left edge for every line, including
+        # the time line - no icon glued to it here anymore.
+        text_x = col_x0 + icon_col_w + icon_col_gap
+        y = margin_y
+        draw.text((text_x, y), label_text, font=font_label, fill=color)
+        y += label_ascent + line_gap
+        draw.text((text_x, y), dist_s, font=font_value, fill=color)
+        draw.text(
+            (text_x, time_y + (time_row_h - time_ascent) / 2), dur_s, font=font_time, fill=color,
+        )
 
     def create_summary_card_columns(
         self,
@@ -720,55 +872,10 @@ class _CardMixin:
         scale = 2
         total_dist = distance_km if total_km is None else total_km
         total_dur = duration_seconds if total_seconds is None else total_seconds
-        font_label = self._load_font(
-            self.FONT_CANDIDATES_REGULAR, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
+        font_label, font_value, font_time = self._columns_fonts(scale)
+        columns = self._columns_spec(
+            distance_km, duration_seconds, mode_breakdown, mode_duration, total_dist, total_dur, banner_theme
         )
-        font_value = self._load_font(
-            self.FONT_CANDIDATES_EXTRABOLD, tuning.SUMMARY_CARD_VALUE_FONT_SIZE * scale
-        )
-        font_time = self._load_font(
-            self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
-        )
-
-        def fmt_distance(km: float) -> str:
-            return f"{km * 1000:.0f} m" if km < 1 else f"{km:.1f} km"
-
-        def fmt_duration(seconds: float) -> str:
-            return self._format_duration_ja(seconds) if seconds > 0 else "--"
-
-        mode_duration = mode_duration or {}
-        multi_mode = bool(mode_breakdown) and len(mode_breakdown) > 1
-        if multi_mode:
-            columns = [
-                (self._mode_name_ja(mode), mode, dist, mode_duration.get(mode, 0.0), self._mode_accent(mode))
-                for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1])
-            ]
-            columns.append((
-                self.summary_card_labels["total_label"], "total", total_dist, total_dur,
-                self.ui["card_text"],
-            ))
-        elif mode_breakdown and len(mode_breakdown) == 1:
-            # The total is shown even when it repeats the one mode (user's choice).
-            (single_mode,) = mode_breakdown.keys()
-            columns = [
-                (
-                    self._mode_name_ja(single_mode), single_mode, distance_km, duration_seconds,
-                    self._mode_accent(single_mode),
-                ),
-                (
-                    self.summary_card_labels["total_label"], "total", total_dist, total_dur,
-                    self.ui["card_text"],
-                ),
-            ]
-        else:
-            columns = [(
-                self.summary_card_labels["distance_label"], "walking", distance_km, duration_seconds,
-                self.ui["card_text"],
-            )]
-
-        if banner_theme:
-            bright = self.ui["pill_text"]
-            columns = [(lab, mode, d, t, bright) for lab, mode, d, t, _ in columns]
 
         label_ascent, _ = font_label.getmetrics()
         value_ascent, _ = font_value.getmetrics()
@@ -786,71 +893,18 @@ class _CardMixin:
         margin_y = 22 * scale
         border_rgba = tuple(reversed(self.card_border_color)) + (255,)
 
-        probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-        rows = []  # (label, mode, dist_str, dur_str, color, text_w)
-        for label, mode, dist, dur, color in columns:
-            dist_s, dur_s = fmt_distance(dist), fmt_duration(dur)
-            text_w = max(
-                probe_draw.textlength(label, font=font_label),
-                probe_draw.textlength(dist_s, font=font_value),
-                probe_draw.textlength(dur_s, font=font_time),
-            )
-            rows.append((label, mode, dist_s, dur_s, color, text_w))
-
-        # Fixed width: pad to sample strings so the card doesn't resize with its values.
-        fixed_text_w = max(
-            probe_draw.textlength(tuning.SUMMARY_CARD_FIXED_DISTANCE_SAMPLE, font=font_value),
-            probe_draw.textlength(video_text.current_labels()["duration_sample"], font=font_time),
-        )
+        rows, fixed_text_w = self._column_rows(columns, font_label, font_value, font_time)
         col_w = icon_col_w + icon_col_gap + max(fixed_text_w, *(r[5] for r in rows)) + col_pad_x * 2
         card_w_px = int(col_w * len(rows))
         card_h_px = int(content_h + margin_y * 2)
 
-        canvas = Image.new("RGBA", (card_w_px, card_h_px), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(canvas)
         card_radius_px = (10 if banner_theme else 18) * scale
-        draw.rounded_rectangle(
-            [0, 0, card_w_px - 1, card_h_px - 1],
-            radius=card_radius_px,
-            fill=self.ui["pill_bg"] if banner_theme else self.ui["card_bg"],
-            outline=None if banner_theme else (border_rgba if self.card_border_thickness else None),
-            width=0 if banner_theme else self.card_border_thickness * scale,
+        canvas = self._paint_columns_card(
+            rows, (card_w_px, card_h_px, card_radius_px, col_w, scale), (font_label, font_value, font_time),
+            (label_ascent, time_ascent, line_gap, row_gap, group_h, icon_size, clock_icon_size, time_row_h,
+             icon_col_w, icon_col_gap, col_pad_x, margin_y),
+            banner_theme, border_rgba,
         )
-
-        divider_color = (
-            (*self.ui["pill_text"][:3], 90) if banner_theme else self.ui["divider"]
-        )
-        for i, (label_text, mode, dist_s, dur_s, color, _text_w) in enumerate(rows):
-            col_x0 = col_w * i + col_pad_x
-            if i > 0:
-                x_div = col_w * i
-                draw.line(
-                    [(x_div, 18 * scale), (x_div, card_h_px - 18 * scale)],
-                    fill=divider_color, width=2 * scale,
-                )
-
-            icon_fn = (
-                self._draw_total_icon if mode == "total"
-                else (lambda d, cx, cy, sz, col, m=mode: self._draw_mode_icon(d, m, cx, cy, sz, col))
-            )
-            icon_cx = col_x0 + icon_col_w / 2  # both icons share this x - vertical alignment
-            # Mode icon, centered on the label/value pair's own height.
-            icon_fn(draw, icon_cx, margin_y + group_h / 2, icon_size, color)
-            # Clock icon, directly below it, centered on the time line's
-            # height - same icon_cx, so the two icons line up vertically.
-            time_y = margin_y + group_h + row_gap
-            self._draw_clock_icon(draw, icon_cx, time_y + time_row_h / 2, clock_icon_size, color)
-
-            # Text column: one shared left edge for every line, including
-            # the time line - no icon glued to it here anymore.
-            text_x = col_x0 + icon_col_w + icon_col_gap
-            y = margin_y
-            draw.text((text_x, y), label_text, font=font_label, fill=color)
-            y += label_ascent + line_gap
-            draw.text((text_x, y), dist_s, font=font_value, fill=color)
-            draw.text(
-                (text_x, time_y + (time_row_h - time_ascent) / 2), dur_s, font=font_time, fill=color,
-            )
 
         canvas = self._add_card_shadow(
             canvas, card_radius_px,
@@ -888,9 +942,6 @@ class _CardMixin:
         ]
         columns.append(("total", total_dist, total_dur))
 
-        def fmt_distance(km: float) -> str:
-            return f"{km * 1000:.0f} m" if km < 1 else f"{km:.1f} km"
-
         disc_d = 112 * scale
         chip_h = 38 * scale
         chip_pad_x = 14 * scale
@@ -898,18 +949,78 @@ class _CardMixin:
         disc_gap = 13 * scale
         col_gap = 26 * scale
         probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-        ascent = sum(font.getmetrics())
 
         rows = []  # (mode, [chip texts], column width)
         for mode, dist, dur in columns:
-            chips = [fmt_distance(dist), self._format_duration_ja(dur) if dur > 0 else "--"]
+            chips = [_fmt_distance(dist), self._fmt_duration(dur)]
             widest = max(probe.textlength(c, font=font) for c in chips) + chip_pad_x * 2
             rows.append((mode, chips, max(disc_d, widest)))
 
         card_w = int(sum(r[2] for r in rows) + col_gap * (len(rows) - 1))
         card_h = int(disc_d + disc_gap + chip_h * 2 + chip_gap)
         canvas = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(canvas)
+        self._draw_disc_columns(
+            ImageDraw.Draw(canvas), probe, font, rows, (disc_d, chip_h, chip_gap, disc_gap, col_gap)
+        )
+
+        w, h = round(card_w * out_scale / scale), round(card_h * out_scale / scale)
+        canvas = canvas.resize((w, h), Image.Resampling.LANCZOS)
+        return np.array(canvas)[:, :, [2, 1, 0, 3]]
+
+    def _columns_fonts(self, scale: int) -> tuple:
+        """(label Regular, value ExtraBold, time Bold) fonts of the columns card."""
+        font_label = self._load_font(
+            self.FONT_CANDIDATES_REGULAR, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
+        )
+        font_value = self._load_font(
+            self.FONT_CANDIDATES_EXTRABOLD, tuning.SUMMARY_CARD_VALUE_FONT_SIZE * scale
+        )
+        font_time = self._load_font(
+            self.FONT_CANDIDATES_BOLD, tuning.SUMMARY_CARD_LABEL_FONT_SIZE * scale
+        )
+        return font_label, font_value, font_time
+
+    def _paint_columns_card(self, rows: list, size: tuple, fonts: tuple, metrics: tuple, banner_theme: bool, border_rgba: tuple):
+        """The columns card's rounded body with every stat column (and its divider) drawn on it."""
+        card_w_px, card_h_px, card_radius_px, col_w, scale = size
+        canvas, draw = self._rounded_card(
+            card_w_px, card_h_px, card_radius_px,
+            self.ui["pill_bg"] if banner_theme else self.ui["card_bg"],
+            None if banner_theme else (border_rgba if self.card_border_thickness else None),
+            0 if banner_theme else self.card_border_thickness * scale,
+        )
+
+        divider_color = (
+            (*self.ui["pill_text"][:3], 90) if banner_theme else self.ui["divider"]
+        )
+        for i, row in enumerate(rows):
+            self._draw_stat_column(draw, i, row, col_w, card_h_px, scale, fonts, metrics, divider_color)
+        return canvas
+
+    def _column_rows(self, columns: list, font_label, font_value, font_time) -> Tuple[list, float]:
+        """((label, mode, dist_str, dur_str, color, text_w) per column, the fixed text width the card pads to)."""
+        probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        rows = []
+        for label, mode, dist, dur, color in columns:
+            dist_s, dur_s = _fmt_distance(dist), self._fmt_duration(dur)
+            text_w = max(
+                probe_draw.textlength(label, font=font_label),
+                probe_draw.textlength(dist_s, font=font_value),
+                probe_draw.textlength(dur_s, font=font_time),
+            )
+            rows.append((label, mode, dist_s, dur_s, color, text_w))
+
+        # Fixed width: pad to sample strings so the card doesn't resize with its values.
+        fixed_text_w = max(
+            probe_draw.textlength(tuning.SUMMARY_CARD_FIXED_DISTANCE_SAMPLE, font=font_value),
+            probe_draw.textlength(video_text.current_labels()["duration_sample"], font=font_time),
+        )
+        return rows, fixed_text_w
+
+    def _draw_disc_columns(self, draw, probe, font, rows: list, sizes: tuple) -> None:
+        """Each travel mode's disc with its icon, and under it the distance and time chips."""
+        disc_d, chip_h, chip_gap, disc_gap, col_gap = sizes
+        ascent = sum(font.getmetrics())
         # The disc and the chips share the card's own ground/ink pair, so the icon reads
         # against the disc whichever theme is on.
         ink = tuple(self.ui["card_text"][:3])
@@ -933,10 +1044,6 @@ class _CardMixin:
                 draw.text((cx - tw / 2, y + (chip_h - ascent) / 2), text, font=font, fill=ink)
                 y += chip_h + chip_gap
             x += col_w + col_gap
-
-        w, h = round(card_w * out_scale / scale), round(card_h * out_scale / scale)
-        canvas = canvas.resize((w, h), Image.Resampling.LANCZOS)
-        return np.array(canvas)[:, :, [2, 1, 0, 3]]
 
     def create_summary_card_taskbar(
         self,
@@ -969,29 +1076,15 @@ class _CardMixin:
         wide "旅の概要") — truncated with an ellipsis past
         `max_title_width` px so an unusually long pair of place names
         can't blow the whole card out to an awkward width."""
-        mode_duration = mode_duration or {}
-        rows: List[Tuple[str, str, float, float]] = []
-        if mode_breakdown:
-            for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1]):
-                rows.append(
-                    (self._mode_name_ja(mode), mode.lower(), dist, mode_duration.get(mode, 0.0))
-                )
         # Same "skip the redundant Total column for a single mode" rule as
         # create_summary_card — a lone mode's own row already IS the total.
-        if not mode_breakdown or len(mode_breakdown) > 1:
-            rows.append((self.summary_card_labels["total_label"], "total", distance_km, duration_seconds))
+        rows = self._summary_columns(distance_km, duration_seconds, mode_breakdown, mode_duration)
 
         # Light "white glass" flyout — same family as create_summary_card's
         # own light palette (this project's actual card theme) rather than
         # the dark mica look this template first shipped with.
         bg_color = self.ui["card_bg"]
-        header_color = self.ui["card_text"]
-        divider_color = self.ui["divider"]
         border_rgba = tuple(reversed(self.card_border_color)) + (255,)
-        # BGR, like every other color in job_config.json's settings —
-        # reversed here since the canvas is RGBA->BGR swapped as a whole
-        # at the end (same convention create_summary_card uses).
-        accent = tuple(reversed(self.line_color)) + (255,)
 
         scale = 2
         font_header = self._load_font(self.FONT_CANDIDATES_BOLD, 22 * scale)
@@ -1020,8 +1113,35 @@ class _CardMixin:
         # measured minimum width.
         label_value_gap = 16 * scale
 
+        row_texts, content_w_px = self._taskbar_row_texts(
+            rows, font_label, font_value, pad_x + icon_size + text_gap, label_value_gap, pad_x
+        )
+        title_text, title_w = self._taskbar_title(title, max_title_width * scale, font_header)
+        header_w_px = pad_x + badge_r * 2 + text_gap + title_w + pad_x
+        card_w_px = max(min_card_width * scale, content_w_px, header_w_px)
+
+        card_h_px = int(header_h + row_h * len(rows) + 14 * scale)
+        canvas, draw = self._rounded_card(
+            card_w_px, card_h_px, radius, bg_color,
+            border_rgba if self.card_border_thickness else None, max(1, self.card_border_thickness) * scale,
+        )
+        self._draw_taskbar_header(draw, title_text, font_header, pad_x, header_h, badge_r, text_gap, card_w_px, scale)
+        self._draw_taskbar_rows(
+            draw, row_texts, (font_label, font_value), (pad_x, header_h, row_h, icon_size, text_gap), card_w_px, scale
+        )
+
+        canvas = self._add_card_shadow(canvas, radius, border_rgba[:3], scale)
+        w_px = canvas.size[0] // scale
+        h_px = canvas.size[1] // scale
+        canvas = canvas.resize((w_px, h_px), Image.Resampling.LANCZOS)
+        return np.array(canvas)[:, :, [2, 1, 0, 3]]
+
+    def _taskbar_row_texts(
+        self, rows: list, font_label, font_value, left: float, label_value_gap: float, pad_x: float,
+    ) -> Tuple[List[Tuple[str, str, Tuple, str]], float]:
+        """((label, "distance · duration", accent, mode) per row, the width the longest row needs)."""
         probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-        row_texts: List[Tuple[str, str, Tuple, float]] = []
+        row_texts: List[Tuple[str, str, Tuple, str]] = []
         content_w_px = 0.0
         for label, mode, dist, dur in rows:
             distance_str = f"{dist * 1000:.0f} m" if dist < 1 else f"{dist:.1f} km"
@@ -1031,37 +1151,30 @@ class _CardMixin:
             row_texts.append((label, value_str, col_accent, mode))
             label_w = probe_draw.textlength(label, font=font_label)
             value_w = probe_draw.textlength(value_str, font=font_value)
-            row_w = (
-                pad_x + icon_size + text_gap + label_w
-                + label_value_gap + value_w + pad_x
-            )
+            row_w = left + label_w + label_value_gap + value_w + pad_x
             content_w_px = max(content_w_px, row_w)
+        return row_texts, content_w_px
 
+    def _taskbar_title(self, title: Optional[str], max_title_w_px: float, font_header) -> Tuple[str, float]:
+        """(the header text, its width), cut with an ellipsis past `max_title_w_px`."""
+        probe_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
         title_text = title if title is not None else self.summary_card_labels["taskbar_card_title"]
         title_w = probe_draw.textlength(title_text, font=font_header)
-        max_title_w_px = max_title_width * scale
         if title_w > max_title_w_px:
             while title_text and probe_draw.textlength(title_text + "…", font=font_header) > max_title_w_px:
                 title_text = title_text[:-1]
             title_text += "…"
             title_w = probe_draw.textlength(title_text, font=font_header)
-        header_w_px = pad_x + badge_r * 2 + text_gap + title_w + pad_x
-        card_w_px = max(min_card_width * scale, content_w_px, header_w_px)
+        return title_text, title_w
 
-        card_h_px = int(header_h + row_h * len(rows) + 14 * scale)
-        canvas = Image.new("RGBA", (int(card_w_px), card_h_px), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(canvas)
-
-        draw.rounded_rectangle(
-            [0, 0, card_w_px - 1, card_h_px - 1],
-            radius=radius,
-            fill=bg_color,
-            outline=border_rgba if self.card_border_thickness else None,
-            width=max(1, self.card_border_thickness) * scale,
-        )
-
-        # Header: small route badge + title, like a notification's own
-        # app-icon-and-name row.
+    def _draw_taskbar_header(
+        self, draw, title_text: str, font_header, pad_x: int, header_h: int, badge_r: int, text_gap: int,
+        card_w_px: float, scale: int,
+    ) -> None:
+        """Header: small route badge + title, like a notification's own app-icon-and-name row."""
+        # BGR, like every other color in job_config.json's settings — reversed here since the canvas is
+        # RGBA->BGR swapped as a whole at the end (same convention create_summary_card uses).
+        accent = tuple(reversed(self.line_color)) + (255,)
         badge_cx, badge_cy = pad_x + badge_r, header_h / 2
         draw.ellipse(
             [badge_cx - badge_r, badge_cy - badge_r, badge_cx + badge_r, badge_cy + badge_r],
@@ -1072,13 +1185,18 @@ class _CardMixin:
         header_ascent, _ = font_header.getmetrics()
         draw.text(
             (title_x, header_h / 2 - header_ascent / 2),
-            title_text, font=font_header, fill=header_color,
+            title_text, font=font_header, fill=self.ui["card_text"],
         )
         draw.line(
             [(pad_x, header_h), (card_w_px - pad_x, header_h)],
-            fill=divider_color, width=max(1, scale),
+            fill=self.ui["divider"], width=max(1, scale),
         )
 
+    def _draw_taskbar_rows(self, draw, row_texts: list, fonts: tuple, sizes: tuple, card_w_px: float, scale: int) -> None:
+        """One label + value row per mode, each in its accent color, with dividers between them."""
+        font_label, font_value = fonts
+        pad_x, header_h, row_h, icon_size, text_gap = sizes
+        divider_color = self.ui["divider"]
         y = header_h
         for i, (label, value_str, col_accent, mode) in enumerate(row_texts):
             row_top = y
@@ -1114,12 +1232,6 @@ class _CardMixin:
                     fill=divider_color, width=max(1, scale),
                 )
             y += row_h
-
-        canvas = self._add_card_shadow(canvas, radius, border_rgba[:3], scale)
-        w_px = canvas.size[0] // scale
-        h_px = canvas.size[1] // scale
-        canvas = canvas.resize((w_px, h_px), Image.Resampling.LANCZOS)
-        return np.array(canvas)[:, :, [2, 1, 0, 3]]
 
     def render_summary_card(self, card_size: Optional[Tuple[int, int]] = None, **kwargs) -> np.ndarray:
         """Shared dispatch point for every summary-card call site: picks
@@ -1226,49 +1338,30 @@ class _CardMixin:
         if blend_h <= 0 or blend_w <= 0:
             return out
         card_bgra = card_bgra[src_y0 : src_y0 + blend_h, src_x0 : src_x0 + blend_w]
-        x0, y0, cw, ch = dst_x0, dst_y0, blend_w, blend_h
-        # Alpha-blends the card's own per-pixel alpha channel together with
-        # the caller-supplied fade-in/out `alpha`, so the card can both have
-        # soft edges and fade as a whole.
-        card_bgr, card_alpha = (
-            card_bgra[:, :, :3].astype(np.float32),
-            (card_bgra[:, :, 3].astype(np.float32) / 255.0) * alpha,
-        )
-        roi = out[y0 : y0 + ch, x0 : x0 + cw].astype(np.float32)
-        out[y0 : y0 + ch, x0 : x0 + cw] = (
-            card_bgr * card_alpha[..., None] + roi * (1 - card_alpha[..., None])
-        ).astype(np.uint8)
+        _blend_card(out, card_bgra, dst_x0, dst_y0, alpha)
         return out
 
-    def route_headline_panel(
-        self, title: str, steps: Sequence[Tuple[str, str]], font_px: int = 22,
-    ) -> Optional[Image.Image]:
-        """The course overview's headline: the area's name on a light strip, and under it
-        the stretch being traced, each place behind the glyph its own pin shows — "S 加太駅
-        → 1 加太春日神社". `steps` is [(glyph, name), …]; with none, the strip alone.
-        Memoized on its text, since it is composited onto every frame."""
-        title, steps = drawable(title or ""), [(g, drawable(n)) for g, n in steps]
-        if not title and not steps:
-            return None
-        cache = self.__dict__.setdefault("_route_headlines", {})
-        key = (title, tuple(steps), font_px, self.theme)
-        if key in cache:
-            return cache[key]
-
-        scale = 2
-        font = self._card_font(self.FONT_CANDIDATES_BOLD, font_px * scale)
-        pad_x, pad_y, gap = int(20 * scale), int(10 * scale), int(10 * scale)
-        measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-        line_h = sum(font.getmetrics())  # the font's own line box, so a CJK name is not clipped
-        chip_d = int(line_h * 1.15)
+    def _headline_run(self, measure, font, steps: Sequence[Tuple[str, str]], chip_d: int, gap: float) -> List[Tuple[str, str, float]]:
+        """The headline's stretch as (kind, text, width) pieces: each place behind its glyph chip, arrows between."""
         arrow = "  →  "
-
         run: List[Tuple[str, str, float]] = []  # (kind, text, width)
         for i, (glyph, name) in enumerate(steps):
             if i:
                 run.append(("text", arrow, measure.textlength(arrow, font=font)))
             run.append(("chip", glyph, chip_d + gap / 2))
             run.append(("text", name, measure.textlength(name, font=font)))
+        return run
+
+    def _render_headline(self, title: str, steps: Sequence[Tuple[str, str]], font_px: int) -> Image.Image:
+        """The headline panel itself (see route_headline_panel): the title strip, then the stretch's pieces."""
+        scale = 2
+        font = self._card_font(self.FONT_CANDIDATES_BOLD, font_px * scale)
+        pad_x, pad_y, gap = int(20 * scale), int(10 * scale), int(10 * scale)
+        measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        line_h = sum(font.getmetrics())  # the font's own line box, so a CJK name is not clipped
+        chip_d = int(line_h * 1.15)
+
+        run = self._headline_run(measure, font, steps, chip_d, gap)
         body_w = sum(w for _, _, w in run)
         title_w = measure.textlength(title, font=font) if title else 0
         card_w = int(max(title_w, body_w) + pad_x * 2)
@@ -1300,7 +1393,24 @@ class _CardMixin:
             else:
                 draw.text((x, y), text, font=font, fill=self.ui["pill_text"], anchor="la")
             x += w
-        canvas = canvas.resize((max(1, card_w // scale), max(1, card_h // scale)), Image.LANCZOS)
+        return canvas.resize((max(1, card_w // scale), max(1, card_h // scale)), Image.LANCZOS)
+
+    def route_headline_panel(
+        self, title: str, steps: Sequence[Tuple[str, str]], font_px: int = 22,
+    ) -> Optional[Image.Image]:
+        """The course overview's headline: the area's name on a light strip, and under it
+        the stretch being traced, each place behind the glyph its own pin shows — "S 加太駅
+        → 1 加太春日神社". `steps` is [(glyph, name), …]; with none, the strip alone.
+        Memoized on its text, since it is composited onto every frame."""
+        title, steps = drawable(title or ""), [(g, drawable(n)) for g, n in steps]
+        if not title and not steps:
+            return None
+        cache = self.__dict__.setdefault("_route_headlines", {})
+        key = (title, tuple(steps), font_px, self.theme)
+        if key in cache:
+            return cache[key]
+
+        canvas = self._render_headline(title, steps, font_px)
         if len(cache) >= self._HUD_PANEL_CACHE_MAX:
             cache.clear()
         cache[key] = canvas
@@ -1432,24 +1542,9 @@ class _CardMixin:
         bbox = ImageDraw.Draw(Image.new("RGBA", (1, 1))).textbbox((0, 0), text, font=font)
         return (bbox[2] - bbox[0] + int(28 * font_px / 22) * scale * 2) // scale
 
-    def render_top_banner(
-        self, frame: np.ndarray, text: str, alpha: float = 1.0, top_margin: int = 30, font_px: int = 22,
-        align: str = "center", left_margin: int = 32,
-    ) -> np.ndarray:
-        """A dark rounded-pill caption centered near the top of the frame —
-        the OpenCV/PIL equivalent of pydeckrecorder.pedestrian's own CSS HUD
-        banner (same dark pill + bold white text), for the 2D
-        spatial_renderer overview's dynamic "next stop" caption. Sized to
-        fit `text` exactly (plus padding) rather than a fixed card_size,
-        since the destination label's length varies waypoint to waypoint.
-        `alpha` fades the whole pill (not just its own soft edges) the same
-        way composite_card_on_frame's own `alpha` does for popup/summary
-        cards, for a consistent fade in/out. `align="left"` docks it `left_margin` px from the left edge."""
-        if not text:
-            return frame
-
+    def _top_banner_card(self, text: str, font_px: int) -> np.ndarray:
+        """The banner's pill as a finished BGRA card sized to fit `text` (supersampled, then downscaled)."""
         scale = 2  # supersampled for antialiased text/corners, then downscaled
-        text = drawable(text)
         font = self._card_font(self.FONT_CANDIDATES_BOLD, font_px * scale)
         measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
         bbox = measure.textbbox((0, 0), text, font=font)
@@ -1468,8 +1563,25 @@ class _CardMixin:
         # is the theme's pill_text (white), not tuning.ACCENT_COLOR -- that would be invisible on itself.
         draw.text((pad_x - bbox[0], pad_y - bbox[1]), text, font=font, fill=self.ui["pill_text"])
         canvas = canvas.resize((max(1, card_w // scale), max(1, card_h // scale)), Image.LANCZOS)
+        return np.array(canvas)[:, :, [2, 1, 0, 3]]
 
-        card_bgra = np.array(canvas)[:, :, [2, 1, 0, 3]]
+    def render_top_banner(
+        self, frame: np.ndarray, text: str, alpha: float = 1.0, top_margin: int = 30, font_px: int = 22,
+        align: str = "center", left_margin: int = 32,
+    ) -> np.ndarray:
+        """A dark rounded-pill caption centered near the top of the frame —
+        the OpenCV/PIL equivalent of pydeckrecorder.pedestrian's own CSS HUD
+        banner (same dark pill + bold white text), for the 2D
+        spatial_renderer overview's dynamic "next stop" caption. Sized to
+        fit `text` exactly (plus padding) rather than a fixed card_size,
+        since the destination label's length varies waypoint to waypoint.
+        `alpha` fades the whole pill (not just its own soft edges) the same
+        way composite_card_on_frame's own `alpha` does for popup/summary
+        cards, for a consistent fade in/out. `align="left"` docks it `left_margin` px from the left edge."""
+        if not text:
+            return frame
+
+        card_bgra = self._top_banner_card(drawable(text), font_px)
         ch, cw = card_bgra.shape[:2]
         h, w = frame.shape[:2]
         x0 = max(0, left_margin) if align == "left" else max(0, (w - cw) // 2)
@@ -1481,12 +1593,7 @@ class _CardMixin:
         card_bgra = card_bgra[:ch, :cw]
 
         out = frame.copy()
-        card_bgr = card_bgra[:, :, :3].astype(np.float32)
-        card_alpha = (card_bgra[:, :, 3].astype(np.float32) / 255.0) * alpha
-        roi = out[y0 : y0 + ch, x0 : x0 + cw].astype(np.float32)
-        out[y0 : y0 + ch, x0 : x0 + cw] = (
-            card_bgr * card_alpha[..., None] + roi * (1 - card_alpha[..., None])
-        ).astype(np.uint8)
+        _blend_card(out, card_bgra, x0, y0, alpha)
         return out
 
     # --- Overview HUD -------------------------------------------------------
@@ -1619,10 +1726,5 @@ class _CardMixin:
             return frame
         card_bgra = card_bgra[:ch, :cw]
         out = frame.copy()
-        card_bgr = card_bgra[:, :, :3].astype(np.float32)
-        card_alpha = (card_bgra[:, :, 3].astype(np.float32) / 255.0) * alpha
-        roi = out[y0 : y0 + ch, x0 : x0 + cw].astype(np.float32)
-        out[y0 : y0 + ch, x0 : x0 + cw] = (
-            card_bgr * card_alpha[..., None] + roi * (1 - card_alpha[..., None])
-        ).astype(np.uint8)
+        _blend_card(out, card_bgra, x0, y0, alpha)
         return out

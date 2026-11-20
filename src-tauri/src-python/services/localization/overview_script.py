@@ -458,76 +458,63 @@ def _way_seconds(trip: dict) -> float:
     return travel + trip.get("via_hold", 0.0)
 
 
-def plan_budget(project: dict, brief: dict) -> dict:
-    """Which numbered stops the walker stops at, and seconds (then characters,
-    at the TTS speed) for every piece, so the voice lasts the overview's target.
-
-    Every numbered stop stops and is described (`overviewHighlight: false`
-    opts a place out); a stop hosting a stop-by batch is described for
-    exactly the freeze its batch needs (the map freezes there anyway), every
-    other stop gets DESCRIBE_TARGET_SECONDS. Time left over (or short) within
-    `target` lengthens (or, if still short of `target`, further lengthens)
-    the descriptions, then the way lines - `target` no longer decides which
-    stops are described, only how their shared time is spent.
-    {"target", "cps", "intro", "closing", "stops", "trips", "ways",
-    "describe": {n: s}, "estimated", "fits"}."""
-    from services.localization.route_brief import journeys
+def _chars_per_second(project: dict) -> float:
+    """Characters the voice speaks per second: the project's own setting, else the natural pace times its speed."""
+    from services import tuning
 
     settings = project.get("settings", {})
     # DEFAULT_CHARS_PER_SECOND was measured at the TTS's natural pace; the
     # voice speaks faster by its speed setting (tuning.TTS_SPEED, or the
     # project's settings.tts.speed).
-    from services import tuning
-
     speed = float((settings.get("tts") or {}).get("speed", tuning.TTS_SPEED))
-    cps = float(settings.get("overview_chars_per_second", DEFAULT_CHARS_PER_SECOND * speed))
-    places = {n: w for n, w in enumerate(visible_waypoints(project), start=1)}
-    target = overview_target_seconds(project, len(places))
-    closing = closing_seconds(project)
-    describing = describes_stops(project)
-    hosts = {l["to_number"]: l["hold_at_to"] for l in brief["legs"]
-             if l["to_number"] is not None and l.get("hold_at_to")}
-    forced = {n for n, w in places.items() if w.get("overviewHighlight") is True}
-    banned = {n for n, w in places.items() if w.get("overviewHighlight") is False} - set(hosts)
+    return float(settings.get("overview_chars_per_second", DEFAULT_CHARS_PER_SECOND * speed))
 
-    def plan(stops: set) -> Tuple[List[dict], List[float], Dict[int, float], float]:
-        trips = journeys(brief, stops)
-        ways = [_way_seconds(t) for t in trips]
-        describe = {n: (hosts[n] if n in hosts else (DESCRIBE_TARGET_SECONDS if describing else 0.0)) for n in stops}
-        return trips, ways, describe, INTRO_SECONDS + sum(ways) + sum(describe.values()) + closing
 
-    if overview_style(project) == "course":
-        # The route sentences are what they are, the opening takes the rest.
-        # The map never freezes mid-route (the stop-bys come last), so no holds.
-        stops = course_stops(brief, forced, banned)
-        trips = journeys(brief, stops)
-        ways = [_way_seconds({**t, "via_hold": 0.0}) for t in trips]
-        describe = {n: 0.0 for n in stops}
-        pivot = len(ROUTE_PIVOT_TEXT) / cps
-        ending = max(closing, len(totals_text(brief) + goal_text(brief) + stopby_text(project) + closed_text(project)) / cps)
-        rest = target - pivot - sum(ways) - sum(describe.values()) - ending
-        opening = min(OPENING_MAX_SECONDS, max(OPENING_MIN_SECONDS, rest))
-        estimated = opening + pivot + sum(ways) + sum(describe.values()) + ending
-        return {
-            "target": target, "cps": cps, "intro": opening, "pivot": pivot, "closing": closing,
-            "stops": sorted(stops), "trips": trips, "ways": ways, "describe": describe,
-            "estimated": estimated, "fits": in_overview_range(estimated),
-        }
+def _chars_for(seconds: float, cps: float) -> int:
+    """How many characters the voice speaks in `seconds` (at least 1)."""
+    return max(1, int(round(seconds * cps)))
 
-    # Every numbered stop gets described (an explicit overviewHighlight:false
-    # still opts a place out) - previously only as many as fit within `target`
-    # were picked, ranked by _highlight_score, and the rest were only ever
-    # named in passing on the way; a route with more stops than the 60-120s
-    # budget could fit simply never described most of them at all. `target`
-    # still drives how spare time is spent below (longer descriptions/ways),
-    # it just no longer decides WHICH stops are described.
-    stops = (set(places) | set(hosts) | forced) - banned
-    trips, ways, describe, estimated = plan(stops)
 
-    # Time left over: longer descriptions (not a batch host's - its freeze is
-    # fixed), then longer way lines.
-    spare = target - estimated
-    flexible = [n for n in stops if n not in hosts] if describing else []
+def _plan_stops(
+    brief: dict, stops: set, hosts: Dict[int, float], describing: bool, closing: float
+) -> Tuple[List[dict], List[float], Dict[int, float], float]:
+    """(trips, seconds per way line, seconds per described stop, estimated total) when `stops` are described."""
+    from services.localization.route_brief import journeys
+
+    trips = journeys(brief, stops)
+    ways = [_way_seconds(t) for t in trips]
+    describe = {n: (hosts[n] if n in hosts else (DESCRIBE_TARGET_SECONDS if describing else 0.0)) for n in stops}
+    return trips, ways, describe, INTRO_SECONDS + sum(ways) + sum(describe.values()) + closing
+
+
+def _course_budget(
+    project: dict, brief: dict, cps: float, target: float, closing: float, forced: set, banned: set
+) -> dict:
+    """plan_budget for the course style: the route sentences are what they are, the opening takes the rest.
+    The map never freezes mid-route (the stop-bys come last), so no holds."""
+    from services.localization.route_brief import journeys
+
+    stops = course_stops(brief, forced, banned)
+    trips = journeys(brief, stops)
+    ways = [_way_seconds({**t, "via_hold": 0.0}) for t in trips]
+    describe = {n: 0.0 for n in stops}
+    pivot = len(ROUTE_PIVOT_TEXT) / cps
+    ending = max(closing, len(totals_text(brief) + goal_text(brief) + stopby_text(project) + closed_text(project)) / cps)
+    rest = target - pivot - sum(ways) - sum(describe.values()) - ending
+    opening = min(OPENING_MAX_SECONDS, max(OPENING_MIN_SECONDS, rest))
+    estimated = opening + pivot + sum(ways) + sum(describe.values()) + ending
+    return {
+        "target": target, "cps": cps, "intro": opening, "pivot": pivot, "closing": closing,
+        "stops": sorted(stops), "trips": trips, "ways": ways, "describe": describe,
+        "estimated": estimated, "fits": in_overview_range(estimated),
+    }
+
+
+def _spend_spare_time(
+    spare: float, flexible: List[int], trips: List[dict], ways: List[float], describe: Dict[int, float]
+) -> Tuple[List[float], float]:
+    """Hands the time left over within the target to the descriptions (not a batch host's - its freeze
+    is fixed), then to the way lines. `describe` is lengthened in place; returns the ways and the time still spare."""
     if spare > 0 and flexible:
         each = min(spare / len(flexible), DESCRIBE_MAX_SECONDS - DESCRIBE_TARGET_SECONDS)
         for n in flexible:
@@ -549,17 +536,52 @@ def plan_budget(project: dict, brief: dict) -> dict:
         elif ways:
             ways = [w + spare / len(ways) for w in ways]
         spare = 0.0 if (flexible or ways) else spare
+    return ways, spare
+
+
+def plan_budget(project: dict, brief: dict) -> dict:
+    """Which numbered stops the walker stops at, and seconds (then characters,
+    at the TTS speed) for every piece, so the voice lasts the overview's target.
+
+    Every numbered stop stops and is described (`overviewHighlight: false`
+    opts a place out); a stop hosting a stop-by batch is described for
+    exactly the freeze its batch needs (the map freezes there anyway), every
+    other stop gets DESCRIBE_TARGET_SECONDS. Time left over (or short) within
+    `target` lengthens (or, if still short of `target`, further lengthens)
+    the descriptions, then the way lines - `target` no longer decides which
+    stops are described, only how their shared time is spent.
+    {"target", "cps", "intro", "closing", "stops", "trips", "ways",
+    "describe": {n: s}, "estimated", "fits"}."""
+    cps = _chars_per_second(project)
+    places = {n: w for n, w in enumerate(visible_waypoints(project), start=1)}
+    target = overview_target_seconds(project, len(places))
+    closing = closing_seconds(project)
+    describing = describes_stops(project)
+    hosts = {l["to_number"]: l["hold_at_to"] for l in brief["legs"]
+             if l["to_number"] is not None and l.get("hold_at_to")}
+    forced = {n for n, w in places.items() if w.get("overviewHighlight") is True}
+    banned = {n for n, w in places.items() if w.get("overviewHighlight") is False} - set(hosts)
+
+    if overview_style(project) == "course":
+        return _course_budget(project, brief, cps, target, closing, forced, banned)
+
+    # Every numbered stop gets described (an explicit overviewHighlight:false
+    # still opts a place out) - previously only as many as fit within `target`
+    # were picked, ranked by _highlight_score, and the rest were only ever
+    # named in passing on the way; a route with more stops than the 60-120s
+    # budget could fit simply never described most of them at all. `target`
+    # still drives how spare time is spent below (longer descriptions/ways),
+    # it just no longer decides WHICH stops are described.
+    stops = (set(places) | set(hosts) | forced) - banned
+    trips, ways, describe, estimated = _plan_stops(brief, stops, hosts, describing, closing)
+
+    spare = target - estimated
+    flexible = [n for n in stops if n not in hosts] if describing else []
+    ways, spare = _spend_spare_time(spare, flexible, trips, ways, describe)
     estimated = target - spare if spare >= 0 and estimated <= target else estimated
     return {
-        "target": target,
-        "cps": cps,
-        "intro": INTRO_SECONDS,
-        "closing": closing,
-        "stops": sorted(stops),
-        "trips": trips,
-        "ways": ways,
-        "describe": describe,
-        "estimated": estimated,
+        "target": target, "cps": cps, "intro": INTRO_SECONDS, "closing": closing, "stops": sorted(stops),
+        "trips": trips, "ways": ways, "describe": describe, "estimated": estimated,
         # the overview stays within 60-120s (the video then follows the
         # voice to within AUDIO_MATCH_TOLERANCE_SECONDS)
         "fits": in_overview_range(estimated),
@@ -893,6 +915,96 @@ def goal_text(brief: dict) -> str:
     return f"コースのゴールは、{end}です。"
 
 
+def _course_opening(
+    project: dict, brief: dict, places: Dict[int, dict], chars: int,
+    generate: Optional[Generate], intro_text: Optional[str],
+) -> dict:
+    """The course opening's report entry: the project's own settings.overview_intro, else the model's (checked), else a template."""
+    from services.localization.route_brief import _short_fact
+
+    settings = project.get("settings", {})
+    own = ((project.get("settings") or {}).get("overview_intro") or "").strip() if intro_text is None else intro_text
+    if own:
+        # The intro's own cues stay ({scene} cuts, {photo:X} picks footage, {open}/{close} time the heading).
+        opening = re.sub(r"\{(?!(?:scene|open|close|photo:[^{}]+)\})[^}]*\}", "", own).strip()
+        return {"kind": "intro", "text": opening, "used": "user", "raw": None, "budget_chars": chars}
+
+    area = spoken_area(settings.get("intro_location"))
+    title = (project.get("video_title") or project.get("project_name") or "").strip()
+    if title and title.isascii():
+        title = ""  # an English working title ("Untitled Project") is not spoken
+    subtitle = (project.get("video_subtitle") or "").strip()
+    named = [(w.get("label") or w.get("name") or "").strip() for w in places.values()]
+    facts = [f"{name}（{_short_fact(w)}）" if _short_fact(w) else name
+             for name, w in zip(named, places.values()) if name]
+    info = (
+        (f"■ 地域: {area}\n" if area else "")
+        + (f"■ タイトル: {title}\n" if title else "")
+        + (f"■ 副題: {subtitle}\n" if subtitle else "")
+        + f"■ 出発地: {brief['start']}\n"
+        + (f"■ 主な場所: {'、'.join(facts)}\n" if facts else "")
+    )
+    fallback = _course_intro_fallback(area, title, brief["start"], [n for n in named if n], len(places), chars)
+    anchors = [brief["start"], *named, *re.split(r"[・\s]+", area), title]
+    raw = None
+    if generate is not None:
+        try:
+            raw = generate(_course_intro_prompt(info, chars), chars)
+        except Exception as exc:  # the model must never break the script
+            logger.warning("Overview intro: generator failed (%s).", exc)
+    text = _clean(raw, chars)
+    ok = (
+        raw is not None and _looks_ok(text, chars, over=1.3)
+        and any(a and _names_in(text, a) for a in anchors)
+        and not _GREETING.search(text) and not _GREETING_SENTENCE.search(text)
+        and _numbers_ok(text, info)
+    )
+    return {"kind": "intro", "text": text if ok else fallback, "used": "model" if ok else "template", "raw": raw,
+            "budget_chars": chars}
+
+
+def _course_route_parts(brief: dict, trips: List[dict], way_chars: List[int], report: List[dict]) -> List[str]:
+    """One sentence per leg ({go} after each that ends at a stop), each with its places tagged; adds to `report`."""
+    from services.localization.cues import CUE_RE, clean_text
+    from services.localization.route_brief import _minutes_phrase
+
+    parts: List[str] = []
+    ferries, after_crossing = 0, False
+    for i, trip in enumerate(trips):
+        line = _route_sentence(trip, i, brief["start"], ferries, after_crossing, trips[0]["from_at"])
+        n = trip["to_number"]
+        if not CUE_RE.search(line):  # ferry / car wording: tag the places it names
+            via = list(trip.get("via") or [])
+            numbers = list(trip.get("via_numbers") or [None] * len(via)) + [n]
+            line = _tag_places(line, via + [trip["to"]], numbers,
+                               len(trip["from"]) if line.startswith(trip["from"]) else 0)
+        if n is not None and "{%d}" % n not in line:
+            line += "{%d}" % n
+        boats = sum(1 for p in trip["pieces"] if p["mode"] in _BOAT_MODES) or int(trip["mode"] in _BOAT_MODES)
+        # The trace needs this long on the map: a line that runs short tells the time too.
+        need = way_chars[i]
+        if len(clean_text(line)) < need and trip["mode"] == "walking" and not boats:
+            line += f"歩いて{_minutes_phrase(trip['minutes'])}の道のりです。"
+        report.append({"kind": f"way{i}", "text": line, "used": "template", "raw": None, "budget_chars": need})
+        parts.append(line)
+        ferries += boats
+        after_crossing = bool(boats)
+        if n is not None:
+            parts.append("{go}")
+    return parts
+
+
+def _course_closing(project: dict, brief: dict, closing_chars: int, closing_text: str) -> str:
+    """The course's ending: totals, the goal, then the stop-bys and the closed places, each behind its cue."""
+    totals, goal, extras, closed = totals_text(brief), goal_text(brief), stopby_text(project), closed_text(project)
+    # {extras}: the stop-bys appear on the map (they are only shown at the end); {closed}: then the closed places.
+    closing = (f"{totals}{{distance}}{goal}" + (f"{{extras}}{extras}" if extras else "")
+               + (f"{{closed}}{closed}" if closed else ""))
+    if len(totals + goal + extras + closed) < closing_chars:
+        closing += closing_text
+    return closing
+
+
 def build_course_script(
     project: dict,
     brief: dict,
@@ -908,90 +1020,20 @@ def build_course_script(
     stopped at, has its {n} right before its name (see _paced). The
     opening is the project's own settings.overview_intro, else the model's (checked),
     else a template; everything after it is built from the route facts."""
-    from services.localization.cues import CUE_RE, clean_text
-    from services.localization.route_brief import _minutes_phrase, _short_fact
-
-    trips = budget["trips"]
     cps = budget["cps"]
-    chars = lambda seconds: max(1, int(round(seconds * cps)))  # noqa: E731
     places = {n: w for n, w in enumerate(visible_waypoints(project), start=1)}
     report: List[dict] = []
-    settings = project.get("settings", {})
 
-    own = ((project.get("settings") or {}).get("overview_intro") or "").strip() if intro_text is None else intro_text
-    opening_chars = chars(budget["intro"])
-    if own:
-        # The intro's own cues stay ({scene} cuts, {photo:X} picks footage, {open}/{close} time the heading).
-        opening = re.sub(r"\{(?!(?:scene|open|close|photo:[^{}]+)\})[^}]*\}", "", own).strip()
-        report.append({"kind": "intro", "text": opening, "used": "user", "raw": None, "budget_chars": opening_chars})
-    else:
-        area = spoken_area(settings.get("intro_location"))
-        title = (project.get("video_title") or project.get("project_name") or "").strip()
-        if title and title.isascii():
-            title = ""  # an English working title ("Untitled Project") is not spoken
-        subtitle = (project.get("video_subtitle") or "").strip()
-        named = [(w.get("label") or w.get("name") or "").strip() for w in places.values()]
-        facts = [f"{name}（{_short_fact(w)}）" if _short_fact(w) else name
-                 for name, w in zip(named, places.values()) if name]
-        info = (
-            (f"■ 地域: {area}\n" if area else "")
-            + (f"■ タイトル: {title}\n" if title else "")
-            + (f"■ 副題: {subtitle}\n" if subtitle else "")
-            + f"■ 出発地: {brief['start']}\n"
-            + (f"■ 主な場所: {'、'.join(facts)}\n" if facts else "")
-        )
-        fallback = _course_intro_fallback(area, title, brief["start"], [n for n in named if n], len(places), opening_chars)
-        anchors = [brief["start"], *named, *re.split(r"[・\s]+", area), title]
-        raw = None
-        if generate is not None:
-            try:
-                raw = generate(_course_intro_prompt(info, opening_chars), opening_chars)
-            except Exception as exc:  # the model must never break the script
-                logger.warning("Overview intro: generator failed (%s).", exc)
-        text = _clean(raw, opening_chars)
-        ok = (
-            raw is not None and _looks_ok(text, opening_chars, over=1.3)
-            and any(a and _names_in(text, a) for a in anchors)
-            and not _GREETING.search(text) and not _GREETING_SENTENCE.search(text)
-            and _numbers_ok(text, info)
-        )
-        opening = text if ok else fallback
-        report.append({"kind": "intro", "text": opening, "used": "model" if ok else "template", "raw": raw,
-                       "budget_chars": opening_chars})
+    opening = _course_opening(project, brief, places, _chars_for(budget["intro"], cps), generate, intro_text)
+    report.append(opening)
 
     # {route}: the trace starts once the whole route has been shown.
-    parts = [opening, "{start}", ROUTE_PIVOT_TEXT, "{route}"]
-    ferries, after_crossing = 0, False
-    for i, trip in enumerate(trips):
-        line = _route_sentence(trip, i, brief["start"], ferries, after_crossing, trips[0]["from_at"])
-        n = trip["to_number"]
-        if not CUE_RE.search(line):  # ferry / car wording: tag the places it names
-            via = list(trip.get("via") or [])
-            numbers = list(trip.get("via_numbers") or [None] * len(via)) + [n]
-            line = _tag_places(line, via + [trip["to"]], numbers,
-                               len(trip["from"]) if line.startswith(trip["from"]) else 0)
-        if n is not None and "{%d}" % n not in line:
-            line += "{%d}" % n
-        boats = sum(1 for p in trip["pieces"] if p["mode"] in _BOAT_MODES) or int(trip["mode"] in _BOAT_MODES)
-        # The trace needs this long on the map: a line that runs short tells the time too.
-        need = chars(budget["ways"][i])
-        if len(clean_text(line)) < need and trip["mode"] == "walking" and not boats:
-            line += f"歩いて{_minutes_phrase(trip['minutes'])}の道のりです。"
-        report.append({"kind": f"way{i}", "text": line, "used": "template", "raw": None, "budget_chars": need})
-        parts.append(line)
-        ferries += boats
-        after_crossing = bool(boats)
-        if n is not None:
-            parts.append("{go}")
+    parts = [opening["text"], "{start}", ROUTE_PIVOT_TEXT, "{route}"]
+    parts += _course_route_parts(brief, budget["trips"], [_chars_for(s, cps) for s in budget["ways"]], report)
 
-    totals, goal, extras, closed = totals_text(brief), goal_text(brief), stopby_text(project), closed_text(project)
-    # {extras}: the stop-bys appear on the map (they are only shown at the end); {closed}: then the closed places.
-    closing = (f"{totals}{{distance}}{goal}" + (f"{{extras}}{extras}" if extras else "")
-               + (f"{{closed}}{closed}" if closed else ""))
-    if len(totals + goal + extras + closed) < chars(budget["closing"]):
-        closing += closing_text
-    report.append({"kind": "closing", "text": closing, "used": "template", "raw": None,
-                   "budget_chars": chars(budget["closing"])})
+    closing_chars = _chars_for(budget["closing"], cps)
+    closing = _course_closing(project, brief, closing_chars, closing_text)
+    report.append({"kind": "closing", "text": closing, "used": "template", "raw": None, "budget_chars": closing_chars})
     parts.append("{end}" + closing)
     return "".join(parts), report
 
@@ -1012,6 +1054,216 @@ def leg_facts_line(trip: dict) -> str:
     return f"ここまで{distance}の道のりでした。"
 
 
+def _via_batch_lines(trip: dict, told: str) -> str:
+    """`told` with a line for every stop-by batch the map freezes on along the way.
+
+    The map freezes on the way to show stop-by cards: tell what they are
+    while they are up, so the voice does not run ahead of the walker.
+    """
+    for host, names, facts in trip.get("via_batches", []):
+        # Every stop-by in the group named, never truncated to the
+        # first 3: a waypoint dropped here was never named ANYWHERE in
+        # the script (it has no {n} cue of its own - this mention is
+        # its only chance). Same reasoning as route_brief.transition_
+        # texts's via/passes uncapping.
+        #
+        # Each one gets ITS OWN short fact folded in as "{fact}の{name}"
+        # when it wrote one (route_brief._short_fact is built exactly for
+        # this - see its own docstring), not just the first with the rest
+        # reduced to bare names - a bare list is easy to tune out, and a
+        # stop-by that wrote real content deserves the same "here's what
+        # this actually is" treatment as any other, not just whichever
+        # happened to come first in the batch.
+        phrases = [
+            f"{fact}の{name}" if fact else name
+            for name, fact in zip(names, facts or [""] * len(names))
+        ]
+        line = f"{host}のあたりでは、{'や'.join(phrases)}が見えてきます。"
+        # The map holds on this batch's cards until this line is spoken
+        # (see cues.py's {goPreN}) - every via_batches host, not just
+        # the one before stop 1.
+        if trip.get("to_number") is not None:
+            line += "{goPre%d}" % trip["to_number"]
+        # Always inserted, even past the way segment's own character
+        # budget (unlike before) - a name silently dropped for staying
+        # under budget defeats guaranteeing every waypoint gets named;
+        # plan_budget's overall target absorbs the odd longer line via
+        # its own spare-time redistribution (see plan_budget's "spare"
+        # handling) rather than this dropping content outright.
+        head, dot, rest_told = told.partition("。")
+        told = head + dot + line + rest_told if rest_told else told + line
+    return told
+
+
+def _way_acceptable(text: str, trip: dict, limit: int, first: bool) -> bool:
+    """Whether a model's way line passes every check (it names every stop-by and via of the leg)."""
+    return (
+        check_transition(text, trip, limit)
+        and not _ARRIVED_PHRASE.search(text)
+        and not (first and text.startswith(("次は", "次に", "続いて")))
+        # The intro (■ 直前のナレーション) already greeted the
+        # listener — reject a way0 that greets again, rather than
+        # ship a script that opens with the same "welcome" line
+        # twice in a row (see _transition_prompt's first=True note).
+        and not (first and _GREETING.search(text))
+        # The model was GIVEN these stop-by names+facts (■ 途中に見
+        # える場所, above) but is free-form otherwise, and routinely
+        # drops some or all of them — require EVERY one to guarantee
+        # the coverage promise ("every waypoint gets named") holds
+        # regardless of whether the model's own text or the `told`
+        # fallback (which the via_batches loop above always names
+        # every one of them into) ends up used. Also every "via"
+        # (a numbered waypoint skipped over, not its own stop) —
+        # same guarantee, same reasoning.
+        and all(
+            _names_in(text, n)
+            for _, names, *_ in trip.get("via_batches", []) for n in names
+        )
+        and all(_names_in(text, n) for n in trip.get("via", []))
+    )
+
+
+def _longest_walk(trips: List[dict]) -> Optional[float]:
+    """The longest walking leg's minutes (past the first leg), when exactly one leg is the longest."""
+    walks = [t["minutes"] for t in trips[1:] if t["mode"] == "walking" and not t["is_return"]]
+    return max(walks) if len(walks) >= 2 and walks.count(max(walks)) == 1 else None
+
+
+class _TourWriter:
+    """Writes the walk/map overview script one piece at a time, keeping the per-piece report.
+
+    Without `generate` (or when its text fails the checks) every piece is built from the facts.
+    """
+
+    def __init__(self, project: dict, brief: dict, budget: dict, generate: Optional[Generate]):
+        self.project = project
+        self.brief = brief
+        self.budget = budget
+        self.generate = generate
+        self.trips: List[dict] = budget["trips"]
+        self.cps: float = budget["cps"]
+        self.places = {n: w for n, w in enumerate(visible_waypoints(project), start=1)}
+        self.place_count = len(self.places)  # every place on the route, stopped at or passed
+        self.km = round(brief["total_km"]) if brief["total_km"] >= 1 else brief["total_km"]
+        self.report: List[dict] = []
+
+    def chars(self, seconds: float) -> int:
+        return _chars_for(seconds, self.cps)
+
+    def ask(self, kind: str, prompt: str, limit: int, ok, fallback: str) -> str:
+        """The model's text when it passes `ok` (and does not open like the piece before), else `fallback`."""
+        raw = None
+        if self.generate is not None:
+            try:
+                raw = self.generate(prompt, limit)
+            except Exception as exc:  # the model must never break the script
+                logger.warning("Overview %s: generator failed (%s).", kind, exc)
+        text = _clean(raw, limit)
+        fresh = not self.report or not _opener(text) or _opener(text) != _opener(self.report[-1]["text"])
+        used = "model" if raw is not None and fresh and ok(text) else "template"
+        if used == "template":
+            text = fallback
+        self.report.append({"kind": kind, "text": text, "used": used, "raw": raw, "budget_chars": limit})
+        return text
+
+    def intro(self, intro_text: Optional[str]) -> str:
+        """The opening line that plays over the waiting map."""
+        if intro_text is not None:
+            return re.sub(r"\{[^}]*\}", "", intro_text).strip()
+        brief = self.brief
+        stop_names = [t["to"] for t in self.trips if t["to_number"] is not None]
+        intro_chars = self.chars(self.budget["intro"])
+        area = spoken_area(self.project.get("settings", {}).get("intro_location"))
+        end = self.trips[-1]["to"] if self.trips else ""
+        fallback = _intro_fallback(brief["start"], end, area, self.place_count, self.km, intro_chars)
+        # A model opening must say where the trip is, not just "美しい山々を巡る旅".
+        anchors = [brief["start"], end, *stop_names, *re.split(r"[・\s]+", area)]
+        return self.ask(
+            "intro", _intro_prompt(brief, stop_names, intro_chars, area, end, self.km), intro_chars,
+            lambda t: _looks_ok(t, intro_chars, over=1.2) and any(a and _names_in(t, a) for a in anchors),
+            fallback,
+        )
+
+    def way(self, i: int, trip: dict, previous: str, longest: Optional[float]) -> str:
+        """The line that tells the way of leg `i` while the walker walks it."""
+        from services.localization.route_brief import LONGEST_LEG_MIN_MINUTES, transition_text
+
+        way_chars = self.chars(self.budget["ways"][i])
+        # The longest walk gets called out ("ここからが一番長い区間です"), past the first leg.
+        if (i > 0 and longest is not None and longest >= LONGEST_LEG_MIN_MINUTES
+                and trip["minutes"] == longest and trip["mode"] == "walking"):
+            trip = {**trip, "longest": True}
+        told = transition_text(trip, way_chars, variant=i)
+        if i == 0 and told.startswith("次は"):
+            told = "まずは" + told[len("次は"):]  # setting off: nothing came before
+        told = _via_batch_lines(trip, told)
+        return self.ask(
+            f"way{i}", _transition_prompt(trip, previous, way_chars, first=(i == 0)), way_chars,
+            lambda t: _way_acceptable(t, trip, way_chars, i == 0),
+            told,
+        )
+
+    def stop_piece(self, n: int, trip: dict, previous: str, parts: List[str]) -> Tuple[str, str]:
+        """(the piece to add to the script, the new `previous`) for the stop numbered `n`."""
+        label = trip["to"]
+        # Route map: the voice reads the leg's numbers while its card shows them (the walker holds until {go}).
+        facts_line = leg_facts_line(trip) if overview_style(self.project) == "map" else ""
+        if not describes_stops(self.project):
+            # A stop that hosts stop-by cards freezes the map: say what is
+            # around it (never the stop's own description or name again).
+            names = trip.get("batch") or []
+            text = f"{'や'.join(names[:3])}も、この近くにあります。" if names and self.budget["describe"].get(n) else ""
+            self.report.append({"kind": f"stop{n}", "text": text, "used": "template", "raw": None,
+                                "budget_chars": self.chars(self.budget["describe"].get(n, 0.0))})
+            return "{%d}%s%s{go}" % (n, facts_line, text), (text or previous)
+        describe_chars = max(self.chars(self.budget["describe"][n]) - len(facts_line), _MIN_PASSAGE_CHARS)
+        facts = _facts(self.places.get(n, {}))
+        # The way line just before this (`previous`) is required to already
+        # name `label` (check_transition) - when it did, the description
+        # shouldn't open by naming it again (see _describe_prompt / _drop_
+        # named_opening docstrings for the "...XXXへ。XXXです。" pattern this avoids).
+        already_named = _names_in(previous, label)
+        about = "".join(
+            sentence for sentence in _SENTENCE_END.split(facts)
+            if not _ROUTE_CLAIM.search(sentence) and not _MOVING_ON.search(sentence)
+            and not _GREETING_SENTENCE.search(sentence)
+        ).strip()
+        if already_named:
+            about = _drop_named_opening(about, label)
+        fallback = _fill_sentences(about, describe_chars) if about else ""
+        if not _looks_ok(fallback, describe_chars, over=1.6):
+            fallback = _arrival_fallback(label, n, already_named, "".join(parts))
+        describe = self.ask(
+            f"stop{n}", _describe_prompt(label, facts, previous, describe_chars), describe_chars,
+            lambda t: (
+                _looks_ok(t, describe_chars, over=1.2) and (already_named or _names_in(t, label))
+                and not _ROUTE_CLAIM.search(t) and not _MOVING_ON.search(t)
+                and not _ARRIVED_PHRASE.search(t) and not _GREETING_SENTENCE.search(t)
+            ),
+            fallback,
+        )
+        return "{%d}%s%s{go}" % (n, facts_line, describe), describe
+
+    def closing(self, closing_text: str) -> str:
+        """The closing line that plays over the ending.
+
+        It lasts at least as long as the ending can shrink to: the shortest of these that does (else the longest).
+        """
+        closing_chars = self.chars(self.budget["closing"])
+        endings = [
+            closing_text,
+            f"{self.place_count}か所を巡る、およそ{self.km}キロの旅でした。{{distance}}{closing_text}",
+            f"{self.brief['start']}を出発し、{self.place_count}か所を巡る、およそ{self.km}キロの旅でした。{{distance}}{closing_text}",
+        ]
+        closing = next((e for e in endings if len(e) >= closing_chars), endings[-1])
+        closed = closed_text(self.project)
+        if closed:  # the closed places come before the sign-off, after everything else
+            closing = closing[: -len(closing_text)] + "{closed}" + closed + closing_text
+        self.report.append({"kind": "closing", "text": closing, "used": "template", "raw": None,
+                            "budget_chars": closing_chars})
+        return closing
+
+
 def build_tour_script(
     project: dict,
     routing_cache: Optional[dict],
@@ -1028,188 +1280,31 @@ def build_tour_script(
     piece is sized by `plan_budget` so the voice lasts the overview's target
     length. Without `generate` (or when its text fails the checks) every piece
     is built from the facts."""
-    from services.localization.route_brief import LONGEST_LEG_MIN_MINUTES, build_brief, transition_text
+    from services.localization.route_brief import build_brief
 
     brief = build_brief(project, routing_cache)
     budget = plan_budget(project, brief)
     if overview_style(project) == "course":
         return build_course_script(project, brief, budget, generate, intro_text, closing_text)
-    trips = budget["trips"]
-    cps = budget["cps"]
-    chars = lambda seconds: max(1, int(round(seconds * cps)))  # noqa: E731
-    places = {n: w for n, w in enumerate(visible_waypoints(project), start=1)}
-    report: List[dict] = []
 
-    def ask(kind: str, prompt: str, limit: int, ok, fallback: str) -> str:
-        raw = None
-        if generate is not None:
-            try:
-                raw = generate(prompt, limit)
-            except Exception as exc:  # the model must never break the script
-                logger.warning("Overview %s: generator failed (%s).", kind, exc)
-        text = _clean(raw, limit)
-        fresh = not report or not _opener(text) or _opener(text) != _opener(report[-1]["text"])
-        used = "model" if raw is not None and fresh and ok(text) else "template"
-        if used == "template":
-            text = fallback
-        report.append({"kind": kind, "text": text, "used": used, "raw": raw, "budget_chars": limit})
-        return text
-
-    stop_names = [t["to"] for t in trips if t["to_number"] is not None]
-    place_count = len(places)  # every place on the route, stopped at or passed
-    intro_chars = chars(budget["intro"])
-    km = round(brief["total_km"]) if brief["total_km"] >= 1 else brief["total_km"]
-    area = spoken_area(project.get("settings", {}).get("intro_location"))
-    end = trips[-1]["to"] if trips else ""
-    if intro_text is not None:
-        intro = re.sub(r"\{[^}]*\}", "", intro_text).strip()
-    else:
-        fallback = _intro_fallback(brief["start"], end, area, place_count, km, intro_chars)
-        # A model opening must say where the trip is, not just "美しい山々を巡る旅".
-        anchors = [brief["start"], end, *stop_names, *re.split(r"[・\s]+", area)]
-        intro = ask("intro", _intro_prompt(brief, stop_names, intro_chars, area, end, km), intro_chars,
-                    lambda t: _looks_ok(t, intro_chars, over=1.2)
-                    and any(a and _names_in(t, a) for a in anchors), fallback)
-
-    # The longest walk gets called out ("ここからが一番長い区間です"), past the first leg.
-    walks = [t["minutes"] for t in trips[1:] if t["mode"] == "walking" and not t["is_return"]]
-    longest = max(walks) if len(walks) >= 2 and walks.count(max(walks)) == 1 else None
+    writer = _TourWriter(project, brief, budget, generate)
+    intro = writer.intro(intro_text)
+    longest = _longest_walk(writer.trips)
 
     parts = [intro, "{start}"]
     previous = intro
-    for i, trip in enumerate(trips):
-        way_chars = chars(budget["ways"][i])
-        if (i > 0 and longest is not None and longest >= LONGEST_LEG_MIN_MINUTES
-                and trip["minutes"] == longest and trip["mode"] == "walking"):
-            trip = {**trip, "longest": True}
-        told = transition_text(trip, way_chars, variant=i)
-        if i == 0 and told.startswith("次は"):
-            told = "まずは" + told[len("次は"):]  # setting off: nothing came before
-        # The map freezes on the way to show stop-by cards: tell what they are
-        # while they are up, so the voice does not run ahead of the walker.
-        for host, names, facts in trip.get("via_batches", []):
-            # Every stop-by in the group named, never truncated to the
-            # first 3: a waypoint dropped here was never named ANYWHERE in
-            # the script (it has no {n} cue of its own - this mention is
-            # its only chance). Same reasoning as route_brief.transition_
-            # texts's via/passes uncapping.
-            #
-            # Each one gets ITS OWN short fact folded in as "{fact}の{name}"
-            # when it wrote one (route_brief._short_fact is built exactly for
-            # this - see its own docstring), not just the first with the rest
-            # reduced to bare names - a bare list is easy to tune out, and a
-            # stop-by that wrote real content deserves the same "here's what
-            # this actually is" treatment as any other, not just whichever
-            # happened to come first in the batch.
-            phrases = [
-                f"{fact}の{name}" if fact else name
-                for name, fact in zip(names, facts or [""] * len(names))
-            ]
-            line = f"{host}のあたりでは、{'や'.join(phrases)}が見えてきます。"
-            # The map holds on this batch's cards until this line is spoken
-            # (see cues.py's {goPreN}) - every via_batches host, not just
-            # the one before stop 1.
-            if trip.get("to_number") is not None:
-                line += "{goPre%d}" % trip["to_number"]
-            # Always inserted, even past the way segment's own character
-            # budget (unlike before) - a name silently dropped for staying
-            # under budget defeats guaranteeing every waypoint gets named;
-            # plan_budget's overall target absorbs the odd longer line via
-            # its own spare-time redistribution (see plan_budget's "spare"
-            # handling) rather than this dropping content outright.
-            head, dot, rest_told = told.partition("。")
-            told = head + dot + line + rest_told if rest_told else told + line
-        way = ask(
-            f"way{i}", _transition_prompt(trip, previous, way_chars, first=(i == 0)), way_chars,
-            lambda t, trip=trip, first=(i == 0), limit=way_chars: (
-                check_transition(t, trip, limit)
-                and not _ARRIVED_PHRASE.search(t)
-                and not (first and t.startswith(("次は", "次に", "続いて")))
-                # The intro (■ 直前のナレーション) already greeted the
-                # listener — reject a way0 that greets again, rather than
-                # ship a script that opens with the same "welcome" line
-                # twice in a row (see _transition_prompt's first=True note).
-                and not (first and _GREETING.search(t))
-                # The model was GIVEN these stop-by names+facts (■ 途中に見
-                # える場所, above) but is free-form otherwise, and routinely
-                # drops some or all of them — require EVERY one to guarantee
-                # the coverage promise ("every waypoint gets named") holds
-                # regardless of whether the model's own text or the `told`
-                # fallback (which the via_batches loop above always names
-                # every one of them into) ends up used. Also every "via"
-                # (a numbered waypoint skipped over, not its own stop) —
-                # same guarantee, same reasoning.
-                and all(
-                    _names_in(t, n)
-                    for _, names, *_ in trip.get("via_batches", []) for n in names
-                )
-                and all(_names_in(t, n) for n in trip.get("via", []))
-            ),
-            told,
-        )
+    for i, trip in enumerate(writer.trips):
+        way = writer.way(i, trip, previous, longest)
         parts.append(way)
         previous = way
         n = trip["to_number"]
         if n is None:
             continue
-        label = trip["to"]
-        # Route map: the voice reads the leg's numbers while its card shows them (the walker holds until {go}).
-        facts_line = leg_facts_line(trip) if overview_style(project) == "map" else ""
-        if not describes_stops(project):
-            # A stop that hosts stop-by cards freezes the map: say what is
-            # around it (never the stop's own description or name again).
-            names = trip.get("batch") or []
-            text = f"{'や'.join(names[:3])}も、この近くにあります。" if names and budget["describe"].get(n) else ""
-            report.append({"kind": f"stop{n}", "text": text, "used": "template", "raw": None,
-                           "budget_chars": chars(budget["describe"].get(n, 0.0))})
-            parts.append("{%d}%s%s{go}" % (n, facts_line, text))
-            previous = text or previous
-            continue
-        describe_chars = max(chars(budget["describe"][n]) - len(facts_line), _MIN_PASSAGE_CHARS)
-        facts = _facts(places.get(n, {}))
-        # The way line just before this (`previous`) is required to already
-        # name `label` (check_transition) - when it did, the description
-        # shouldn't open by naming it again (see _describe_prompt / _drop_
-        # named_opening docstrings for the "...XXXへ。XXXです。" pattern this avoids).
-        already_named = _names_in(previous, label)
-        about = "".join(
-            sentence for sentence in _SENTENCE_END.split(facts)
-            if not _ROUTE_CLAIM.search(sentence) and not _MOVING_ON.search(sentence)
-            and not _GREETING_SENTENCE.search(sentence)
-        ).strip()
-        if already_named:
-            about = _drop_named_opening(about, label)
-        fallback = _fill_sentences(about, describe_chars) if about else ""
-        if not _looks_ok(fallback, describe_chars, over=1.6):
-            fallback = _arrival_fallback(label, n, already_named, "".join(parts))
-        describe = ask(
-            f"stop{n}", _describe_prompt(label, facts, previous, describe_chars), describe_chars,
-            lambda t, label=label, already_named=already_named: (
-                _looks_ok(t, describe_chars, over=1.2) and (already_named or _names_in(t, label))
-                and not _ROUTE_CLAIM.search(t) and not _MOVING_ON.search(t)
-                and not _ARRIVED_PHRASE.search(t) and not _GREETING_SENTENCE.search(t)
-            ),
-            fallback,
-        )
-        parts.append("{%d}%s%s{go}" % (n, facts_line, describe))
-        previous = describe
+        piece, previous = writer.stop_piece(n, trip, previous, parts)
+        parts.append(piece)
 
-    # The closing line plays over the ending, so it lasts at least as long as
-    # the ending can shrink to: the shortest of these that does (else the longest).
-    closing_chars = chars(budget["closing"])
-    endings = [
-        closing_text,
-        f"{place_count}か所を巡る、およそ{km}キロの旅でした。{{distance}}{closing_text}",
-        f"{brief['start']}を出発し、{place_count}か所を巡る、およそ{km}キロの旅でした。{{distance}}{closing_text}",
-    ]
-    closing = next((e for e in endings if len(e) >= closing_chars), endings[-1])
-    closed = closed_text(project)
-    if closed:  # the closed places come before the sign-off, after everything else
-        closing = closing[: -len(closing_text)] + "{closed}" + closed + closing_text
-    report.append({"kind": "closing", "text": closing, "used": "template", "raw": None,
-                   "budget_chars": closing_chars})
-    parts.append("{end}" + closing)
-    return "".join(parts), report
+    parts.append("{end}" + writer.closing(closing_text))
+    return "".join(parts), writer.report
 
 
 def ollama_generate(model: str = "gemma2:2b") -> Generate:

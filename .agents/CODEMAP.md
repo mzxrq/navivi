@@ -375,7 +375,7 @@ Rebuilt as a clip sequence, matching what the Python exporter can do (concat of 
   Gemma-4-26B script model needs ~17 GB of memory (2 tokens/s, ~55 s to load). Evidence: `bin/Irodori-TTS-Server/server.log`, `%LOCALAPPDATA%\Ollama\server.log`.
 - Script requests (`ollamaApi.ts`): `keep_alive: 30m`, `num_predict 400`, `num_ctx 4096` for scripts; `warmUpModel` loads the model when the script box is focused;
   Settings > AI model warns (`utils/modelFit.ts`, model size from `/api/tags`, RAM from the new sidecar mode `system_info`) when a model is over 60% of the PC's memory.
-- Irodori (`services/tts/ttsengine.py`): quality presets in `tuning.TTS_QUALITY_PRESETS` (fast 16 / balanced 24 / best 40 steps) chosen by `settings.tts.quality`
+- Irodori (`services/tts/clients.py`; `ttsengine.py` is a facade re-exporting the split modules `tts_config`, `text_split`, `ffmpeg_tools`, `audio_processor`, `server_client`, `clients`): quality presets in `tuning.TTS_QUALITY_PRESETS` (fast 16 / balanced 24 / best 40 steps) chosen by `settings.tts.quality`
   (Voice tab picker). Not in the voice fingerprint, so finished audio stays valid; Redo voice remakes it. Measured (saved latent, 6/14/31 characters): best 40/45/77 s,
   balanced 26/31/51 s, fast 20/25/42 s.
 - `ensure_reference_latent` encodes the voice wav once with the server venv (`make_latent.py` -> `voices/.latents/<voice>-<sha12>.pt`) and requests send `ref_latent`

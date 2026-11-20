@@ -94,6 +94,72 @@ def add_scene_cues(script: Optional[str], shares: Sequence[float]) -> Optional[s
     return opening + script[at:]
 
 
+def _first_sentence_matching(sentences: List[str], pattern: "re.Pattern") -> Optional[int]:
+    return next((i for i, s in enumerate(sentences) if pattern.search(s)), None)
+
+
+def _numbered_starts(sentences: List[str]) -> dict:
+    """The user's own {n}: the sentence each one sits in -> its stop number."""
+    starts: dict = {}
+    for i, s in enumerate(sentences):
+        for t in cue_tags(s):
+            if t.isdigit():
+                starts.setdefault(i, int(t))
+    return starts
+
+
+def _named_starts(sentences: List[str], labels: Sequence[str], after: int, limit: int) -> dict:
+    """Sentence index -> the stop number whose description starts there, found by the stops' names."""
+    starts: dict = {}
+    for n, label in enumerate(labels, start=1):
+        # The full name first: a short form (加太 for 加太駅) is often also
+        # the town's name, so it only counts when the full one never appears.
+        mentions = []
+        for variants in (name_variants(label)[:1], name_variants(label)):
+            mentions = [
+                i for i in range(after + 1, limit)
+                if i not in starts and any(v in sentences[i] for v in variants)
+            ]
+            if mentions:
+                break
+        # "次は常行寺へ向かいます" only announces the place: its description
+        # is the next sentence naming it (the announcement if none does).
+        hit = next((i for i in mentions if not is_transition(sentences[i])), None)
+        if hit is None and mentions:
+            hit = mentions[0]
+        if hit is not None:
+            starts[hit] = n
+            after = hit
+    return starts
+
+
+def _go_positions(sentences: List[str], starts: dict) -> set:
+    """{go}: in each stop's passage, the first transition after its opening sentence."""
+    go_before = set()
+    order = sorted(starts)
+    for k, first in enumerate(order):
+        end = order[k + 1] if k + 1 < len(order) else len(sentences)
+        hit = next((i for i in range(first + 1, end) if is_transition(sentences[i])), None)
+        if hit is not None:
+            go_before.add(hit)
+    return go_before
+
+
+def _sentence_marks(sentences: List[str], tags: List[str], pivot: Optional[int], extras: Optional[int],
+                    closed: Optional[int]) -> dict:
+    """Sentence index -> the {start} / {route} / {extras} / {closed} tags that go before it."""
+    marks: dict = {}
+    if pivot is not None:
+        marks.setdefault(pivot, []).append("{start}")
+        if pivot + 1 < len(sentences) and "route" not in tags:
+            marks.setdefault(pivot + 1, []).append("{route}")
+    if extras is not None:
+        marks.setdefault(extras, []).append("{extras}")
+    if closed is not None:
+        marks.setdefault(closed, []).append("{closed}")
+    return marks
+
+
 def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[str]:
     """`script` with {n} / {go} tags placed; `labels[i]` is visible waypoint
     i + 1's name. Returns the script unchanged when nothing could be placed."""
@@ -106,66 +172,25 @@ def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[
     # "これが全体のルートです。": the map appears there, so the opening before it plays
     # over the intro ({start}); the route is traced from the next sentence ({route}).
     # "黒色で示した地点は…": the stop-bys appear ({extras}); their names are not stops.
-    pivot = None if "start" in tags else next((i for i, s in enumerate(sentences) if _ROUTE_PIVOT.search(s)), None)
-    extras = None if "extras" in tags else next((i for i, s in enumerate(sentences) if _EXTRAS.search(s)), None)
-    marks: dict = {}
-    if pivot is not None:
-        marks.setdefault(pivot, []).append("{start}")
-        if pivot + 1 < len(sentences) and "route" not in tags:
-            marks.setdefault(pivot + 1, []).append("{route}")
-    closed = None if "closed" in tags else next((i for i, s in enumerate(sentences) if _CLOSED.search(s)), None)
-    if extras is not None:
-        marks.setdefault(extras, []).append("{extras}")
-    if closed is not None:
-        marks.setdefault(closed, []).append("{closed}")
+    pivot = None if "start" in tags else _first_sentence_matching(sentences, _ROUTE_PIVOT)
+    extras = None if "extras" in tags else _first_sentence_matching(sentences, _EXTRAS)
+    closed = None if "closed" in tags else _first_sentence_matching(sentences, _CLOSED)
+    marks = _sentence_marks(sentences, tags, pivot, extras, closed)
     limit = min(i for i in (extras, closed, len(sentences)) if i is not None)
     if has_numbers and has_go:
         return _with_marks(sentences, marks)
     if pivot is not None and not has_numbers:
         return _with_marks(_tag_route_names(sentences, pivot + 1, limit, labels, not has_go), marks)
 
-    # sentence index -> the stop number whose description starts there
-    starts = {}
     if has_numbers:
-        # the user's own {n}: find the sentence each one sits in
-        for i, s in enumerate(sentences):
-            for t in cue_tags(s):
-                if t.isdigit():
-                    starts.setdefault(i, int(t))
+        starts = _numbered_starts(sentences)
     else:
         after = -1 if pivot is None else pivot  # names in the opening introduce, they are not stops
-        for n, label in enumerate(labels, start=1):
-            # The full name first: a short form (加太 for 加太駅) is often also
-            # the town's name, so it only counts when the full one never appears.
-            mentions = []
-            for variants in (name_variants(label)[:1], name_variants(label)):
-                mentions = [
-                    i for i in range(after + 1, limit)
-                    if i not in starts and any(v in sentences[i] for v in variants)
-                ]
-                if mentions:
-                    break
-            # "次は常行寺へ向かいます" only announces the place: its description
-            # is the next sentence naming it (the announcement if none does).
-            hit = next((i for i in mentions if not is_transition(sentences[i])), None)
-            if hit is None and mentions:
-                hit = mentions[0]
-            if hit is not None:
-                starts[hit] = n
-                after = hit
+        starts = _named_starts(sentences, labels, after, limit)
     if not starts:
         return _with_marks(sentences, marks)
 
-    # {go}: in each stop's passage, the first transition after its opening sentence
-    go_before = set()
-    if not has_go:
-        order = sorted(starts)
-        for k, first in enumerate(order):
-            end = order[k + 1] if k + 1 < len(order) else len(sentences)
-            hit = next((i for i in range(first + 1, end) if is_transition(sentences[i])), None)
-            if hit is not None:
-                go_before.add(hit)
-
+    go_before = set() if has_go else _go_positions(sentences, starts)
     out = []
     for i, s in enumerate(sentences):
         if i in go_before:

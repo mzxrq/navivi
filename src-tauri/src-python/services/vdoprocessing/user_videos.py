@@ -120,6 +120,30 @@ def write_original_sound(parts: List[Tuple[Optional[str], float]], final: str, o
         )
 
 
+def _clip_is_unchanged(final_path: Path, stamp: Path, fingerprint: dict) -> bool:
+    """True when the finished clip is valid and its stamp matches this fingerprint."""
+    if not output_is_valid(final_path):
+        return False
+    try:
+        return json.loads(stamp.read_text(encoding="utf-8")) == fingerprint
+    except (OSError, ValueError):
+        return False
+
+
+def _write_kept_sound(
+    used: List[str], used_keep: List[bool], raws: List[str], target_audio_duration: float, result: str, sidecar: Path,
+) -> None:
+    """Writes the `.orig.wav` sidecar: each kept video's sound, silence for the others, an even share each of the target."""
+    from services.tts.ttsengine import FFmpegManager
+
+    share = target_audio_duration / len(raws) if target_audio_duration > 0 else None
+    write_original_sound(
+        [(src if used_keep[i] else None, share if share else FFmpegManager.get_media_duration(raws[i]))
+         for i, src in enumerate(used)],
+        result, sidecar,
+    )
+
+
 def process_user_videos(
     generator,
     videos: List[str],
@@ -141,13 +165,9 @@ def process_user_videos(
     stamp = final_path.with_suffix(".src.json")
     fingerprint = _fingerprint(clips, keep, target_audio_duration, place_label)
 
-    if not force and output_is_valid(final_path):
-        try:
-            if json.loads(stamp.read_text(encoding="utf-8")) == fingerprint:
-                logger.info("User video clip unchanged - skipping: %s", final_path)
-                return str(final_path)
-        except (OSError, ValueError):
-            pass
+    if not force and _clip_is_unchanged(final_path, stamp, fingerprint):
+        logger.info("User video clip unchanged - skipping: %s", final_path)
+        return str(final_path)
 
     generator._clear_stale_outputs(output_filename)
     for stale in (sidecar, stamp):
@@ -175,14 +195,7 @@ def process_user_videos(
                 place_label=place_label, camera_pan="none",
             )
         if result and any(used_keep):
-            from services.tts.ttsengine import FFmpegManager
-
-            share = target_audio_duration / len(raws) if target_audio_duration > 0 else None
-            write_original_sound(
-                [(src if used_keep[i] else None, share if share else FFmpegManager.get_media_duration(raws[i]))
-                 for i, src in enumerate(used)],
-                result, sidecar,
-            )
+            _write_kept_sound(used, used_keep, raws, target_audio_duration, result, sidecar)
         if result:
             stamp.write_text(json.dumps(fingerprint), encoding="utf-8")
         return result

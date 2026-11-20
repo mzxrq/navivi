@@ -51,66 +51,63 @@ class _SpatialRendererBase:
     # by _initial_heading and _smoothed_heading below.
     _MIN_HEADING_SAMPLE_DIST_PX = 1.5
 
+    @classmethod
+    def _clamp_speed_factor(cls, factor: float) -> float:
+        """Clamped so no leg is compressed to a barely-visible handful of frames or made
+        slower than a near-standstill."""
+        return max(cls._MIN_SPEED_FACTOR, min(cls._MAX_SPEED_FACTOR, factor))
+
+    @classmethod
+    def _reported_mode_speeds(cls, config: Dict[str, Any]) -> Dict[str, float]:
+        """Real-world km/h per mode: the defaults plus settings.mode_speeds_kmh."""
+        return {
+            **cls._DEFAULT_MODE_SPEED_KMH,
+            **{str(k).lower(): float(v) for k, v in (config.get("mode_speeds_kmh") or {}).items()},
+        }
+
+    @classmethod
+    def _animation_speed_factors(
+        cls, config: Dict[str, Any], mode_speed_kmh: Dict[str, float]
+    ) -> Dict[str, float]:
+        """On-screen pace factor per mode. Every mode shares one display pace
+        (_DEFAULT_ANIMATION_SPEED_KMH) so a real-world-fast car/ferry leg doesn't zip by
+        relative to a walking one; settings.animation_speeds_kmh opts a mode out."""
+        animation_overrides = {
+            str(k).lower(): float(v)
+            for k, v in (config.get("animation_speeds_kmh") or {}).items()
+        }
+        # [NOTE] [Animation] Walking and ferry don't share the flat baseline: ferry's default
+        # derives from walking's already-slowed pace so it stays visibly faster than walking.
+        walking_default_kmh = cls._DEFAULT_ANIMATION_SPEED_KMH * tuning.WALKING_ANIMATION_SPEED_FACTOR
+        default_kmh_by_mode = {
+            "walking": walking_default_kmh,
+            "ferry": walking_default_kmh * tuning.FERRY_ANIMATION_SPEED_FACTOR,
+        }
+        animation_speed_kmh = {
+            **{
+                mode: default_kmh_by_mode.get(mode, cls._DEFAULT_ANIMATION_SPEED_KMH)
+                for mode in mode_speed_kmh
+            },
+            **animation_overrides,
+        }
+        return {
+            mode: cls._clamp_speed_factor(kmh / cls._REFERENCE_KMH)
+            for mode, kmh in animation_speed_kmh.items()
+        }
+
     def __init__(self, config: Dict[str, Any], graphics: GraphicsEngine, out_dir: Path):
         self.config = config
         self.graphics = graphics
         self.out_dir = out_dir
 
-        mode_speed_kmh = {
-            **self._DEFAULT_MODE_SPEED_KMH,
-            **{
-                str(k).lower(): float(v)
-                for k, v in (config.get("mode_speeds_kmh") or {}).items()
-            },
-        }
-        # Kept (not just the derived factor below) so a leg missing real
-        # timestamp data can still estimate a real-world travel time from
-        # distance/speed for its summary card, instead of showing nothing.
-        self.mode_speed_kmh = mode_speed_kmh
-        # How fast each travel mode's leg is animated on screen — every mode
-        # defaults to the SAME on-screen pace (_DEFAULT_ANIMATION_SPEED_KMH,
-        # a single number, not a per-mode dict like mode_speed_kmh above),
-        # so a real-world-fast car/ferry/flight leg doesn't visually zip by
-        # relative to a walking one; only the real mode_speed_kmh numbers
-        # still vary per mode, for distance/time calculations. A project can
-        # still opt one specific mode into its own display pace via
-        # settings.animation_speeds_kmh. Clamped so no leg is compressed to
-        # a barely-visible handful of frames or, at the other extreme, made
-        # slower than a near-standstill.
-        animation_overrides = {
-            str(k).lower(): float(v)
-            for k, v in (config.get("animation_speeds_kmh") or {}).items()
-        }
-        # walking and ferry are the two modes that don't share the flat
-        # baseline pace by default (see tuning.py's WALKING/FERRY_
-        # ANIMATION_SPEED_FACTOR) — ferry's own default is derived from
-        # walking's (already-slowed) pace, not the base one, so it stays
-        # visibly faster than a walking leg rather than both landing back
-        # at the same speed. A project's explicit animation_speeds_kmh
-        # override (below) still wins over either of these.
-        _walking_default_kmh = self._DEFAULT_ANIMATION_SPEED_KMH * tuning.WALKING_ANIMATION_SPEED_FACTOR
-        _default_kmh_by_mode = {
-            "walking": _walking_default_kmh,
-            "ferry": _walking_default_kmh * tuning.FERRY_ANIMATION_SPEED_FACTOR,
-        }
-        animation_speed_kmh = {
-            **{
-                mode: _default_kmh_by_mode.get(mode, self._DEFAULT_ANIMATION_SPEED_KMH)
-                for mode in mode_speed_kmh
-            },
-            **animation_overrides,
-        }
-        self._mode_speed_factor = {
-            mode: max(self._MIN_SPEED_FACTOR, min(self._MAX_SPEED_FACTOR, kmh / self._REFERENCE_KMH))
-            for mode, kmh in animation_speed_kmh.items()
-        }
-        # Fallback factor for a mode key with no entry above at all (e.g. a
-        # mode string not present in mode_speed_kmh) — same uniform default
-        # pace as every listed mode, not a hardcoded "1.0" that would give
-        # it yet another, different speed of its own.
-        self._default_mode_speed_factor = max(
-            self._MIN_SPEED_FACTOR,
-            min(self._MAX_SPEED_FACTOR, self._DEFAULT_ANIMATION_SPEED_KMH / self._REFERENCE_KMH),
+        # [NOTE] [Config] Kept (not just the derived factor) so a leg missing real timestamps
+        # can still estimate a travel time from distance/speed for its summary card.
+        self.mode_speed_kmh = self._reported_mode_speeds(config)
+        self._mode_speed_factor = self._animation_speed_factors(config, self.mode_speed_kmh)
+        # Fallback for a mode with no entry above: the same uniform default pace, not a
+        # hardcoded 1.0 that would give it yet another speed.
+        self._default_mode_speed_factor = self._clamp_speed_factor(
+            self._DEFAULT_ANIMATION_SPEED_KMH / self._REFERENCE_KMH
         )
 
         self.trigger_radius_padding = {

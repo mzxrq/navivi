@@ -65,6 +65,31 @@ class _Reference:
         self.matcher = cv2.BFMatcher()
 
 
+def _patch_verdict(
+    gray: np.ndarray, lab: np.ndarray, ref: _Reference, r: int, c: int, mapped_xy: np.ndarray,
+) -> Optional[bool]:
+    """None when the patch at grid cell (r, c) maps outside the photo, else whether the photo lacks it near that spot."""
+    rh, rw = ref.gray.shape
+    half = _PATCH / 2
+    mx, my = mapped_xy
+    px, py = int(round(mx - half)), int(round(my - half))
+    if px < -half or py < -half or px > rw - half or py > rh - half:
+        return None
+    x0, y0 = max(0, px - _SEARCH), max(0, py - _SEARCH)
+    x1, y1 = min(rw, px + _PATCH + _SEARCH), min(rh, py + _PATCH + _SEARCH)
+    if x1 - x0 < _PATCH or y1 - y0 < _PATCH:
+        return None
+    y, x = r * _PATCH, c * _PATCH
+    patch = gray[y:y + _PATCH, x:x + _PATCH]
+    res = cv2.matchTemplate(ref.gray[y0:y1, x0:x1], patch, cv2.TM_CCOEFF_NORMED)
+    _, ncc, _, loc = cv2.minMaxLoc(res)
+    bx, by = x0 + loc[0], y0 + loc[1]
+    color_diff = np.abs(
+        lab[y:y + _PATCH, x:x + _PATCH].mean((0, 1)) - ref.lab[by:by + _PATCH, bx:bx + _PATCH].mean((0, 1))
+    ).max()
+    return bool((patch.std() > _MIN_TEXTURE_STD and ncc < _MIN_NCC) or color_diff > _MAX_COLOR_DIFF)
+
+
 def frame_problems(frame: np.ndarray, ref: _Reference) -> Tuple[float, int, float]:
     """(share of patches not found in the photo, size of the biggest
     connected group of them, share of patches mapping outside the photo)."""
@@ -89,34 +114,17 @@ def frame_problems(frame: np.ndarray, ref: _Reference) -> Tuple[float, int, floa
         return 1.0, 10**6, 1.0
 
     h, w = gray.shape
-    rh, rw = ref.gray.shape
     rows, cols = h // _PATCH, w // _PATCH
     bad = np.zeros((rows, cols), np.uint8)
     outside = np.zeros_like(bad)
     centres = np.float32([[[(c + 0.5) * _PATCH, (r + 0.5) * _PATCH]] for r in range(rows) for c in range(cols)])
     mapped = cv2.perspectiveTransform(centres, to_photo).reshape(rows, cols, 2)
-    half = _PATCH / 2
     for r in range(rows):
         for c in range(cols):
-            mx, my = mapped[r, c]
-            px, py = int(round(mx - half)), int(round(my - half))
-            if px < -half or py < -half or px > rw - half or py > rh - half:
+            verdict = _patch_verdict(gray, lab, ref, r, c, mapped[r, c])
+            if verdict is None:
                 outside[r, c] = 1
-                continue
-            x0, y0 = max(0, px - _SEARCH), max(0, py - _SEARCH)
-            x1, y1 = min(rw, px + _PATCH + _SEARCH), min(rh, py + _PATCH + _SEARCH)
-            if x1 - x0 < _PATCH or y1 - y0 < _PATCH:
-                outside[r, c] = 1
-                continue
-            y, x = r * _PATCH, c * _PATCH
-            patch = gray[y:y + _PATCH, x:x + _PATCH]
-            res = cv2.matchTemplate(ref.gray[y0:y1, x0:x1], patch, cv2.TM_CCOEFF_NORMED)
-            _, ncc, _, loc = cv2.minMaxLoc(res)
-            bx, by = x0 + loc[0], y0 + loc[1]
-            color_diff = np.abs(
-                lab[y:y + _PATCH, x:x + _PATCH].mean((0, 1)) - ref.lab[by:by + _PATCH, bx:bx + _PATCH].mean((0, 1))
-            ).max()
-            if (patch.std() > _MIN_TEXTURE_STD and ncc < _MIN_NCC) or color_diff > _MAX_COLOR_DIFF:
+            elif verdict:
                 bad[r, c] = 1
     count, _, stats, _ = cv2.connectedComponentsWithStats(bad, connectivity=4)
     cluster = int(stats[1:, cv2.CC_STAT_AREA].max()) if count > 1 else 0

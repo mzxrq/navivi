@@ -13,7 +13,7 @@ import random
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
@@ -21,6 +21,7 @@ import numpy as np
 from services import tuning
 from services.logger.logger import setup_logger
 from services.vdoprocessing.camera_pan import normalize_camera_pan
+from services.vdoprocessing.video_frames import raw_encoder_command
 
 logger = setup_logger("SlowMove")
 
@@ -253,6 +254,40 @@ def _extend_with_reverse(video_path: str, gap: float, output_path: str) -> Optio
         shutil.rmtree(work, ignore_errors=True)
 
 
+def _write_push_in_tail(
+    frame: np.ndarray, frames: int, fps: float, gap: float, rate: float, drift: Tuple[float, float], tail_path: str,
+) -> bool:
+    """Encodes `frames` of a slow push-in over the clip's last frame into `tail_path`; False when ffmpeg fails."""
+    h, w = frame.shape[:2]
+    dx, dy = drift
+    proc = subprocess.Popen(
+        raw_encoder_command(w, h, fps, tail_path, 18), stdin=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    try:
+        for i in range(1, frames + 1):
+            scale = 1.0 + rate * _progress(i / fps, gap)
+            # Drift uses up to 90% of the margin the push-in has made.
+            margin_x = (scale - 1.0) * w / 2 * 0.9
+            margin_y = (scale - 1.0) * h / 2 * 0.9
+            cx, cy = w / 2 + dx * margin_x, h / 2 + dy * margin_y
+            # Sub-pixel affine (scale about the moving centre), so a very
+            # slow move glides instead of stepping a whole pixel at a time.
+            m = np.array(
+                [[scale, 0.0, w / 2 - scale * cx], [0.0, scale, h / 2 - scale * cy]],
+                dtype=np.float32,
+            )
+            out = cv2.warpAffine(frame, m, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REFLECT)
+            proc.stdin.write(out.tobytes())
+        proc.stdin.close()
+        if proc.wait() != 0:
+            logger.warning("Slow move tail failed: %s", proc.stderr.read().decode("utf-8", "replace"))
+            return False
+    except Exception:
+        proc.kill()
+        raise
+    return True
+
+
 def extend_with_slow_move(
     video_path: str, target_duration: float, camera_pan, output_path: str,
     rng: Optional[random.Random] = None, photo_path: Optional[str] = None,
@@ -292,37 +327,8 @@ def extend_with_slow_move(
 
         tail_path = str(Path(output_path).with_suffix(".tail.mp4"))
         ffmpeg = FFmpegManager.resolve_ffmpeg_bin()
-        proc = subprocess.Popen(
-            [
-                ffmpeg, "-y", *tuning.ffmpeg_pipe_log_args(),
-                "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}", "-r", f"{fps:.3f}", "-i", "-",
-                "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast",
-                "-pix_fmt", "yuv420p", tail_path,
-            ],
-            stdin=subprocess.PIPE, stderr=subprocess.PIPE,
-        )
-        try:
-            for i in range(1, frames + 1):
-                scale = 1.0 + rate * _progress(i / fps, gap)
-                # Drift uses up to 90% of the margin the push-in has made.
-                margin_x = (scale - 1.0) * w / 2 * 0.9
-                margin_y = (scale - 1.0) * h / 2 * 0.9
-                cx, cy = w / 2 + dx * margin_x, h / 2 + dy * margin_y
-                # Sub-pixel affine (scale about the moving centre), so a very
-                # slow move glides instead of stepping a whole pixel at a time.
-                m = np.array(
-                    [[scale, 0.0, w / 2 - scale * cx], [0.0, scale, h / 2 - scale * cy]],
-                    dtype=np.float32,
-                )
-                out = cv2.warpAffine(frame, m, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REFLECT)
-                proc.stdin.write(out.tobytes())
-            proc.stdin.close()
-            if proc.wait() != 0:
-                logger.warning("Slow move tail failed: %s", proc.stderr.read().decode("utf-8", "replace"))
-                return None
-        except Exception:
-            proc.kill()
-            raise
+        if not _write_push_in_tail(frame, frames, fps, gap, rate, (dx, dy), tail_path):
+            return None
 
         concat = subprocess.run(
             [

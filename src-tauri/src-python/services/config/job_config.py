@@ -20,6 +20,23 @@ from services.config.upscaled_images import apply_upscaled_images
 logger = setup_logger("JobConfigManager")
 
 
+def _absolute(value: Any, anchor: Path) -> Any:
+    """`value` as an absolute path anchored at `anchor` when it is a relative path string; anything else is returned as it is."""
+    if not isinstance(value, str) or not value.strip():
+        return value
+    path = Path(value).expanduser()
+    if path.is_absolute():
+        return value
+    return str((anchor / path).resolve())
+
+
+def _absolute_each(value: Any, anchor: Path) -> Any:
+    """`_absolute` for one path or for every path in a list."""
+    if isinstance(value, list):
+        return [_absolute(v, anchor) for v in value]
+    return _absolute(value, anchor)
+
+
 # [Core] JobConfigManager Singleton Class
 class JobConfigManager:
     """
@@ -101,19 +118,6 @@ class JobConfigManager:
         the app wrote."""
         anchor = self.config_path.parent
 
-        def absolute(value: Any) -> Any:
-            if not isinstance(value, str) or not value.strip():
-                return value
-            path = Path(value).expanduser()
-            if path.is_absolute():
-                return value
-            return str((anchor / path).resolve())
-
-        def absolute_each(value: Any) -> Any:
-            if isinstance(value, list):
-                return [absolute(v) for v in value]
-            return absolute(value)
-
         # directory_path anchors the project's own output (video/, cache/,
         # gpsdata/ ...). Missing entirely — as in a hand-written config —
         # means "the folder this config lives in", which is the only
@@ -121,17 +125,17 @@ class JobConfigManager:
         # working directory.
         directory_path = self.data.get("directory_path")
         self.data["directory_path"] = (
-            absolute(directory_path) if directory_path else str(anchor)
+            _absolute(directory_path, anchor) if directory_path else str(anchor)
         )
 
         for key in self._PATH_KEYS_TOP:
             if key in self.data:
-                self.data[key] = absolute_each(self.data[key])
+                self.data[key] = _absolute_each(self.data[key], anchor)
 
         source_files = self.data.get("source_files")
         if isinstance(source_files, dict):
             for key, value in source_files.items():
-                source_files[key] = absolute_each(value)
+                source_files[key] = _absolute_each(value, anchor)
 
         points = list(self.data.get("waypoints") or [])
         for key in ("start_point", "end_point"):
@@ -143,7 +147,7 @@ class JobConfigManager:
                 continue
             for key in self._PATH_KEYS_WAYPOINT:
                 if key in point:
-                    point[key] = absolute_each(point[key])
+                    point[key] = _absolute_each(point[key], anchor)
 
     # [Util/Config] Accessor methods for configuration properties
     def get(self, key: str, default: Any = None) -> Any:

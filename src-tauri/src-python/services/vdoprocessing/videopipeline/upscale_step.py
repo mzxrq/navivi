@@ -179,6 +179,38 @@ def _waypoint_images(config: dict, anchor: Path) -> List[str]:
     return list(seen.values())
 
 
+def _upscale_photo(client, src: str, out: Path, result: dict) -> None:
+    """Upscales one photo into `out`: on the GPU (ComfyUI) when it can, else on the CPU. Counts how it went
+    in `result`; a photo that cannot be upscaled keeps its original."""
+    try:
+        done = False
+        if client is not None:
+            from services.gpu_cooldown import wait_for_gpu_cooldown
+
+            wait_for_gpu_cooldown(f"upscale {Path(src).name}")
+            free = free_vram_mb()
+            if free is not None and free < tuning.IMAGE_UPSCALE_MIN_FREE_VRAM_MB:
+                logger.warning(
+                    "Step 2c: only %d MB VRAM free (< %d) — CPU resize for %s.",
+                    free, tuning.IMAGE_UPSCALE_MIN_FREE_VRAM_MB, src,
+                )
+            else:
+                try:
+                    _gpu_upscale(client, src, out)
+                    result["gpu"] += 1
+                    done = True
+                except Exception as exc:
+                    logger.warning("Step 2c: ComfyUI upscale failed for %s (%s) — CPU resize.", src, exc)
+        if not done:
+            _cpu_upscale(src, out)
+            result["cpu"] += 1
+        result["map"][src] = str(out)
+    except Exception as exc:
+        logger.warning("Step 2c: could not upscale %s (%s) — keeping the original.", src, exc)
+        out.unlink(missing_ok=True)
+        result["failed"] += 1
+
+
 def upscale_waypoint_images(config_file_path: str, force: bool = False) -> dict:
     """Writes upscaled copies of the project's small waypoint photos and
     map.json. Returns counts plus the original -> upscaled map."""
@@ -219,33 +251,7 @@ def upscale_waypoint_images(config_file_path: str, force: bool = False) -> dict:
             result["cached"] += 1
             result["map"][src] = str(out)
             continue
-        try:
-            done = False
-            if client is not None:
-                from services.gpu_cooldown import wait_for_gpu_cooldown
-
-                wait_for_gpu_cooldown(f"upscale {Path(src).name}")
-                free = free_vram_mb()
-                if free is not None and free < tuning.IMAGE_UPSCALE_MIN_FREE_VRAM_MB:
-                    logger.warning(
-                        "Step 2c: only %d MB VRAM free (< %d) — CPU resize for %s.",
-                        free, tuning.IMAGE_UPSCALE_MIN_FREE_VRAM_MB, src,
-                    )
-                else:
-                    try:
-                        _gpu_upscale(client, src, out)
-                        result["gpu"] += 1
-                        done = True
-                    except Exception as exc:
-                        logger.warning("Step 2c: ComfyUI upscale failed for %s (%s) — CPU resize.", src, exc)
-            if not done:
-                _cpu_upscale(src, out)
-                result["cpu"] += 1
-            result["map"][src] = str(out)
-        except Exception as exc:
-            logger.warning("Step 2c: could not upscale %s (%s) — keeping the original.", src, exc)
-            out.unlink(missing_ok=True)
-            result["failed"] += 1
+        _upscale_photo(client, src, out, result)
 
     if client is not None:
         client.free_memory()
