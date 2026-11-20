@@ -1141,9 +1141,10 @@ class _OverviewRenderMixin:
             for kind in ("stopby", "closed")
         ]
         if self._cards_stay():
-            # Cards that stay up go straight to their place in the ending summary (its layout: no overlaps,
-            # short uncrossed lines), so the summary shows them exactly where the walk left them.
-            self._stay_layout = self._layout_recap_cards(
+            # Cards that stay up are clustered around their own pin (360 degrees, off the route,
+            # the pins and the HUD), each at the biggest size that fits there, so none of them
+            # needs a long leader line back across the map. The recap lays its badges out again.
+            self._stay_layout = self._layout_ring_cards(
                 # Only places with a photo: a card IS the photo, and one of
                 # these stays composited into every frame of the walk. A
                 # photo-less stop-by or closed place still gets its badge in
@@ -1151,7 +1152,6 @@ class _OverviewRenderMixin:
                 [ap for ap in active_popups if ap["data"].get("popup_image")
                  and not (self._is_loop_route and ap is stop_popup)],
                 w, h, reserved_boxes=reserved_boxes, route_obstacles=route_obstacle_arr,
-                card_room=True,  # these cards stay up: give each its own card-sized slot
             )
             for ap in self._stay_layout:
                 ap["stay_box"] = ap["beside_box"]

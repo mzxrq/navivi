@@ -467,18 +467,75 @@ def test_a_reserved_box_at_the_top_only_shortens_its_columns():
     assert len(with_head) > len(layout._recap_card_slots(1920, 1080, 34, 283, None)) / 2
 
 
-def test_a_stronger_clutter_pull_buys_more_distance():
-    """The course style raises the pull (its map is never faded back), so a badge there walks
-    further off busy map than the recap's would."""
+def test_clear_space_moves_a_badge_but_only_within_reach():
+    """The clear-space pull breaks ties nearby — the course style leans on it hard, since its
+    map is never faded — but it can never drag a badge out of its own pin's neighbourhood:
+    on a loop whose start sits apart from the stops around it, that split the block in two."""
     import numpy as np
 
     rng = np.random.default_rng(0)
-    background = np.full((1080, 1920, 3), 200, dtype=np.uint8)
-    background[:, :1200] = rng.integers(0, 255, (1080, 1200, 3), dtype=np.uint8)  # busy left
     layout = _layout()
-    pop = _popup(300, 540, "AB", 1)
+
+    near = np.full((1080, 1920, 3), 200, dtype=np.uint8)
+    near[:, :700] = rng.integers(0, 255, (1080, 700, 3), dtype=np.uint8)  # busy left of the pin
+    pop = _popup(700, 540, "AB", 1)
     busy = []
     for pull in (0.0, 2000.0):
-        layout._layout_recap_cards([pop], 1920, 1080, background=background, clutter_pull=pull)
-        busy.append(layout._clutter_cost(background, [pop["beside_box"]], 34, 180)[0])
-    assert busy[1] < busy[0]  # the stronger pull walks further for quieter map
+        layout._layout_recap_cards([pop], 1920, 1080, background=near, clutter_pull=pull)
+        busy.append(layout._clutter_cost(near, [pop["beside_box"]], 34, 180)[0])
+    assert busy[1] < busy[0]  # quiet map a short step away: worth taking
+
+    far = rng.integers(0, 255, (1080, 1920, 3), dtype=np.uint8)
+    far[:, 1600:] = 200  # the only quiet map is right across the frame
+    pop = _popup(300, 540, "AB", 1)
+    layout._layout_recap_cards([pop], 1920, 1080, background=far, clutter_pull=2000.0)
+    assert pop["beside_box"][0] < 300 + layout._CLUTTER_REACH_PX
+
+
+def _ring_layout():
+    """A layout whose card is 200x150 at scale 1.0 and shrinks with the scale."""
+    layout = _layout()
+    layout.graphics.beside_card_footprint = (
+        lambda card_scale=1.0, **k: (int(200 * card_scale), int(150 * card_scale))
+    )
+    return layout
+
+
+def _boxes(placed, layout):
+    out = []
+    for p in placed:
+        bx, by = p["beside_box"]
+        cw, ch = layout.graphics.beside_card_footprint(p["card_scale"])
+        out.append((bx, by, bx + cw, by + ch))
+    return out
+
+
+def test_a_staying_card_sits_against_its_own_pin():
+    """Cards that stay up through the walk ring their own pin instead of lining up at the
+    edge of the frame — so none of them needs a leader line across the map."""
+    import math
+
+    layout = _ring_layout()
+    pops = [_popup(400 + 320 * i, 540, "s%d" % i, i + 1) for i in range(4)]
+    placed = layout._layout_ring_cards(pops, 1920, 1080)
+    assert len(placed) == 4
+    for p, (x0, y0, x1, y1) in zip(placed, _boxes(placed, layout)):
+        reach = math.hypot((x0 + x1) / 2 - p["x"], (y0 + y1) / 2 - p["y"])
+        assert reach < max(x1 - x0, y1 - y0)  # beside the pin, not across the frame
+
+
+def test_every_staying_card_is_the_same_size():
+    """One size for the whole set, the largest that places all of them: a stop's photo bigger
+    than its neighbour's, for no reason a viewer can see, reads as a mistake. They never land
+    on each other or on a reserved panel either."""
+    layout = _ring_layout()
+    hud = [(0.0, 0.0, 600.0, 140.0)]
+    pops = [_popup(900 + 40 * i, 500 + 30 * (i % 3), "s%d" % i, i + 1) for i in range(14)]
+    placed = layout._layout_ring_cards(pops, 1920, 1080, reserved_boxes=hud)
+    assert len(placed) == 14
+    assert len({p["card_scale"] for p in placed}) == 1
+    boxes = _boxes(placed, layout)
+    for i, a in enumerate(boxes):
+        assert not (a[0] < hud[0][2] and hud[0][0] < a[2] and a[1] < hud[0][3] and hud[0][1] < a[3])
+        for b in boxes[i + 1:]:
+            assert not (a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3])

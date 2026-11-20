@@ -1,7 +1,7 @@
 """Sprite blitting and cached procedural walker/vehicle icon sprites."""
 
 import math
-from typing import Dict, Final, Tuple
+from typing import Dict, Final, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -319,6 +319,36 @@ class _SpriteMixin:
             flags=cv2.INTER_LINEAR,
             borderMode=cv2.BORDER_CONSTANT,
             borderValue=(0, 0, 0, 0),
+        )
+
+    def transport_icon_sprite(
+        self, frame_count: int, angle: float, mode: str, target_h: int,
+    ) -> Optional[np.ndarray]:
+        """The traveler marker as a small BGRA sprite `target_h` px tall — the same walker,
+        ferry or vehicle the map shows, shrunk to ride the progress rail. draw_transport_icon
+        paints straight onto a BGR frame, so it is drawn twice (over black and over white)
+        and the difference gives the alpha, the way the course overlay recovers its own."""
+        box = 240
+        c = box // 2
+        on_black = np.zeros((box, box, 3), dtype=np.uint8)
+        on_white = np.full((box, box, 3), 255, dtype=np.uint8)
+        self.draw_transport_icon(on_black, c, c, frame_count, angle, mode)
+        self.draw_transport_icon(on_white, c, c, frame_count, angle, mode)
+        alpha = np.clip(
+            1.0 - (on_white.astype(np.float32) - on_black.astype(np.float32)).mean(axis=2) / 255.0,
+            0.0, 1.0,
+        )
+        ys, xs = np.nonzero(alpha > 0.02)
+        if not len(ys) or target_h < 4:
+            return None
+        y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+        a = alpha[y0:y1, x0:x1]
+        # on_black is the colour already multiplied by the coverage: divide it back out.
+        rgb = on_black[y0:y1, x0:x1].astype(np.float32) / np.maximum(a, 1e-3)[..., None]
+        sprite = np.dstack([np.clip(rgb, 0, 255), a * 255.0]).astype(np.uint8)
+        k = target_h / sprite.shape[0]
+        return cv2.resize(
+            sprite, (max(1, int(round(sprite.shape[1] * k))), target_h), interpolation=cv2.INTER_AREA,
         )
 
     def draw_transport_icon(

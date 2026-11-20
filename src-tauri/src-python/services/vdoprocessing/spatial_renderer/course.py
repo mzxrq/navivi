@@ -162,14 +162,15 @@ def distance_at(anchors: List[Tuple], t: float) -> float:
     return anchors[-1][1]
 
 
-def leg_banner(stops: List[Tuple[float, str]], dist: float) -> str:
-    """"A → B" for the stretch the trace is drawing at `dist`: the last stop reached and the next one.
-    `stops` is (distance along the route, name) per stop in route order, the start first."""
+def leg_banner(stops: List[Tuple[float, str, str]], dist: float) -> List[Tuple[str, str]]:
+    """[(glyph, name), (glyph, name)] for the stretch the trace is drawing at `dist`: the last
+    stop reached and the next one, each behind the glyph its own pin shows. `stops` is
+    (distance along the route, pin glyph, name) per stop in route order, the start first."""
     reached = [s for s in stops if s[0] <= dist + 1e-6]
     ahead = [s for s in stops if s[0] > dist + 1e-6]
     if not reached or not ahead:
-        return ""
-    return f"{reached[-1][1]} → {ahead[0][1]}"
+        return []
+    return [(reached[-1][1], reached[-1][2]), (ahead[0][1], ahead[0][2])]
 
 
 def tagline_at(taglines: List[str], t: float) -> Tuple[str, float]:
@@ -297,25 +298,65 @@ class _CourseOverviewMixin:
                 duration_seconds=summary.get("total_duration_seconds", 0.0),
                 mode_breakdown=summary.get("mode_breakdown"),
                 mode_duration=summary.get("mode_duration"),
+                banner_theme=True,  # it sits under the totals chip now, not alone on the map
             )
         taglines = [str(x) for x in (self.config.get("overview_taglines") or []) if str(x).strip()]
         # While the route is traced the headline names the stretch being drawn ("A → B"), in sync with it.
-        leg_stops: List[Tuple[float, str]] = []
+        leg_stops: List[Tuple[float, str, str]] = []
         for ap in on_route:
             name = str(ap.get("label") or "").strip()
             if name and (not leg_stops or ap["course_dist"] > leg_stops[-1][0]):
-                leg_stops.append((float(ap["course_dist"]), name))
-        banners = [leg_banner(leg_stops, d) for d, _ in leg_stops]
-        # the headline, docked top left: as wide as the widest tagline or stretch
+                glyph, _, _ = self._pin_label_and_color(ap, total_points)
+                leg_stops.append((float(ap["course_dist"]), str(glyph or ""), name))
+        banners = [leg_banner(leg_stops, d) for d, _, _ in leg_stops]
+        # The headline, docked top left: the area's name on a light strip with the stretch
+        # being traced under it. Reserved at the widest it ever gets, so no badge sits where
+        # a later stretch's own (longer) names will be drawn.
         headline_font = max(22, int(h * 0.033))
-        headline_w = max((self.graphics.top_banner_width(x, headline_font) for x in taglines + banners if x), default=0)
-        reserved = [(0.0, 0.0, min(float(w), h * 0.03 * 2 + headline_w), h * 0.14)]
+        margin = int(h * 0.03)
+        headline = max(
+            (self.graphics.route_headline_panel(title, steps, headline_font)
+             for title in (taglines or [""]) for steps in (banners or [[]])),
+            key=lambda c: (c.size[0] * c.size[1]) if c is not None else -1, default=None,
+        )
+        reserved = []
+        if headline is not None:
+            reserved.append((0.0, 0.0, float(margin * 2 + headline.size[0]),
+                             float(margin * 2 + headline.size[1])))
+        # The whole route's distance and time, top right, and the map's scale bar bottom right.
+        totals = self.graphics.route_totals_panel(
+            (summary or {}).get("total_distance_km"), (summary or {}).get("total_duration_seconds"),
+        ) if summary else None
+        if totals is not None:
+            reserved.append((float(w - margin - totals.size[0]), 0.0, float(w), float(margin * 2 + totals.size[1])))
+        # The stats card hangs under the totals chip, top right: the foot of the frame is the
+        # progress rail's now.
+        stats_y = margin + ((totals.size[1] + 12) if totals is not None else 0)
         if summary_card is not None:
             ch, cw = summary_card.shape[:2]
-            drop = tuning.COURSE_STATS_DROP_PX
-            reserved.append((w - cw - 20.0, h - ch - 20.0 + drop, w - 20.0, h - 20.0 + drop))
+            reserved.append((w - cw - float(margin), float(stats_y), float(w), float(stats_y + ch)))
+        # The whole route as one line across the foot, a tick per stop, filled as it is traced.
+        rail_marks = []
+        for ap in on_route:
+            glyph, color, _ = self._pin_label_and_color(ap, total_points)
+            # _pin_color returns None for a stop not yet reached, meaning "the default".
+            rail_marks.append((
+                float(ap["course_dist"]) / max(1e-6, total_smooth_dist),
+                str(glyph if glyph is not None else ""),
+                tuple(color or self.graphics.marker_color)[:3],
+            ))
+        rail_h = self.graphics.route_progress_rail_height(h) if rail_marks else 0
+        if rail_h:
+            reserved.append((0.0, float(h - margin - rail_h), float(w), float(h)))
+        # The stop-by notice sits bottom left; the closed-place one beside it.
+        closed_offset = 0
         if stopbys:
-            reserved.append(tuple(float(v) for v in self.graphics.stopby_notice_box(w, h)))
+            box = self.graphics.stopby_notice_box(w, h)
+            reserved.append(tuple(float(v) for v in box))
+            closed_offset = box[2] - box[0] + int(24 * h / 1080)
+        if closed:
+            reserved.append(tuple(float(v) for v in self.graphics.stopby_notice_box(
+                w, h, "closed", closed_offset)))
         # Stop-bys with a photo get their card too, popping in with their pin at {extras}.
         card_popups = [ap for ap in on_route + extras if ap["data"].get("popup_image") and id(ap) not in returns]
         if self._is_loop_route and stop_popup is not None:
@@ -519,18 +560,35 @@ class _CourseOverviewMixin:
                 else:
                     self.graphics.draw_transport_icon(frame, cx, cy, i, smoothed_angle, mode)
 
-            stretch = leg_banner(leg_stops, dist) if route_at <= t < trace_end else ""
-            text, alpha = (stretch, 1.0) if stretch else tagline_at(taglines, t)
-            if text and alpha > 0:
-                frame = self.graphics.render_top_banner(
-                    frame, text, alpha=alpha, top_margin=int(h * 0.03), font_px=max(22, int(h * 0.033)),
-                    align="left", left_margin=int(h * 0.03))
+            steps = leg_banner(leg_stops, dist) if route_at <= t < trace_end else []
+            title, title_alpha = tagline_at(taglines, t)
+            # The strip holds the tagline whole while a stretch is under it (one swaps for the
+            # next rather than dissolving through: the stretch must stay legible), and fades
+            # on its own once the trace is done and the card is the strip alone.
+            panel = self.graphics.route_headline_panel(title, steps, headline_font)
+            if panel is not None:
+                frame = self.graphics._composite_pill(
+                    frame, panel, 1.0 if steps else title_alpha,
+                    x_from_left=margin, y_from_top=margin)
+            if totals is not None:
+                frame = self.graphics._composite_pill(
+                    frame, totals, 1.0, x_from_right=margin, y_from_top=margin)
+            if rail_marks:
+                frame = self.graphics.render_route_progress_rail(
+                    frame, dist / max(1e-6, total_smooth_dist), rail_marks, margin=margin,
+                    mode=modes[min(max(0, k - 1), len(modes) - 1)] if t >= route_at else None,
+                    frame_count=i)
             if summary_card is not None and t >= stats_at:
                 u = _smoothstep((t - stats_at) / tuning.COURSE_STATS_SLIDE_SECONDS)
                 frame = self.graphics.composite_card_on_frame(
-                    frame, summary_card, alpha=u, slide_offset_y=tuning.COURSE_STATS_DROP_PX + (1 - u) * 80)
+                    frame, summary_card, alpha=u, margin=margin, corner="top_right",
+                    margin_y=stats_y, slide_offset_y=-(1 - u) * 80)
             if extras_at is not None and t >= extras_at:
                 frame = self.graphics.render_stopby_notice(frame, alpha=_smoothstep((t - extras_at) / 0.5))
+            if closed and closed_at is not None and t >= closed_at:
+                frame = self.graphics.render_stopby_notice(
+                    frame, alpha=_smoothstep((t - closed_at) / 0.5), kind="closed",
+                    x_offset=closed_offset)
 
             video.write(frame)
             if i % fps == 0:

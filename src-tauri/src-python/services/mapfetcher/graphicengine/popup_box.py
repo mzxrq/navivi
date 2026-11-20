@@ -39,10 +39,13 @@ class _PopupBoxMixin:
     # off the longest name among the popups actually being shown, and each
     # individual badge is only as tall as its own (possibly shorter) name
     # needs.
-    _PILL_BADGE_W = 34
+    # Sized 1.4x the original drawing (34/20/46): the badges are what the recap IS, and at the
+    # old size they read as footnotes on a 1920-wide frame. Not larger still - the lattice is
+    # pitched for the longest NAME, and past ~1.5x a ten-character name leaves room for one row.
+    _PILL_BADGE_W = 48
     _PILL_BADGE_NAME_CHARS = 4  # fallback length when the caller has no real name yet
-    _PILL_BADGE_LINE_H = 20
-    _PILL_BADGE_PHOTO_H = 46
+    _PILL_BADGE_LINE_H = 28
+    _PILL_BADGE_PHOTO_H = 64
 
     def beside_card_footprint(
         self, card_scale: float = 1.0, has_label: bool = True,
@@ -324,7 +327,10 @@ class _PopupBoxMixin:
         # exact name's length (see popup_card_geometry's is_pill_badge
         # branch / pill_badge_footprint).
         name = drawable(popup_info.get("label") or "")
-        name_font = self._card_font(self.FONT_CANDIDATES_REGULAR, max(9, round(15 * pill_scale)))
+        # Off the line pitch, so the badge's three sizes stay one decision.
+        name_font = self._card_font(
+            self.FONT_CANDIDATES_REGULAR, max(9, round(self._PILL_BADGE_LINE_H * 0.75 * pill_scale))
+        )
         line_h = self._PILL_BADGE_LINE_H * pill_scale
         ty = cby + bd + 6
         cx = bx + total_w / 2.0
