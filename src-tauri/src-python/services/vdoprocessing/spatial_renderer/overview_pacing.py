@@ -61,6 +61,60 @@ class _OverviewPacingMixin:
                 break
         return mode
 
+    @staticmethod
+    def _dedupe_path_points(points: List) -> List:
+        """Drops literal near-duplicate points (<= 0.5 px) and keeps the final destination."""
+        # [NOTE] [Animation] Light dedup only: thinning harder by raw distance strips the close
+        # points of a tight turn and lets the smoothed path swing wide of sharp corners.
+        # get_smooth_path's own Douglas-Peucker pass reduces density by curvature instead.
+        filtered_points = [points[0]]
+        for pt in points[1:]:
+            if math.hypot(pt[0] - filtered_points[-1][0], pt[1] - filtered_points[-1][1]) > 0.5:
+                filtered_points.append(pt)
+        if filtered_points[-1] != points[-1]:
+            filtered_points.append(points[-1])
+        return filtered_points
+
+    def _speed_weighted_path(
+        self, filtered_points: List, mode_breakpoints: List[Tuple[float, str]], num_frames: int
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
+        """Samples the path densely, then picks `num_frames` samples evenly spaced by
+        speed-weighted distance, so fast modes (ferry, car) cover ground quicker on screen
+        than a walking leg of the same length. Returns (path, cum_dist, total_dist)."""
+        dense_n = max(num_frames * 4, 400)
+        dense_arr = np.asarray(
+            MapFetcher.get_smooth_path(filtered_points, dense_n, ease=True, simplify_tolerance_px=2.2),
+            dtype=float,
+        )
+        seg_lens = np.hypot(np.diff(dense_arr[:, 0]), np.diff(dense_arr[:, 1]))
+        cum_dense = np.concatenate([[0.0], np.cumsum(seg_lens)])
+        total_dense = cum_dense[-1] or 1.0
+        fracs = cum_dense / total_dense
+        speeds = np.array(
+            [
+                self._mode_speed_factor.get(
+                    self._mode_at_fraction(mode_breakpoints, f),
+                    self._default_mode_speed_factor,
+                )
+                for f in fracs
+            ]
+        )
+        seg_speed = (speeds[:-1] + speeds[1:]) / 2.0
+        virtual_seg = np.where(seg_speed > 0, seg_lens / seg_speed, seg_lens)
+        virtual_cum = np.concatenate([[0.0], np.cumsum(virtual_seg)])
+        total_virtual = virtual_cum[-1] or 1.0
+
+        target = np.linspace(0.0, total_virtual, num_frames)
+        idx = np.clip(np.searchsorted(virtual_cum, target), 1, len(virtual_cum) - 1)
+        v0, v1 = virtual_cum[idx - 1], virtual_cum[idx]
+        t = np.where(v1 > v0, (target - v0) / (v1 - v0), 0.0)
+        smooth_path = dense_arr[idx - 1] + (dense_arr[idx] - dense_arr[idx - 1]) * t[:, None]
+
+        final_seg_lens = np.hypot(np.diff(smooth_path[:, 0]), np.diff(smooth_path[:, 1]))
+        total_smooth_dist = float(final_seg_lens.sum()) or 1.0
+        cum_smooth_dist = np.concatenate([[0.0], np.cumsum(final_seg_lens)])
+        return smooth_path, cum_smooth_dist, total_smooth_dist
+
     def _build_overview_path(
         self, points: List, point_modes: Optional[List[str]], num_frames: int
     ) -> Tuple[np.ndarray, List[Tuple[float, str]], Optional[np.ndarray], float]:
@@ -70,79 +124,14 @@ class _OverviewPacingMixin:
         Returns (smooth_path, mode_breakpoints, cum_smooth_dist,
         total_smooth_dist) — the latter two are None/1.0 when there's no
         mode data to weight by."""
-        # [NOTE] [Animation] Light dedup only — drop literal near-duplicate points so the spline
-        # fit doesn't choke on zero-length segments. We deliberately do NOT
-        # thin more aggressively than this by raw distance: a tight turn has
-        # its points close together too, and stripping those is exactly what
-        # let the smoothed path swing wide of sharp corners (cutting across
-        # ground the real road never touches). get_smooth_path's own
-        # Douglas-Peucker pass below reduces density based on actual
-        # curvature (perpendicular deviation), which is the correct signal.
-        filtered_points = [points[0]]
-        for pt in points[1:]:
-            if (
-                math.hypot(
-                    pt[0] - filtered_points[-1][0], pt[1] - filtered_points[-1][1]
-                )
-                > 0.5
-            ):
-                filtered_points.append(pt)
-        # Ensure the final destination is always included
-        if filtered_points[-1] != points[-1]:
-            filtered_points.append(points[-1])
-
+        filtered_points = self._dedupe_path_points(points)
         mode_breakpoints = self._build_mode_breakpoints(points, point_modes) if point_modes else []
-
-        if mode_breakpoints:
-            # [NOTE] [Animation] Faster real-world modes (ferry, car) should visually cover
-            # ground quicker on screen than a walking leg of the same
-            # length — sample the path densely first, then pick out
-            # `num_frames` of those samples spaced by "speed-weighted"
-            # distance rather than raw pixel distance. That compresses the
-            # frame budget spent on fast legs and leaves more of it for
-            # walking ones, instead of moving at one constant on-screen
-            # speed regardless of travel mode.
-            dense_n = max(num_frames * 4, 400)
-            dense_arr = np.asarray(
-                MapFetcher.get_smooth_path(
-                    filtered_points, dense_n, ease=True, simplify_tolerance_px=2.2
-                ),
-                dtype=float,
-            )
-            seg_lens = np.hypot(np.diff(dense_arr[:, 0]), np.diff(dense_arr[:, 1]))
-            cum_dense = np.concatenate([[0.0], np.cumsum(seg_lens)])
-            total_dense = cum_dense[-1] or 1.0
-            fracs = cum_dense / total_dense
-            speeds = np.array(
-                [
-                    self._mode_speed_factor.get(
-                        self._mode_at_fraction(mode_breakpoints, f),
-                        self._default_mode_speed_factor,
-                    )
-                    for f in fracs
-                ]
-            )
-            seg_speed = (speeds[:-1] + speeds[1:]) / 2.0
-            virtual_seg = np.where(seg_speed > 0, seg_lens / seg_speed, seg_lens)
-            virtual_cum = np.concatenate([[0.0], np.cumsum(virtual_seg)])
-            total_virtual = virtual_cum[-1] or 1.0
-
-            target = np.linspace(0.0, total_virtual, num_frames)
-            idx = np.clip(np.searchsorted(virtual_cum, target), 1, len(virtual_cum) - 1)
-            v0, v1 = virtual_cum[idx - 1], virtual_cum[idx]
-            t = np.where(v1 > v0, (target - v0) / (v1 - v0), 0.0)
-            smooth_path = dense_arr[idx - 1] + (dense_arr[idx] - dense_arr[idx - 1]) * t[:, None]
-
-            smooth_arr = smooth_path
-            final_seg_lens = np.hypot(
-                np.diff(smooth_arr[:, 0]), np.diff(smooth_arr[:, 1])
-            )
-            total_smooth_dist = float(final_seg_lens.sum()) or 1.0
-            cum_smooth_dist = np.concatenate([[0.0], np.cumsum(final_seg_lens)])
-        else:
+        if not mode_breakpoints:
             smooth_path = MapFetcher.get_smooth_path(
                 filtered_points, num_frames, ease=True, simplify_tolerance_px=2.2
             )
-            cum_smooth_dist, total_smooth_dist = None, 1.0
-
+            return smooth_path, mode_breakpoints, None, 1.0
+        smooth_path, cum_smooth_dist, total_smooth_dist = self._speed_weighted_path(
+            filtered_points, mode_breakpoints, num_frames
+        )
         return smooth_path, mode_breakpoints, cum_smooth_dist, total_smooth_dist

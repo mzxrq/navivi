@@ -7,7 +7,7 @@ appear last. Timed by the course script's cues: {route} (the trace starts),
 """
 
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, NamedTuple, Optional, Set, Tuple
 
 import cv2
 import numpy as np
@@ -23,6 +23,10 @@ from .base import logger
 
 _MIN_ANCHOR_GAP_SECONDS = 0.4
 _LAST_LEG_MAX_SECONDS = 4.0  # the walk to the last stop never takes longer than this
+_EXTRAS_AFTER_SECONDS = 4.0  # the stop-bys come this long after the stats, the closed places after them
+_TRACE_TAIL_SECONDS = 0.6  # the transport icon fades out over this once the trace is done
+_NOTICE_FADE_SECONDS = 0.5
+_LABEL_GAP_PX = 6  # between a stop-by's pin and the name beside it
 
 
 def _smoothstep(t: float) -> float:
@@ -185,6 +189,198 @@ def tagline_at(taglines: List[str], t: float) -> Tuple[str, float]:
     return text, max(0.0, min(1.0, local / fade, (period - local) / fade))
 
 
+class _Timing(NamedTuple):
+    """When things happen, in seconds. extras_at / closed_at are None when there is nothing of that kind."""
+    anchors: List[Tuple]
+    route_at: float
+    trace_end: float
+    stats_at: float
+    extras_at: Optional[float]
+    closed_at: Optional[float]
+    end_at: float
+    stopbys: List[Dict]
+    closed: List[Dict]
+
+
+class _Panels(NamedTuple):
+    """The fixed furniture of the frame (cards, headline, rail) and the boxes the badges keep clear of."""
+    summary_card: Optional[np.ndarray]
+    taglines: List[str]
+    leg_stops: List[Tuple[float, str, str]]
+    headline_font: int
+    margin: int
+    totals: Optional[Image.Image]
+    stats_y: int
+    rail_marks: List[Tuple[float, str, Tuple]]
+    closed_offset: int
+    reserved: List[Tuple[float, float, float, float]]
+
+
+class _Trace(NamedTuple):
+    """The drawn route: its points, cumulative length, travel mode per point and line style."""
+    path: np.ndarray
+    cum: np.ndarray
+    pts: List[Tuple[int, int]]
+    modes: List[str]
+    color: Tuple
+    thick: int
+    border: int
+
+
+class _Scene(NamedTuple):
+    """What the cards-and-pins layer is drawn from."""
+    on_route: List[Dict]
+    extras: List[Dict]
+    laid_out: List[Dict]
+    cards: Dict[int, Dict]
+    returns: Set[int]
+    labels: Dict[int, Optional[np.ndarray]]
+    label_at: Dict[int, Tuple[int, int]]
+    total_points: int
+    fps: int
+    draw_marker: Callable
+
+
+class _Heading:
+    """The transport icon's smoothed heading and the last head position it was measured from."""
+
+    def __init__(self, angle: float):
+        self.angle = angle
+        self.x: Optional[int] = None
+        self.y: Optional[int] = None
+
+
+def _drawn_path(smooth_path) -> Tuple[np.ndarray, np.ndarray, float]:
+    """(path, cumulative length per point, total length) of the drawn route."""
+    path = np.asarray(smooth_path, dtype=float)
+    seg = np.hypot(np.diff(path[:, 0]), np.diff(path[:, 1]))
+    cum = np.concatenate([[0.0], np.cumsum(seg)])
+    return path, cum, float(cum[-1]) or 1.0
+
+
+def _is_loose(ap: Dict) -> bool:
+    """Every stop-by, connected or not, pops up with the others at {extras}, not on the traced route."""
+    return bool(ap["data"].get("is_stopby"))
+
+
+def _split_popups(
+    active_popups: List[Dict], total_points: int, path: np.ndarray, cum: np.ndarray, total: float,
+) -> Tuple[List[Dict], List[Dict], Optional[Dict]]:
+    """(on_route, extras, stop_popup); stamps each on-route stop's `course_dist` along the drawn path."""
+    on_route = [ap for ap in active_popups if not _is_loose(ap)]
+    extras = [ap for ap in active_popups if _is_loose(ap)]
+    stop_popup = next((ap for ap in active_popups if ap["index"] == total_points - 1), None)
+
+    # [NOTE] [Course] In route order, the first place after the previous stop where the path passes it (within a
+    # few px of its closest pass). Estimating it from its share of the raw route first put the island loop's
+    # stops (and a pier passed twice) at the wrong pass.
+    for ap, dist in zip(on_route, stop_distances(path, cum, [(ap["x"], ap["y"]) for ap in on_route])):
+        ap["course_dist"] = 0.0 if ap["index"] == 0 else dist
+    if stop_popup is not None:
+        stop_popup["course_dist"] = total
+    return on_route, extras, stop_popup
+
+
+def _return_stops(numbered: List[Dict], on_route: List[Dict], stop_popup: Optional[Dict], is_loop: bool) -> Set[int]:
+    """ids of the stops that draw no pin or card of their own. A return stop ("Add return stop": a copy of an
+    earlier stop, same place) is still walked to on its cue, but not drawn over the original."""
+    returns = {
+        id(ap) for ap in numbered
+        if any(same_place(ap["data"], b["data"]) for b in on_route[:on_route.index(ap)])
+    }
+    if is_loop and stop_popup is not None:
+        returns.add(id(stop_popup))  # the start pin already shows a loop's end (half green, half red)
+    return returns
+
+
+def _arrive_cue(ap: Dict, cues: Dict, any_go: bool) -> Tuple:
+    """A {go} stop is reached when its name is said and the walker waits there until {go} (arriving at {go}
+    spread the walk over the whole description: a crawl between close stops). A stop named without a {go} is
+    passed at the second its name is said."""
+    name = cues.get(str(ap.get("order")))
+    if not any_go:
+        return (name, ap["course_dist"])
+    go = cues.get(f"go{ap.get('order')}")
+    if go is None or ap["data"].get("pause_at_waypoint") is False:  # "Pause at Location" off: passed
+        return (name, ap["course_dist"], False)
+    if name is not None and float(name) < float(go):
+        return (float(name), ap["course_dist"], True, float(go))
+    return (float(go), ap["course_dist"])
+
+
+def _course_timing(
+    cues: Dict, audio_seconds: float, numbered: List[Dict], extras: List[Dict], total: float,
+) -> _Timing:
+    start_at = float(cues.get("start", 0.0))
+    route_at = float(cues["route"]) if "route" in cues else start_at + (
+        tuning.COURSE_PIVOT_HOLD_SECONDS if cues else 1.5
+    )
+    any_go = any(str(k).startswith("go") for k in cues)
+    anchors = trace_anchors(
+        [_arrive_cue(ap, cues, any_go) for ap in numbered],
+        total, route_at, cues.get("end"), max(1, len(numbered) + 1),
+    )
+    trace_end = anchors[-1][0]
+    stats_at = float(cues["end"]) if "end" in cues else trace_end + 0.5
+    # Closed places (red ×) come after the stop-bys, at {closed}; drawn like them otherwise.
+    stopbys = [ap for ap in extras if not ap["data"].get("inaccessible")]
+    closed = [ap for ap in extras if ap["data"].get("inaccessible")]
+    extras_at = float(cues["extras"]) if "extras" in cues else (stats_at + _EXTRAS_AFTER_SECONDS if stopbys else None)
+    closed_at = (float(cues["closed"]) if "closed" in cues
+                 else ((extras_at if extras_at is not None else stats_at) + _EXTRAS_AFTER_SECONDS if closed else None))
+    end_at = max(
+        audio_seconds + 0.3 if audio_seconds else trace_end + 6.0,
+        stats_at + 2.0,
+        (extras_at + 3.0) if extras_at is not None else 0.0,
+        (closed_at + 3.0) if closed_at is not None else 0.0,
+    )
+    return _Timing(anchors, route_at, trace_end, stats_at, extras_at, closed_at, end_at, stopbys, closed)
+
+
+def _reveal_time(anchors: List[Tuple], dist: float) -> float:
+    """The first moment the trace has reached `dist`."""
+    for (t0, _d0, *_), (t1, d1, *_) in zip(anchors, anchors[1:]):
+        if dist <= d1 + 1e-6:
+            lo, hi = t0, t1
+            for _ in range(30):  # distance_at is monotonic: bisect
+                mid = (lo + hi) / 2
+                if distance_at(anchors, mid) >= dist - 1e-6:
+                    hi = mid
+                else:
+                    lo = mid
+            return hi
+    return anchors[-1][0]
+
+
+def _set_reveal_times(
+    on_route: List[Dict], stop_popup: Optional[Dict], cues: Dict, timing: _Timing, fps: int,
+) -> None:
+    """Stamps `course_at` on every stop (and `pop_frame` on the stop-bys and closed places)."""
+    for ap in on_route:
+        ap["course_at"] = timing.route_at if ap["index"] == 0 else _reveal_time(timing.anchors, ap["course_dist"])
+        # A pin and its card appear when the voice names the stop: never before, and
+        # at most COURSE_CUE_WINDOW_SECONDS after, wherever the trace is by then.
+        said = cues.get(str(ap.get("order")))
+        if said is not None and ap["index"] != 0 and ap is not stop_popup:
+            ap["course_at"] = pin_reveal_time(ap["course_at"], said, timing.route_at)
+    for group, at in ((timing.stopbys, timing.extras_at), (timing.closed, timing.closed_at)):
+        for k, ap in enumerate(group):
+            ap["course_at"] = (at if at is not None else timing.end_at) + k * tuning.COURSE_STOPBY_STAGGER_SECONDS
+            ap["pop_frame"] = int(round(ap["course_at"] * fps))
+
+
+def _log_timing(timing: _Timing, cards: int) -> None:
+    logger.info(
+        "Course overview: %.1fs (route from %.1fs, traced by %.1fs, stats at %.1fs%s); %d card(s).",
+        timing.end_at, timing.route_at, timing.trace_end, timing.stats_at,
+        f", stop-bys at {timing.extras_at:.1f}s" if timing.extras_at is not None else "", cards,
+    )
+
+
+def _largest(panels: List) -> Optional[object]:
+    return max(panels, key=lambda c: (c.size[0] * c.size[1]) if c is not None else -1, default=None)
+
+
 class _CourseOverviewMixin:
     def _render_course_overview(
         self,
@@ -207,29 +403,63 @@ class _CourseOverviewMixin:
         audio_seconds = float(self.config.get("overview_audio_seconds") or 0.0)
         total_points = len(points)
 
-        path = np.asarray(smooth_path, dtype=float)
-        seg = np.hypot(np.diff(path[:, 0]), np.diff(path[:, 1]))
-        cum = np.concatenate([[0.0], np.cumsum(seg)])
-        total = float(cum[-1]) or 1.0
+        path, cum, total = _drawn_path(smooth_path)
+        on_route, extras, stop_popup = _split_popups(active_popups, total_points, path, cum, total)
+        modes = self._course_modes(points, on_route, total, cum, mode_breakpoints)
+        numbered = [ap for ap in on_route if ap["index"] != 0 and ap is not stop_popup]
+        returns = _return_stops(numbered, on_route, stop_popup, self._is_loop_route)
+        timing = _course_timing(cues, audio_seconds, numbered, extras, total)
+        panels = self._course_panels(
+            summary, w, h, on_route, timing, total_points, total_smooth_dist)
+        pill_recap, laid_out, cards = self._course_cards(
+            on_route, extras, returns, stop_popup, panels.reserved, route_obstacle_arr, current_bg, w, h)
+        _set_reveal_times(on_route, stop_popup, cues, timing, fps)
 
-        def loose(ap: Dict) -> bool:
-            # Every stop-by, connected or not, pops up with the others at {extras}, not on the traced route.
-            return bool(ap["data"].get("is_stopby"))
+        route_bg, trace = self._course_route_plate(current_bg, path, cum, modes)
+        labels, label_at = self._course_extra_labels(extras, cards, laid_out, on_route, w, h)
+        # A pill badge already shows its stop's number, so the map under it only needs the
+        # color: a plain dot, as the walk's recap draws (_draw_recap_dot), not a numbered
+        # teardrop repeating it.
+        draw_marker = self._draw_recap_dot if pill_recap else self._draw_pin
+        scene = _Scene(on_route, extras, laid_out, cards, returns, labels, label_at, total_points, fps, draw_marker)
 
-        on_route = [ap for ap in active_popups if not loose(ap)]
-        extras = [ap for ap in active_popups if loose(ap)]
-        stop_popup = next((ap for ap in active_popups if ap["index"] == total_points - 1), None)
+        _log_timing(timing, len(laid_out))
+        video = VideoExporter(overview_path, w, h, fps)
+        tracker.begin_substeps(max(1, int(timing.end_at)))
+        self._course_play(video, scene, route_bg, trace, timing, panels, total_smooth_dist)
 
-        # Each stop's distance along the drawn path: in route order, the first place after the previous stop
-        # where the path passes it (within a few px of its closest pass). Estimating it from its share of the
-        # raw route first put the island loop's stops (and a pier passed twice) at the wrong pass.
-        for ap, dist in zip(on_route, stop_distances(path, cum, [(ap["x"], ap["y"]) for ap in on_route])):
-            ap["course_dist"] = 0.0 if ap["index"] == 0 else dist
-        if stop_popup is not None:
-            stop_popup["course_dist"] = total
+        # After the voice, the walk overview's ending: the GL zoom to the start and its photo.
+        hard_ended = False
+        if stop_popup is not None and self.config.get("enable_ending_highlight", True):
+            hard_ended = self._course_ending(
+                video, w, h, fps, route_bg, trace, scene, stop_popup, active_popups, bounding_box)
 
-        # Travel mode along the drawn path: each stop pinned to its own place on it, the raw route's mode read in
-        # between (by share of the whole route, the island walk showed the boat until the return).
+        for ap in active_popups:
+            ap["data"]["triggered"] = False
+            ap["data"]["arrived"] = False
+        self.last_rendered_seconds = video.frames_written / fps
+        self.last_ending_hard_ended = hard_ended
+        return video.release(overview_path)
+
+    def _course_route_plate(
+        self, current_bg: np.ndarray, path: np.ndarray, cum: np.ndarray, modes: List[str],
+    ) -> Tuple[np.ndarray, _Trace]:
+        """The planned route under everything, drawn once, and the style the trace is drawn over it in."""
+        route_bg = current_bg.copy()
+        pts = [(int(x), int(y)) for x, y in path]
+        self.graphics.draw_path(route_bg, pts, modes)
+        return route_bg, _Trace(
+            path, cum, pts, modes,
+            tuple(self.config.get("course_trace_color") or tuning.COURSE_TRACE_COLOR),
+            max(3, int(round(self.graphics.line_thickness * 1.4))),
+            self.graphics.line_border_thickness,
+        )
+
+    def _course_modes(
+        self, points: List, on_route: List[Dict], total: float, cum: np.ndarray, mode_breakpoints,
+    ) -> List[str]:
+        """Travel mode along the drawn path: each stop pinned to its own place on it, the raw route's mode read in
+        between (by share of the whole route; the island walk showed the boat until the return)."""
         raw = np.hypot(np.diff([p[0] for p in points]), np.diff([p[1] for p in points]))
         raw_cum = np.concatenate([[0.0], np.cumsum(raw)])
         raw_total = float(raw_cum[-1]) or 1.0
@@ -237,61 +467,16 @@ class _CourseOverviewMixin:
             (ap["course_dist"], float(raw_cum[min(ap["index"], len(raw_cum) - 1)]) / raw_total) for ap in on_route
         })
         xs, fs = [k[0] for k in knots], np.maximum.accumulate([k[1] for k in knots])
-        modes = [self._mode_at_fraction(mode_breakpoints, float(np.interp(c, xs, fs))) for c in cum]
+        return [self._mode_at_fraction(mode_breakpoints, float(np.interp(c, xs, fs))) for c in cum]
 
-        start_at = float(cues.get("start", 0.0))
-        route_at = float(cues["route"]) if "route" in cues else start_at + (
-            tuning.COURSE_PIVOT_HOLD_SECONDS if cues else 1.5
-        )
-        numbered = [ap for ap in on_route if ap["index"] != 0 and ap is not stop_popup]
-        # A return stop ("Add return stop": a copy of an earlier stop, same place) is still walked to on its
-        # cue, but draws no pin or card of its own over the original's.
-        returns = {
-            id(ap) for ap in numbered
-            if any(same_place(ap["data"], b["data"]) for b in on_route[:on_route.index(ap)])
-        }
-        if self._is_loop_route and stop_popup is not None:
-            returns.add(id(stop_popup))  # the start pin already shows a loop's end (half green, half red)
-        any_go = any(str(k).startswith("go") for k in cues)
-
-        def arrive_cue(ap: Dict) -> Tuple:
-            # A {go} stop is reached when its name is said and the walker waits
-            # there until {go} (arriving at {go} spread the walk over the whole
-            # description: a crawl between close stops). A stop named without a
-            # {go} is passed at the second its name is said.
-            name = cues.get(str(ap.get("order")))
-            if not any_go:
-                return (name, ap["course_dist"])
-            go = cues.get(f"go{ap.get('order')}")
-            if go is None or ap["data"].get("pause_at_waypoint") is False:  # "Pause at Location" off: passed
-                return (name, ap["course_dist"], False)
-            if name is not None and float(name) < float(go):
-                return (float(name), ap["course_dist"], True, float(go))
-            return (float(go), ap["course_dist"])
-
-        anchors = trace_anchors(
-            [arrive_cue(ap) for ap in numbered],
-            total, route_at, cues.get("end"), max(1, len(numbered) + 1),
-        )
-        trace_end = anchors[-1][0]
-        stats_at = float(cues["end"]) if "end" in cues else trace_end + 0.5
-        # Closed places (red ×) come after the stop-bys, at {closed}; drawn like them otherwise.
-        stopbys = [ap for ap in extras if not ap["data"].get("inaccessible")]
-        closed = [ap for ap in extras if ap["data"].get("inaccessible")]
-        extras_at = float(cues["extras"]) if "extras" in cues else (stats_at + 4.0 if stopbys else None)
-        closed_at = (float(cues["closed"]) if "closed" in cues
-                     else ((extras_at if extras_at is not None else stats_at) + 4.0 if closed else None))
-        end_at = max(
-            audio_seconds + 0.3 if audio_seconds else trace_end + 6.0,
-            stats_at + 2.0,
-            (extras_at + 3.0) if extras_at is not None else 0.0,
-            (closed_at + 3.0) if closed_at is not None else 0.0,
-        )
-
-        # Cards: every stop with a photo, laid out once (as the recap does) clear
-        # of the headline, the stats card and the stop-by notice.
-        summary_card = None
+    def _course_panels(
+        self, summary: Optional[Dict], w: int, h: int, on_route: List[Dict], timing: _Timing,
+        total_points: int, total_smooth_dist: float,
+    ) -> _Panels:
+        """Everything fixed on the frame, and `reserved`: the boxes the cards are laid out clear of (the
+        headline, the totals, the stats card, the progress rail and the stop-by notices)."""
         summary = self.config.get("course_summary") or summary  # the numbers the script speaks
+        summary_card = None
         if summary:
             summary_card = self.graphics.render_summary_card(
                 distance_km=summary.get("total_distance_km", 0.0),
@@ -301,41 +486,54 @@ class _CourseOverviewMixin:
                 banner_theme=True,  # it sits under the totals chip now, not alone on the map
             )
         taglines = [str(x) for x in (self.config.get("overview_taglines") or []) if str(x).strip()]
-        # While the route is traced the headline names the stretch being drawn ("A → B"), in sync with it.
+        leg_stops = self._course_leg_stops(on_route, total_points)
+        headline_font = max(22, int(h * 0.033))
+        margin = int(h * 0.03)
+        reserved: List[Tuple[float, float, float, float]] = []
+
+        # Reserved at the widest the headline ever gets, so no badge sits where a later stretch's own
+        # (longer) names will be drawn.
+        banners = [leg_banner(leg_stops, d) for d, _, _ in leg_stops]
+        headline = _largest([
+            self.graphics.route_headline_panel(title, steps, headline_font)
+            for title in (taglines or [""]) for steps in (banners or [[]])
+        ])
+        if headline is not None:
+            reserved.append((0.0, 0.0, float(margin * 2 + headline.size[0]),
+                             float(margin * 2 + headline.size[1])))
+        totals = self.graphics.route_totals_panel(
+            (summary or {}).get("total_distance_km"), (summary or {}).get("total_duration_seconds"),
+        ) if summary else None
+        if totals is not None:
+            reserved.append((float(w - margin - totals.size[0]), 0.0, float(w), float(margin * 2 + totals.size[1])))
+        # The stats card hangs under the totals chip, top right: the foot of the frame is the progress rail's.
+        stats_y = margin + ((totals.size[1] + 12) if totals is not None else 0)
+        if summary_card is not None:
+            ch, cw = summary_card.shape[:2]
+            reserved.append((w - cw - float(margin), float(stats_y), float(w), float(stats_y + ch)))
+        rail_marks = self._course_rail_marks(on_route, total_points, total_smooth_dist)
+        rail_h = self.graphics.route_progress_rail_height(h) if rail_marks else 0
+        if rail_h:
+            reserved.append((0.0, float(h - margin - rail_h), float(w), float(h)))
+        closed_offset = self._reserve_notices(reserved, timing, w, h)
+        return _Panels(summary_card, taglines, leg_stops, headline_font, margin, totals, stats_y,
+                       rail_marks, closed_offset, reserved)
+
+    def _course_leg_stops(self, on_route: List[Dict], total_points: int) -> List[Tuple[float, str, str]]:
+        """(distance, glyph, name) per named stop: the headline names the stretch being drawn ("A → B"),
+        in sync with the trace."""
         leg_stops: List[Tuple[float, str, str]] = []
         for ap in on_route:
             name = str(ap.get("label") or "").strip()
             if name and (not leg_stops or ap["course_dist"] > leg_stops[-1][0]):
                 glyph, _, _ = self._pin_label_and_color(ap, total_points)
                 leg_stops.append((float(ap["course_dist"]), str(glyph or ""), name))
-        banners = [leg_banner(leg_stops, d) for d, _, _ in leg_stops]
-        # The headline, docked top left: the area's name on a light strip with the stretch
-        # being traced under it. Reserved at the widest it ever gets, so no badge sits where
-        # a later stretch's own (longer) names will be drawn.
-        headline_font = max(22, int(h * 0.033))
-        margin = int(h * 0.03)
-        headline = max(
-            (self.graphics.route_headline_panel(title, steps, headline_font)
-             for title in (taglines or [""]) for steps in (banners or [[]])),
-            key=lambda c: (c.size[0] * c.size[1]) if c is not None else -1, default=None,
-        )
-        reserved = []
-        if headline is not None:
-            reserved.append((0.0, 0.0, float(margin * 2 + headline.size[0]),
-                             float(margin * 2 + headline.size[1])))
-        # The whole route's distance and time, top right, and the map's scale bar bottom right.
-        totals = self.graphics.route_totals_panel(
-            (summary or {}).get("total_distance_km"), (summary or {}).get("total_duration_seconds"),
-        ) if summary else None
-        if totals is not None:
-            reserved.append((float(w - margin - totals.size[0]), 0.0, float(w), float(margin * 2 + totals.size[1])))
-        # The stats card hangs under the totals chip, top right: the foot of the frame is the
-        # progress rail's now.
-        stats_y = margin + ((totals.size[1] + 12) if totals is not None else 0)
-        if summary_card is not None:
-            ch, cw = summary_card.shape[:2]
-            reserved.append((w - cw - float(margin), float(stats_y), float(w), float(stats_y + ch)))
-        # The whole route as one line across the foot, a tick per stop, filled as it is traced.
+        return leg_stops
+
+    def _course_rail_marks(
+        self, on_route: List[Dict], total_points: int, total_smooth_dist: float,
+    ) -> List[Tuple[float, str, Tuple]]:
+        """The progress rail's ticks: the whole route as one line across the foot, a tick per stop."""
         rail_marks = []
         for ap in on_route:
             glyph, color, _ = self._pin_label_and_color(ap, total_points)
@@ -345,73 +543,52 @@ class _CourseOverviewMixin:
                 str(glyph if glyph is not None else ""),
                 tuple(color or self.graphics.marker_color)[:3],
             ))
-        rail_h = self.graphics.route_progress_rail_height(h) if rail_marks else 0
-        if rail_h:
-            reserved.append((0.0, float(h - margin - rail_h), float(w), float(h)))
-        # The stop-by notice sits bottom left; the closed-place one beside it.
+        return rail_marks
+
+    def _reserve_notices(self, reserved: List, timing: _Timing, w: int, h: int) -> int:
+        """Adds the stop-by notice (bottom left) and the closed-place one beside it to `reserved`;
+        returns the closed notice's x offset."""
         closed_offset = 0
-        if stopbys:
+        if timing.stopbys:
             box = self.graphics.stopby_notice_box(w, h)
             reserved.append(tuple(float(v) for v in box))
             closed_offset = box[2] - box[0] + int(24 * h / 1080)
-        if closed:
+        if timing.closed:
             reserved.append(tuple(float(v) for v in self.graphics.stopby_notice_box(
                 w, h, "closed", closed_offset)))
-        # Stop-bys with a photo get their card too, popping in with their pin at {extras}.
+        return closed_offset
+
+    def _course_cards(
+        self, on_route: List[Dict], extras: List[Dict], returns: Set[int], stop_popup: Optional[Dict],
+        reserved: List, route_obstacle_arr: np.ndarray, current_bg: np.ndarray, w: int, h: int,
+    ) -> Tuple[bool, List[Dict], Dict[int, Dict]]:
+        """(pill_recap, laid_out, cards by index): every stop with a photo, laid out once (as the recap does)
+        clear of the headline, the stats card and the stop-by notice. Stop-bys with a photo get their card
+        too, popping in with their pin at {extras}."""
         card_popups = [ap for ap in on_route + extras if ap["data"].get("popup_image") and id(ap) not in returns]
         if self._is_loop_route and stop_popup is not None:
             card_popups = [ap for ap in card_popups if ap is not stop_popup]
         # Pill badges are laid out exactly as the walk/map recap lays them out: no leader lines
-        # (the badge's number and its pin's are the tie), packed tight, beside their own pin and
-        # over the map's own clear space. A pop_up_card recap keeps its leaders — a wide photo
-        # card carries no number, so the line is the only thing tying it to a pin.
+        # (the badge's number and its pin's are the tie). A pop_up_card recap keeps its leaders: a wide
+        # photo card carries no number, so the line is the only thing tying it to a pin.
         pill_recap = self.config.get("overview_recap_style", "pill_badge") != "pop_up_card"
         laid_out = self._layout_recap_cards(card_popups, w, h, reserved_boxes=reserved,
                                             route_obstacles=route_obstacle_arr,
                                             background=current_bg if pill_recap else None,
                                             leaders=not pill_recap,
                                             clutter_pull=self._CLUTTER_PULL_COURSE_PX)
-        cards = {ap["index"]: ap for ap in laid_out}
+        return pill_recap, laid_out, {ap["index"]: ap for ap in laid_out}
 
-        def reveal_time(dist: float) -> float:
-            for (t0, _d0, *_), (t1, d1, *_) in zip(anchors, anchors[1:]):
-                if dist <= d1 + 1e-6:
-                    lo, hi = t0, t1
-                    for _ in range(30):  # distance_at is monotonic: bisect
-                        mid = (lo + hi) / 2
-                        if distance_at(anchors, mid) >= dist - 1e-6:
-                            hi = mid
-                        else:
-                            lo = mid
-                    return hi
-            return anchors[-1][0]
-
-        for ap in on_route:
-            ap["course_at"] = route_at if ap["index"] == 0 else reveal_time(ap["course_dist"])
-            # A pin and its card appear when the voice names the stop: never before, and
-            # at most COURSE_CUE_WINDOW_SECONDS after, wherever the trace is by then.
-            said = cues.get(str(ap.get("order")))
-            if said is not None and ap["index"] != 0 and ap is not stop_popup:
-                ap["course_at"] = pin_reveal_time(ap["course_at"], said, route_at)
-        for group, at in ((stopbys, extras_at), (closed, closed_at)):
-            for k, ap in enumerate(group):
-                ap["course_at"] = (at if at is not None else end_at) + k * tuning.COURSE_STOPBY_STAGGER_SECONDS
-                ap["pop_frame"] = int(round(ap["course_at"] * fps))
-
-        # The planned route under everything, drawn once.
-        route_bg = current_bg.copy()
-        pts = [(int(x), int(y)) for x, y in path]
-        self.graphics.draw_path(route_bg, pts, modes)
-        trace_color = tuple(self.config.get("course_trace_color") or tuning.COURSE_TRACE_COLOR)
-        thick = max(3, int(round(self.graphics.line_thickness * 1.4)))
-        border = self.graphics.line_border_thickness
-
-        # A name beside the pin only where no card names it.
+    def _course_extra_labels(
+        self, extras: List[Dict], cards: Dict[int, Dict], laid_out: List[Dict], on_route: List[Dict],
+        w: int, h: int,
+    ) -> Tuple[Dict[int, Optional[np.ndarray]], Dict[int, Tuple[int, int]]]:
+        """(sprites, positions) of the names beside the stop-by pins. A name goes beside the pin only where
+        no card names it, on the first side clear of the cards, pins and earlier labels."""
         labels = {
             id(ap): None if ap["index"] in cards else self._course_label_sprite(ap.get("label") or "")
             for ap in extras
         }
-        # Each label goes on the first side of its pin clear of the cards, pins and earlier labels.
         r = int(self.graphics.marker_radius)
         taken = [
             (bx, by, bx + cw, by + ch)
@@ -423,14 +600,15 @@ class _CourseOverviewMixin:
             for ap in on_route + extras
         ]
         label_at = {}
+        gap = r + _LABEL_GAP_PX
         for ap in extras:
             sprite = labels[id(ap)]
             if sprite is None:
                 continue
             sh, sw = sprite.shape[:2]
             px, py = int(ap.get("pin_x", ap["x"])), int(ap.get("pin_y", ap["y"]))
-            sides = [(px + r + 6, py - sh // 2), (px - r - 6 - sw, py - sh // 2),
-                     (px - sw // 2, py - r - 6 - sh), (px - sw // 2, py + r + 6)]
+            sides = [(px + gap, py - sh // 2), (px - gap - sw, py - sh // 2),
+                     (px - sw // 2, py - gap - sh), (px - sw // 2, py + gap)]
             free = [
                 (x, y) for x, y in sides
                 if 0 <= x and x + sw <= w and 0 <= y and y + sh <= h
@@ -439,185 +617,206 @@ class _CourseOverviewMixin:
             x, y = (free or sides)[0]
             label_at[id(ap)] = (x, y)
             taken.append((x, y, x + sw, y + sh))
+        return labels, label_at
+
+    def _course_plate_state(self, scene: _Scene, t: float):
+        """What is on the cards-and-pins layer at `t`; the layer is only rebuilt when this changes."""
         pop = tuning.COURSE_CARD_POP_SECONDS
-
-        def plate_state(t: float):
-            shown, anim = [], []
-            for ap in laid_out:
-                age = t - ap["course_at"]
-                if age >= 0:
-                    shown.append(ap["index"])
-                    if age < pop:
-                        anim.append((ap["index"], round(age / pop, 2)))
-            bumps = tuple(
-                (ap["index"], round((t - ap["course_at"]) / pop, 2))
-                for ap in on_route if 0 <= t - ap["course_at"] < pop
-            )
-            arrived = tuple(ap["index"] for ap in on_route if t >= ap["course_at"])
-            extra_on = tuple(
-                (ap["index"], round(self._pin_pop_scale(ap, int(round(t * fps)), fps), 2))
-                for ap in extras if t >= ap["course_at"]
-            )
-            return tuple(shown), tuple(anim), bumps, arrived, extra_on
-
-        # A pill badge already shows its stop's number, so the map under it only needs the
-        # colour: a plain dot, as the walk's recap draws (_draw_recap_dot), not a numbered
-        # teardrop repeating it.
-        draw_marker = self._draw_recap_dot if pill_recap else self._draw_pin
-
-        def build_layer(state, base: np.ndarray) -> np.ndarray:
-            shown, anim, bumps, arrived, extra_on = state
-            alpha = dict(anim)
-            for ap in on_route:
-                ap["data"]["arrived"] = ap["index"] in arrived
-            plate = base.copy()
-            huds = [self._course_hud(cards[i]) for i in shown]
-            for hud in huds:
-                plate = self.graphics.render_popup_box(
-                    plate, hud, alpha=_smoothstep(alpha.get(hud["index"], 1.0)), line_only=True)
-            bump = dict(bumps)
-            for ap in on_route:
-                if id(ap) in returns:
-                    continue
-                u = bump.get(ap["index"])
-                scale = 1.0 + 0.3 * math.sin(math.pi * u) if u is not None else 1.0
-                draw_marker(plate, ap, total_points, scale=scale)
-            scales = dict(extra_on)
-            for ap in extras:
-                if ap["index"] in scales:
-                    draw_marker(plate, ap, total_points, scale=scales[ap["index"]])
-            for hud in huds:
-                a = alpha.get(hud["index"])
-                if a is not None and hud.get("beside_box"):  # rises a little as it fades in
-                    bx, by = hud["beside_box"]
-                    hud = dict(hud, beside_box=(bx, int(by + 14 * (1 - _smoothstep(a)))))
-                plate = self.graphics.render_popup_box(
-                    plate, hud, alpha=_smoothstep(a if a is not None else 1.0), skip_line=True)
-            for ap in extras:  # above the cards, should no side be free
-                if id(ap) in label_at and scales.get(ap["index"], 0.0) >= 0.99:
-                    self.graphics.blit_sprite(plate, labels[id(ap)], (0, 0), *label_at[id(ap)])
-            return plate
-
-        def build_overlay(state) -> Tuple[np.ndarray, np.ndarray]:
-            """Cards and pins as their own layer: drawn over black and over white,
-            whose difference is each pixel's opacity. Blended over the traced
-            route, so the trace shows through their soft shadows (pasting every
-            changed pixel used to bring back the untraced line around each card)."""
-            on_black = build_layer(state, np.zeros_like(route_bg)).astype(np.float32)
-            on_white = build_layer(state, np.full_like(route_bg, 255)).astype(np.float32)
-            opacity = np.clip(1.0 - (on_white - on_black).mean(axis=2, keepdims=True) / 255.0, 0.0, 1.0)
-            # 3 channels and the rounding folded in, for the per-frame cv2 blend (3.5x numpy's).
-            return np.repeat(1.0 - opacity, 3, axis=2), on_black + 0.5
-
-        total_frames = int(math.ceil(end_at * fps))
-        logger.info(
-            "Course overview: %.1fs (route from %.1fs, traced by %.1fs, stats at %.1fs%s); %d card(s).",
-            end_at, route_at, trace_end, stats_at,
-            f", stop-bys at {extras_at:.1f}s" if extras_at is not None else "", len(laid_out),
+        shown, anim = [], []
+        for ap in scene.laid_out:
+            age = t - ap["course_at"]
+            if age >= 0:
+                shown.append(ap["index"])
+                if age < pop:
+                    anim.append((ap["index"], round(age / pop, 2)))
+        bumps = tuple(
+            (ap["index"], round((t - ap["course_at"]) / pop, 2))
+            for ap in scene.on_route if 0 <= t - ap["course_at"] < pop
         )
-        video = VideoExporter(overview_path, w, h, fps)
-        tracker.begin_substeps(max(1, int(end_at)))
+        arrived = tuple(ap["index"] for ap in scene.on_route if t >= ap["course_at"])
+        extra_on = tuple(
+            (ap["index"], round(self._pin_pop_scale(ap, int(round(t * scene.fps)), scene.fps), 2))
+            for ap in scene.extras if t >= ap["course_at"]
+        )
+        return tuple(shown), tuple(anim), bumps, arrived, extra_on
+
+    def _course_layer(self, scene: _Scene, state, base: np.ndarray) -> np.ndarray:
+        """The cards and pins drawn over `base`."""
+        shown, anim, bumps, arrived, extra_on = state
+        alpha = dict(anim)
+        for ap in scene.on_route:
+            ap["data"]["arrived"] = ap["index"] in arrived
+        plate = base.copy()
+        huds = [self._course_hud(scene.cards[i]) for i in shown]
+        for hud in huds:
+            plate = self.graphics.render_popup_box(
+                plate, hud, alpha=_smoothstep(alpha.get(hud["index"], 1.0)), line_only=True)
+        bump = dict(bumps)
+        for ap in scene.on_route:
+            if id(ap) in scene.returns:
+                continue
+            u = bump.get(ap["index"])
+            scale = 1.0 + 0.3 * math.sin(math.pi * u) if u is not None else 1.0
+            scene.draw_marker(plate, ap, scene.total_points, scale=scale)
+        scales = dict(extra_on)
+        for ap in scene.extras:
+            if ap["index"] in scales:
+                scene.draw_marker(plate, ap, scene.total_points, scale=scales[ap["index"]])
+        for hud in huds:
+            a = alpha.get(hud["index"])
+            if a is not None and hud.get("beside_box"):  # rises a little as it fades in
+                bx, by = hud["beside_box"]
+                hud = dict(hud, beside_box=(bx, int(by + 14 * (1 - _smoothstep(a)))))
+            plate = self.graphics.render_popup_box(
+                plate, hud, alpha=_smoothstep(a if a is not None else 1.0), skip_line=True)
+        for ap in scene.extras:  # above the cards, should no side be free
+            if id(ap) in scene.label_at and scales.get(ap["index"], 0.0) >= 0.99:
+                self.graphics.blit_sprite(plate, scene.labels[id(ap)], (0, 0), *scene.label_at[id(ap)])
+        return plate
+
+    def _course_overlay(self, scene: _Scene, state, route_bg: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Cards and pins as their own layer: drawn over black and over white,
+        whose difference is each pixel's opacity. Blended over the traced
+        route, so the trace shows through their soft shadows (pasting every
+        changed pixel used to bring back the untraced line around each card)."""
+        on_black = self._course_layer(scene, state, np.zeros_like(route_bg)).astype(np.float32)
+        on_white = self._course_layer(scene, state, np.full_like(route_bg, 255)).astype(np.float32)
+        opacity = np.clip(1.0 - (on_white - on_black).mean(axis=2, keepdims=True) / 255.0, 0.0, 1.0)
+        # 3 channels and the rounding folded in, for the per-frame cv2 blend (3.5x numpy's).
+        return np.repeat(1.0 - opacity, 3, axis=2), on_black + 0.5
+
+    def _course_play(
+        self, video: VideoExporter, scene: _Scene, route_bg: np.ndarray, trace: _Trace, timing: _Timing,
+        panels: _Panels, total_smooth_dist: float,
+    ) -> None:
+        """Writes every frame of the overview; leaves the last one in `self.last_frame`."""
+        fps = scene.fps
+        total_frames = int(math.ceil(timing.end_at * fps))
         state, keep, layer = None, None, None
         frame = route_bg
-        prev_cx, prev_cy = None, None
-        smoothed_angle = self._initial_heading(path)
+        heading = _Heading(self._initial_heading(trace.path))
 
         for i in range(total_frames):
             t = i / fps
-            new_state = plate_state(t)
+            new_state = self._course_plate_state(scene, t)
             if new_state != state:
                 state = new_state
-                keep, layer = build_overlay(state)
-            frame = route_bg.copy()
-
-            dist = distance_at(anchors, t)
-            k = int(np.searchsorted(cum, dist))
-            head = path[min(k, len(path) - 1)]
-            if t >= route_at and k > 0:
-                if k < len(path):
-                    d0, d1 = cum[k - 1], cum[k]
-                    u = (dist - d0) / max(1e-6, d1 - d0)
-                    head = path[k - 1] + (path[k] - path[k - 1]) * u
-                line = np.array(pts[:k] + [(int(head[0]), int(head[1]))], dtype=np.int32)
-                if border:
-                    cv2.polylines(frame, [line], False, self.graphics.line_border_color, thick + 2 * border, cv2.LINE_AA)
-                cv2.polylines(frame, [line], False, trace_color, thick, cv2.LINE_AA)
-            blended = cv2.add(cv2.multiply(frame, keep, dtype=cv2.CV_32F), layer)
-            frame = np.clip(blended, 0, 255, out=blended).astype(np.uint8)
-
-            if route_at <= t < trace_end + 0.6:
-                mode = modes[min(max(0, k - 1), len(modes) - 1)]
-                head = head if t < trace_end else path[-1]
-                fade = 1.0 if t < trace_end else max(0.0, 1.0 - (t - trace_end) / 0.6)
-                cx, cy = int(head[0]), int(head[1])
-                smoothed_angle = self._smoothed_heading(smoothed_angle, cx, cy, prev_cx, prev_cy)
-                prev_cx, prev_cy = cx, cy
-
-                if fade < 1.0:
-                    overlay = frame.copy()
-                    self.graphics.draw_transport_icon(overlay, cx, cy, i, smoothed_angle, mode)
-                    cv2.addWeighted(overlay, fade, frame, 1.0 - fade, 0, dst=frame)
-                else:
-                    self.graphics.draw_transport_icon(frame, cx, cy, i, smoothed_angle, mode)
-
-            steps = leg_banner(leg_stops, dist) if route_at <= t < trace_end else []
-            title, title_alpha = tagline_at(taglines, t)
-            # The strip holds the tagline whole while a stretch is under it (one swaps for the
-            # next rather than dissolving through: the stretch must stay legible), and fades
-            # on its own once the trace is done and the card is the strip alone.
-            panel = self.graphics.route_headline_panel(title, steps, headline_font)
-            if panel is not None:
-                frame = self.graphics._composite_pill(
-                    frame, panel, 1.0 if steps else title_alpha,
-                    x_from_left=margin, y_from_top=margin)
-            if totals is not None:
-                frame = self.graphics._composite_pill(
-                    frame, totals, 1.0, x_from_right=margin, y_from_top=margin)
-            if rail_marks:
-                frame = self.graphics.render_route_progress_rail(
-                    frame, dist / max(1e-6, total_smooth_dist), rail_marks, margin=margin,
-                    mode=modes[min(max(0, k - 1), len(modes) - 1)] if t >= route_at else None,
-                    frame_count=i)
-            if summary_card is not None and t >= stats_at:
-                u = _smoothstep((t - stats_at) / tuning.COURSE_STATS_SLIDE_SECONDS)
-                frame = self.graphics.composite_card_on_frame(
-                    frame, summary_card, alpha=u, margin=margin, corner="top_right",
-                    margin_y=stats_y, slide_offset_y=-(1 - u) * 80)
-            if extras_at is not None and t >= extras_at:
-                frame = self.graphics.render_stopby_notice(frame, alpha=_smoothstep((t - extras_at) / 0.5))
-            if closed and closed_at is not None and t >= closed_at:
-                frame = self.graphics.render_stopby_notice(
-                    frame, alpha=_smoothstep((t - closed_at) / 0.5), kind="closed",
-                    x_offset=closed_offset)
-
+                keep, layer = self._course_overlay(scene, state, route_bg)
+            frame = self._course_frame(i, t, route_bg, keep, layer, trace, timing, panels, heading, total_smooth_dist)
             video.write(frame)
             if i % fps == 0:
-                tracker.show_item(i // fps + 1, f"Rendering course overview {i // fps}/{int(end_at)}s")
-
-        # After the voice, the walk overview's ending: the GL zoom to the start and its photo.
+                tracker.show_item(i // fps + 1, f"Rendering course overview {i // fps}/{int(timing.end_at)}s")
         self.last_frame = frame
-        hard_ended = False
-        if stop_popup is not None and self.config.get("enable_ending_highlight", True):
-            clean = route_bg.copy()
-            whole = np.array(pts, dtype=np.int32)
-            if border:
-                cv2.polylines(clean, [whole], False, self.graphics.line_border_color, thick + 2 * border, cv2.LINE_AA)
-            cv2.polylines(clean, [whole], False, trace_color, thick, cv2.LINE_AA)
-            for ap in on_route + extras:
-                if id(ap) not in returns:
-                    draw_marker(clean, ap, total_points)  # the same markers the video just held on
-            start_popup = next((ap for ap in active_popups if ap["index"] == 0), None)
-            hard_ended = self._render_ending_highlight(
-                video, w, h, fps, stop_popup, start_popup,
-                clean_map_frame=clean, bounding_box=bounding_box,
-            )
 
-        for ap in active_popups:
-            ap["data"]["triggered"] = False
-            ap["data"]["arrived"] = False
-        self.last_rendered_seconds = video.frames_written / fps
-        self.last_ending_hard_ended = hard_ended
-        return video.release(overview_path)
+    def _course_frame(
+        self, i: int, t: float, route_bg: np.ndarray, keep: np.ndarray, layer: np.ndarray, trace: _Trace,
+        timing: _Timing, panels: _Panels, heading: _Heading, total_smooth_dist: float,
+    ) -> np.ndarray:
+        frame = route_bg.copy()
+        path = trace.path
+        dist = distance_at(timing.anchors, t)
+        k = int(np.searchsorted(trace.cum, dist))
+        head = path[min(k, len(path) - 1)]
+        if t >= timing.route_at and k > 0:
+            if k < len(path):
+                d0, d1 = trace.cum[k - 1], trace.cum[k]
+                u = (dist - d0) / max(1e-6, d1 - d0)
+                head = path[k - 1] + (path[k] - path[k - 1]) * u
+            self._draw_trace_line(frame, trace, k, head)
+        blended = cv2.add(cv2.multiply(frame, keep, dtype=cv2.CV_32F), layer)
+        frame = np.clip(blended, 0, 255, out=blended).astype(np.uint8)
+
+        tracing = timing.route_at <= t < timing.trace_end + _TRACE_TAIL_SECONDS
+        if tracing:
+            self._draw_walker(frame, i, t, k, head, trace, timing, heading)
+        return self._composite_course_panels(
+            frame, i, t, dist, k, timing.route_at <= t < timing.trace_end, trace, timing, panels, total_smooth_dist)
+
+    def _draw_trace_line(self, frame: np.ndarray, trace: _Trace, k: int, head) -> None:
+        """The traced part of the route, up to `head`."""
+        line = np.array(trace.pts[:k] + [(int(head[0]), int(head[1]))], dtype=np.int32)
+        if trace.border:
+            cv2.polylines(frame, [line], False, self.graphics.line_border_color,
+                          trace.thick + 2 * trace.border, cv2.LINE_AA)
+        cv2.polylines(frame, [line], False, trace.color, trace.thick, cv2.LINE_AA)
+
+    def _draw_walker(
+        self, frame: np.ndarray, i: int, t: float, k: int, head, trace: _Trace, timing: _Timing,
+        heading: _Heading,
+    ) -> None:
+        """The transport icon at the trace's head; it fades out after the trace is done."""
+        modes = trace.modes
+        mode = modes[min(max(0, k - 1), len(modes) - 1)]
+        head = head if t < timing.trace_end else trace.path[-1]
+        fade = 1.0 if t < timing.trace_end else max(0.0, 1.0 - (t - timing.trace_end) / _TRACE_TAIL_SECONDS)
+        cx, cy = int(head[0]), int(head[1])
+        heading.angle = self._smoothed_heading(heading.angle, cx, cy, heading.x, heading.y)
+        heading.x, heading.y = cx, cy
+
+        if fade >= 1.0:
+            self.graphics.draw_transport_icon(frame, cx, cy, i, heading.angle, mode)
+            return
+        overlay = frame.copy()
+        self.graphics.draw_transport_icon(overlay, cx, cy, i, heading.angle, mode)
+        cv2.addWeighted(overlay, fade, frame, 1.0 - fade, 0, dst=frame)
+
+    def _composite_course_panels(
+        self, frame: np.ndarray, i: int, t: float, dist: float, k: int, in_trace: bool, trace: _Trace,
+        timing: _Timing, panels: _Panels, total_smooth_dist: float,
+    ) -> np.ndarray:
+        """Headline, totals, progress rail, stats card and stop-by notices over the frame."""
+        margin = panels.margin
+        steps = leg_banner(panels.leg_stops, dist) if in_trace else []
+        title, title_alpha = tagline_at(panels.taglines, t)
+        # The strip holds the tagline whole while a stretch is under it (one swaps for the
+        # next rather than dissolving through: the stretch must stay legible), and fades
+        # on its own once the trace is done and the card is the strip alone.
+        panel = self.graphics.route_headline_panel(title, steps, panels.headline_font)
+        if panel is not None:
+            frame = self.graphics._composite_pill(
+                frame, panel, 1.0 if steps else title_alpha,
+                x_from_left=margin, y_from_top=margin)
+        if panels.totals is not None:
+            frame = self.graphics._composite_pill(
+                frame, panels.totals, 1.0, x_from_right=margin, y_from_top=margin)
+        if panels.rail_marks:
+            frame = self.graphics.render_route_progress_rail(
+                frame, dist / max(1e-6, total_smooth_dist), panels.rail_marks, margin=margin,
+                mode=trace.modes[min(max(0, k - 1), len(trace.modes) - 1)] if t >= timing.route_at else None,
+                frame_count=i)
+        if panels.summary_card is not None and t >= timing.stats_at:
+            u = _smoothstep((t - timing.stats_at) / tuning.COURSE_STATS_SLIDE_SECONDS)
+            frame = self.graphics.composite_card_on_frame(
+                frame, panels.summary_card, alpha=u, margin=margin, corner="top_right",
+                margin_y=panels.stats_y, slide_offset_y=-(1 - u) * 80)
+        if timing.extras_at is not None and t >= timing.extras_at:
+            frame = self.graphics.render_stopby_notice(
+                frame, alpha=_smoothstep((t - timing.extras_at) / _NOTICE_FADE_SECONDS))
+        if timing.closed and timing.closed_at is not None and t >= timing.closed_at:
+            frame = self.graphics.render_stopby_notice(
+                frame, alpha=_smoothstep((t - timing.closed_at) / _NOTICE_FADE_SECONDS), kind="closed",
+                x_offset=panels.closed_offset)
+        return frame
+
+    def _course_ending(
+        self, video: VideoExporter, w: int, h: int, fps: int, route_bg: np.ndarray, trace: _Trace,
+        scene: _Scene, stop_popup: Dict, active_popups: List[Dict], bounding_box: Optional[Dict[str, float]],
+    ) -> bool:
+        """The walk overview's ending: the GL zoom to the start and its photo. True if it hard-cut out."""
+        clean = route_bg.copy()
+        whole = np.array(trace.pts, dtype=np.int32)
+        if trace.border:
+            cv2.polylines(clean, [whole], False, self.graphics.line_border_color,
+                          trace.thick + 2 * trace.border, cv2.LINE_AA)
+        cv2.polylines(clean, [whole], False, trace.color, trace.thick, cv2.LINE_AA)
+        for ap in scene.on_route + scene.extras:
+            if id(ap) not in scene.returns:
+                scene.draw_marker(clean, ap, scene.total_points)  # the same markers the video just held on
+        start_popup = next((ap for ap in active_popups if ap["index"] == 0), None)
+        return self._render_ending_highlight(
+            video, w, h, fps, stop_popup, start_popup,
+            clean_map_frame=clean, bounding_box=bounding_box,
+        )
 
     def _course_hud(self, ap: Dict) -> Dict:
         """A laid-out card as the recap draws it (see _render_recap_frame)."""
@@ -629,13 +828,6 @@ class _CourseOverviewMixin:
         hud["leader_line_width"] = self._RECAP_LEADER_WIDTH
         hud["border_color"] = color
         return hud
-
-    def _draw_place_name(self, frame: np.ndarray, ap: Dict) -> None:
-        """A place's name right of its pin (closed places at the end, photo-less places as they are passed)."""
-        sprite = self._course_label_sprite(ap.get("label") or "")
-        if sprite is not None:
-            r = int(self.graphics.marker_radius)
-            self.graphics.blit_sprite(frame, sprite, (0, 0), int(ap["x"]) + r + 6, int(ap["y"]) - sprite.shape[0] // 2)
 
     def _closed_obstacle_points(self, step: float = 8.0) -> np.ndarray:
         """Layout obstacles over each closed place's pin and its name (drawn right of the pin at the end)."""
@@ -663,4 +855,3 @@ class _CourseOverviewMixin:
         ImageDraw.Draw(img).text((2 - box[0], 2 - box[1]), text, font=font, fill=(40, 30, 25, 255),
                                  stroke_width=3, stroke_fill=(255, 255, 255, 255))
         return np.array(img)[:, :, [2, 1, 0, 3]]
-

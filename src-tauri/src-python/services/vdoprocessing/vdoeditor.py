@@ -195,7 +195,6 @@ class VideoEditor:
 
         return str(output_path)
 
-    # [Core/Util] Muxes an audio track into a video segment, preserving sample rates and channels to avoid pitch-shifting or desync issues.
     def concatenate_videos(self, input_paths: List[str], output_filename: str) -> str:
         """Joins multiple video clips (e.g., .mp4) together."""
         return self.concatenate_media(input_paths, output_filename, media_type="video")
@@ -221,21 +220,40 @@ class VideoEditor:
             output_path.unlink()
 
         ffmpeg_cmd = self.engine.resolve_binary()
+        src_rate, src_channels = self._probe_audio_format(aud_p)
 
-        # [HACK] [Editor] Query source audio format to lock down -ar and -ac
-        # explicitly — without pinning them, ffmpeg's AAC encoder can pick a
-        # different sample rate/channel layout than the source, which plays
-        # back pitch-shifted ("chipmunk") audio.
+        cmd = [
+            ffmpeg_cmd,
+            "-y", *tuning.ffmpeg_log_args(),
+            "-i", str(vid_p),
+            "-i", str(aud_p),
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-ar", str(src_rate),
+            "-ac", str(src_channels),
+            "-map", "0:v:0",
+            "-map", "1:a:0",
+            # [NOTE] [Editor] Deliberately no -shortest: it would cut the VIDEO to a shorter narration (the overview
+            # clip is paced off the route, not the narration). A narration longer than the video is handled upstream
+            # by sizing the render to cover it (render_step.py's overview_audio_duration).
+            str(output_path),
+        ]
+
+        self.engine.run_command(cmd)
+        logger.info("Successfully muxed audio into video: %s", output_path)
+        return str(output_path)
+
+    @staticmethod
+    def _probe_audio_format(aud_p: Path) -> tuple[str, str]:
+        """(sample rate, channels) of the audio file, 44100/2 when it can't be probed."""
+        # [HACK] [Editor] Pin -ar/-ac to the source: left alone, ffmpeg's AAC encoder can pick another rate or
+        # layout and the audio plays back pitch-shifted ("chipmunk").
         probe_cmd = [
             runtime_paths.ffprobe_exe() or "ffprobe",
-            "-v",
-            "error",
-            "-select_streams",
-            "a:0",
-            "-show_entries",
-            "stream=sample_rate,channels",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
+            "-v", "error",
+            "-select_streams", "a:0",
+            "-show_entries", "stream=sample_rate,channels",
+            "-of", "default=noprint_wrappers=1:nokey=1",
             str(aud_p),
         ]
         try:
@@ -247,49 +265,12 @@ class VideoEditor:
                 timeout=5,
             )
             lines = probe_res.stdout.strip().splitlines()
-            src_rate = lines[0] if len(lines) > 0 else "44100"
-            src_channels = lines[1] if len(lines) > 1 else "2"
+            return (
+                lines[0] if len(lines) > 0 else "44100",
+                lines[1] if len(lines) > 1 else "2",
+            )
         except Exception:
-            src_rate, src_channels = "44100", "2"
-
-        cmd = [
-            ffmpeg_cmd,
-            "-y", *tuning.ffmpeg_log_args(),
-            "-i",
-            str(vid_p),
-            "-i",
-            str(aud_p),
-            "-c:v",
-            "copy",
-            "-c:a",
-            "aac",
-            "-ar",
-            str(src_rate),
-            "-ac",
-            str(src_channels),
-            "-map",
-            "0:v:0",
-            "-map",
-            "1:a:0",
-            # [NOTE] [Editor] Deliberately no -shortest here: that trims the
-            # MUXED OUTPUT to whichever of video/audio is shorter, so a
-            # narration script shorter than its clip's own paced/rendered
-            # duration (a real case for the overview clip, whose duration
-            # is paced off the route, not off the narration) used to cut
-            # the VIDEO short to match the shorter audio -- ending the clip
-            # early mid-scene rather than just playing out silent after the
-            # narration finishes. Without it, the video plays its full
-            # intended length regardless of narration length; the reverse
-            # case (narration longer than the video) is handled upstream
-            # instead, by sizing the render itself to at least cover the
-            # narration before this mux ever runs (see render_step.py's
-            # overview_audio_duration handling).
-            str(output_path),
-        ]
-
-        self.engine.run_command(cmd)
-        logger.info("Successfully muxed audio into video: %s", output_path)
-        return str(output_path)
+            return "44100", "2"
 
     # [Core/Util] Cuts a video down to a target duration (hard trim, no speed change).
     def trim_video_duration(

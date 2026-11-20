@@ -115,13 +115,8 @@ def _center(item: dict) -> float:
     return item["x"] + len(item["text"]) * item["size"] * 0.27
 
 
-def _course_times(items: list[dict]) -> tuple[list[str], set[int]]:
-    """A "Course Times" box (stop, minutes, stop, minutes...) drawn as columns: its text fragments are scattered in the
-    file, but their positions give the chain back. Returns (["A -> 15 min. -> B -> ..."], ids of the items used) or ([], set())."""
-    times = sorted((i for i in items if _TIME.match(i["text"])), key=lambda i: -i["y"])
-    if len(times) < 3:
-        return [], set()
-    # "1 hr." and "20 min." stacked at the same x are one duration
+def _merge_stacked_times(times: list[dict]) -> list[dict]:
+    """Durations stacked at one x ("1 hr." above "20 min.") joined into one entry, each with its centre `cx`."""
     merged: list[dict] = []
     for t in times:
         last = next((m for m in merged if abs(m["x"] - t["x"]) <= 3 and 0 < m["y_low"] - t["y"] <= 12), None)
@@ -133,7 +128,11 @@ def _course_times(items: list[dict]) -> tuple[list[str], set[int]]:
             merged.append({"text": t["text"], "x": t["x"], "y": t["y"], "y_low": t["y"], "size": t["size"], "ids": [id(t)]})
     for m in merged:
         m["cx"] = _center(m)
+    return merged
 
+
+def _time_columns(merged: list[dict]) -> tuple[list[list[dict]], list[dict]]:
+    """(columns of durations, lone durations that bridge two columns)."""
     groups: list[list[dict]] = []
     for m in sorted(merged, key=lambda m: m["cx"]):
         if groups and m["cx"] - groups[-1][-1]["cx"] <= 25:
@@ -144,6 +143,40 @@ def _course_times(items: list[dict]) -> tuple[list[str], set[int]]:
     groups = [[m for m in g if abs(m["size"] - sorted(x["size"] for x in g)[len(g) // 2]) <= 0.3] for g in groups]
     columns = [g for g in groups if len(g) >= 2]
     bridges = [m for g in groups if len(g) < 2 for m in g]
+    return columns, bridges
+
+
+def _column_chain(col: list[dict], items: list[dict]) -> tuple[list[str], float, set[int]] | None:
+    """(the column's stops and durations top to bottom, its x, ids of the items used), or None when it names no stop."""
+    cx = sum(m["cx"] for m in col) / len(col)
+    top, bottom = max(m["y"] for m in col) + 40, min(m["y_low"] for m in col) - 40
+    nodes = [
+        i for i in items
+        if not _TIME.match(i["text"]) and i["text"].upper() not in _NOT_A_STOP and len(i["text"]) <= 40
+        and abs(_center(i) - cx) <= 45 and bottom <= i["y"] <= top
+    ]
+    events = [("node", n["y"], n["text"], [id(n)]) for n in nodes] + [("time", m["y"], m["text"], m["ids"]) for m in col]
+    events.sort(key=lambda e: -e[1])
+    while events and events[0][0] == "time":
+        events.pop(0)
+    while events and events[-1][0] == "time":
+        events.pop()
+    if not any(e[0] == "node" for e in events):
+        return None
+    used: set[int] = set()
+    for e in events:
+        used.update(e[3])
+    return [e[2] for e in events], cx, used
+
+
+def _course_times(items: list[dict]) -> tuple[list[str], set[int]]:
+    """A "Course Times" box (stop, minutes, stop, minutes...) drawn as columns: its text fragments are scattered in the
+    file, but their positions give the chain back. Returns (["A -> 15 min. -> B -> ..."], ids of the items used) or ([], set())."""
+    times = sorted((i for i in items if _TIME.match(i["text"])), key=lambda i: -i["y"])
+    if len(times) < 3:
+        return [], set()
+    # "1 hr." and "20 min." stacked at the same x are one duration
+    columns, bridges = _time_columns(_merge_stacked_times(times))
     if not columns:
         return [], set()
 
@@ -151,25 +184,13 @@ def _course_times(items: list[dict]) -> tuple[list[str], set[int]]:
     chains: list[list[str]] = []
     centers: list[float] = []
     for col in columns:
-        cx = sum(m["cx"] for m in col) / len(col)
-        top, bottom = max(m["y"] for m in col) + 40, min(m["y_low"] for m in col) - 40
-        nodes = [
-            i for i in items
-            if not _TIME.match(i["text"]) and i["text"].upper() not in _NOT_A_STOP and len(i["text"]) <= 40
-            and abs(_center(i) - cx) <= 45 and bottom <= i["y"] <= top
-        ]
-        events = [("node", n["y"], n["text"], [id(n)]) for n in nodes] + [("time", m["y"], m["text"], m["ids"]) for m in col]
-        events.sort(key=lambda e: -e[1])
-        while events and events[0][0] == "time":
-            events.pop(0)
-        while events and events[-1][0] == "time":
-            events.pop()
-        if not any(e[0] == "node" for e in events):
+        found = _column_chain(col, items)
+        if found is None:
             continue
-        chains.append([e[2] for e in events])
+        chain, cx, chain_ids = found
+        chains.append(chain)
         centers.append(cx)
-        for e in events:
-            used.update(e[3])
+        used |= chain_ids
     if not chains:
         return [], set()
 
@@ -184,15 +205,9 @@ def _course_times(items: list[dict]) -> tuple[list[str], set[int]]:
     return [" -> ".join(line)], used
 
 
-def _layout_text(fragments: list[tuple[str, float, float, float]]) -> str:
-    """(text, x, y, size) of one page -> reading-order text, or "" when the page has no columns of prose."""
-    items = []
-    for raw, x, y, size in fragments:
-        text = _clean_fragment(raw)
-        if text and not _looks_garbled(text):
-            items.append({"text": text, "x": x, "y": y, "size": size or 1.0})
+def _prose_columns(items: list[dict]) -> list[list[dict]]:
+    """The page's columns of prose, left to right."""
     prose = sorted((i for i in items if len(i["text"]) >= PROSE_MIN_CHARS), key=lambda i: i["x"])
-
     columns: list[list[dict]] = []
     for item in prose:
         for col in columns:
@@ -202,43 +217,41 @@ def _layout_text(fragments: list[tuple[str, float, float, float]]) -> str:
         else:
             columns.append([item])
     columns = [c for c in columns if len(c) >= COLUMN_MIN_LINES]
-    if not columns:
-        return ""
     columns.sort(key=lambda c: min(i["x"] for i in c))
+    return columns
 
-    used: set[int] = set()
-    parts: list[str] = [SECTION_TEXT]
-    for col in columns:
-        left = min(i["x"] for i in col)
-        top, bottom = max(i["y"] for i in col), min(i["y"] for i in col)
-        pitch = sorted(abs(a["y"] - b["y"]) for a, b in zip(col, col[1:]))
-        gap = (pitch[len(pitch) // 2] if pitch else 10.0) * 1.8
-        # short lines that start at the column's left edge inside its vertical span are its headings and bullets; a
-        # label further right is on the map, even where the box would reach it
-        members = list(col) + [
-            i for i in items
-            if id(i) not in {id(c) for c in col} and abs(i["x"] - left) <= COLUMN_X_TOLERANCE and bottom - gap <= i["y"] <= top + gap and len(i["text"]) < PROSE_MIN_CHARS
-        ]
-        members.sort(key=lambda i: (-round(i["y"], 1), i["x"]))
-        paragraph: list[str] = []
-        last_y = None
-        for i in members:
-            used.add(id(i))
-            new_paragraph = last_y is not None and (last_y - i["y"] > gap or i["x"] - left > 5)
-            if new_paragraph and paragraph:
-                parts.append(" ".join(paragraph))
-                paragraph = []
-            paragraph.append(i["text"])
-            last_y = i["y"]
-        if paragraph:
+
+def _column_paragraphs(col: list[dict], items: list[dict], used: set[int]) -> list[str]:
+    """The column's lines (and its headings and bullets) as paragraphs; ids of the items read go into `used`."""
+    left = min(i["x"] for i in col)
+    top, bottom = max(i["y"] for i in col), min(i["y"] for i in col)
+    pitch = sorted(abs(a["y"] - b["y"]) for a, b in zip(col, col[1:]))
+    gap = (pitch[len(pitch) // 2] if pitch else 10.0) * 1.8
+    # short lines that start at the column's left edge inside its vertical span are its headings and bullets; a
+    # label further right is on the map, even where the box would reach it
+    members = list(col) + [
+        i for i in items
+        if id(i) not in {id(c) for c in col} and abs(i["x"] - left) <= COLUMN_X_TOLERANCE and bottom - gap <= i["y"] <= top + gap and len(i["text"]) < PROSE_MIN_CHARS
+    ]
+    members.sort(key=lambda i: (-round(i["y"], 1), i["x"]))
+    parts: list[str] = []
+    paragraph: list[str] = []
+    last_y = None
+    for i in members:
+        used.add(id(i))
+        new_paragraph = last_y is not None and (last_y - i["y"] > gap or i["x"] - left > 5)
+        if new_paragraph and paragraph:
             parts.append(" ".join(paragraph))
+            paragraph = []
+        paragraph.append(i["text"])
+        last_y = i["y"]
+    if paragraph:
+        parts.append(" ".join(paragraph))
+    return parts
 
-    time_lines, time_ids = _course_times(items)
-    used |= time_ids
-    if time_lines:
-        parts.append(SECTION_TIMES)
-        parts.extend(time_lines)
 
+def _label_lines(items: list[dict], used: set[int]) -> list[str]:
+    """The text not read yet (map labels), top to bottom, each distinct label once."""
     labels = sorted((i for i in items if id(i) not in used), key=lambda i: (-round(i["y"] / 20), i["x"]))
     seen: set[str] = set()
     label_lines = []
@@ -247,6 +260,32 @@ def _layout_text(fragments: list[tuple[str, float, float, float]]) -> str:
         if key not in seen:
             seen.add(key)
             label_lines.append(i["text"])
+    return label_lines
+
+
+def _layout_text(fragments: list[tuple[str, float, float, float]]) -> str:
+    """(text, x, y, size) of one page -> reading-order text, or "" when the page has no columns of prose."""
+    items = []
+    for raw, x, y, size in fragments:
+        text = _clean_fragment(raw)
+        if text and not _looks_garbled(text):
+            items.append({"text": text, "x": x, "y": y, "size": size or 1.0})
+    columns = _prose_columns(items)
+    if not columns:
+        return ""
+
+    used: set[int] = set()
+    parts: list[str] = [SECTION_TEXT]
+    for col in columns:
+        parts.extend(_column_paragraphs(col, items, used))
+
+    time_lines, time_ids = _course_times(items)
+    used |= time_ids
+    if time_lines:
+        parts.append(SECTION_TIMES)
+        parts.extend(time_lines)
+
+    label_lines = _label_lines(items, used)
     if label_lines:
         parts.append(SECTION_LABELS)
         parts.extend(label_lines)

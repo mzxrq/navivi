@@ -1,12 +1,11 @@
 """The overview's frame-by-frame animation loop — split out of overview.py
 (render_overview itself) so that file is left holding just the setup
 (labels, path building, intro beat) and wrap-up (recap, summary, ending
-highlight), with this, the largest single piece, isolated on its own.
-Behavior-identical extraction: this is the same loop body render_overview
-used to run inline, now parameterized instead of closing over render_overview's
-locals directly."""
+highlight). The loop's per-frame steps are the `_walk_*` / `_arrive_*`
+helpers below, passing their shared state through `_WalkState`."""
 
 import math
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 import cv2
@@ -19,16 +18,17 @@ from services import tuning
 from .base import logger
 from .overview_timing import warp_path
 
-# Animation-loop tuning constants (magic numbers pulled out of the loop body
-# below so their purpose has a name; not read from self.config/tuning).
+# Animation-loop tuning constants (not read from self.config/tuning).
 _MIN_TRIGGER_GAP_FLOOR_SECONDS = 0.15  # floor effective_gap_frames shrinks to for a deep backlog
 _DEFAULT_FREEZE_SECONDS = 4.0
 # Longest the overview walker waits at a stop for the voice to reach its cue.
 _MAX_CUE_WAIT_SECONDS = 20.0
 _CARD_STAYS_SECONDS = 3600.0  # "until the end" for a card that stays (walk style)
-# A walk re-timed to meet its cue runs at most this much slower / faster than
-# planned (see _animate_overview_frames' _catch_up).
+# A walk re-timed to meet its cue runs at most this much slower / faster than planned.
 _CATCH_UP_RANGE = (0.6, 2.5)  # matches overview_timing.MAX_WALK_SPEEDUP's raised cap
+_MIN_RETIME_DELTA_FRAMES = 2  # a re-time (and a stretch worth re-timing) is at least this many frames
+_PREVIEW_BADGE_MARGIN_PX = 24
+_PREVIEW_BADGE_RISE_PX = 44  # the preview badge floats this far above its coordinate
 
 
 class _NoticeWriter:
@@ -45,6 +45,129 @@ class _NoticeWriter:
     def write(self, frame: np.ndarray) -> None:
         frame = self._renderer._apply_hud(frame)
         self._video.write(self._renderer._apply_stopby_notice(frame))
+
+
+@dataclass
+class _Beat:
+    """Where the walker is on one frame: path index, its dot, the dot one frame back, travel mode."""
+    index: int
+    cx: int
+    cy: int
+    px: int
+    py: int
+    mode: str
+
+
+@dataclass
+class _WalkClock:
+    """The walk's own timeline. `wait` replays the current path frame that many
+    more times (a cued stop's hold, its popup still fading in) so the picture
+    stays in step with the voice. After a stop (its wait, card hold or
+    stop-by cards) `catch_up_due` re-times the walk to the NEXT cued stop once,
+    within _CATCH_UP_RANGE of its planned pace, so it never rushes or crawls
+    (an unreachable cue just lands a little late/early)."""
+    path: np.ndarray
+    cum: Optional[np.ndarray]
+    wait: int = 0
+    catch_up_due: bool = False
+
+    def frames(self):
+        i = 0
+        while i < len(self.path):
+            yield i, self.path[i]
+            while self.wait > 0:
+                self.wait -= 1
+                yield i, self.path[i]
+            i += 1
+
+
+@dataclass
+class _WalkState:
+    """Everything the animation loop carries from frame to frame."""
+    video: _NoticeWriter
+    current_bg: np.ndarray
+    cap: object
+    is_video: bool
+    w: int
+    h: int
+    fps: int
+    n_points: int
+    smooth_path: np.ndarray
+    cum: Optional[np.ndarray]
+    total_dist: float
+    mode_breakpoints: List[Tuple[float, str]]
+    active_popups: List[Dict]
+    stop_popup: Optional[Dict]
+    route_obstacles: np.ndarray
+    sequential_popups: List[Dict]
+    smoothed_angle: float
+    total_stops: int
+    min_trigger_gap_frames: int
+    last_trigger_frame: int
+    baked_popups: List[Dict] = field(default_factory=list)
+    path_history: List = field(default_factory=list)
+    mode_history: List = field(default_factory=list)
+    pending_popups: List[Dict] = field(default_factory=list)
+    prev_cx: Optional[int] = None
+    prev_cy: Optional[int] = None
+    seq_ptr: int = 0
+    # [NOTE] [Animation] path_history index of the most recently reached waypoint: the boundary
+    # between "earlier, completed legs" (kept visible) and "the current leg" (hidden while its
+    # arrival popup shows).
+    last_leg_boundary: int = 0
+    arrival_count: int = 0
+    # [NOTE] [Animation] Last frame's pins + route with no popup card baked in, captured only on
+    # the final iteration: self.last_frame can carry a card mid fade-out, which the recap would
+    # bake into its background and then draw again on top (a ghosted double image).
+    pre_popup_frame: Optional[np.ndarray] = None
+    # Stays None if the walk has no frames at all (the card-hold tail checks it).
+    frame_before_popups: Optional[np.ndarray] = None
+    last_beat: Optional[_Beat] = None
+
+
+def _retime_walk(
+    clock: _WalkClock, index: int, active_popups: List[Dict], frames_written: int, fps: int,
+) -> None:
+    """Re-times the walk from `index` to the next cued stop so it arrives on
+    its cue (within _CATCH_UP_RANGE); later stops' expected frames shift with it."""
+    ahead = [
+        ap for ap in active_popups
+        if ap.get("cue_frame") is not None and ap.get("expected_frame") is not None
+        and ap["expected_frame"] > index and not ap["data"].get("triggered")
+    ]
+    if not ahead:
+        return
+    nxt = min(ahead, key=lambda ap: ap["expected_frame"])
+    end = int(nxt["expected_frame"])
+    planned = end - index
+    if planned < _MIN_RETIME_DELTA_FRAMES:
+        return
+    wanted = int(nxt["cue_frame"]) - frames_written
+    lo, hi = _CATCH_UP_RANGE
+    new_len = int(round(min(max(wanted, planned / hi), planned / lo)))
+    if abs(new_len - planned) < _MIN_RETIME_DELTA_FRAMES:
+        return
+    path, cum = clock.path, clock.cum
+    xs, ys = [0.0, float(new_len)], [0.0, float(planned)]
+    seg, seg_cum = warp_path(
+        path[index:end + 1], cum[index:end + 1] if cum is not None else None,
+        xs, ys, out_len=new_len + 1,
+    )
+    clock.path = np.concatenate([path[:index], seg, path[end + 1:]])
+    if cum is not None:
+        clock.cum = np.concatenate([cum[:index], seg_cum, cum[end + 1:]])
+    shift = new_len - planned
+    for ap in active_popups:
+        ef = ap.get("expected_frame")
+        if ef is None or ef <= index:
+            continue
+        ap["expected_frame"] = (
+            index + int(round((ef - index) * new_len / planned)) if ef <= end else ef + shift
+        )
+    logger.info(
+        "Overview: walk to stop #%s re-timed %.1fs -> %.1fs to meet its cue.",
+        nxt.get("order"), planned / fps, new_len / fps,
+    )
 
 
 class _OverviewAnimationMixin:
@@ -79,16 +202,14 @@ class _OverviewAnimationMixin:
 
     def _apply_preview_badge(self, frame: np.ndarray) -> np.ndarray:
         """The upcoming (not yet arrived) waypoint's own pill badge — see
-        _animate_overview_frames, which sets self._preview_badge to it
-        each frame (or None once nothing is left to preview). Placed
-        directly above its own map coordinate with no leader line: it
-        hasn't been reached yet, so there's no pin on screen to connect
-        it to — only the badge itself, a quiet "coming up" hint rather
-        than a real arrival. Cleared instantly once that waypoint is
-        itself triggered — its real full "pop up card" takes over from
-        there, and only shrinks back to this same pill badge once it's
-        been shown for a while (see _composite_baked_popups), at the very
-        spot the end-of-video recap will keep it in."""
+        _walk_one_frame, which sets self._preview_badge to it each frame (or
+        None once nothing is left to preview). Placed directly above its own
+        map coordinate with no leader line: it hasn't been reached yet, so
+        there's no pin on screen to connect it to. Cleared instantly once
+        that waypoint is itself triggered — its real full "pop up card" takes
+        over from there, and only shrinks back to this same pill badge once
+        it's been shown for a while (see _composite_baked_popups), at the
+        very spot the end-of-video recap will keep it in."""
         popup = getattr(self, "_preview_badge", None)
         if popup is None:
             return frame
@@ -98,9 +219,9 @@ class _OverviewAnimationMixin:
             is_pill_badge=True, pill_name_chars=name_chars
         )
         x, y = popup.get("pin_x", popup["x"]), popup.get("pin_y", popup["y"])
-        margin = 24
+        margin = _PREVIEW_BADGE_MARGIN_PX
         box_x = int(max(margin, min(x - badge_w / 2, w - badge_w - margin)))
-        box_y = int(max(margin, min(y - badge_h - 44, h - badge_h - margin)))
+        box_y = int(max(margin, min(y - badge_h - _PREVIEW_BADGE_RISE_PX, h - badge_h - margin)))
         preview = popup.copy()
         preview["is_pill_badge"] = True
         preview["beside_box"] = (box_x, box_y)
@@ -157,61 +278,37 @@ class _OverviewAnimationMixin:
         animate_host: bool = False,
         total_display_seconds: Optional[float] = None,
     ) -> np.ndarray:
-        """Plays every unconnected stop-by attached to `host_popup` over
-        the frame held at that stop — ALL of them together (laid out and
-        faded in/out as one simultaneous group), not one card at a time in
-        turn. The group's shared display lasts
-        tuning.STOPBY_BATCH_SECONDS * (number shown), the same total the
-        old one-at-a-time version spent (route_brief.stopby_holds's own
-        hold-time budget assumes that total, so it's kept exactly, only
-        redistributed across the group instead of per-card). Returns the
-        last frame written.
+        """Plays every unconnected stop-by attached to `host_popup` over the
+        frame held at that stop — ALL of them together (laid out and faded
+        in/out as one simultaneous group), not one card at a time. The
+        group's shared display lasts tuning.STOPBY_BATCH_SECONDS * (number
+        shown), the total route_brief.stopby_holds's hold budget assumes.
+        Returns the last frame written.
 
-        These landmarks are places the route only passes NEAR — the
-        traveler visibly never goes to them, so a card popping where each
-        one sits read as the map claiming a visit that never happened.
-        Shown here instead: the traveler stops at the previous normal
-        waypoint, that stop's own card settles, and then every landmark
-        behind it appears together beside its own pin, each with a leader
-        line back to it. See _attach_stopby_groups for which stop-by
-        belongs to which host, and why a CONNECTED one is never in this
-        group.
+        These landmarks are places the route only passes NEAR, so a card
+        popping where each one sits would claim a visit that never happened:
+        the traveler stops at the previous normal waypoint, that stop's card
+        settles, then every landmark behind it appears together beside its own
+        pin with a leader line back to it (see _attach_stopby_groups).
 
-        The host's own line, pin and card are composited into the plate
-        once, at full opacity (`draw_host_card=False` for a host that
-        already showed its card elsewhere — a FULLSCREEN photo transition,
-        or its own settle-first beat just before this call — leaving only
-        its pin drawn here), rather than re-rendered per frame: the frame is
-        frozen for the whole batch, so the only thing changing is the shared
-        fade/slide on the stop-by cards on top of it. The host's card REUSES
-        the spot it already settled into during the arrival hold
-        (`host_popup["beside_box"]`) rather than being laid out fresh here
-        — recomputing independently made the card visibly jump to a new
-        spot the instant the batch started, right after it had just
-        settled from the arrival trigger a moment earlier. Only falls
-        back to a fresh layout when there's no existing spot to reuse
-        (e.g. this host never got a "beside" box of its own — the
-        FULLSCREEN case, though that skips this branch entirely via
-        draw_host_card=False). Reserved either way, so a landmark's card
-        can never land on top of the stop it belongs to. (`animate_host`
-        is the third case: the host's card isn't composited here at all —
-        it's laid out and faded in as part of the group below instead, see
-        that param's own note.)
+        The host's line, pin and card are composited into the plate once, at
+        full opacity (`draw_host_card=False` for a host that already showed
+        its card elsewhere, leaving only its pin drawn here), because the
+        frame is frozen for the whole batch. The host's card REUSES the spot
+        it settled into during the arrival hold (`host_popup["beside_box"]`):
+        a fresh layout made it visibly jump the instant the batch started.
+        It is reserved either way, so no landmark card lands on its stop.
 
-        `carried`: cards of the stops just passed, still inside their own
-        display time - drawn over the batch until they fade out (the list is
-        updated in place), and kept clear of the landmarks' cards.
+        `carried`: cards of the stops just passed, still inside their display
+        time - drawn over the batch until they fade out (the list is updated
+        in place), and kept clear of the landmarks' cards.
 
-        `animate_host`: the host's own card joins the simultaneous group
-        instead of being composited separately (implies `draw_host_card=
-        False` — only its pin is drawn up front, same as that case) — used
-        for a host that is ITSELF a stop-by (see host_is_stopby in the
-        caller): it pops together with the landmarks behind it rather than
-        settling alone first, the way a real waypoint host does.
-        `total_display_seconds`, given, overrides the group's shared hold
-        (normally STOPBY_BATCH_SECONDS * count) — the caller's own
-        already-cue-extended hold, so the host's arrival description and the
-        batch share one timer instead of the batch adding its own on top."""
+        `animate_host`: the host's card joins the simultaneous group instead
+        of being composited separately (implies `draw_host_card=False`) - for
+        a host that is ITSELF a stop-by: it pops together with the landmarks
+        behind it. `total_display_seconds`, given, overrides the group's
+        shared hold: the caller's own cue-extended hold, so the host's
+        description and the batch share one timer."""
         if not stopby_group:
             return base_frame
         carried = carried if carried is not None else []
@@ -220,73 +317,27 @@ class _OverviewAnimationMixin:
             stopby["data"]["arrived"] = True
             stopby["data"]["triggered"] = True
 
-        plate = base_frame
-        reserved = []
-        # The first stop-by of the video also explains what these round
-        # markers are (bottom-left ribbon + card, see _start_stopby_notice);
-        # the cards are kept off it.
-        notice = not getattr(self, "_stopby_notice_shown", False)
-        if notice:
-            reserved.append(self.graphics.stopby_notice_box(w, h))
-        else:
-            reserved.extend(self._stopby_notice_reserved(w, h))
-        # Every landmark's own reserved box below (after it's shown) needs
-        # this regardless of whether the host itself has a card — computed
-        # unconditionally so draw_host_card=False (the start pin, or a
-        # host that just finished a FULLSCREEN transition) doesn't leave
-        # it undefined.
-        card_w, card_h = self.graphics.beside_card_footprint()
-        reserved.extend(self._active_card_boxes(carried))
-        if draw_host_card:
-            existing_box = host_popup.get("beside_box")
-            if existing_box:
-                host_hud["beside_box"] = existing_box
-            else:
-                self._layout_recap_popups(
-                    [{"popup": host_hud, "frames_left": 1}], w, h,
-                    route_obstacles=route_obstacles,
-                )
-            plate = self.graphics.render_popup_box(
-                plate, host_hud, alpha=1.0, line_only=True
-            )
-            self._draw_pin(plate, host_popup, total_points)
-            plate = self.graphics.render_popup_box(
-                plate, host_hud, alpha=1.0, skip_line=True
-            )
-            host_box = host_hud.get("beside_box")
-            if host_box:
-                reserved.append(
-                    (host_box[0], host_box[1], host_box[0] + card_w, host_box[1] + card_h)
-                )
-        else:
-            self._draw_pin(plate, host_popup, total_points)
-
-        # Only the first STOPBY_BATCH_MAX_HELD get their own held card —
-        # the narration never names more than a few of them either way
-        # (overview_script.py's via_batches), so a longer group holding a
-        # card for every one used to sit the video frozen well past when
-        # the voice had already moved on. The rest still get their pin
-        # (they WERE passed) baked straight into the plate below, same as
-        # a "no room for a card" landmark.
+        plate, reserved = self._batch_plate(
+            base_frame, host_popup, host_hud, w, h, total_points,
+            route_obstacles, draw_host_card, carried,
+        )
+        # [NOTE] [Pacing] Only the first STOPBY_BATCH_MAX_HELD get a held card (the narration never
+        # names more); a longer group froze the video well past the voice. The rest still get
+        # their pin baked into the plate, like a "no room for a card" landmark.
         held = stopby_group[: tuning.STOPBY_BATCH_MAX_HELD]
         overflow = stopby_group[tuning.STOPBY_BATCH_MAX_HELD:]
         for stopby in overflow:
             self._draw_pin(plate, stopby, total_points)
 
-        # animate_host: the host joins the SAME laid-out group as the
-        # landmarks (not sliced by STOPBY_BATCH_MAX_HELD - it's the actual
-        # stop, always shown), so it fades in, is laid out to avoid overlap
-        # with, and holds for exactly as long as the rest of the batch.
+        # animate_host: the host joins the SAME laid-out group (not sliced by
+        # STOPBY_BATCH_MAX_HELD, it's the actual stop) and holds as long as the batch.
         group = ([host_popup] if animate_host else []) + held
         huds = [(item, item.copy()) for item in group]
         for _, hud in huds:
             hud["hud_corner"] = None
             hud["draw_leader_line"] = True
-        # Laid out TOGETHER in one pass (angular order around the group's
-        # own centroid, each one avoiding every other's box as well as
-        # `reserved`) — this is what makes them all appear at once instead
-        # of each sliding into whatever spot happened to be free after the
-        # last one settled.
+        # Laid out TOGETHER in one pass so they all appear at once instead of
+        # each sliding into whatever spot was free after the last settled.
         self._layout_recap_popups(
             [{"popup": hud, "frames_left": 1} for _, hud in huds], w, h,
             reserved_boxes=reserved, route_obstacles=route_obstacles,
@@ -295,66 +346,90 @@ class _OverviewAnimationMixin:
         placed = [(stopby, hud) for stopby, hud in huds if hud.get("beside_box")]
         no_room = [stopby for stopby, hud in huds if not hud.get("beside_box")]
         for stopby in no_room:
-            # Nowhere free to put this card. Its pin is still shown (it
-            # HAS been reached, as far as the map is concerned) — better a
-            # landmark with no card than a card dropped on top of the stop
-            # it belongs to.
+            # Better a landmark with a pin and no card than a card dropped on its own stop.
             self._draw_pin(plate, stopby, total_points)
 
-        last_frame = plate
         if not placed:
             self._start_stopby_notice(fps, tuning.STOPBY_NOTICE_SECONDS)
-        if placed:
-            base_boxes = {id(hud): hud["beside_box"] for _, hud in placed}
-            # One shared timer for the whole group - every card fades in
-            # and back out TOGETHER, on the group's combined duration
-            # (tuning.STOPBY_BATCH_SECONDS per card, summed - the same
-            # total the old sequential version spent, just not sliced
-            # into individual per-card turns) - or, when the caller passed
-            # one (a host_is_stopby's own already-cue-extended hold), that
-            # duration instead, so the host's description and the batch
-            # don't each claim their own separate stretch of time.
-            batch_seconds = (
-                total_display_seconds if total_display_seconds is not None
-                else tuning.STOPBY_BATCH_SECONDS * len(placed)
-            )
-            bp = self._make_baked_popup(
-                placed[0][0], batch_seconds, fps,
-                min_display_seconds=batch_seconds,
-            )
-            total_frames = bp["total_frames"]
-            self._start_stopby_notice(fps, total_frames / fps)
-            for i in range(total_frames):
-                # Drives _popup_fade_alpha/_popup_slide_offset_y's shared
-                # envelope straight off this loop's own progress, so every
-                # card fades and slides in and back out together, exactly
-                # the way every other popup in the video does.
-                bp["frames_left"] = total_frames - i - 1
-                alpha = self._popup_fade_alpha(bp)
-                slide = self._popup_slide_offset_y(bp)
+            return plate
+        batch_seconds = (
+            total_display_seconds if total_display_seconds is not None
+            else tuning.STOPBY_BATCH_SECONDS * len(placed)
+        )
+        return self._play_batch_cards(
+            video, plate, placed, carried, batch_seconds, w, h, route_obstacles, total_points, fps,
+        )
 
-                frame = plate
-                for _, hud in placed:
-                    bx, by = base_boxes[id(hud)]
-                    hud["beside_box"] = (bx, int(by + slide))
-                    frame = self.graphics.render_popup_box(
-                        frame, hud, alpha=alpha, line_only=True
-                    )
-                for stopby, _ in placed:
-                    self._draw_pin(frame, stopby, total_points)
-                for _, hud in placed:
-                    frame = self.graphics.render_popup_box(
-                        frame, hud, alpha=alpha, skip_line=True
-                    )
-                frame = self._draw_carried(frame, carried, w, h, route_obstacles, total_points, fps)
-                last_frame = frame
-                video.write(frame)
+    def _batch_plate(
+        self, base_frame: np.ndarray, host_popup: Dict, host_hud: Dict, w: int, h: int,
+        total_points: int, route_obstacles: Optional[np.ndarray], draw_host_card: bool,
+        carried: List[Dict],
+    ) -> Tuple[np.ndarray, List]:
+        """The stop-by batch's frozen plate (host line/pin/card drawn in) and
+        the boxes the landmark cards must keep off."""
+        plate = base_frame
+        reserved = []
+        # The first stop-by of the video also explains what these round markers are
+        # (bottom-left ribbon + card, see _start_stopby_notice); the cards are kept off it.
+        if not getattr(self, "_stopby_notice_shown", False):
+            reserved.append(self.graphics.stopby_notice_box(w, h))
+        else:
+            reserved.extend(self._stopby_notice_reserved(w, h))
+        card_w, card_h = self.graphics.beside_card_footprint()
+        reserved.extend(self._active_card_boxes(carried))
+        if not draw_host_card:
+            self._draw_pin(plate, host_popup, total_points)
+            return plate, reserved
+        existing_box = host_popup.get("beside_box")
+        if existing_box:
+            host_hud["beside_box"] = existing_box
+        else:
+            self._layout_recap_popups(
+                [{"popup": host_hud, "frames_left": 1}], w, h, route_obstacles=route_obstacles,
+            )
+        plate = self.graphics.render_popup_box(plate, host_hud, alpha=1.0, line_only=True)
+        self._draw_pin(plate, host_popup, total_points)
+        plate = self.graphics.render_popup_box(plate, host_hud, alpha=1.0, skip_line=True)
+        host_box = host_hud.get("beside_box")
+        if host_box:
+            reserved.append((host_box[0], host_box[1], host_box[0] + card_w, host_box[1] + card_h))
+        return plate, reserved
 
-            # Bake every landmark's pin into the plate so it stays put
-            # after the batch without being re-drawn from scratch.
+    def _play_batch_cards(
+        self, video, plate: np.ndarray, placed: List, carried: List[Dict], batch_seconds: float,
+        w: int, h: int, route_obstacles: Optional[np.ndarray], total_points: int, fps: int,
+    ) -> np.ndarray:
+        """Fades the placed landmark cards in and back out TOGETHER over
+        `batch_seconds`, then bakes their pins into `plate`; returns the last frame."""
+        base_boxes = {id(hud): hud["beside_box"] for _, hud in placed}
+        bp = self._make_baked_popup(
+            placed[0][0], batch_seconds, fps, min_display_seconds=batch_seconds,
+        )
+        total_frames = bp["total_frames"]
+        self._start_stopby_notice(fps, total_frames / fps)
+        last_frame = plate
+        for i in range(total_frames):
+            # Drives the shared fade/slide envelope straight off this loop's progress.
+            bp["frames_left"] = total_frames - i - 1
+            alpha = self._popup_fade_alpha(bp)
+            slide = self._popup_slide_offset_y(bp)
+
+            frame = plate
+            for _, hud in placed:
+                bx, by = base_boxes[id(hud)]
+                hud["beside_box"] = (bx, int(by + slide))
+                frame = self.graphics.render_popup_box(frame, hud, alpha=alpha, line_only=True)
             for stopby, _ in placed:
-                self._draw_pin(plate, stopby, total_points)
+                self._draw_pin(frame, stopby, total_points)
+            for _, hud in placed:
+                frame = self.graphics.render_popup_box(frame, hud, alpha=alpha, skip_line=True)
+            frame = self._draw_carried(frame, carried, w, h, route_obstacles, total_points, fps)
+            last_frame = frame
+            video.write(frame)
 
+        # Bake every landmark's pin into the plate so it stays put after the batch.
+        for stopby, _ in placed:
+            self._draw_pin(plate, stopby, total_points)
         return last_frame
 
     def _draw_carried(
@@ -400,89 +475,16 @@ class _OverviewAnimationMixin:
         frame if there's a stop_popup to arrive at, used afterward by the
         recap and the ending highlight's own lead-in zoom. None if there's
         no stop_popup."""
-        video = _NoticeWriter(video, self)
-        baked_popups: List[Dict] = []
-        path_history = []
-        mode_history = []
-        prev_cx, prev_cy = None, None
-        smoothed_angle = self._initial_heading(smooth_path)
-        # [NOTE] [Animation] path_history index where the most recently reached waypoint sits —
-        # marks the boundary between "earlier, completed legs" (always kept
-        # visible) and "the current leg" (the only part hidden while its
-        # arrival popup is showing).
-        last_leg_boundary = 0
-        # The last frame's state right before baked-popup cards are
-        # composited that iteration — i.e. pins and route, no popup card
-        # overlay. Captured only on the loop's final iteration (see below)
-        # rather than using self.last_frame, which can carry a still-fading
-        # popup card baked in: without this, a card mid-fade-out exactly
-        # when the animation ends gets baked into the recap's background at
-        # partial opacity, and then _render_recap_frame draws that SAME
-        # waypoint's card again on top at full opacity — a blurry/ghosted
-        # double-image for whichever popup happened to still be fading.
-        pre_popup_frame = None
-        # Stays None if the walk has no frames at all, which is what the
-        # card-hold tail below checks before reaching for the loop's own
-        # last-frame state.
-        frame_before_popups = None
-
-        # Live CLI substep + ETA for this (often long, frame-by-frame)
-        # render — total_stops excludes the start pin (index 0), which
-        # never triggers an arrival of its own. See mapfetcher.py's
-        # identical begin_substeps/show_item use for the per-leg tile
-        # fetch stage.
-        total_stops = max(1, len(active_popups) - 1)
-        tracker.begin_substeps(total_stops)
-        arrival_count = 0
-
-        # Waypoints placed close together on the map (a common case —
-        # several stops within the same block) can otherwise trigger their
-        # popups back-to-back within a frame or two of real animation time,
-        # popping the current card back out again almost as soon as it
-        # appeared. This floor guarantees at least this many seconds of
-        # real time between one trigger and the next, regardless of how
-        # close the pins themselves are — set far enough in the past that
-        # it never blocks the very first trigger.
+        # Waypoints placed close together can otherwise trigger back-to-back and pop the
+        # current card out almost as soon as it appeared: this floor guarantees at least this
+        # many frames between triggers, set far enough in the past not to block the first.
         min_trigger_gap_frames = int(fps * tuning.OVERVIEW_POPUP_MIN_TRIGGER_GAP_SECONDS)
-        last_trigger_frame = -min_trigger_gap_frames
-        # (x, y) of the most recently triggered popup's own pin — lets the
-        # gap check below tell "these two waypoints are genuinely close
-        # together on the map" apart from "these two just happen to be
-        # queued back to back" (see the cluster-gap override further
-        # down).
-        pending_popups: List[Dict] = []
-
-        # Real (non-stop-by) waypoints must pop up STRICTLY in route order —
-        # expected_frame/proximity alone (see the loop below) can still let
-        # a later waypoint's pin satisfy both checks while the traveler is
-        # only really passing near it on an earlier, unrelated stretch of a
-        # route that loops or clusters several stops close together (e.g.
-        # arriving at #2 while #3/#4 sit just a few pixels away) — popping
-        # #3/#4 before the traveler has actually walked the legs to reach
-        # them. `sequential_popups` (in the same route-position order
-        # active_popups already is) plus `seq_ptr` gate a real waypoint's
-        # eligibility on every waypoint ahead of it in sequence having
-        # already arrived first.
-        #
-        # Every stop-by (connected or not) is now grouped behind the
-        # nearest preceding REAL waypoint and played as part of ITS batch
-        # — see _attach_stopby_groups — so a HOSTED stop-by (stopby_host
-        # is not None) never reaches this loop at all; it's excluded here
-        # outright (its own "stopby_host is not None: continue" below),
-        # since _play_stopby_batch triggers it directly instead, as one
-        # continuous stop that doesn't resume the traveling animation
-        # until the run of stop-bys ends at the next real waypoint. Only
-        # a stop-by with no preceding real waypoint at all (nothing to
-        # host it — the hostless fallback case) still reaches this loop,
-        # keeping the old pop-on-proximity behaviour.
-        #
-        # Leaving a hosted stop-by in `sequential_popups` used to let
-        # seq_ptr get assigned to it — and since the proximity loop never
-        # checks a hosted stop-by against sequential_popups[seq_ptr]
-        # (skipped outright, above), seq_ptr could never advance past it,
-        # permanently blocking every real waypoint later in route order
-        # from ever triggering (and so never drawing its pin) for the
-        # rest of the video.
+        # [NOTE] [Animation] Real waypoints must pop up STRICTLY in route order: expected_frame +
+        # proximity alone let a later pin satisfy both while the traveler is only passing near it
+        # on a looping route. `sequential_popups` + `seq_ptr` gate each one on every waypoint
+        # ahead of it having arrived. A HOSTED stop-by is excluded outright: _play_stopby_batch
+        # triggers it, and leaving it here let seq_ptr stick on it forever, blocking every later
+        # waypoint. Only a hostless loose stop-by still reaches the loop (pop-on-proximity).
         sequential_popups = [
             ap for ap in active_popups
             if ap["index"] != 0
@@ -490,980 +492,631 @@ class _OverviewAnimationMixin:
             and ap.get("stopby_host") is None
             and not self._is_loose_stopby(ap)
         ]
-        seq_ptr = 0
+        s = _WalkState(
+            video=_NoticeWriter(video, self), current_bg=current_bg, cap=cap, is_video=is_video,
+            w=w, h=h, fps=fps, n_points=len(points), smooth_path=smooth_path, cum=cum_smooth_dist,
+            total_dist=total_smooth_dist, mode_breakpoints=mode_breakpoints,
+            active_popups=active_popups, stop_popup=stop_popup, route_obstacles=route_obstacle_arr,
+            sequential_popups=sequential_popups, smoothed_angle=self._initial_heading(smooth_path),
+            # excludes the start pin (index 0), which never arrives
+            total_stops=max(1, len(active_popups) - 1),
+            min_trigger_gap_frames=min_trigger_gap_frames,
+            last_trigger_frame=-min_trigger_gap_frames,
+        )
+        tracker.begin_substeps(s.total_stops)
+        self._play_start_batch(s)
 
-        # The start pin itself never "arrives" through the trigger loop
-        # below (index 0 is excluded throughout, same as every other
-        # place in this file) — so any stop-by batched under it (see
-        # _attach_stopby_groups) is played here instead, once, right
-        # before the traveler sets off. Same "stop, then show its
-        # landmarks in turn" beat every other host gets via
-        # _play_stopby_batch, just anchored to frame zero rather than a
-        # mid-route trigger. draw_host_card=False: the start pin has no
-        # "arrival card" of its own to show here (it hasn't gone anywhere
-        # yet) — only its pin, which is already part of every frame from
-        # the very first one.
-        start_popup = active_popups[0] if active_popups else None
-        if start_popup and start_popup.get("stopby_group"):
-            start_frame = current_bg.copy()
-            self._draw_pin(start_frame, start_popup, len(points))
-            # batch_display_seconds (overview.py): when the batch's own
-            # {goPreN} cue exists, hold until it's actually spoken instead
-            # of the fixed per-card estimate.
-            self.last_frame = self._play_stopby_batch(
-                video, start_frame, start_popup, start_popup.copy(),
-                start_popup["stopby_group"], w, h, fps, len(points),
-                route_obstacles=route_obstacle_arr, draw_host_card=False,
-                total_display_seconds=start_popup.get("batch_display_seconds"),
-            )
-
-        # A cued stop can ask the walker to wait there for a moment: the same
-        # path frame is played again `wait["n"]` more times (its popup keeps
-        # fading in), so the picture stays in step with the voice.
-        wait = {"n": 0}
-        # After a stop (its wait, card hold or stop-by cards) the walk to the
-        # NEXT cued stop is re-timed once so it still gets there on its cue -
-        # but only within _CATCH_UP_RANGE of its planned pace, so it never
-        # rushes or crawls (an unreachable cue just lands a little late/early).
-        route = {"path": smooth_path, "cum": cum_smooth_dist, "catch_up": False}
-
-        def _path_frames():
-            i = 0
-            while i < len(route["path"]):
-                yield i, route["path"][i]
-                while wait["n"] > 0:
-                    wait["n"] -= 1
-                    yield i, route["path"][i]
-                i += 1
-
-        def _catch_up(index: int) -> None:
-            ahead = [
-                ap for ap in active_popups
-                if ap.get("cue_frame") is not None and ap.get("expected_frame") is not None
-                and ap["expected_frame"] > index and not ap["data"].get("triggered")
-            ]
-            if not ahead:
-                return
-            nxt = min(ahead, key=lambda ap: ap["expected_frame"])
-            end = int(nxt["expected_frame"])
-            planned = end - index
-            if planned < 2:
-                return
-            wanted = int(nxt["cue_frame"]) - video.frames_written
-            lo, hi = _CATCH_UP_RANGE
-            new_len = int(round(min(max(wanted, planned / hi), planned / lo)))
-            if abs(new_len - planned) < 2:
-                return
-            path, cum = route["path"], route["cum"]
-            xs, ys = [0.0, float(new_len)], [0.0, float(planned)]
-            seg, seg_cum = warp_path(
-                path[index:end + 1], cum[index:end + 1] if cum is not None else None,
-                xs, ys, out_len=new_len + 1,
-            )
-            route["path"] = np.concatenate([path[:index], seg, path[end + 1:]])
-            if cum is not None:
-                route["cum"] = np.concatenate([cum[:index], seg_cum, cum[end + 1:]])
-            shift = new_len - planned
-            for ap in active_popups:
-                ef = ap.get("expected_frame")
-                if ef is None or ef <= index:
-                    continue
-                ap["expected_frame"] = (
-                    index + int(round((ef - index) * new_len / planned)) if ef <= end else ef + shift
-                )
-            logger.info(
-                "Overview: walk to stop #%s re-timed %.1fs -> %.1fs to meet its cue.",
-                nxt.get("order"), planned / fps, new_len / fps,
-            )
-
+        clock = _WalkClock(smooth_path, cum_smooth_dist)
         last_index = -1
-        for current_frame, path_point in _path_frames():
+        for current_frame, path_point in clock.frames():
             if current_frame != last_index:
-                if route["catch_up"]:
-                    route["catch_up"] = False
-                    _catch_up(current_frame)
-                    path_point = route["path"][current_frame]
-                smooth_path, cum_smooth_dist = route["path"], route["cum"]
+                if clock.catch_up_due:
+                    clock.catch_up_due = False
+                    _retime_walk(clock, current_frame, active_popups, s.video.frames_written, fps)
+                    path_point = clock.path[current_frame]
+                s.smooth_path, s.cum = clock.path, clock.cum
                 last_index = current_frame
-            if is_video:
-                ret, vid_frame = cap.read()
-                if ret:
-                    if vid_frame.shape[0] != h or vid_frame.shape[1] != w:
-                        vid_frame = cv2.resize(vid_frame, (w, h))
-                    current_bg = vid_frame
+            self._walk_one_frame(s, clock, current_frame, path_point)
 
-            frame = current_bg.copy()
+        self._hold_final_cards(s)
+        return s.pre_popup_frame
 
-            path_history.append((int(path_point[0]), int(path_point[1])))
+    def _play_start_batch(self, s: _WalkState) -> None:
+        """Index 0 never "arrives" through the trigger loop, so a stop-by batch
+        hosted by the start pin is played here, once, right before the walker
+        sets off (draw_host_card=False: only its pin, already on every frame).
+        `batch_display_seconds` (overview.py) holds until the batch's {goPreN}
+        cue is spoken instead of the fixed per-card estimate."""
+        start_popup = s.active_popups[0] if s.active_popups else None
+        if not (start_popup and start_popup.get("stopby_group")):
+            return
+        start_frame = s.current_bg.copy()
+        self._draw_pin(start_frame, start_popup, s.n_points)
+        self.last_frame = self._play_stopby_batch(
+            s.video, start_frame, start_popup, start_popup.copy(),
+            start_popup["stopby_group"], s.w, s.h, s.fps, s.n_points,
+            route_obstacles=s.route_obstacles, draw_host_card=False,
+            total_display_seconds=start_popup.get("batch_display_seconds"),
+        )
 
-            leg_color = None
-            if cum_smooth_dist is not None:
-                frac = cum_smooth_dist[current_frame] / total_smooth_dist
-                current_mode = self._mode_at_fraction(mode_breakpoints, frac)
-                color_breakpoints = getattr(self, "_color_breakpoints", None)
-                if color_breakpoints:
-                    leg_color = self._mode_at_fraction(color_breakpoints, frac)
-                self._hud_progress_frac = frac
-            else:
-                current_mode = "walking"
-            mode_history.append((current_mode, leg_color) if leg_color else current_mode)
+    def _walk_one_frame(
+        self, s: _WalkState, clock: _WalkClock, current_frame: int, path_point,
+    ) -> None:
+        """One frame of the walk: move the dot, queue/trigger arrivals, draw
+        pins and flowing cards, and write the frame (or, on an arrival, the
+        whole hold it starts)."""
+        if s.is_video:
+            self._read_video_frame(s)
+        frame = s.current_bg.copy()
 
-            if not is_video:
-                self.graphics.draw_path(frame, path_history, mode_history)
+        s.path_history.append((int(path_point[0]), int(path_point[1])))
+        mode = self._track_mode(s, current_frame)
+        if not s.is_video:
+            self.graphics.draw_path(frame, s.path_history, s.mode_history)
 
-            # [NOTE] [Animation] Detected here, BEFORE the pin/popup drawing below, so a
-            # waypoint's pin and its popup card appear on the very same
-            # frame it's reached — detecting it after drawing (as this used
-            # to) left the just-arrived pin (and, for a frozen waypoint,
-            # its popup entirely) invisible for the whole held/flowing
-            # display, only catching up once the NEXT frame drew fresh.
-            cx, cy = path_history[-1]
-            px, py = path_history[-2] if len(path_history) > 1 else path_history[-1]
+        # [NOTE] [Animation] Detected BEFORE the pin/popup drawing so a waypoint's pin and card
+        # appear on the very frame it's reached; detecting after left them invisible until the
+        # next frame drew fresh.
+        cx, cy = s.path_history[-1]
+        px, py = s.path_history[-2] if len(s.path_history) > 1 else s.path_history[-1]
+        beat = _Beat(current_frame, cx, cy, px, py, mode)
+        s.last_beat = beat
+        at_end = current_frame == len(s.smooth_path) - 1
 
-            # [NOTE] [Animation] stop_popup (the destination "E" pin) is deliberately excluded
-            # from the proximity-trigger loop below — its arrival is
-            # handled separately, by _render_recap_and_summary /
-            # _render_ending_highlight — but the per-frame pin-drawing
-            # below piggybacks on that same "triggered" flag, so without
-            # this its pin was NEVER drawn on the main map at all (not
-            # even once the traveler had actually reached it), only ever
-            # appearing via the separate ending-highlight's own marker.
-            if (
-                stop_popup
-                and not stop_popup["data"]["triggered"]
-                and current_frame == len(smooth_path) - 1
-            ):
-                stop_popup["data"]["triggered"] = True
-                # The per-frame pin-drawing loops below key off "arrived"
-                # now (see the proximity loop's own comment further down),
-                # not "triggered" — set both here so the "E" pin still
-                # shows up on this same final frame instead of only ever
-                # appearing via the separate ending-highlight's marker.
-                stop_popup["data"]["arrived"] = True
+        # [NOTE] [Animation] stop_popup (the "E" pin) is excluded from the proximity loop (the
+        # recap/ending highlight handle its arrival), but the pin drawing keys off "arrived", so
+        # flag it here or its pin never shows on the main map.
+        if s.stop_popup and not s.stop_popup["data"]["triggered"] and at_end:
+            s.stop_popup["data"]["triggered"] = True
+            s.stop_popup["data"]["arrived"] = True
 
-            # Queue any not-yet-triggered, not-yet-queued popup the
-            # traveler is passing right now — queued (not triggered)
-            # immediately, so a popup is never missed just because the
-            # cooldown below hasn't elapsed yet: without this, gating the
-            # proximity check itself on the cooldown could let the
-            # traveler move past a clustered pin entirely during the wait,
-            # with no later frame ever close enough to catch it.
-            for popup in active_popups:
-                if popup["index"] == 0 or (
-                    stop_popup and popup["index"] == stop_popup["index"]
-                ):
-                    continue
-                # A stop-by belonging to a host waypoint's batch (connected
-                # or not) never triggers on its own — its card plays during
-                # that host's one continuous stop instead (see
-                # _play_stopby_batch). Without this it would ALSO pop here
-                # on proximity, showing the same landmark twice.
-                if popup.get("stopby_host") is not None:
-                    continue
-                # Only a HOSTLESS unconnected stop-by still behaves the old
-                # way: exempt from the sequence gate below, and from having
-                # to be near the traveler at all.
-                is_stopby = self._is_loose_stopby(popup)
-                # A real waypoint — and a connected stop-by, which is one
-                # in all but appearance — only becomes eligible once every
-                # waypoint ahead of it in route sequence has already
-                # arrived; see sequential_popups/seq_ptr's own comment
-                # above.
-                if not is_stopby and (
-                    seq_ptr >= len(sequential_popups)
-                    or popup is not sequential_popups[seq_ptr]
-                ):
-                    continue
-                # Identity check, not `in` (which is value-equality on
-                # dicts) — these dicts keep mutating in place as the loop
-                # runs (e.g. "triggered" itself), so an equality-based
-                # membership test isn't reliable for "is this the same
-                # popup already queued".
-                if not popup["data"]["triggered"] and not any(
-                    p is popup for p in pending_popups
-                ):
-                    # Raw pixel distance alone isn't enough to mean "the
-                    # traveler has arrived" — a route that loops or
-                    # doubles back (a real street layout near a cluster
-                    # of stops) can swing physically close to a pin long
-                    # before actually reaching it in the path's own
-                    # sequence, popping that waypoint's card up while the
-                    # traveler is really just passing through on an
-                    # earlier, unrelated leg. `expected_frame` (set in
-                    # overview.py) is this popup's own nearest-point
-                    # position along the animated path — requiring the
-                    # traveler to have actually reached near that point
-                    # in time (not just in space) before it can trigger
-                    # rules out that false-early case. A small tolerance
-                    # (see tuning.OVERVIEW_POPUP_TRIGGER_TOLERANCE_SECONDS)
-                    # keeps it from being stricter than the spatial check
-                    # itself needs — just enough to absorb expected_frame's
-                    # own estimation jitter, not enough to visibly show a
-                    # popup before the traveler has actually gotten there.
-                    expected_frame = popup.get("expected_frame")
-                    trigger_tolerance_frames = int(
-                        fps * tuning.OVERVIEW_POPUP_TRIGGER_TOLERANCE_SECONDS
-                    )
-                    if (
-                        expected_frame is not None
-                        and current_frame < expected_frame - trigger_tolerance_frames
-                    ):
-                        continue
-                    # A stop-by can legitimately sit off the drawn route
-                    # entirely (a viewpoint a short walk from the road, a
-                    # landmark the route just passes near rather than
-                    # through) — requiring the traveler's on-screen dot to
-                    # actually come within the marker's trigger radius, the
-                    # same test real waypoints need, meant one placed just
-                    # outside that radius would never trigger at all, no
-                    # matter how long the animation ran. Time (expected_frame,
-                    # already checked above) is enough on its own for a
-                    # stop-by; only a real waypoint still needs the
-                    # traveler to actually be near it on screen.
-                    near_enough = is_stopby or (
-                        RouteGeometryProcessor.point_to_segment_distance(
-                            popup["x"], popup["y"], px, py, cx, cy
-                        )
-                        < (
-                            self.graphics.marker_radius
-                            + self.trigger_radius_padding["overview"]
-                        )
-                    )
-                    if near_enough:
-                        pending_popups.append(popup)
-                        if not is_stopby:
-                            # This was sequential_popups[seq_ptr] (the gate
-                            # above only let it through if so) — advance so
-                            # the NEXT real waypoint in sequence becomes
-                            # eligible for its own proximity check.
-                            seq_ptr += 1
-                        # Mark the pin itself as reached right away, on the
-                        # same frame the traveler actually gets there —
-                        # "triggered" below (which the pin-drawing loops
-                        # used to gate on instead) only flips once this
-                        # popup's card actually clears the min-trigger-gap
-                        # cooldown, which for a cluster of nearby waypoints
-                        # can be a couple of seconds after the real arrival.
-                        # Gating the pin on "triggered" made it (and the
-                        # popup card fading in beside it) visibly pop in
-                        # late, seconds after the traveler had already
-                        # passed the spot on screen.
-                        popup["data"]["arrived"] = True
-                        popup["pop_frame"] = video.frames_written  # the pin pops in from here
+        for popup in s.active_popups:
+            self._queue_if_reached(s, popup, beat)
+        self._update_preview(s)
+        triggered_popup = self._pop_trigger(s, clock, current_frame)
 
-            # The next real waypoint still ahead (seq_ptr already advanced
-            # above for anything reached this frame) gets a small preview
-            # badge — name, number and a thumbnail — ahead of actually
-            # arriving, so the traveler is never walking toward a stop with
-            # nothing on screen naming it yet. Drawn every frame via
-            # _apply_hud/_NoticeWriter, same as the scale bar/distance chip,
-            # so every write path (walk, holds, batches) shows it; cleared
-            # the moment that waypoint is itself triggered (its own real
-            # card, not this preview, takes over from there).
-            self._preview_badge = None
-            # Same two values the HUD's stop counter and "next" line show
-            # (seq_ptr = how many numbered stops have been reached).
-            self._hud_stops = (seq_ptr, len(sequential_popups)) if sequential_popups else None
-            self._hud_next_stop = None
-            if seq_ptr < len(sequential_popups):
-                upcoming = sequential_popups[seq_ptr]
-                self._hud_next_stop = upcoming.get("label") or None
-                if (
-                    not upcoming["data"].get("triggered")
-                    and upcoming["data"].get("popup_image")
-                ):
-                    self._preview_badge = upcoming
+        # Pins reached in the last tuning.PIN_POP_SECONDS are still popping in.
+        self._pop_now = s.video.frames_written
+        frame_no_route = self._frame_without_current_leg(s)
+        if not s.is_video:
+            self._draw_walk_pins(s, frame, at_end)
 
-            # A fixed cooldown between triggers is what a single popup
-            # needs to be readable before the next one bumps it — but
-            # applied unconditionally to a real backlog (several
-            # waypoints queued at once, see the proximity loop above), it
-            # became the bottleneck itself: dequeuing one every fixed
-            # min_trigger_gap_frames could take longer than the
-            # remaining animation had frames left for, so some queued
-            # waypoints never got their turn to even be triggered before
-            # the video ended. Shrinks (down to a floor) the more that's
-            # backed up, so a dense cluster drains fast enough that every
-            # waypoint the traveler actually reached gets shown.
-            effective_gap_frames = min_trigger_gap_frames
-            if len(pending_popups) > 1:
-                effective_gap_frames = max(
-                    int(fps * _MIN_TRIGGER_GAP_FLOOR_SECONDS),
-                    min_trigger_gap_frames // len(pending_popups),
-                )
+        # [NOTE] [Animation] Only the last iteration's pre-popup frame is read (by the recap), so
+        # skip the full-resolution copy on every other frame.
+        if s.stop_popup and at_end:
+            s.pre_popup_frame = frame.copy()
+        # The clean plate BEFORE any flowing card goes on: a freeze/batch holds it for seconds,
+        # and a stale still-fading card baked into it would show next to the new stop's card.
+        s.frame_before_popups = frame
+        self._trim_cards_for_return(s, triggered_popup)
+        frame, s.baked_popups = self._composite_baked_popups(
+            frame, s.baked_popups, s.w, s.h, s.route_obstacles,
+            active_popups=s.active_popups, total_points=s.n_points, fps=s.fps,
+        )
+        if frame_no_route is None:
+            frame_no_route = frame
 
-            triggered_popup = None
-            if pending_popups and current_frame - last_trigger_frame >= effective_gap_frames:
-                triggered_popup = pending_popups.pop(0)
-                triggered_popup["data"]["triggered"] = True
-                last_trigger_frame = current_frame
-                route["catch_up"] = True
-                if triggered_popup["data"].get("inaccessible"):
-                    self._start_stopby_notice(fps, tuning.STOPBY_NOTICE_SECONDS, kind="closed")
-                elif triggered_popup["data"].get("is_stopby") and not triggered_popup.get("stopby_group"):
-                    self._start_stopby_notice(fps, tuning.STOPBY_NOTICE_SECONDS)
-                if triggered_popup.get("cue_frame") is not None:
-                    logger.info(
-                        "Overview stop #%s reached at %.1fs (its cue: %.1fs).",
-                        triggered_popup.get("order"), video.frames_written / fps,
-                        triggered_popup["cue_frame"] / fps,
-                    )
-                # border_color was set once in render_overview's setup,
-                # before any waypoint had "arrived" — for a plain numbered
-                # pin that made it permanently the pre-arrival default
-                # marker color (_pin_color returns None until "arrived" is
-                # set), even once this pin's own dot has since turned
-                # arrived_marker_color above. Recompute fresh now that
-                # "arrived" is true (set on the proximity loop above) so
-                # the card's border actually matches its own pin's current
-                # color, same as waypoints.py's per-leg video already does.
-                _, fresh_border_color, _ = self._pin_label_and_color(
-                    triggered_popup, len(points)
-                )
-                triggered_popup["border_color"] = (
-                    fresh_border_color or self.graphics.marker_color
-                )
+        if triggered_popup:
+            self._walk_arrive(s, clock, beat, triggered_popup, frame_no_route)
+        else:
+            if not s.is_video:
+                self._walk_turn(s, beat)
+                self._walk_draw_icon(s, frame, beat)
+            self.last_frame = frame
+            s.video.write(frame)
+        s.prev_cx, s.prev_cy = cx, cy
 
-            # [NOTE] [Animation] "Point to point" snapshot for hide_route_on_popup — every
-            # earlier, already-completed leg stays drawn; only the CURRENT
-            # leg (since the last waypoint reached) is left off, so arriving
-            # at a stop doesn't erase the whole route travelled so far.
-            # Built separately (rather than copying `frame` before the line
-            # is drawn) because pins still need to render on top of the
-            # route line for normal display below.
-            # Pins reached in the last tuning.PIN_POP_SECONDS are still popping in.
-            self._pop_now = video.frames_written
-            frame_no_route = None
-            if not is_video and self.hide_route_on_popup:
-                frame_no_route = current_bg.copy()
-                self.graphics.draw_path(
-                    frame_no_route,
-                    path_history[: last_leg_boundary + 1],
-                    mode_history[: last_leg_boundary + 1],
-                )
-                for wp in active_popups:
-                    if wp["data"].get("arrived") or wp["index"] == 0:
-                        self._draw_pin(frame_no_route, wp, len(points), scale=self._pin_pop_scale(wp, self._pop_now, fps))
+    def _read_video_frame(self, s: _WalkState) -> None:
+        ret, vid_frame = s.cap.read()
+        if not ret:
+            return
+        if vid_frame.shape[0] != s.h or vid_frame.shape[1] != s.w:
+            vid_frame = cv2.resize(vid_frame, (s.w, s.h))
+        s.current_bg = vid_frame
 
-            if not is_video:
-                # The recap draws a plain dot per stop, not the walk's
-                # teardrop pins (see _render_recap_frame / _draw_recap_dot),
-                # so it gets the plate from BEFORE they go on — drawing
-                # dots over the frame below would leave each teardrop
-                # sticking out around its own dot.
-                last_frame_of_walk = stop_popup and current_frame == len(smooth_path) - 1
-                if last_frame_of_walk:
-                    # The map faded back with the route redrawn on it (see plain_recap_plate),
-                    # built here because this is where the background and the walked path are
-                    # both to hand.
-                    self._recap_plate = self.plain_recap_plate(
-                        current_bg, path_history, mode_history
-                    )
-                # Every waypoint is shown once up front on the intro frame
-                # (a preview of the whole route), but from here on a pin
-                # only reappears once the traveler actually reaches it —
-                # not-yet-visited stops stay hidden instead of cluttering
-                # the map with numbers for places not reached yet.
-                for wp in active_popups:
-                    if wp["data"].get("arrived") or wp["index"] == 0:
-                        self._draw_pin(frame, wp, len(points), scale=self._pin_pop_scale(wp, self._pop_now, fps))
+    def _track_mode(self, s: _WalkState, current_frame: int) -> str:
+        """The travel mode at this frame; records it (with the leg color, when
+        the route has per-leg colors) and the HUD's progress fraction."""
+        leg_color = None
+        if s.cum is not None:
+            frac = s.cum[current_frame] / s.total_dist
+            mode = self._mode_at_fraction(s.mode_breakpoints, frac)
+            color_breakpoints = getattr(self, "_color_breakpoints", None)
+            if color_breakpoints:
+                leg_color = self._mode_at_fraction(color_breakpoints, frac)
+            self._hud_progress_frac = frac
+        else:
+            mode = "walking"
+        s.mode_history.append((mode, leg_color) if leg_color else mode)
+        return mode
 
-            # [NOTE] [Animation] Only the very last iteration's pre-popup frame is ever read
-            # (see the recap's use of it, below) — smooth_path's length is
-            # fixed and known up front (no early-exit branch in this loop),
-            # so skip the per-frame copy everywhere else instead of paying
-            # for a full-resolution frame copy on every single frame of
-            # the animation.
-            if stop_popup and current_frame == len(smooth_path) - 1:
-                pre_popup_frame = frame.copy()
-            # Kept for popup_base_frame below (not mutated by the call —
-            # render_popup_box always copies its input frame rather than
-            # drawing in place): the clean plate BEFORE any currently-
-            # flowing card is composited onto it. Without this, a new
-            # waypoint arriving while an EARLIER, still-fading flow-through
-            # card (e.g. a connected stop-by's) is on screen would bake
-            # that stale card permanently into popup_base_frame — which
-            # then gets held for the whole freeze/pause and, for a host
-            # with a stop-by batch, the whole batch too — showing two
-            # unrelated waypoints' cards on screen together for seconds.
-            frame_before_popups = frame
-            # Once every real waypoint (and every stop-by host) has already
-            # been QUEUED (seq_ptr advances on proximity — see the loop
-            # above — which can be a few frames before that last waypoint's
-            # own cooldown-gated trigger below), nothing is left ahead but
-            # the final destination itself — the "Return" stretch, which
-            # should show just the line, the pins and the "... へ" banner —
-            # no popup card, and no fade transition either (an instant cut
-            # is exactly what was asked for here, not a graceful wrap-up).
-            # `triggered_popup is None` guards the one frame the last
-            # waypoint (or its stop-by host) itself triggers on, so its own
-            # arrival still plays out normally; every OTHER card's own
-            # POPUP_MIN_DISPLAY_SECONDS is no longer at risk from this cut
-            # the way it used to be — each waypoint's own leg_display_seconds
-            # (see overview.py) now already finishes before the NEXT one's
-            # "まもなく" banner even appears, which is well before seq_ptr
-            # can read "done" here.
-            # The last waypoint's own card is kept: clearing it too wiped it
-            # the frame after it triggered, so the final stop never showed one.
-            if triggered_popup is None and seq_ptr >= len(sequential_popups) and not self._cards_stay():
-                last_stop = sequential_popups[-1] if sequential_popups else None
-                baked_popups = [b for b in baked_popups if b["popup"] is last_stop]
-            frame, baked_popups = self._composite_baked_popups(
-                frame, baked_popups, w, h, route_obstacle_arr,
-                active_popups=active_popups, total_points=len(points), fps=fps,
+    def _walk_turn(self, s: _WalkState, beat: _Beat) -> None:
+        s.smoothed_angle = self._smoothed_heading(
+            s.smoothed_angle, beat.cx, beat.cy, s.prev_cx, s.prev_cy
+        )
+
+    def _walk_draw_icon(self, s: _WalkState, frame: np.ndarray, beat: _Beat) -> None:
+        self.graphics.draw_transport_icon(
+            frame, beat.cx, beat.cy, beat.index, s.smoothed_angle, mode=beat.mode
+        )
+
+    def _queue_if_reached(self, s: _WalkState, popup: Dict, beat: _Beat) -> None:
+        """Queues (not triggers) a not-yet-triggered popup the traveler is
+        passing right now: queued immediately so a popup is never missed just
+        because the trigger cooldown hasn't elapsed (gating the proximity check
+        on it could let the traveler move past a clustered pin entirely)."""
+        stop_popup = s.stop_popup
+        if popup["index"] == 0 or (stop_popup and popup["index"] == stop_popup["index"]):
+            return
+        # A stop-by hosted by a waypoint's batch plays during that host's stop
+        # (see _play_stopby_batch); triggering here too would show it twice.
+        if popup.get("stopby_host") is not None:
+            return
+        is_stopby = self._is_loose_stopby(popup)
+        seq = s.sequential_popups
+        if not is_stopby and (s.seq_ptr >= len(seq) or popup is not seq[s.seq_ptr]):
+            return
+        # Identity check, not `in`: these dicts keep mutating in place ("triggered" itself).
+        if popup["data"]["triggered"] or any(p is popup for p in s.pending_popups):
+            return
+        # Raw pixel distance alone isn't "arrived": a route that loops can pass close to a
+        # pin long before reaching it. expected_frame (overview.py) is the pin's own position in
+        # the path's time sequence; the tolerance only absorbs its estimation jitter.
+        expected_frame = popup.get("expected_frame")
+        trigger_tolerance_frames = int(s.fps * tuning.OVERVIEW_POPUP_TRIGGER_TOLERANCE_SECONDS)
+        if (
+            expected_frame is not None
+            and beat.index < expected_frame - trigger_tolerance_frames
+        ):
+            return
+        # A stop-by can sit off the drawn route entirely, so time alone is enough for it;
+        # only a real waypoint must also be near the traveler on screen.
+        near_enough = is_stopby or (
+            RouteGeometryProcessor.point_to_segment_distance(
+                popup["x"], popup["y"], beat.px, beat.py, beat.cx, beat.cy
+            )
+            < (
+                self.graphics.marker_radius
+                + self.trigger_radius_padding["overview"]
+            )
+        )
+        if not near_enough:
+            return
+        s.pending_popups.append(popup)
+        if not is_stopby:
+            # This was sequential_popups[seq_ptr]: the next real waypoint becomes eligible.
+            s.seq_ptr += 1
+        # [NOTE] [Animation] Pin is "arrived" on the frame the traveler gets there; "triggered"
+        # only flips after the cooldown, seconds later in a cluster, which made the pin pop late.
+        popup["data"]["arrived"] = True
+        popup["pop_frame"] = s.video.frames_written  # the pin pops in from here
+
+    def _update_preview(self, s: _WalkState) -> None:
+        """The next real waypoint still ahead gets a small preview badge (name,
+        number, thumbnail) before arriving, so the traveler never walks toward a
+        stop with nothing on screen naming it; also the HUD's stop counter and
+        "next" line. The badge clears the moment that waypoint triggers."""
+        self._preview_badge = None
+        self._hud_stops = (s.seq_ptr, len(s.sequential_popups)) if s.sequential_popups else None
+        self._hud_next_stop = None
+        if s.seq_ptr < len(s.sequential_popups):
+            upcoming = s.sequential_popups[s.seq_ptr]
+            self._hud_next_stop = upcoming.get("label") or None
+            if not upcoming["data"].get("triggered") and upcoming["data"].get("popup_image"):
+                self._preview_badge = upcoming
+
+    def _pop_trigger(self, s: _WalkState, clock: _WalkClock, current_frame: int) -> Optional[Dict]:
+        """Dequeues the next popup once the trigger cooldown allows. The cooldown
+        shrinks (to a floor) the more is backed up: a fixed one could outlast the
+        remaining frames and leave queued waypoints never shown."""
+        effective_gap_frames = s.min_trigger_gap_frames
+        if len(s.pending_popups) > 1:
+            effective_gap_frames = max(
+                int(s.fps * _MIN_TRIGGER_GAP_FLOOR_SECONDS),
+                s.min_trigger_gap_frames // len(s.pending_popups),
+            )
+        if not s.pending_popups or current_frame - s.last_trigger_frame < effective_gap_frames:
+            return None
+        popup = s.pending_popups.pop(0)
+        popup["data"]["triggered"] = True
+        s.last_trigger_frame = current_frame
+        clock.catch_up_due = True
+        if popup["data"].get("inaccessible"):
+            self._start_stopby_notice(s.fps, tuning.STOPBY_NOTICE_SECONDS, kind="closed")
+        elif popup["data"].get("is_stopby") and not popup.get("stopby_group"):
+            self._start_stopby_notice(s.fps, tuning.STOPBY_NOTICE_SECONDS)
+        if popup.get("cue_frame") is not None:
+            logger.info(
+                "Overview stop #%s reached at %.1fs (its cue: %.1fs).",
+                popup.get("order"), s.video.frames_written / s.fps, popup["cue_frame"] / s.fps,
+            )
+        # border_color was set before any waypoint had "arrived", so it is the pre-arrival
+        # marker color; recompute now so the card border matches its pin.
+        _, fresh_border_color, _ = self._pin_label_and_color(popup, s.n_points)
+        popup["border_color"] = fresh_border_color or self.graphics.marker_color
+        return popup
+
+    def _frame_without_current_leg(self, s: _WalkState) -> Optional[np.ndarray]:
+        """[NOTE] [Animation] "Point to point" snapshot for hide_route_on_popup: every earlier
+        leg stays drawn, only the CURRENT one (since the last waypoint) is left off, so
+        arriving doesn't erase the route travelled so far. Built separately from the walk
+        frame because pins must render on top of the route line there."""
+        if s.is_video or not self.hide_route_on_popup:
+            return None
+        frame_no_route = s.current_bg.copy()
+        self.graphics.draw_path(
+            frame_no_route,
+            s.path_history[: s.last_leg_boundary + 1],
+            s.mode_history[: s.last_leg_boundary + 1],
+        )
+        self._draw_arrived_pins(s, frame_no_route)
+        return frame_no_route
+
+    def _draw_arrived_pins(self, s: _WalkState, frame: np.ndarray) -> None:
+        """Every waypoint is shown once up front on the intro frame, but from
+        here on a pin only reappears once the traveler reaches it."""
+        for wp in s.active_popups:
+            if wp["data"].get("arrived") or wp["index"] == 0:
+                self._draw_pin(frame, wp, s.n_points, scale=self._pin_pop_scale(wp, self._pop_now, s.fps))
+
+    def _draw_walk_pins(self, s: _WalkState, frame: np.ndarray, at_end: bool) -> None:
+        # The recap draws a plain dot per stop, so it gets the plate from BEFORE the
+        # teardrop pins go on (dots over pins would leave each teardrop sticking out).
+        if s.stop_popup and at_end:
+            # The map faded back with the route redrawn on it (see plain_recap_plate).
+            self._recap_plate = self.plain_recap_plate(
+                s.current_bg, s.path_history, s.mode_history
+            )
+        self._draw_arrived_pins(s, frame)
+
+    def _trim_cards_for_return(self, s: _WalkState, triggered_popup: Optional[Dict]) -> None:
+        """Once every real waypoint has been QUEUED, only the final destination is
+        ahead (the "Return" stretch: just line, pins and banner), so every card but
+        the last stop's is cleared, with no fade. `triggered_popup is None` lets
+        the frame the last waypoint itself triggers play out normally."""
+        if triggered_popup is None and s.seq_ptr >= len(s.sequential_popups) and not self._cards_stay():
+            last_stop = s.sequential_popups[-1] if s.sequential_popups else None
+            s.baked_popups = [b for b in s.baked_popups if b["popup"] is last_stop]
+
+    def _walk_arrive(
+        self, s: _WalkState, clock: _WalkClock, beat: _Beat, popup: Dict,
+        frame_no_route: np.ndarray,
+    ) -> None:
+        """A waypoint triggered on this frame: lay its card out and play its
+        arrival, either flowing (the walker keeps moving) or frozen."""
+        # Everything up to here becomes an "earlier leg" for the NEXT popup's hide effect.
+        s.last_leg_boundary = len(s.path_history) - 1
+
+        s.arrival_count += 1
+        place_label = popup.get("label") or f"waypoint_{popup['index']}"
+        tracker.show_item(
+            s.arrival_count,
+            f"Rendering overview video {s.arrival_count}/{s.total_stops}: arriving at '{place_label}'",
+        )
+
+        # [NOTE] [Animation] Laid out once and kept on the popup so the arrival pause, the hold
+        # and the lingering HUD all reuse the identical spot; every card already on screen is
+        # reserved or this lone popup could land on a still-visible neighbour.
+        self._layout_recap_popups(
+            [{"popup": popup, "frames_left": 1}], s.w, s.h,
+            route_obstacles=s.route_obstacles,
+            reserved_boxes=self._active_card_boxes(
+                s.baked_popups, exclude=popup
+            ) + self._stopby_notice_reserved(s.w, s.h),
+        )
+        popup["hud_corner"] = None
+        popup["draw_leader_line"] = True
+
+        # Shared base for the arrival pause and the popup: only already-arrived pins when
+        # requested, so the pause and the popup read as one "you arrived" beat.
+        if self.hide_upcoming_pins_on_popup:
+            popup_base_frame = self._build_freeze_frame(
+                s.current_bg, s.path_history, s.mode_history,
+                s.last_leg_boundary, s.active_popups, s.n_points,
+            )
+        else:
+            popup_base_frame = (
+                frame_no_route if self.hide_route_on_popup else s.frame_before_popups
             )
 
-            if frame_no_route is None:
-                frame_no_route = frame
+        # [NOTE] [Animation] Waypoints flow through by default (the traveler keeps moving); one
+        # only freezes with "freeze_frame": true. A waypoint hosting unconnected stop-bys always
+        # freezes: their cards are played over its held frame.
+        stopby_group = popup.get("stopby_group") or []
+        if popup["data"].get("freeze_frame", False) or bool(stopby_group):
+            self._arrive_frozen(s, beat, popup, popup_base_frame, stopby_group)
+        else:
+            self._arrive_flowing(s, clock, beat, popup, popup_base_frame)
 
-            if triggered_popup:
-                # Everything up to (and including) this point becomes part
-                # of an "earlier leg" for the NEXT popup's hide effect.
-                last_leg_boundary = len(path_history) - 1
+    def _plan_cue_wait(self, s: _WalkState, clock: _WalkClock, popup: Dict):
+        """Sets clock.wait: reached before the voice gets to this stop's cue, the walker
+        stops here and the picture holds (card showing) until the voice catches up. A
+        cue at the start of a sentence always waits at least cue_wait_frames, and a stop
+        described until its {go} waits for it (arriving late shortens the stop, never
+        runs it past the {go}). Returns the map-style card scale when this is a map stop."""
+        fps = s.fps
+        max_wait = int(_MAX_CUE_WAIT_SECONDS * fps)
+        cue_frame = popup.get("cue_frame")
+        early = int(cue_frame) - s.video.frames_written - 1 if cue_frame is not None else 0
+        clock.wait = max(int(popup.get("cue_wait_frames") or 0), min(max(0, early), max_wait))
+        if popup.get("no_pause"):
+            early = 0
+            clock.wait = 0  # "Pause at Location" off: walk straight on
+        map_stop = self.config.get("overview_style") == "map" and popup.get("card_scale")
+        depart_frame = popup.get("depart_frame")
+        if depart_frame is not None:
+            clock.wait = max(
+                min(max(0, early), max_wait),
+                int(depart_frame) - s.video.frames_written - 1,
+                0,
+            )
+            logger.info(
+                "Overview stop #%s: describing it until %.1fs (holding %.1fs).",
+                popup.get("order"), depart_frame / fps, clock.wait / fps,
+            )
+        if early > 0:
+            logger.info(
+                "Overview stop #%s reached %.1fs before its cue: waiting %.1fs.",
+                popup.get("order"), early / fps, clock.wait / fps,
+            )
+        if map_stop and not popup.get("no_pause"):
+            # Route map: stand here long enough to see the photo and read the leg card.
+            clock.wait = max(clock.wait, int(tuning.OVERVIEW_MAP_MIN_STOP_SECONDS * fps))
+        return map_stop
 
-                arrival_count += 1
-                place_label = triggered_popup.get("label") or f"waypoint_{triggered_popup['index']}"
-                tracker.show_item(
-                    arrival_count,
-                    f"Rendering overview video {arrival_count}/{total_stops}: arriving at '{place_label}'",
+    def _flow_display_seconds(self, s: _WalkState, clock: _WalkClock, popup: Dict, map_stop) -> float:
+        # The card rides along for roughly this leg (so it hands off to the next popup about
+        # when that waypoint is reached) and stays up while the walker waits.
+        display_seconds = float(
+            popup.get("leg_display_seconds")
+            or popup["data"].get("freeze_seconds", _DEFAULT_FREEZE_SECONDS)
+        ) + clock.wait / s.fps
+        if map_stop:
+            display_seconds = clock.wait / s.fps + self._POPUP_FADE_SECONDS  # closes as the walker leaves
+        if self._cards_stay():
+            # Walk the route: every stop's card stays up to the end (at its summary spot and size).
+            display_seconds = _CARD_STAYS_SECONDS
+        return display_seconds
+
+    def _wrap_up_earlier_cards(self, s: _WalkState, popup: Dict) -> None:
+        """Forces every OTHER still-active, not-yet-fading flow-through card into
+        its fade-out the moment a later stop arrives. frames_left only counts down
+        while a card is drawn, so one that started late (behind others) could run
+        its full duration long after the traveler moved on. Never before the card
+        has had POPUP_MIN_DISPLAY_SECONDS on screen (else it "blinks": gone a frame
+        or two after fading in) and OVERVIEW_POPUP_MIN_HOLD_SECONDS fully shown.
+        The floor is deliberately unconditional: shrinking it under a deep backlog
+        once left cards under their guaranteed 2 s."""
+        fps = s.fps
+        new_order = popup.get("order", 0)
+        min_display_frames = max(1, int(tuning.POPUP_MIN_DISPLAY_SECONDS * fps))
+        for bp in ([] if self._cards_stay() else s.baked_popups):
+            if bp["popup"]["data"].get("freeze_frame", False):
+                continue
+            if bp["popup"].get("order", 0) >= new_order:
+                continue
+            wrap_up_frames = bp.get("fade_frames") or max(
+                1, int(self._POPUP_FADE_SECONDS * fps)
+            )
+            elapsed = bp.get("total_frames", bp["frames_left"]) - bp["frames_left"]
+            remaining_for_min_display = max(0, min_display_frames - elapsed)
+            hold_left = max(
+                0, wrap_up_frames + int(tuning.OVERVIEW_POPUP_MIN_HOLD_SECONDS * fps) - elapsed
+            )
+            target_frames_left = max(
+                wrap_up_frames, remaining_for_min_display, hold_left + wrap_up_frames
+            )
+            if self.config.get("overview_style") == "map":
+                target_frames_left = wrap_up_frames  # one big card at a time: the last one closes now
+            bp["frames_left"] = min(bp["frames_left"], target_frames_left)
+
+    def _arrive_flowing(
+        self, s: _WalkState, clock: _WalkClock, beat: _Beat, popup: Dict, popup_base_frame: np.ndarray,
+    ) -> None:
+        """Flow-through: no held frame, no arrival pause. The card rides along as
+        a HUD overlay beside the waypoint's pin and this one frame is written
+        here before the loop resumes normal per-frame compositing."""
+        map_stop = self._plan_cue_wait(s, clock, popup)
+        display_seconds = self._flow_display_seconds(s, clock, popup, map_stop)
+        self._wrap_up_earlier_cards(s, popup)
+        new_bp = self._make_baked_popup(
+            popup, display_seconds, s.fps, min_hold_seconds=tuning.OVERVIEW_POPUP_MIN_HOLD_SECONDS,
+        )
+        s.baked_popups.append(new_bp)
+        frame = self._redraw_other_cards(s, popup_base_frame, new_bp)
+        if not s.is_video:
+            frame = self._draw_arriving_card(s, frame, popup, new_bp, beat)
+        self.last_frame = frame
+        s.video.write(frame)
+
+    def _redraw_other_cards(self, s: _WalkState, frame: np.ndarray, new_bp: Dict) -> np.ndarray:
+        """popup_base_frame is a clean plate with no cards, so every OTHER active
+        card (an earlier waypoint's, still fading) is redrawn on this one frame;
+        without it that card vanished for exactly this frame (a visible blink)."""
+        for other_bp in s.baked_popups:
+            if other_bp is new_bp:
+                continue
+            other_popup = other_bp["popup"]
+            if not other_popup.get("beside_box"):
+                continue
+            other_hud = self.walk_card_hud(
+                other_popup, s.w, s.h, s.route_obstacles,
+                lambda popup: self._active_card_boxes(s.baked_popups, exclude=popup),
+            )
+            other_alpha = self._popup_fade_alpha(other_bp)
+            frame = self.graphics.render_popup_box(
+                frame, other_hud, alpha=other_alpha, line_only=True
+            )
+            self._draw_pin(frame, other_popup, s.n_points, scale=self._pin_pop_scale(other_popup, self._pop_now, s.fps))
+            frame = self.graphics.render_popup_box(
+                frame, other_hud, alpha=other_alpha, skip_line=True
+            )
+        return frame
+
+    def _draw_arriving_card(
+        self, s: _WalkState, frame: np.ndarray, popup: Dict, new_bp: Dict, beat: _Beat,
+    ) -> np.ndarray:
+        """The new card on its arrival frame, faded in from the start like every
+        later frame _composite_baked_popups draws it for (else the pin, already on
+        this frame, would show a frame before its card)."""
+        self._walk_turn(s, beat)
+        # A card that stays already has its badge's spot (_layout_recap_cards); looking for
+        # another would show it there for one frame and jump back on the next.
+        stays = popup.get("stay_box")
+        if not stays:
+            self._layout_recap_popups(
+                [new_bp], s.w, s.h, route_obstacles=s.route_obstacles,
+                reserved_boxes=self._active_card_boxes(
+                    s.baked_popups, exclude=popup
+                ) + self._stopby_notice_reserved(s.w, s.h),
+            )
+        hud_new = self.walk_card_hud(
+            popup, s.w, s.h, s.route_obstacles,
+            lambda other: self._active_card_boxes(s.baked_popups, exclude=other),
+        )
+        # Slide-up entrance (see _popup_slide_offset_y); a staying card doesn't slide.
+        if hud_new.get("beside_box") and not stays:
+            bx, by = hud_new["beside_box"]
+            hud_new["beside_box"] = (bx, int(by + self._popup_slide_offset_y(new_bp)))
+        # Line, then pin, then card: the pin is already in `frame`, so a combined call
+        # would land the line over it.
+        frame = self.graphics.render_popup_box(
+            frame, hud_new, alpha=self._popup_fade_alpha(new_bp), line_only=True,
+        )
+        self._draw_pin(frame, popup, s.n_points, scale=self._pin_pop_scale(popup, self._pop_now, s.fps))
+        frame = self.graphics.render_popup_box(
+            frame, hud_new, alpha=self._popup_fade_alpha(new_bp), skip_line=True,
+        )
+        # Drawn LAST: the traveler sits on this pin the instant it triggers.
+        self._walk_draw_icon(s, frame, beat)
+        return frame
+
+    def _arrive_frozen(
+        self, s: _WalkState, beat: _Beat, popup: Dict, popup_base_frame: np.ndarray,
+        stopby_group: List[Dict],
+    ) -> None:
+        """Freeze: the map holds on the stop (arrival pause, card hold, then its
+        stop-by batch). Cards of the stops just passed still inside their display
+        time (`carried`) stay up over the whole freeze and fade on their own clock;
+        popup_base_frame is a clean plate, so they used to vanish when the map stopped."""
+        carried = s.baked_popups
+        s.baked_popups = []
+        if not s.is_video and self.post_arrival_hold_seconds > 0:
+            self._arrival_pause(s, beat, popup, popup_base_frame, carried)
+
+        display_seconds = float(popup["data"].get("freeze_seconds", _DEFAULT_FREEZE_SECONDS))
+        # The voice may still be describing this stop when the planned hold would end:
+        # same {go}-cue wait the flow-through branch gives, only ever extending the hold
+        # (capped at _MAX_CUE_WAIT_SECONDS) so a freezing stop never cuts its narration off.
+        depart_frame = popup.get("depart_frame")
+        if depart_frame is not None:
+            needed = (int(depart_frame) - s.video.frames_written) / s.fps
+            display_seconds = max(display_seconds, min(needed, _MAX_CUE_WAIT_SECONDS))
+        # A CONNECTED stop-by hosting a batch has no settle-first beat: its card joins the
+        # batch and fades in with the landmarks. A real waypoint host keeps the two-beat order.
+        host_is_stopby = bool(stopby_group) and bool(popup["data"].get("is_stopby"))
+        if not host_is_stopby:
+            self._settle_card(s, popup, popup_base_frame, carried, display_seconds, stopby_group)
+
+        # The landmarks behind this stop, in route order. Built from popup_base_frame (the
+        # hold's last frame has the host's card mid-slide-out) with draw_host_card=False:
+        # its one appearance was the settle above.
+        if stopby_group:
+            hud_settled = popup.copy()
+            hud_settled["hud_corner"] = None
+            hud_settled["draw_leader_line"] = True
+            self.last_frame = self._play_stopby_batch(
+                s.video, popup_base_frame, popup, hud_settled,
+                stopby_group, s.w, s.h, s.fps, s.n_points,
+                route_obstacles=s.route_obstacles,
+                draw_host_card=False, carried=carried,
+                animate_host=host_is_stopby,
+                total_display_seconds=display_seconds if host_is_stopby else None,
+            )
+        s.baked_popups = carried + s.baked_popups
+
+    def _arrival_pause(
+        self, s: _WalkState, beat: _Beat, popup: Dict, popup_base_frame: np.ndarray,
+        carried: List[Dict],
+    ) -> None:
+        """A beat on the traveler having just reached the pin. Pin only, no card:
+        the hold loop after it fades the card in from scratch (a card at flat alpha
+        here made one pop-in twice: opaque, then dipping to restart its fade)."""
+        pause_frame = popup_base_frame.copy()
+        self._walk_turn(s, beat)
+        self._draw_pin(pause_frame, popup, s.n_points)
+        self._walk_draw_icon(s, pause_frame, beat)
+        for _ in range(int(self.post_arrival_hold_seconds * s.fps)):
+            s.video.write(self._draw_carried(
+                pause_frame, carried, s.w, s.h, s.route_obstacles, s.n_points, s.fps
+            ))
+
+    def _settle_card(
+        self, s: _WalkState, popup: Dict, popup_base_frame: np.ndarray, carried: List[Dict],
+        display_seconds: float, stopby_group: List[Dict],
+    ) -> None:
+        """The host's own card fades in over the frozen map (re-rendered each frame so its
+        alpha can ramp) and, unless a stop-by batch follows, lingers as a baked popup once
+        the walk resumes. With a batch it is NOT appended: the batch makes the host's card
+        vanish, and reappearing after it read as a stray "already shown image" flash."""
+        lingering_bp = self._make_baked_popup(popup, display_seconds, s.fps)
+        if not stopby_group:
+            s.baked_popups.append(lingering_bp)
+        hud_triggered = popup.copy()
+
+        total_hold_frames = lingering_bp["total_frames"]
+        fade_in_frames = lingering_bp["fade_frames"]
+        temp_frame = popup_base_frame
+        base_beside_box = hud_triggered.get("beside_box")
+        for i in range(total_hold_frames):
+            alpha = min(1.0, (i + 1) / fade_in_frames)
+            if base_beside_box:
+                bx, by = base_beside_box
+                # Reuses _popup_slide_offset_y via a throwaway bp-shaped dict of this loop's progress.
+                slide = self._popup_slide_offset_y(
+                    {
+                        "total_frames": total_hold_frames,
+                        "frames_left": total_hold_frames - i,
+                        "fade_frames": fade_in_frames,
+                    }
                 )
+                hud_triggered["beside_box"] = (bx, int(by + slide))
+            # Line, then pin, then card: the base's own pin(s) are baked in already.
+            temp_frame = self.graphics.render_popup_box(
+                popup_base_frame, hud_triggered, alpha=alpha, line_only=True
+            )
+            self._draw_pin(temp_frame, popup, s.n_points)
+            temp_frame = self.graphics.render_popup_box(
+                temp_frame, hud_triggered, alpha=alpha, skip_line=True
+            )
+            temp_frame = self._draw_carried(
+                temp_frame, carried, s.w, s.h, s.route_obstacles, s.n_points, s.fps
+            )
+            s.video.write(temp_frame)
 
-                # Anchored beside this waypoint's own pin with a leader line
-                # back to it (see render_popup_box's non-HUD-corner branch),
-                # computed once and kept on the popup itself so the arrival
-                # pause, the frozen hold, and the lingering baked-popup HUD
-                # (below) all reuse the identical spot instead of jumping
-                # around mid-display. A fixed screen corner (the old
-                # pick_hud_corner behavior) looked fine whenever it happened
-                # to land near the pin, but read as disconnected/"floating
-                # over there" for a stop on the opposite side of the frame —
-                # this ties every triggered popup, flow-through or frozen,
-                # back to its own pin the same way.
-                # Every card already on screen is reserved here: this
-                # lays out ONE popup, so without them its `placed` list
-                # would be empty and it could be dropped straight on top
-                # of a still-visible neighbour (see _active_card_boxes)
-                # — and the lock window would then hold both there.
-                self._layout_recap_popups(
-                    [{"popup": triggered_popup, "frames_left": 1}], w, h,
-                    route_obstacles=route_obstacle_arr,
-                    reserved_boxes=self._active_card_boxes(
-                        baked_popups, exclude=triggered_popup
-                    ) + self._stopby_notice_reserved(w, h),
-                )
-                triggered_popup["hud_corner"] = None
-                triggered_popup["draw_leader_line"] = True
+        self.last_frame = temp_frame
+        # [NOTE] [Animation] The hold loop writes straight to video, never through
+        # _composite_baked_popups, so lingering_bp's frames_left never counted down; left alone
+        # the card re-entered from scratch when the walk resumed. Jump to "just past its fade-in".
+        lingering_bp["frames_left"] = lingering_bp["fade_frames"]
 
-                # Shared base for BOTH the arrival-hold pause and the popup
-                # itself — decluttered to only already-arrived pins when
-                # requested, and with the per-leg stat card baked in up
-                # front so the pause and the popup read as one continuous
-                # "you arrived" beat instead of the card popping in only
-                # once the popup shows.
-                if self.hide_upcoming_pins_on_popup:
-                    popup_base_frame = self._build_freeze_frame(
-                        current_bg, path_history, mode_history,
-                        last_leg_boundary, active_popups, len(points),
-                    )
-                else:
-                    popup_base_frame = (
-                        frame_no_route if self.hide_route_on_popup
-                        else frame_before_popups
-                    )
-
-                # [NOTE] [Animation] Fullscreen popups are an inherent full-screen takeover —
-                # they always freeze regardless of the waypoint's
-                # freeze_frame setting, since "flow through" wouldn't mean
-                # anything for a shot that covers the whole frame. Every
-                # other waypoint now flows through by default — the
-                # traveler continues moving past each stop all the way to
-                # the end; a waypoint only freezes if it opts in with
-                # "freeze_frame": true in job_config.json.
-                is_fullscreen = False  # the overview always shows the small pip card, whatever image_display says
-                # A waypoint hosting unconnected stop-bys always freezes,
-                # whatever the project asked for: their cards are played
-                # over its held frame (see _play_stopby_batch), and
-                # "flow through" leaves nothing to play them over — the
-                # traveler is meant to stop here first, then the landmarks
-                # behind this stop appear in order.
-                stopby_group = triggered_popup.get("stopby_group") or []
-                freeze_frame_on = (
-                    triggered_popup["data"].get("freeze_frame", False)
-                    or is_fullscreen
-                    or bool(stopby_group)
-                )
-                # A CONNECTED stop-by can itself host a batch of loose ones
-                # behind it (it acts like a normal waypoint otherwise - see
-                # _attach_stopby_groups) - it still gets its own arrival
-                # card, but pops it together WITH the batch instead of
-                # settling alone first: a stop-by hosting stop-bys reads as
-                # one cluster of landmarks the traveler is near, not "the
-                # main stop, then, separately, some others nearby". A real
-                # waypoint host keeps the old two-beat order (its own card
-                # settles, THEN the batch appears) since it IS the actual
-                # destination, distinct from what's merely near it.
-                host_is_stopby = bool(stopby_group) and bool(triggered_popup["data"].get("is_stopby"))
-
-                if not freeze_frame_on:
-                    # Reached before the voice gets to this stop's cue: the
-                    # walker stops here and the picture holds (the card
-                    # showing) until the voice catches up, then walks on.
-                    # A cue at the start of a sentence always waits at least
-                    # cue_wait_frames.
-                    cue_frame = triggered_popup.get("cue_frame")
-                    early = (
-                        int(cue_frame) - video.frames_written - 1 if cue_frame is not None else 0
-                    )
-                    wait["n"] = max(
-                        int(triggered_popup.get("cue_wait_frames") or 0),
-                        min(max(0, early), int(_MAX_CUE_WAIT_SECONDS * fps)),
-                    )
-                    if triggered_popup.get("no_pause"):
-                        early = 0
-                        wait["n"] = 0  # "Pause at Location" off: walk straight on
-                    map_stop = self.config.get("overview_style") == "map" and triggered_popup.get("card_scale")
-                    # A stop described until its {go}: wait until the voice
-                    # gets there (arriving late shortens the stop, never
-                    # makes it run past the {go}).
-                    depart_frame = triggered_popup.get("depart_frame")
-                    if depart_frame is not None:
-                        wait["n"] = max(
-                            min(max(0, early), int(_MAX_CUE_WAIT_SECONDS * fps)),
-                            int(depart_frame) - video.frames_written - 1,
-                            0,
-                        )
-                        logger.info(
-                            "Overview stop #%s: describing it until %.1fs (holding %.1fs).",
-                            triggered_popup.get("order"), depart_frame / fps, wait["n"] / fps,
-                        )
-                    if early > 0:
-                        logger.info(
-                            "Overview stop #%s reached %.1fs before its cue: waiting %.1fs.",
-                            triggered_popup.get("order"), early / fps, wait["n"] / fps,
-                        )
-                    # [NOTE] [Animation] Flow-through: the traveler keeps moving — no held
-                    # frame, no arrival pause. The popup card rides along as
-                    # a HUD overlay beside the waypoint's own pin (with a
-                    # leader line back to it, drawn in render_popup_box) for
-                    # roughly the duration of this leg (see
-                    # leg_display_seconds above) rather than always the
-                    # fixed freeze_seconds, so it hands off to the next
-                    # popup right around when that waypoint is reached
-                    # instead of lingering past it or vanishing early.
-                    if map_stop and not triggered_popup.get("no_pause"):
-                        # Route map: stand here long enough to see the photo and read the leg card.
-                        wait["n"] = max(wait["n"], int(tuning.OVERVIEW_MAP_MIN_STOP_SECONDS * fps))
-                    display_seconds = float(
-                        triggered_popup.get("leg_display_seconds")
-                        or triggered_popup["data"].get("freeze_seconds", _DEFAULT_FREEZE_SECONDS)
-                    ) + wait["n"] / fps  # the card stays up while the walker waits
-                    if map_stop:
-                        display_seconds = wait["n"] / fps + self._POPUP_FADE_SECONDS  # closes as the walker leaves
-                    if self._cards_stay():
-                        # Walk the route: every stop's card stays up to the end (at its summary spot and size).
-                        display_seconds = _CARD_STAYS_SECONDS
-                    # pending_popups here is whatever's LEFT after this one
-                    # was just popped off the front — i.e. how many other
-                    # already-triggered popups are still queued behind it,
-                    # each needing its own turn at the trigger cooldown
-                    # before it can even start waiting for a display slot.
-                    # An EARLIER waypoint's own flow-through card can still
-                    # be mid-display right when this new one triggers —
-                    # frames_left only counts down while a card is
-                    # actually drawn (see _make_baked_popup's own
-                    # docstring on why: so one stuck waiting for a
-                    # concurrency slot isn't unfairly cut short), so a
-                    # card that got a late start (behind others) could
-                    # otherwise run its full nominal duration long after
-                    # the traveler has clearly moved on to this next
-                    # stop — reported as an earlier waypoint's card still
-                    # showing well past when it should already be gone.
-                    # Force every OTHER still-active, not-yet-fading
-                    # flow-through card straight into its own fade-out the
-                    # moment a later one arrives, instead of letting it
-                    # run out its original clock — but never before it's
-                    # had at least POPUP_MIN_DISPLAY_SECONDS on screen.
-                    # Without that floor, a card whose trigger frame lands
-                    # right before the NEXT waypoint's own trigger (e.g.
-                    # two stops close together) could get wrapped up only
-                    # a frame or two after it first appeared — elapsed
-                    # (total_frames - frames_left) is near zero, so
-                    # wrap_up_frames alone let it fade out almost as soon
-                    # as it faded in, reported as the card "blinking" —
-                    # gone again the instant the next waypoint arrived.
-                    # This floor is a hard, unconditional
-                    # POPUP_MIN_DISPLAY_SECONDS — a previous version of this
-                    # code shrank it under a deep concurrency backlog (many
-                    # waypoints clustered together, more than
-                    # MAX_CONCURRENT_FLOW_POPUPS competing for a display
-                    # slot at once) to stop a late card from waiting so long
-                    # for a free slot that it ended up shown well into the
-                    # FOLLOWING leg. That traded away the one guarantee this
-                    # whole block exists for — reported directly as a popup
-                    # sometimes not staying up for a full 2 seconds. The
-                    # "still showing late into the next leg" case is now
-                    # instead handled at the point the animation actually
-                    # enters that next leg (see the seq_ptr-based wrap-up
-                    # right before _composite_baked_popups above), which
-                    # itself also respects this same floor — so a dense
-                    # cluster may still take a few real seconds to fully
-                    # drain, but no individual card's guaranteed 2 seconds
-                    # is ever cut short to make that happen faster.
-                    new_order = triggered_popup.get("order", 0)
-                    min_display_frames = max(
-                        1, int(tuning.POPUP_MIN_DISPLAY_SECONDS * fps)
-                    )
-                    for bp in ([] if self._cards_stay() else baked_popups):
-                        if bp["popup"]["data"].get("freeze_frame", False):
-                            continue
-                        if bp["popup"].get("order", 0) >= new_order:
-                            continue
-                        wrap_up_frames = bp.get("fade_frames") or max(
-                            1, int(self._POPUP_FADE_SECONDS * fps)
-                        )
-                        elapsed = bp.get("total_frames", bp["frames_left"]) - bp["frames_left"]
-                        remaining_for_min_display = max(0, min_display_frames - elapsed)
-                        # ...and fully shown (after its fade-in) for
-                        # OVERVIEW_POPUP_MIN_HOLD_SECONDS before it may start
-                        # fading out, even though the walker has moved on.
-                        hold_left = max(
-                            0, wrap_up_frames + int(tuning.OVERVIEW_POPUP_MIN_HOLD_SECONDS * fps) - elapsed
-                        )
-                        target_frames_left = max(
-                            wrap_up_frames, remaining_for_min_display, hold_left + wrap_up_frames
-                        )
-                        if self.config.get("overview_style") == "map":
-                            target_frames_left = wrap_up_frames  # one big card at a time: the last one closes now
-                        bp["frames_left"] = min(bp["frames_left"], target_frames_left)
-
-                    new_bp = self._make_baked_popup(
-                        triggered_popup, display_seconds, fps,
-                        min_hold_seconds=tuning.OVERVIEW_POPUP_MIN_HOLD_SECONDS,
-                    )
-                    baked_popups.append(new_bp)
-                    frame = popup_base_frame
-                    # popup_base_frame is deliberately a clean plate with no
-                    # cards baked in (see frame_before_popups' own comment
-                    # above) — needed so a FREEZE hold reusing this same
-                    # plate for many frames never bakes in a stale card.
-                    # But this flow-through branch only ever writes ONE
-                    # frame from it, right here, before the loop resumes
-                    # normal per-frame compositing next iteration — without
-                    # redrawing every OTHER still-active card (e.g. an
-                    # earlier waypoint's own card, still lingering/fading)
-                    # on this one frame too, it vanished for exactly this
-                    # one frame and popped back on the next, reported as
-                    # the earlier card visibly "blinking" the instant a new
-                    # waypoint arrives.
-                    for other_bp in baked_popups:
-                        if other_bp is new_bp:
-                            continue
-                        other_popup = other_bp["popup"]
-                        if not other_popup.get("beside_box"):
-                            continue
-                        other_hud = self.walk_card_hud(
-                            other_popup, w, h, route_obstacle_arr,
-                            lambda popup: self._active_card_boxes(baked_popups, exclude=popup),
-                        )
-                        other_alpha = self._popup_fade_alpha(other_bp)
-                        frame = self.graphics.render_popup_box(
-                            frame, other_hud, alpha=other_alpha, line_only=True
-                        )
-                        self._draw_pin(frame, other_popup, len(points), scale=self._pin_pop_scale(other_popup, self._pop_now, fps))
-                        frame = self.graphics.render_popup_box(
-                            frame, other_hud, alpha=other_alpha, skip_line=True
-                        )
-                    if not is_video:
-                        smoothed_angle = self._smoothed_heading(
-                            smoothed_angle, cx, cy, prev_cx, prev_cy
-                        )
-                        # Render its card immediately too — otherwise the
-                        # pin (already on this frame above) would show a
-                        # full frame before its popup catches up on the
-                        # next one. Faded in from the start (see
-                        # _popup_fade_alpha), same as every later frame
-                        # _composite_baked_popups draws it for.
-                        # A card that stays already has its spot (its badge's,
-                        # from _layout_recap_cards) and must not be sent
-                        # looking for another one here: it would show at that
-                        # other spot for this one frame and jump back on the
-                        # next, when _composite_baked_popups puts it back.
-                        if not triggered_popup.get("stay_box"):
-                            self._layout_recap_popups(
-                                [new_bp], w, h, route_obstacles=route_obstacle_arr,
-                                reserved_boxes=self._active_card_boxes(
-                                    baked_popups, exclude=triggered_popup
-                                ) + self._stopby_notice_reserved(w, h),
-                            )
-                        hud_new = self.walk_card_hud(
-                            triggered_popup, w, h, route_obstacle_arr,
-                            lambda popup: self._active_card_boxes(baked_popups, exclude=popup),
-                        )
-                        # Slide-up entrance, same as every later frame
-                        # _composite_baked_popups draws this popup for —
-                        # see _popup_slide_offset_y. A staying card doesn't
-                        # slide (its leader line would sweep with it).
-                        if hud_new.get("beside_box") and not triggered_popup.get("stay_box"):
-                            bx, by = hud_new["beside_box"]
-                            hud_new["beside_box"] = (
-                                bx, int(by + self._popup_slide_offset_y(new_bp))
-                            )
-                        # Line, then pin, then card — the pin's already
-                        # baked into `frame` (see the comment above), so
-                        # without redrawing it here on top of the line,
-                        # the line (drawn as part of a combined call) would
-                        # land right over it.
-                        frame = self.graphics.render_popup_box(
-                            frame, hud_new, alpha=self._popup_fade_alpha(new_bp),
-                            line_only=True,
-                        )
-                        self._draw_pin(frame, triggered_popup, len(points), scale=self._pin_pop_scale(triggered_popup, self._pop_now, fps))
-                        frame = self.graphics.render_popup_box(
-                            frame, hud_new, alpha=self._popup_fade_alpha(new_bp),
-                            skip_line=True,
-                        )
-                        # Drawn LAST (on top of the pin/line/card) — the
-                        # traveler is right at this pin's position the
-                        # instant it triggers, so drawing the icon earlier
-                        # left it hidden behind the pin redraw above.
-                        self.graphics.draw_transport_icon(
-                            frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
-                        )
-                    self.last_frame = frame
-                    video.write(frame)
-                    prev_cx, prev_cy = cx, cy
-                    continue
-
-                # Hold on the traveler having just reached the pin for a
-                # beat before the fullscreen/pip transition kicks in.
-                # Pin only here, no card yet — the hold loop right after
-                # this is what actually fades the card in from scratch
-                # (alpha 0 -> 1 over fade_in_frames). Drawing the card here
-                # too, at flat alpha=1 with no fade of its own, used to
-                # mean the card snapped fully opaque for this pause, then
-                # the hold loop's very next frame immediately dropped it
-                # back down near-invisible to restart its own fade-in —
-                # a visible dip-then-recover that read as the same card
-                # popping in twice in a row. One entrance (the hold loop's
-                # own fade-in), not two.
-                # Cards of the stops just passed that are still inside their
-                # own display time stay up over this freeze (the arrival
-                # pause, this card's hold, its stop-by batch) and fade out on
-                # their own clock - popup_base_frame is a clean plate, so
-                # they used to vanish the moment the map stopped here.
-                carried = baked_popups
-                baked_popups = []
-                if not is_video and self.post_arrival_hold_seconds > 0:
-                    pause_frame = popup_base_frame.copy()
-                    smoothed_angle = self._smoothed_heading(
-                        smoothed_angle, cx, cy, prev_cx, prev_cy
-                    )
-                    self._draw_pin(pause_frame, triggered_popup, len(points))
-                    # Drawn LAST (on top of the pin/line/card) — same
-                    # reasoning as the trigger-moment frame above.
-                    self.graphics.draw_transport_icon(
-                        pause_frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
-                    )
-                    for _ in range(int(self.post_arrival_hold_seconds * fps)):
-                        video.write(self._draw_carried(
-                            pause_frame, carried, w, h, route_obstacle_arr, len(points), fps
-                        ))
-
-                if is_fullscreen:
-                    self.last_frame, _ = self.graphics.play_fullscreen_popup_sequence(
-                        video=video,
-                        base_frame=popup_base_frame,
-                        popup_info=triggered_popup,
-                        fps=fps,
-                        transition_cfg=self.transition_cfg,
-                        exit_frame=frame,
-                    )
-                else:
-                    display_seconds = float(
-                        triggered_popup["data"].get("freeze_seconds", _DEFAULT_FREEZE_SECONDS)
-                    )
-                    # The voice may still be describing this stop when the
-                    # planned hold would otherwise end (e.g. its own
-                    # description ran long, or an earlier stop's cue-wait
-                    # pushed timing back) - same {go}-cue wait the flow-
-                    # through branch above gives every stop, applied here so
-                    # a freezing stop (a stop-by host, or one with an
-                    # explicit freeze_frame) never cuts its own narration off
-                    # mid-sentence either. Only ever extends the hold, and
-                    # only up to _MAX_CUE_WAIT_SECONDS, same cap as the
-                    # flow-through branch.
-                    depart_frame = triggered_popup.get("depart_frame")
-                    if depart_frame is not None:
-                        needed = (int(depart_frame) - video.frames_written) / fps
-                        display_seconds = max(display_seconds, min(needed, _MAX_CUE_WAIT_SECONDS))
-                    # Kept as its own baked_popups entry so it lingers as a
-                    # HUD overlay (with its own fade in/out) once the
-                    # camera resumes moving — see _composite_baked_popups.
-                    # NOT appended when a stopby_group follows (below): that
-                    # batch already makes this host's card vanish the
-                    # instant it starts (draw_host_card=False — see its own
-                    # comment), and a run of landmark cards plays in its
-                    # place. Letting it linger and reappear AFTER all of
-                    # that, once the batch ends and the traveler is already
-                    # moving on, reads as the map re-showing a photo the
-                    # viewer just watched settle and disappear moments
-                    # earlier — reported directly as a stray "already shown
-                    # image" flash right after a stop-by pause. A host with
-                    # no stopby_group never has this problem (its card never
-                    # disappears early), so it still gets the graceful
-                    # lingering fade-out.
-                    # A stop-by host does NOT get this separate "settle
-                    # alone first" beat — its own card instead joins the
-                    # batch below and fades in together with the landmarks
-                    # behind it (see host_is_stopby above). Skipping this
-                    # loop entirely for that case, rather than giving it
-                    # zero hold frames, avoids baking a half-configured
-                    # lingering_bp (never appended anyway, per stopby_group
-                    # below) that nothing then uses.
-                    if not host_is_stopby:
-                        lingering_bp = self._make_baked_popup(
-                            triggered_popup, display_seconds, fps
-                        )
-                        if not stopby_group:
-                            baked_popups.append(lingering_bp)
-                        hud_triggered = triggered_popup.copy()
-
-                        # The frame itself is frozen (unchanging) for this
-                        # whole hold, but the card still fades in rather than
-                        # snapping on at full opacity — re-rendered once per
-                        # frame (instead of one frame written repeatedly) so
-                        # its alpha can ramp up. Reuses the same fade_frames as
-                        # the lingering entry above for a consistent ramp.
-                        total_hold_frames = lingering_bp["total_frames"]
-                        fade_in_frames = lingering_bp["fade_frames"]
-                        temp_frame = popup_base_frame
-                        base_beside_box = hud_triggered.get("beside_box")
-                        for i in range(total_hold_frames):
-                            alpha = min(1.0, (i + 1) / fade_in_frames)
-                            # Same slide-up entrance as every other popup
-                            # appearance (see _popup_slide_offset_y) — reuses
-                            # that same helper via a throwaway bp-shaped dict
-                            # matching this loop's own (i, fade_in_frames)
-                            # progress, rather than re-deriving the easing
-                            # curve inline.
-                            if base_beside_box:
-                                bx, by = base_beside_box
-                                slide = self._popup_slide_offset_y(
-                                    {
-                                        "total_frames": total_hold_frames,
-                                        "frames_left": total_hold_frames - i,
-                                        "fade_frames": fade_in_frames,
-                                    }
-                                )
-                                hud_triggered["beside_box"] = (bx, int(by + slide))
-                            # Line, then pin, then card — same reasoning as the
-                            # post-arrival pause above: popup_base_frame's own
-                            # pin(s) are already baked in, so the line must be
-                            # drawn first and the pin redrawn on top of it.
-                            temp_frame = self.graphics.render_popup_box(
-                                popup_base_frame, hud_triggered, alpha=alpha, line_only=True
-                            )
-                            self._draw_pin(temp_frame, triggered_popup, len(points))
-                            temp_frame = self.graphics.render_popup_box(
-                                temp_frame, hud_triggered, alpha=alpha, skip_line=True
-                            )
-                            temp_frame = self._draw_carried(
-                                temp_frame, carried, w, h, route_obstacle_arr, len(points), fps
-                            )
-                            video.write(temp_frame)
-
-                        self.last_frame = temp_frame
-
-                        # lingering_bp's OWN fade-in already played out, frame
-                        # by frame, in the hold loop above — but that loop
-                        # writes its frames directly (video.write), never
-                        # through _composite_baked_popups, so lingering_bp's
-                        # own "frames_left" never actually counted down and is
-                        # still sitting at its starting value. Left alone,
-                        # the first time _composite_baked_popups DOES pick it
-                        # up — once the main loop resumes below, or after a
-                        # stop-by batch here finishes playing on top of this
-                        # same held frame — it reads as frame zero of a card
-                        # that's never been shown, and fades/slides itself in
-                        # from scratch a second time: the same card visibly
-                        # re-entering right after it already settled. Jumping
-                        # straight to "just past its own fade-in" here is what
-                        # the hold loop actually just finished showing, so the
-                        # card reappears already settled and only has its
-                        # fade-OUT left to play once it resumes as a lingering
-                        # HUD overlay.
-                        lingering_bp["frames_left"] = lingering_bp["fade_frames"]
-
-                # Then the landmarks behind this stop, in route order — see
-                # _play_stopby_batch. Outside the freeze/fullscreen split
-                # above so a host whose own photo takes over the screen
-                # still plays its batch afterwards, on the map it returns
-                # to. Built from popup_base_frame rather than the hold's
-                # last frame: that one already has the host's card
-                # mid-slide-out (its own fade envelope), which would sit
-                # frozen half-departed underneath the whole batch.
-                # draw_host_card=False: this host's own card already had
-                # its one appearance above (the pause + hold loop, or the
-                # fullscreen takeover) — it's not redrawn/persisted here
-                # too, so the batch is just the landmarks behind it, not
-                # the host's card sitting there the whole time as well.
-                # lingering_bp (set above) still fades it out gracefully
-                # once the video resumes moving after the batch — that's
-                # the same one appearance finishing, not a second one.
-                if stopby_group:
-                    hud_settled = triggered_popup.copy()
-                    hud_settled["hud_corner"] = None
-                    hud_settled["draw_leader_line"] = True
-                    self.last_frame = self._play_stopby_batch(
-                        video, popup_base_frame, triggered_popup, hud_settled,
-                        stopby_group, w, h, fps, len(points),
-                        route_obstacles=route_obstacle_arr,
-                        draw_host_card=False, carried=carried,
-                        # host_is_stopby: this host never got its own
-                        # settle-first beat above (skipped there) - instead
-                        # its card joins the batch's own simultaneous layout
-                        # (animate_host), held for display_seconds (the
-                        # same hold the settle-first beat would otherwise
-                        # have used, already extended to the {go} cue by
-                        # the depart_frame check above) rather than the
-                        # batch's own default per-card timer.
-                        animate_host=host_is_stopby,
-                        total_display_seconds=display_seconds if host_is_stopby else None,
-                    )
-                baked_popups = carried + baked_popups
-
-            else:
-                if not is_video:
-                    smoothed_angle = self._smoothed_heading(
-                        smoothed_angle, cx, cy, prev_cx, prev_cy
-                    )
-                    self.graphics.draw_transport_icon(
-                        frame, cx, cy, current_frame, smoothed_angle, mode=current_mode
-                    )
-
-                self.last_frame = frame
-                video.write(frame)
-
-            prev_cx, prev_cy = cx, cy
-
-        # The walk is over and every stop's card is still up (they stay for
-        # the whole walk — see _composite_baked_popups). Hold on that
-        # picture before the recap turns them all into badges. Composited
-        # frame by frame rather than freezing the last one: the final
-        # stop's card pops as the walk ends, so a frozen frame would hold
-        # it half faded-in for the whole beat.
-        hold_frames = int(tuning.RECAP_CARD_HOLD_SECONDS * fps)
-        if stop_popup and not is_video and self._cards_stay() and frame_before_popups is not None:
-            for _ in range(hold_frames):
-                held = frame_before_popups.copy()
-                held, baked_popups = self._composite_baked_popups(
-                    held, baked_popups, w, h, route_obstacle_arr,
-                    active_popups=active_popups, total_points=len(points), fps=fps,
-                )
-                self.graphics.draw_transport_icon(
-                    held, cx, cy, current_frame, smoothed_angle, mode=current_mode
-                )
-                self.last_frame = held
-                video.write(held)
-
-        return pre_popup_frame
+    def _hold_final_cards(self, s: _WalkState) -> None:
+        """The walk is over with every stop's card still up (they stay for the whole
+        walk): hold on that picture before the recap turns them into badges. Composited
+        frame by frame, since the final stop's card pops as the walk ends and a frozen
+        frame would hold it half faded-in."""
+        if not (
+            s.stop_popup and not s.is_video and self._cards_stay()
+            and s.frame_before_popups is not None
+        ):
+            return
+        beat = s.last_beat
+        for _ in range(int(tuning.RECAP_CARD_HOLD_SECONDS * s.fps)):
+            held = s.frame_before_popups.copy()
+            held, s.baked_popups = self._composite_baked_popups(
+                held, s.baked_popups, s.w, s.h, s.route_obstacles,
+                active_popups=s.active_popups, total_points=s.n_points, fps=s.fps,
+            )
+            self._walk_draw_icon(s, held, beat)
+            self.last_frame = held
+            s.video.write(held)

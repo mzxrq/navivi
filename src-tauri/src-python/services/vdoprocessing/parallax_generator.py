@@ -23,6 +23,7 @@ from services import tuning
 from services.logger.logger import setup_logger
 from services.vdoprocessing.camera_pan import normalize_camera_pan
 from services.vdoprocessing.clip_qc import read_image
+from services.vdoprocessing.video_frames import raw_encoder_command
 
 logger = setup_logger("ParallaxGenerator")
 
@@ -378,13 +379,7 @@ def generate_parallax_clip(
     fps: Optional[float] = None,
 ) -> str:
     """A `duration_sec` 3D camera move over the photo, 1920x1080. Raises on failure."""
-    from services.tts.ttsengine import FFmpegManager
-
-    preset = normalize_camera_pan(camera_pan_hint)
-    if preset == "walkback":
-        preset = "zoomout"
-    if preset not in _PANS + ("zoomin", "zoomout", "walk"):
-        preset = "zoomin"
+    preset = _resolve_preset(camera_pan_hint)
     if preset in tuning.PARALLAX_FLAT_PRESETS:
         depth_fn = lambda img: np.full(img.shape[:2], 0.5, np.float32)  # one flat layer: a plain slide, no warp
     photo = read_image(image_path)
@@ -404,30 +399,11 @@ def generate_parallax_clip(
 
     # ffmpeg's messages go to a file, not a pipe that is only read at the end (a flood of warnings would fill it and hang).
     err = tempfile.TemporaryFile()
-    proc = subprocess.Popen(
-        [
-            FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_pipe_log_args(),
-            "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{OUT_W}x{OUT_H}", "-r", f"{fps:.3f}", "-i", "-",
-            "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "17", "-preset", "fast",
-            "-pix_fmt", "yuv420p", output_path,
-        ],
-        stdin=subprocess.PIPE, stderr=err,
-    )
+    proc = subprocess.Popen(raw_encoder_command(OUT_W, OUT_H, fps, output_path, 17), stdin=subprocess.PIPE, stderr=err)
     try:
         for i in range(frames):
             t = i / (frames - 1)
-            acc = seen = None
-            for j in range(subs):
-                ts = t - shutter * j / max(1, subs - 1) if subs > 1 else t
-                if preset == "walk":
-                    *cam, roll = walk_camera(max(ts, 0.0), duration_sec)
-                    img, d = _render(layers, proj, tuple(cam))
-                    img = _roll(img, roll)
-                else:
-                    img, d = _render(layers, proj, camera(preset, _ease(ts)))
-                acc = img if acc is None else acc + img
-                seen = d if seen is None else seen
-            frame = acc / subs
+            frame, seen = _blurred_view(layers, proj, preset, t, duration_sec, subs, shutter)
             # Focus lands on the subject over the first half of the move.
             focus = focus_from + (focus_to - focus_from) * _ease(min(1.0, t * 2))
             frame = _focus_pull(frame, seen, focus)
@@ -443,6 +419,34 @@ def generate_parallax_clip(
         err.close()
     logger.info("3D photo %s %.1fs over %s -> %s", preset, duration_sec, image_path, output_path)
     return output_path
+
+
+def _resolve_preset(camera_pan_hint) -> str:
+    """The parallax preset a camera hint plays: walkback is a zoom-out, anything unknown a zoom-in."""
+    preset = normalize_camera_pan(camera_pan_hint)
+    if preset == "walkback":
+        preset = "zoomout"
+    if preset not in _PANS + ("zoomin", "zoomout", "walk"):
+        preset = "zoomin"
+    return preset
+
+
+def _blurred_view(
+    layers: List[_Layer], proj: _Projector, preset: str, t: float, duration_sec: float, subs: int, shutter: float,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """(frame at progress `t` averaged over `subs` shutter sub-frames, depth seen at the first one)."""
+    acc = seen = None
+    for j in range(subs):
+        ts = t - shutter * j / max(1, subs - 1) if subs > 1 else t
+        if preset == "walk":
+            *cam, roll = walk_camera(max(ts, 0.0), duration_sec)
+            img, d = _render(layers, proj, tuple(cam))
+            img = _roll(img, roll)
+        else:
+            img, d = _render(layers, proj, camera(preset, _ease(ts)))
+        acc = img if acc is None else acc + img
+        seen = d if seen is None else seen
+    return acc / subs, seen
 
 
 if __name__ == "__main__":

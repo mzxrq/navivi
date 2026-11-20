@@ -87,6 +87,27 @@ def _short_hash(value: Any) -> str:
     return hashlib.sha256(raw).hexdigest()[:16]
 
 
+def _add_config_parts(parts: dict, config_data: dict) -> None:
+    """Adds a hash for every field of job_config.json (waypoints per field, settings per field) to `parts`."""
+    for key, value in config_data.items():
+        if key == "updated_at":
+            continue
+        if key == "waypoints" and isinstance(value, list):
+            parts["route.waypoints"] = route_inputs_hash(value)
+            parts["route.overview_flags"] = overview_flags_hash(value)
+            parts["route.labels"] = labels_hash(value)
+            parts["config.waypoints.count"] = _short_hash(len(value))
+            for i, wp in enumerate(value):
+                label = wp.get("label", "") if isinstance(wp, dict) else ""
+                for field, field_value in (wp.items() if isinstance(wp, dict) else [("value", wp)]):
+                    parts[f"config.waypoints[{i}:{label}].{field}"] = _short_hash(field_value)
+        elif key == "settings" and isinstance(value, dict):
+            for field, field_value in value.items():
+                parts[f"config.settings.{field}"] = _short_hash(field_value)
+        else:
+            parts[f"config.{key}"] = _short_hash(value)
+
+
 def _checkpoint_parts(
     project_config_path: str,
     cleaned_route: dict,
@@ -126,23 +147,7 @@ def _checkpoint_parts(
     marker_part = marker_inputs_hash(shown, str(Path(project_config_path).parent))
     if marker_part:
         parts["route.markers"] = marker_part
-    for key, value in config_data.items():
-        if key == "updated_at":
-            continue
-        if key == "waypoints" and isinstance(value, list):
-            parts["route.waypoints"] = route_inputs_hash(value)
-            parts["route.overview_flags"] = overview_flags_hash(value)
-            parts["route.labels"] = labels_hash(value)
-            parts["config.waypoints.count"] = _short_hash(len(value))
-            for i, wp in enumerate(value):
-                label = wp.get("label", "") if isinstance(wp, dict) else ""
-                for field, field_value in (wp.items() if isinstance(wp, dict) else [("value", wp)]):
-                    parts[f"config.waypoints[{i}:{label}].{field}"] = _short_hash(field_value)
-        elif key == "settings" and isinstance(value, dict):
-            for field, field_value in value.items():
-                parts[f"config.settings.{field}"] = _short_hash(field_value)
-        else:
-            parts[f"config.{key}"] = _short_hash(value)
+    _add_config_parts(parts, config_data)
     route_df = cleaned_route.get("route")
     if route_df is not None:
         parts["route.geometry"] = _short_hash(
@@ -207,6 +212,31 @@ def _legs_complete(paths) -> bool:
     return all(pieces_complete(files) for files in legs.values())
 
 
+def _route_changes(cached_parts, cached_key, checkpoint_key, checkpoint_parts, project_config_path) -> list:
+    """The route inputs that differ from the manifest's record (empty when the route is unchanged).
+
+    Only the route itself (or a missing output) invalidates the render; other input changes are logged and ignored.
+    """
+    if not cached_parts:
+        return [] if cached_key == checkpoint_key else ["(no per-input record)"]
+    # A manifest from before route.waypoints existed falls back to the line itself.
+    keys = ROUTE_CHECKPOINT_PARTS if "route.waypoints" in cached_parts else ("route.geometry",)
+    old_parts = dict(cached_parts)
+    # Rendered before the pause toggle was read: every stop paused then.
+    try:
+        with open(project_config_path, "r", encoding="utf-8") as _f:
+            _wp_count = len(json.load(_f).get("waypoints", []))
+    except (OSError, json.JSONDecodeError):
+        _wp_count = 0
+    old_parts.setdefault(
+        "route.overview_flags",
+        overview_flags_hash([{}] * _wp_count),
+    )
+    # Recorded before stop names were checked: taken as unchanged, so no project re-renders for it.
+    old_parts.setdefault("route.labels", checkpoint_parts.get("route.labels"))
+    return [k for k in keys if old_parts.get(k) != checkpoint_parts.get(k)]
+
+
 def reuse_render_manifest(manifest_path, checkpoint_key, checkpoint_parts, project_config_path):
     """(the manifest's paths when the route is unchanged and every output exists, else None; whether the
     overview must be rendered again because the route changed)."""
@@ -219,27 +249,7 @@ def reuse_render_manifest(manifest_path, checkpoint_key, checkpoint_parts, proje
         cached_parts = manifest.get("input_parts")
     except (OSError, json.JSONDecodeError):
         cached_paths, cached_key, cached_parts = [], None, None
-    # Only the route itself (or a missing output) invalidates the render;
-    # other input changes are logged and ignored.
-    if cached_parts:
-        # A manifest from before route.waypoints existed falls back to the line itself.
-        keys = ROUTE_CHECKPOINT_PARTS if "route.waypoints" in cached_parts else ("route.geometry",)
-        old_parts = dict(cached_parts)
-        # Rendered before the pause toggle was read: every stop paused then.
-        try:
-            with open(project_config_path, "r", encoding="utf-8") as _f:
-                _wp_count = len(json.load(_f).get("waypoints", []))
-        except (OSError, json.JSONDecodeError):
-            _wp_count = 0
-        old_parts.setdefault(
-            "route.overview_flags",
-            overview_flags_hash([{}] * _wp_count),
-        )
-        # Recorded before stop names were checked: taken as unchanged, so no project re-renders for it.
-        old_parts.setdefault("route.labels", checkpoint_parts.get("route.labels"))
-        route_changed = [k for k in keys if old_parts.get(k) != checkpoint_parts.get(k)]
-    else:
-        route_changed = [] if cached_key == checkpoint_key else ["(no per-input record)"]
+    route_changed = _route_changes(cached_parts, cached_key, checkpoint_key, checkpoint_parts, project_config_path)
     outputs_ok = bool(cached_paths) and all(output_is_valid(p) for p in cached_paths) and _legs_complete(cached_paths)
     if outputs_ok and not route_changed:
         ignored = (

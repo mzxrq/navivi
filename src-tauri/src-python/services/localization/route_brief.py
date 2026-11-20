@@ -75,6 +75,25 @@ def _balance_brackets(s: str) -> str:
     return s.rstrip()
 
 
+def _fit_fact_clause(first: str) -> str:
+    """`first` cut down to the shared clause's length, at its last comma when it has one."""
+    if len(first) <= _STOPBY_FACT_CHARS:
+        return first
+    # Too long for the shared clause (this is folded alongside other
+    # names in via_batches's one sentence - see overview_script.py). Cut
+    # at the last comma within budget rather than a hard character cut +
+    # "…": a comma is already a natural clause break in Japanese, so
+    # "天正年間に再建された歴史ある寺院で" reads as a complete noun-phrase
+    # modifier on its own, spoken cleanly - a trailing ellipsis
+    # mid-clause (TTS doesn't pronounce it cleanly, and "…の{name}" sounds
+    # like the sentence just stops and restarts) doesn't. Either way,
+    # _balance_brackets guards against the cut landing inside a
+    # 『bracketed name』.
+    within_budget = first[:_STOPBY_FACT_CHARS]
+    cut_at = within_budget.rfind("、")
+    return _balance_brackets(within_budget[:cut_at] if cut_at > 0 else within_budget)
+
+
 def _short_fact(waypoint: dict) -> str:
     """One short clause of what's known about an UNCONNECTED stop-by, from
     whatever the user already wrote in its attractionNarration - the field
@@ -104,22 +123,7 @@ def _short_fact(waypoint: dict) -> str:
     )
     if not first:
         return ""
-    if len(first) <= _STOPBY_FACT_CHARS:
-        candidate = first
-    else:
-        # Too long for the shared clause (this is folded alongside other
-        # names in via_batches's one sentence - see overview_script.py). Cut
-        # at the last comma within budget rather than a hard character cut +
-        # "…": a comma is already a natural clause break in Japanese, so
-        # "天正年間に再建された歴史ある寺院で" reads as a complete noun-phrase
-        # modifier on its own, spoken cleanly - a trailing ellipsis
-        # mid-clause (TTS doesn't pronounce it cleanly, and "…の{name}" sounds
-        # like the sentence just stops and restarts) doesn't. Either way,
-        # _balance_brackets guards against the cut landing inside a
-        # 『bracketed name』.
-        within_budget = first[:_STOPBY_FACT_CHARS]
-        cut_at = within_budget.rfind("、")
-        candidate = _balance_brackets(within_budget[:cut_at] if cut_at > 0 else within_budget)
+    candidate = _fit_fact_clause(first)
     # Only usable as the "{fact}の{name}" noun-phrase modifier (see
     # overview_script.py's via_batches insertion) when it actually ends in a
     # connector that attaches that way - で/な (the "〜でのX"/"〜なX" pattern,
@@ -249,17 +253,8 @@ def _leg_points(from_wp: dict, to_wp: dict, cache: dict) -> List[List[float]]:
     return [[from_wp["lat"], from_wp["lng"]], [to_wp["lat"], to_wp["lng"]]]
 
 
-def stopby_holds(project: dict) -> Tuple[Dict[int, float], float]:
-    """({id(waypoint): seconds}, start seconds): how long the overview freezes
-    at a waypoint that hosts a batch of stop-by cards, the same way the
-    renderer groups them (SpatialRenderer._attach_stopby_groups): each real
-    waypoint hosts the stop-bys after it, unless the first of them is
-    connected, which then hosts the rest. A host freezes for the post-arrival
-    hold + its own card + STOPBY_BATCH_SECONDS per stop-by
-    (overview.py's _hold_frames); the start pin only plays the batch."""
-    settings = project.get("settings", {})
-    post = float(settings.get("post_arrival_hold_seconds", 1.0))
-    waypoints = [w for w in project.get("waypoints", []) if isinstance(w, dict)]
+def _group_stopbys(waypoints: List[dict]) -> Tuple[Dict[int, int], Dict[int, List[str]], Dict[int, List[str]], Dict[int, List[List[float]]]]:
+    """(stop-by count, names, facts, places) per host waypoint id: each real waypoint hosts the stop-bys after it."""
     groups: Dict[int, int] = {}
     names: Dict[int, List[str]] = {}
     facts: Dict[int, List[str]] = {}
@@ -285,6 +280,21 @@ def stopby_holds(project: dict) -> Tuple[Dict[int, float], float]:
             names.setdefault(id(host), []).append(clean_label(w))
             facts.setdefault(id(host), []).append(_short_fact(w))
             places.setdefault(id(host), []).append([w.get("lat"), w.get("lng")])
+    return groups, names, facts, places
+
+
+def stopby_holds(project: dict) -> Tuple[Dict[int, float], float]:
+    """({id(waypoint): seconds}, start seconds): how long the overview freezes
+    at a waypoint that hosts a batch of stop-by cards, the same way the
+    renderer groups them (SpatialRenderer._attach_stopby_groups): each real
+    waypoint hosts the stop-bys after it, unless the first of them is
+    connected, which then hosts the rest. A host freezes for the post-arrival
+    hold + its own card + STOPBY_BATCH_SECONDS per stop-by
+    (overview.py's _hold_frames); the start pin only plays the batch."""
+    settings = project.get("settings", {})
+    post = float(settings.get("post_arrival_hold_seconds", 1.0))
+    waypoints = [w for w in project.get("waypoints", []) if isinstance(w, dict)]
+    groups, names, facts, places = _group_stopbys(waypoints)
     stopby_holds.names = names  # the stop-bys each host shows (see build_brief)
     stopby_holds.facts = facts  # each one's own short fact, "" when none written
     stopby_holds.places = places  # each one's [lat, lng] (the outro finds its photo by it)
@@ -307,6 +317,75 @@ def stopby_holds(project: dict) -> Tuple[Dict[int, float], float]:
     return holds, start
 
 
+def _leg_pieces(
+    a: dict, b: dict, points: List[List[float]], km: float, set_mode: str, mode: str, cache: dict, speeds: Dict[str, float]
+) -> Tuple[List[dict], Optional[float]]:
+    """(the leg's pieces with their minutes, the climb in metres when it is a plain walk)."""
+    # Only a routed line can hide a crossing: a hand-drawn one ("draw")
+    # is as sparse as the user clicked it, and "direct" is a straight line.
+    raw_pieces = split_crossings(points, mode) if set_mode == mode else [{"mode": mode, "km": km}]
+    # Climb is counted only for a plain walk (no boat pieces to share it with).
+    ascent = _leg_ascent_m(a, b, cache) if mode == "walking" and len(raw_pieces) == 1 else None
+    pieces = []
+    for piece in raw_pieces:
+        hours = piece["km"] / (speeds.get(piece["mode"]) or speeds.get("walking", 3.0))
+        if ascent is not None:
+            hours += ascent / tuning.WALKING_ASCENT_M_PER_HOUR
+        pieces.append({
+            "mode": piece["mode"],
+            "km": round(piece["km"], 2),
+            "minutes": max(1, int(round(hours * 60))),
+        })
+    return pieces, ascent
+
+
+def _brief_leg(
+    a: dict, b: dict, route: List[dict], cache: dict, speeds: Dict[str, float],
+    numbers: Dict[int, int], holds: Dict[int, float],
+) -> dict:
+    """The brief's leg from stop `a` to stop `b` (with its `_points`, which build_brief drops again)."""
+    set_mode = _leg_mode(a, b, cache)
+    mode = tuning.MODE_ALIASES.get(set_mode, set_mode)
+    points = _leg_points(a, b, cache)
+    km = _length_km(points)
+    straight = _length_km([[a["lat"], a["lng"]], [b["lat"], b["lng"]]])
+    pieces, ascent = _leg_pieces(a, b, points, km, set_mode, mode, cache, speeds)
+    return {
+        "from": clean_label(a),
+        "to": clean_label(b),
+        "to_number": numbers.get(id(b)),
+        "mode": mode,
+        "km": round(km, 2),
+        "minutes": sum(piece["minutes"] for piece in pieces),
+        "pieces": pieces,
+        **({"ascent_m": int(round(ascent))} if ascent is not None else {}),
+        "heading": heading(a["lat"], a["lng"], b["lat"], b["lng"]),
+        "winding": bool(straight > 0.05 and km / straight >= WINDING_RATIO),
+        "passes": [],
+        "is_return": b is route[-1] and "return" in (b.get("label") or "").lower(),
+        # seconds the overview freezes on arriving at `to` (a stop-by batch)
+        # and the stop-bys whose cards it shows then
+        "hold_at_to": round(holds.get(id(b), 0.0), 2),
+        "batch": list(stopby_holds.names.get(id(b), [])),
+        "batch_facts": list(stopby_holds.facts.get(id(b), [])),
+        "batch_at": list(stopby_holds.places.get(id(b), [])),
+        "from_id": a.get("id"),
+        "to_id": b.get("id"),
+        "from_at": [a["lat"], a["lng"]],
+        "to_at": [b["lat"], b["lng"]],
+        "_points": points,
+    }
+
+
+def _attach_passes(legs: List[dict], seen_only: List[dict]) -> None:
+    """Each unconnected stop-by is passed on the leg whose line comes closest."""
+    for w in seen_only:
+        near = [(_nearest_km(leg["_points"], w["lat"], w["lng"]), leg) for leg in legs]
+        near = [(d, leg) for d, leg in near if d <= PASS_NEAR_KM]
+        if near:
+            min(near, key=lambda item: item[0])[1]["passes"].append(clean_label(w))
+
+
 def build_brief(project: dict, routing_cache: Optional[dict] = None) -> dict:
     """{"start": label, "legs": [...], "total_km", "total_minutes"}. Each leg:
     {"from", "to", "to_number" (the overview's {n} for the stop it reaches, or
@@ -327,59 +406,8 @@ def build_brief(project: dict, routing_cache: Optional[dict] = None) -> dict:
     seen_only = [w for w in waypoints if not on_route(w) and not is_inaccessible(w)]
     holds, start_hold = stopby_holds(project)
 
-    legs = []
-    for a, b in zip(route, route[1:]):
-        set_mode = _leg_mode(a, b, cache)
-        mode = tuning.MODE_ALIASES.get(set_mode, set_mode)
-        points = _leg_points(a, b, cache)
-        km = _length_km(points)
-        straight = _length_km([[a["lat"], a["lng"]], [b["lat"], b["lng"]]])
-        # Only a routed line can hide a crossing: a hand-drawn one ("draw")
-        # is as sparse as the user clicked it, and "direct" is a straight line.
-        raw_pieces = split_crossings(points, mode) if set_mode == mode else [{"mode": mode, "km": km}]
-        # Climb is counted only for a plain walk (no boat pieces to share it with).
-        ascent = _leg_ascent_m(a, b, cache) if mode == "walking" and len(raw_pieces) == 1 else None
-        pieces = []
-        for piece in raw_pieces:
-            hours = piece["km"] / (speeds.get(piece["mode"]) or speeds.get("walking", 3.0))
-            if ascent is not None:
-                hours += ascent / tuning.WALKING_ASCENT_M_PER_HOUR
-            pieces.append({
-                "mode": piece["mode"],
-                "km": round(piece["km"], 2),
-                "minutes": max(1, int(round(hours * 60))),
-            })
-        legs.append({
-            "from": clean_label(a),
-            "to": clean_label(b),
-            "to_number": numbers.get(id(b)),
-            "mode": mode,
-            "km": round(km, 2),
-            "minutes": sum(piece["minutes"] for piece in pieces),
-            "pieces": pieces,
-            **({"ascent_m": int(round(ascent))} if ascent is not None else {}),
-            "heading": heading(a["lat"], a["lng"], b["lat"], b["lng"]),
-            "winding": bool(straight > 0.05 and km / straight >= WINDING_RATIO),
-            "passes": [],
-            "is_return": b is route[-1] and "return" in (b.get("label") or "").lower(),
-            # seconds the overview freezes on arriving at `to` (a stop-by batch)
-            # and the stop-bys whose cards it shows then
-            "hold_at_to": round(holds.get(id(b), 0.0), 2),
-            "batch": list(stopby_holds.names.get(id(b), [])),
-            "batch_facts": list(stopby_holds.facts.get(id(b), [])),
-            "batch_at": list(stopby_holds.places.get(id(b), [])),
-            "from_id": a.get("id"),
-            "to_id": b.get("id"),
-            "from_at": [a["lat"], a["lng"]],
-            "to_at": [b["lat"], b["lng"]],
-            "_points": points,
-        })
-    # Each unconnected stop-by is passed on the leg whose line comes closest.
-    for w in seen_only:
-        near = [(_nearest_km(leg["_points"], w["lat"], w["lng"]), leg) for leg in legs]
-        near = [(d, leg) for d, leg in near if d <= PASS_NEAR_KM]
-        if near:
-            min(near, key=lambda item: item[0])[1]["passes"].append(clean_label(w))
+    legs = [_brief_leg(a, b, route, cache, speeds, numbers, holds) for a, b in zip(route, route[1:])]
+    _attach_passes(legs, seen_only)
     for leg in legs:
         del leg["_points"]
     return {
@@ -411,6 +439,64 @@ def load_brief(project_config_path: str) -> dict:
     return build_brief(project, cache)
 
 
+def _merged_pieces(legs: List[dict]) -> List[dict]:
+    """The pieces of `legs` in order, neighbours of the same mode joined into one."""
+    pieces: List[dict] = []
+    for leg in legs:
+        for piece in leg.get("pieces") or [{"mode": leg["mode"], "km": leg["km"], "minutes": leg["minutes"]}]:
+            if pieces and pieces[-1]["mode"] == piece["mode"]:
+                pieces[-1] = {
+                    "mode": piece["mode"],
+                    "km": round(pieces[-1]["km"] + piece["km"], 2),
+                    "minutes": pieces[-1]["minutes"] + piece["minutes"],
+                }
+            else:
+                pieces.append(dict(piece))
+    return pieces
+
+
+def _trip(brief: dict, legs: List[dict], is_first: bool) -> dict:
+    """One trip of `journeys`: `legs` told as a single leg, the places between them as `via`."""
+    pieces = _merged_pieces(legs)
+    by_mode: Dict[str, float] = {}
+    for piece in pieces:
+        by_mode[piece["mode"]] = by_mode.get(piece["mode"], 0.0) + piece["km"]
+    first, last = legs[0], legs[-1]
+    return {
+        "from": first["from"],
+        "to": last["to"],
+        "to_number": last["to_number"],
+        "mode": max(by_mode, key=by_mode.get),
+        "km": round(sum(l["km"] for l in legs), 2),
+        "minutes": sum(p["minutes"] for p in pieces),
+        "pieces": pieces,
+        "heading": heading(*first["from_at"], *last["to_at"]),
+        "winding": any(l["winding"] for l in legs),
+        "passes": [p for l in legs for p in l["passes"]],
+        "via": [l["to"] for l in legs[:-1]],
+        "via_numbers": [l["to_number"] for l in legs[:-1]],
+        # km into the trip at which each via place is reached
+        "via_km": [round(sum(x["km"] for x in legs[:k + 1]), 2) for k in range(len(legs) - 1)],
+        "leg_facts": [(l["heading"], l["minutes"], l["km"]) for l in legs],
+        "via_hold": round(
+            sum(l.get("hold_at_to", 0.0) for l in legs[:-1])
+            + (brief.get("start_hold", 0.0) if is_first else 0.0), 2
+        ),
+        "hold_at_to": last.get("hold_at_to", 0.0),
+        "batch": list(last.get("batch", [])),
+        "legs": len(legs),
+        # (host, [stop-bys], [each one's own short fact, "" when none
+        # written]) for every batch shown on the way
+        "via_batches": [
+            (l["to"], l["batch"], l.get("batch_facts") or [""] * len(l["batch"]))
+            for l in legs[:-1] if l.get("batch")
+        ],
+        "is_return": last["is_return"],
+        "from_at": first["from_at"],
+        "to_at": last["to_at"],
+    }
+
+
 def journeys(brief: dict, stops: Optional[set] = None) -> List[dict]:
     """The legs grouped into the trips between the overview stops the walker
     stops at (`stops`: their numbers; default every numbered stop): from the
@@ -424,56 +510,9 @@ def journeys(brief: dict, stops: Optional[set] = None) -> List[dict]:
         groups[-1].append(leg)
         if leg["to_number"] is not None and (stops is None or leg["to_number"] in stops):
             groups.append([])
-    out = []
+    out: List[dict] = []
     for legs in (g for g in groups if g):
-        pieces: List[dict] = []
-        for leg in legs:
-            for piece in leg.get("pieces") or [{"mode": leg["mode"], "km": leg["km"], "minutes": leg["minutes"]}]:
-                if pieces and pieces[-1]["mode"] == piece["mode"]:
-                    pieces[-1] = {
-                        "mode": piece["mode"],
-                        "km": round(pieces[-1]["km"] + piece["km"], 2),
-                        "minutes": pieces[-1]["minutes"] + piece["minutes"],
-                    }
-                else:
-                    pieces.append(dict(piece))
-        by_mode: Dict[str, float] = {}
-        for piece in pieces:
-            by_mode[piece["mode"]] = by_mode.get(piece["mode"], 0.0) + piece["km"]
-        first, last = legs[0], legs[-1]
-        out.append({
-            "from": first["from"],
-            "to": last["to"],
-            "to_number": last["to_number"],
-            "mode": max(by_mode, key=by_mode.get),
-            "km": round(sum(l["km"] for l in legs), 2),
-            "minutes": sum(p["minutes"] for p in pieces),
-            "pieces": pieces,
-            "heading": heading(*first["from_at"], *last["to_at"]),
-            "winding": any(l["winding"] for l in legs),
-            "passes": [p for l in legs for p in l["passes"]],
-            "via": [l["to"] for l in legs[:-1]],
-            "via_numbers": [l["to_number"] for l in legs[:-1]],
-            # km into the trip at which each via place is reached
-            "via_km": [round(sum(x["km"] for x in legs[:k + 1]), 2) for k in range(len(legs) - 1)],
-            "leg_facts": [(l["heading"], l["minutes"], l["km"]) for l in legs],
-            "via_hold": round(
-                sum(l.get("hold_at_to", 0.0) for l in legs[:-1])
-                + (brief.get("start_hold", 0.0) if not out else 0.0), 2
-            ),
-            "hold_at_to": last.get("hold_at_to", 0.0),
-            "batch": list(last.get("batch", [])),
-            "legs": len(legs),
-            # (host, [stop-bys], [each one's own short fact, "" when none
-            # written]) for every batch shown on the way
-            "via_batches": [
-                (l["to"], l["batch"], l.get("batch_facts") or [""] * len(l["batch"]))
-                for l in legs[:-1] if l.get("batch")
-            ],
-            "is_return": last["is_return"],
-            "from_at": first["from_at"],
-            "to_at": last["to_at"],
-        })
+        out.append(_trip(brief, legs, is_first=not out))
     return out
 
 
@@ -490,6 +529,19 @@ _WALK_WORDINGS = [
     ("道は{h}へと続きます。", "{time}で、{to}です。"),
 ]
 LONGEST_LEG_MIN_MINUTES = 30
+
+
+def _crossing_texts(leg: dict, pieces: List[dict], passes: str, arrive: str) -> List[str]:
+    """Ways to tell a walk / boat / walk leg, longest first."""
+    to = leg["to"]
+    steps = []
+    for piece in pieces:
+        piece_time = _minutes_phrase(piece["minutes"])
+        steps.append(f"船で{piece_time}渡り" if piece["mode"] == "ferry" else f"{piece_time}歩き")
+    head = "最後は" if leg["is_return"] else "ここからは"
+    boat = _minutes_phrase(next(p["minutes"] for p in pieces if p["mode"] == "ferry"))
+    return [f"{head}、{passes}{'、'.join(steps)}、{to}{arrive}。",
+            f"船で{boat}渡り、{to}{arrive}。", f"船で{to}{arrive}。"]
 
 
 def transition_texts(leg: dict, variant: int = 0) -> List[str]:
@@ -514,14 +566,7 @@ def transition_texts(leg: dict, variant: int = 0) -> List[str]:
     time = _minutes_phrase(leg["minutes"])
     short = f"{to}{arrive}。"
     if len(pieces) > 1:  # walk / boat / walk
-        steps = []
-        for piece in pieces:
-            piece_time = _minutes_phrase(piece["minutes"])
-            steps.append(f"船で{piece_time}渡り" if piece["mode"] == "ferry" else f"{piece_time}歩き")
-        head = "最後は" if leg["is_return"] else "ここからは"
-        boat = _minutes_phrase(next(p["minutes"] for p in pieces if p["mode"] == "ferry"))
-        return [f"{head}、{passes}{'、'.join(steps)}、{to}{arrive}。",
-                f"船で{boat}渡り、{to}{arrive}。", f"船で{to}{arrive}。"]
+        return _crossing_texts(leg, pieces, passes, arrive)
     if leg["mode"] == "ferry":
         return [f"{leg['from']}から船に乗り、{time}で{to}へ渡ります。", f"船で{time}、{to}へ。", f"船で{to}へ。"]
     if leg["mode"] in ("car", "driving"):

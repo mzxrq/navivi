@@ -82,19 +82,7 @@ def _generate_attraction_video(
     force: bool,
 ) -> Dict[str, Any]:
     config_path, waypoints = _load_waypoints(job_config_path)
-    if waypoint_index < 0 or waypoint_index >= len(waypoints):
-        raise IndexError(
-            f"waypoint_index must be between 0 and {len(waypoints) - 1}, "
-            f"got {waypoint_index}"
-        )
-
-    waypoint = waypoints[waypoint_index]
-    if not isinstance(waypoint, dict):
-        raise ValueError(f"Waypoint {waypoint_index} must be an object")
-    if not waypoint.get("popup_image"):
-        raise ValueError(f"Waypoint {waypoint_index} has no popup_image")
-    if no_attraction(waypoint):
-        raise ValueError(f"Waypoint {waypoint_index}: {passed_only_reason(waypoint)} (no attraction clip)")
+    waypoint = _checked_waypoint(waypoints, waypoint_index)
 
     from services import tuning
     from services.config.job_config import JobConfigManager
@@ -124,6 +112,29 @@ def _generate_attraction_video(
         force=force,
     )
 
+    return _attraction_reply(result, waypoint_index)
+
+
+def _checked_waypoint(waypoints: list, waypoint_index: int) -> dict:
+    """The waypoint at `waypoint_index`, raising when it cannot have an attraction clip."""
+    if waypoint_index < 0 or waypoint_index >= len(waypoints):
+        raise IndexError(
+            f"waypoint_index must be between 0 and {len(waypoints) - 1}, "
+            f"got {waypoint_index}"
+        )
+
+    waypoint = waypoints[waypoint_index]
+    if not isinstance(waypoint, dict):
+        raise ValueError(f"Waypoint {waypoint_index} must be an object")
+    if not waypoint.get("popup_image"):
+        raise ValueError(f"Waypoint {waypoint_index} has no popup_image")
+    if no_attraction(waypoint):
+        raise ValueError(f"Waypoint {waypoint_index}: {passed_only_reason(waypoint)} (no attraction clip)")
+    return waypoint
+
+
+def _attraction_reply(result: Dict[str, Any], waypoint_index: int) -> Dict[str, Any]:
+    """The CLI reply for a generated or pending clip; raises when generation failed."""
     if result["status"] == "generated":
         return {
             "success": True,

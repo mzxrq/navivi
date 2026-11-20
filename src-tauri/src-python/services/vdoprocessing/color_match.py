@@ -19,6 +19,7 @@ import numpy as np
 
 from services import tuning
 from services.logger.logger import setup_logger
+from services.vdoprocessing.video_frames import raw_encoder_command, read_frames
 
 logger = setup_logger("ColorMatch")
 
@@ -75,6 +76,30 @@ def correct_frame(frame_bgr: np.ndarray, frame_stats: np.ndarray, target_stats: 
     return cv2.cvtColor(np.clip(corrected, 0, 255).astype(np.uint8), cv2.COLOR_LAB2BGR)
 
 
+def _encode_matched(frames: list, stats: list, target, fps: float, out_path: str) -> bool:
+    """Encodes every frame colour-corrected toward `target` into `out_path`; False (file removed) when ffmpeg fails."""
+    h, w = frames[0].shape[:2]
+    # ffmpeg's messages go to a file, not a pipe that is only read at the end (a flood of warnings would fill it and hang).
+    err = tempfile.TemporaryFile()
+    proc = subprocess.Popen(raw_encoder_command(w, h, fps, out_path, 16), stdin=subprocess.PIPE, stderr=err)
+    try:
+        for frame, frame_stats in zip(frames, stats):
+            proc.stdin.write(correct_frame(frame, frame_stats, target, tuning.ATTRACTION_COLOR_MATCH_STRENGTH).tobytes())
+        proc.stdin.close()
+        if proc.wait() != 0:
+            err.seek(0)
+            logger.warning("Colour match encode failed: %s", err.read().decode("utf-8", "replace"))
+            Path(out_path).unlink(missing_ok=True)
+            return False
+    except Exception:
+        proc.kill()
+        Path(out_path).unlink(missing_ok=True)
+        raise
+    finally:
+        err.close()
+    return True
+
+
 def match_clip_to_photo(video_path: str, photo_path: str) -> bool:
     """Rewrites video_path in place with its colours matched to photo_path.
     Returns False (leaving the clip untouched) when switched off or on any
@@ -88,15 +113,8 @@ def match_clip_to_photo(video_path: str, photo_path: str) -> bool:
             logger.warning("Colour match skipped: can't read %s", photo_path)
             return False
 
-        cap = cv2.VideoCapture(video_path)
-        fps = cap.get(cv2.CAP_PROP_FPS) or float(tuning.COMFYUI_FPS)
-        frames = []
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                break
-            frames.append(frame)
-        cap.release()
+        frames, fps = read_frames(video_path)
+        fps = fps or float(tuning.COMFYUI_FPS)
         if not frames:
             logger.warning("Colour match skipped: no frames in %s", video_path)
             return False
@@ -106,35 +124,9 @@ def match_clip_to_photo(video_path: str, photo_path: str) -> bool:
         radius = max(1, round(fps * tuning.ATTRACTION_COLOR_MATCH_SMOOTH_SECONDS / 2))
         stats = _smooth([_lab_stats(f) for f in frames], radius)
 
-        from services.tts.ttsengine import FFmpegManager
-
         out_path = str(Path(video_path).with_suffix(".colormatch.mp4"))
-        # ffmpeg's messages go to a file, not a pipe that is only read at the end (a flood of warnings would fill it and hang).
-        err = tempfile.TemporaryFile()
-        proc = subprocess.Popen(
-            [
-                FFmpegManager.resolve_ffmpeg_bin(), "-y", *tuning.ffmpeg_pipe_log_args(),
-                "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{w}x{h}", "-r", f"{fps:.3f}", "-i", "-",
-                "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "16", "-preset", "fast",
-                "-pix_fmt", "yuv420p", out_path,
-            ],
-            stdin=subprocess.PIPE, stderr=err,
-        )
-        try:
-            for frame, frame_stats in zip(frames, stats):
-                proc.stdin.write(correct_frame(frame, frame_stats, target, tuning.ATTRACTION_COLOR_MATCH_STRENGTH).tobytes())
-            proc.stdin.close()
-            if proc.wait() != 0:
-                err.seek(0)
-                logger.warning("Colour match encode failed: %s", err.read().decode("utf-8", "replace"))
-                Path(out_path).unlink(missing_ok=True)
-                return False
-        except Exception:
-            proc.kill()
-            Path(out_path).unlink(missing_ok=True)
-            raise
-        finally:
-            err.close()
+        if not _encode_matched(frames, stats, target, fps, out_path):
+            return False
 
         Path(out_path).replace(video_path)
         drift = np.abs(np.stack(stats) - target).max(0)

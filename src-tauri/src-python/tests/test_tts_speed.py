@@ -2,13 +2,14 @@
 
 import asyncio
 import os
+import subprocess
 import wave
 
 import pytest
 
 from services import tuning
 from services.tts import phrase_cache, voices
-from services.tts import ttsengine
+from services.tts import clients
 from services.tts.ttsengine import IrodoriTTSClient, TTSConfig, ensure_reference_latent, tts_config_from_settings
 
 
@@ -89,7 +90,7 @@ class TestCallApi:
             return b"AUDIO-" + payload["input"].encode("utf-8")
 
         monkeypatch.setattr(IrodoriTTSClient, "_post_speech", post)
-        monkeypatch.setattr(ttsengine, "ensure_reference_latent", lambda voice: None)
+        monkeypatch.setattr(clients, "ensure_reference_latent", lambda voice: None)
         c = IrodoriTTSClient(output_dir=tmp_path / "out", config=TTSConfig(voice="alice", quality="fast"))
         c.sent = sent
         return c
@@ -110,10 +111,10 @@ class TestCallApi:
 
     def test_the_saved_latent_is_sent_but_is_not_part_of_the_cache_key(self, client, monkeypatch, tmp_path):
         first = tmp_path / "a.pt"
-        monkeypatch.setattr(ttsengine, "ensure_reference_latent", lambda voice: first)
+        monkeypatch.setattr(clients, "ensure_reference_latent", lambda voice: first)
         asyncio.run(client.call_api("一"))
         assert client.sent[0]["irodori"] == {"num_steps": 16, "ref_latent": str(first)}
-        monkeypatch.setattr(ttsengine, "ensure_reference_latent", lambda voice: tmp_path / "b.pt")
+        monkeypatch.setattr(clients, "ensure_reference_latent", lambda voice: tmp_path / "b.pt")
         asyncio.run(client.call_api("一"))  # same line, the latent file moved: still a cache hit
         assert len(client.sent) == 1
 
@@ -138,21 +139,21 @@ class TestReferenceLatent:
         def boom(*a, **k):
             raise AssertionError("must not run the encoder again")
 
-        monkeypatch.setattr(ttsengine.subprocess, "run", boom)
+        monkeypatch.setattr(subprocess, "run", boom)
         assert ensure_reference_latent("alice") == latent
 
     def test_a_failing_encoder_falls_back_and_is_not_retried(self, voice_lib, monkeypatch, tmp_path):
         fake_python = tmp_path / "python.exe"
         fake_python.write_bytes(b"")
         monkeypatch.setattr(IrodoriTTSClient, "_SERVER_VENV_PYTHON", fake_python)
-        monkeypatch.setattr(ttsengine, "_latent_failures", set())
+        monkeypatch.setattr(clients, "_latent_failures", set())
         calls = []
 
         def fail(*a, **k):
             calls.append(1)
             return type("R", (), {"returncode": 1, "stderr": "boom"})()
 
-        monkeypatch.setattr(ttsengine.subprocess, "run", fail)
+        monkeypatch.setattr(subprocess, "run", fail)
         assert ensure_reference_latent("alice") is None
         assert ensure_reference_latent("alice") is None
         assert len(calls) == 1

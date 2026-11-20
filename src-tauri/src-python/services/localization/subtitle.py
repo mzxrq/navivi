@@ -208,6 +208,53 @@ def spoken_weight(text: str) -> int:
     return max(1, sum(0 if _UNSPOKEN.match(ch) else 2 if _TWO_MORA.match(ch) else 1 for ch in text))
 
 
+def _pause_alignment_table(
+    n: int, last: int, rate: float, prefix: List[int], miss: List[float], max_group: int, spoken,
+) -> Tuple[List[List[float]], List[List[Optional[Tuple[int, int]]]]]:
+    """The DP table of align_to_pauses: the cheapest cost of fitting the first k clauses ending at node b,
+    and where that came from (clause count, node)."""
+    inf = float("inf")
+    best = [[inf] * (last + 1) for _ in range(n + 1)]
+    back: List[List[Optional[Tuple[int, int]]]] = [[None] * (last + 1) for _ in range(n + 1)]
+    best[0][0] = 0.0
+    for k0 in range(n):
+        for a in range(last):
+            if best[k0][a] == inf:
+                continue
+            for k in range(k0 + 1, min(n, k0 + max_group) + 1):
+                target = rate * (prefix[k] - prefix[k0])
+                extra = sum(miss[k0 : k - 1])
+                for b in range(a + 1, last + 1):
+                    if (b == last) != (k == n):
+                        continue
+                    cost = best[k0][a] + (spoken(a, b) - target) ** 2 + extra
+                    if cost < best[k][b]:
+                        best[k][b] = cost
+                        back[k][b] = (k0, a)
+    return best, back
+
+
+def _spans_from_table(
+    n: int, last: int, back: List[List[Optional[Tuple[int, int]]]], opens: List[float], closes: List[float],
+    prefix: List[int],
+) -> List[Tuple[float, float]]:
+    """Walks the DP table back from the end: each group of clauses shares its pause-to-pause span by weight."""
+    spans: List[Tuple[float, float]] = []
+    k, b = n, last
+    while k > 0:
+        k0, a = back[k][b]
+        start, end = opens[a], closes[b - 1]
+        total = prefix[k] - prefix[k0]
+        group = []
+        for i in range(k0, k):
+            s = start + (end - start) * (prefix[i] - prefix[k0]) / total
+            e = start + (end - start) * (prefix[i + 1] - prefix[k0]) / total
+            group.append((s, e))
+        spans[:0] = group
+        k, b = k0, a
+    return spans
+
+
 def align_to_pauses(
     weights: List[int], speech: List[Tuple[float, float]], max_group: int = 6, unsnapped_cost: float = 1.0,
 ) -> Optional[List[Tuple[float, float]]]:
@@ -233,40 +280,11 @@ def align_to_pauses(
     def spoken(a: int, b: int) -> float:
         return closes[b - 1] - opens[a] - (gap_sum[b - 1] - gap_sum[a])
 
-    inf = float("inf")
-    best = [[inf] * (last + 1) for _ in range(n + 1)]
-    back: List[List[Optional[Tuple[int, int]]]] = [[None] * (last + 1) for _ in range(n + 1)]
-    best[0][0] = 0.0
-    for k0 in range(n):
-        for a in range(last):
-            if best[k0][a] == inf:
-                continue
-            for k in range(k0 + 1, min(n, k0 + max_group) + 1):
-                target = rate * (prefix[k] - prefix[k0])
-                extra = sum(miss[k0 : k - 1])
-                for b in range(a + 1, last + 1):
-                    if (b == last) != (k == n):
-                        continue
-                    cost = best[k0][a] + (spoken(a, b) - target) ** 2 + extra
-                    if cost < best[k][b]:
-                        best[k][b] = cost
-                        back[k][b] = (k0, a)
-    if best[n][last] == inf:
+    best, back = _pause_alignment_table(n, last, rate, prefix, miss, max_group, spoken)
+    if best[n][last] == float("inf"):
         return None
 
-    spans: List[Tuple[float, float]] = []
-    k, b = n, last
-    while k > 0:
-        k0, a = back[k][b]
-        start, end = opens[a], closes[b - 1]
-        total = prefix[k] - prefix[k0]
-        group = []
-        for i in range(k0, k):
-            s = start + (end - start) * (prefix[i] - prefix[k0]) / total
-            e = start + (end - start) * (prefix[i + 1] - prefix[k0]) / total
-            group.append((s, e))
-        spans[:0] = group
-        k, b = k0, a
+    spans = _spans_from_table(n, last, back, opens, closes, prefix)
     # Hold each caption through the pause until the next one starts.
     return [(s, spans[i + 1][0] if i + 1 < len(spans) else e) for i, (s, e) in enumerate(spans)]
 

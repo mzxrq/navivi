@@ -22,7 +22,7 @@ import math
 import random
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
@@ -312,6 +312,43 @@ def _totals_line(engine, brief: Dict[str, Any]) -> str:
     return f"{_fmt_km(brief['total_km'])}{sep}{engine._format_duration_ja(brief['total_minutes'] * 60)}"
 
 
+def _draw_grid_card(
+    canvas: Image.Image, draw: ImageDraw.ImageDraw, wp: Dict[str, Any], idx: int, thumb_x: float, thumb_y: float,
+    thumb_w: float, thumb_h: float, badge_font, label_font,
+) -> None:
+    """One card of the single-frame grid: the photo (or a plain tile), its number badge and name below."""
+    image_path = _first_image(wp)
+    thumb = (
+        _rounded_thumbnail(image_path, (int(thumb_w), int(thumb_h)))
+        if image_path
+        else None
+    )
+    if thumb is not None:
+        canvas.paste(thumb, (int(thumb_x), int(thumb_y)), thumb)
+    else:
+        draw.rounded_rectangle(
+            [thumb_x, thumb_y, thumb_x + thumb_w, thumb_y + thumb_h],
+            radius=_CORNER_RADIUS,
+            fill=(40, 40, 44),
+        )
+
+    _draw_badge(canvas, (int(thumb_x) + 4, int(thumb_y) + 4), idx + 1, badge_font)
+
+    label = _truncate_to_width(
+        draw,
+        str(wp.get("label", f"{video_text.current_labels()['waypoint_fallback']} {idx + 1}")),
+        label_font, thumb_w,
+    )
+    _center_text(
+        draw,
+        label,
+        label_font,
+        thumb_x + thumb_w / 2,
+        thumb_y + thumb_h + 6,
+        tuning.OUTRO_LABEL_COLOR,
+    )
+
+
 def _build_frame(
     project_name: str, waypoints: List[Dict[str, Any]], brief: Optional[Dict[str, Any]] = None,
 ) -> Image.Image:
@@ -365,40 +402,50 @@ def _build_frame(
         cell_x = margin + col * (cell_w + margin)
         cell_y = grid_top + row * (cell_h + margin)
         thumb_x = cell_x + (cell_w - thumb_w) / 2
-        thumb_y = cell_y
-
-        image_path = _first_image(wp)
-        thumb = (
-            _rounded_thumbnail(image_path, (int(thumb_w), int(thumb_h)))
-            if image_path
-            else None
-        )
-        if thumb is not None:
-            canvas.paste(thumb, (int(thumb_x), int(thumb_y)), thumb)
-        else:
-            draw.rounded_rectangle(
-                [thumb_x, thumb_y, thumb_x + thumb_w, thumb_y + thumb_h],
-                radius=_CORNER_RADIUS,
-                fill=(40, 40, 44),
-            )
-
-        _draw_badge(canvas, (int(thumb_x) + 4, int(thumb_y) + 4), idx + 1, badge_font)
-
-        label = _truncate_to_width(
-            draw,
-            str(wp.get("label", f"{video_text.current_labels()['waypoint_fallback']} {idx + 1}")),
-            label_font, thumb_w,
-        )
-        _center_text(
-            draw,
-            label,
-            label_font,
-            thumb_x + thumb_w / 2,
-            thumb_y + thumb_h + 6,
-            tuning.OUTRO_LABEL_COLOR,
-        )
+        _draw_grid_card(canvas, draw, wp, idx, thumb_x, cell_y, thumb_w, thumb_h, badge_font, label_font)
 
     return canvas
+
+
+def _draw_scroll_card(
+    page: Image.Image, draw: ImageDraw.ImageDraw, wp: Dict[str, Any], idx: int, x: int, y: int, thumb_w: int,
+    thumb_h: int, px, badge_r: int, badge_font, bold, label_font, label_size: int, label_min_size: int,
+) -> None:
+    """One card of the scrolling page: a rounded photo (or a plain tile), its number badge and its bold name."""
+    image_path = _first_image(wp)
+    thumb = (
+        _rounded_thumbnail(image_path, (thumb_w, thumb_h), px(_CORNER_RADIUS))
+        if image_path else None
+    )
+    if thumb is not None:
+        page.paste(thumb, (x, y), thumb)
+    else:
+        draw.rounded_rectangle(
+            [x, y, x + thumb_w, y + thumb_h], radius=px(_CORNER_RADIUS), fill=(40, 40, 44)
+        )
+    _draw_badge(page, (x + badge_r + px(8), y + badge_r + px(8)), idx + 1, badge_font, badge_r)
+
+    # A long name first shrinks (down to OUTRO_SCROLL_LABEL_MIN_FONT_SIZE)
+    # to fit the card's width, and is only cut with "…" past that.
+    text = str(wp.get("label", f"{video_text.current_labels()['waypoint_fallback']} {idx + 1}"))
+    font = label_font
+    font_size = label_size
+    while draw.textlength(text, font=font) > thumb_w and font_size > label_min_size:
+        font_size -= 1
+        font = _load_font(bold, font_size)
+    label = _truncate_to_width(draw, text, font, thumb_w)
+    # Shrunk text stays vertically centred on the full-size label line.
+    label_y = y + thumb_h + px(8) + (label_size - font_size) / 2
+    _center_text(draw, label, font, x + thumb_w / 2, label_y, tuning.OUTRO_LABEL_COLOR)
+
+
+def _draw_scroll_title(draw: ImageDraw.ImageDraw, project_name: str, count: int, width: int, px, title_font, subtitle_font) -> None:
+    """The pinned title block of the scrolling page: the project name over its "N places" line."""
+    _center_text(draw, project_name, title_font, width / 2, px(34), tuning.OUTRO_TITLE_COLOR)
+    _center_text(
+        draw, _outro_subtitle(count), subtitle_font, width / 2, px(34 + tuning.OUTRO_TITLE_FONT_SIZE + 10),
+        tuning.OUTRO_SUBTITLE_COLOR,
+    )
 
 
 def _build_scroll_page(
@@ -455,15 +502,7 @@ def _build_scroll_page(
     if header_color:
         draw.rectangle([0, 0, width, header_h - px(10)], fill=header_color)
     if (heading or {}).get("burn_text", True):
-        _center_text(draw, project_name, title_font, width / 2, px(34), tuning.OUTRO_TITLE_COLOR)
-        _center_text(
-            draw,
-            _outro_subtitle(len(waypoints)),
-            subtitle_font,
-            width / 2,
-            px(34 + tuning.OUTRO_TITLE_FONT_SIZE + 10),
-            tuning.OUTRO_SUBTITLE_COLOR,
-        )
+        _draw_scroll_title(draw, project_name, len(waypoints), width, px, title_font, subtitle_font)
 
     badge_r = px(tuning.OUTRO_SCROLL_BADGE_RADIUS)
     for idx, wp in enumerate(waypoints):
@@ -473,32 +512,10 @@ def _build_scroll_page(
         row_left = (width - (in_row * thumb_w + (in_row - 1) * margin)) / 2
         x = int(row_left + col * (thumb_w + margin))
         y = header_h + row * row_h
-
-        image_path = _first_image(wp)
-        thumb = (
-            _rounded_thumbnail(image_path, (thumb_w, thumb_h), px(_CORNER_RADIUS))
-            if image_path else None
+        _draw_scroll_card(
+            page, draw, wp, idx, x, y, thumb_w, thumb_h, px, badge_r, badge_font, bold, label_font, label_size,
+            label_min_size,
         )
-        if thumb is not None:
-            page.paste(thumb, (x, y), thumb)
-        else:
-            draw.rounded_rectangle(
-                [x, y, x + thumb_w, y + thumb_h], radius=px(_CORNER_RADIUS), fill=(40, 40, 44)
-            )
-        _draw_badge(page, (x + badge_r + px(8), y + badge_r + px(8)), idx + 1, badge_font, badge_r)
-
-        # A long name first shrinks (down to OUTRO_SCROLL_LABEL_MIN_FONT_SIZE)
-        # to fit the card's width, and is only cut with "…" past that.
-        text = str(wp.get("label", f"{video_text.current_labels()['waypoint_fallback']} {idx + 1}"))
-        font = label_font
-        font_size = label_size
-        while draw.textlength(text, font=font) > thumb_w and font_size > label_min_size:
-            font_size -= 1
-            font = _load_font(bold, font_size)
-        label = _truncate_to_width(draw, text, font, thumb_w)
-        # Shrunk text stays vertically centred on the full-size label line.
-        label_y = y + thumb_h + px(8) + (label_size - font_size) / 2
-        _center_text(draw, label, font, x + thumb_w / 2, label_y, tuning.OUTRO_LABEL_COLOR)
 
     return page
 
@@ -635,6 +652,201 @@ def route_cards(legs: List[Dict[str, Any]]) -> List[Tuple[str, Optional[int]]]:
     return cards
 
 
+def _route_rows(
+    brief: Dict[str, Any], legs: List[Dict[str, Any]], cards: list, cols: int,
+) -> List[Tuple[str, List[Any]]]:
+    """The route page's rows as (kind, items): the leg cards, then the stop-bys and the closed places, each with a title row."""
+    # Leg cards OUTRO_ROUTE_COLS to a row; after the last one, a title and
+    # every stop-by in route order (the start pin's first) as shorter cards.
+    rows: List[Tuple[str, List[Any]]] = [
+        ("legs", list(range(n, min(n + cols, len(cards))))) for n in range(0, len(cards), cols)
+    ]
+    stopbys = _stopbys(brief, "start_batch", "start_batch_at")
+    for leg in legs:
+        stopbys += _stopbys(leg, "batch", "batch_at")
+    if stopbys:
+        rows.append(("title", []))
+        rows.extend(("stopbys", stopbys[n:n + cols]) for n in range(0, len(stopbys), cols))
+    # Then the closed places (the editor's "Closed"), their own section with a × badge.
+    closed = _stopbys(brief, "closed", "closed_at")
+    if closed:
+        rows.append(("closed_title", []))
+        rows.extend(("closed", closed[n:n + cols]) for n in range(0, len(closed), cols))
+    return rows
+
+
+def _row_tops(
+    rows: list, legs_top: int, title_h: int, row_h: int, row_gap: int, height: int, px,
+) -> Tuple[List[int], int]:
+    """(each row's top, the page's height): it ends just below the last row, never under one screen."""
+    row_tops, y = [], legs_top
+    for kind, _ in rows:
+        row_tops.append(y)
+        y += title_h if kind in ("title", "closed_title") else row_h + row_gap
+    return row_tops, max(height, y - row_gap + px(70))
+
+
+class _RouteCardPainter:
+    """Draws the route page's leg cards: the destination's photo, its name and where the leg started,
+    and the travel mode, distance and time on the right."""
+
+    def __init__(
+        self, page: Image.Image, draw: ImageDraw.ImageDraw, engine, waypoints: List[Dict[str, Any]],
+        legs: List[Dict[str, Any]], cards: list, px, card_w: int, row_h: int, bold, badge_font,
+    ):
+        self.page, self.draw, self.engine, self.px = page, draw, engine, px
+        self.waypoints, self.legs, self.cards = waypoints, legs, cards
+        self.card_w, self.row_h, self.bold, self.badge_font = card_w, row_h, bold, badge_font
+        self.from_font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_REGULAR, px(tuning.OUTRO_ROUTE_FROM_FONT_SIZE))
+        self.chip_font = _load_font(bold, px(tuning.OUTRO_LEG_FONT_SIZE))
+        self.dist_font = _load_font(
+            _GraphicsEngineBase.FONT_CANDIDATES_EXTRABOLD, px(tuning.OUTRO_ROUTE_DISTANCE_FONT_SIZE)
+        )
+        self.pad = px(12)
+        self.thumb_h = row_h - 2 * self.pad
+        self.thumb_w = int(self.thumb_h * tuning.OUTRO_ROUTE_THUMB_ASPECT)
+        self.icon = px(tuning.OUTRO_LEG_FONT_SIZE + 2)
+        self.chip_ascent = self.chip_font.getmetrics()[0]
+        self.dist_ascent = self.dist_font.getmetrics()[0]
+        self.stats = [
+            (
+                _leg_modes(leg),
+                video_text.current_labels()["mode_join"].join(engine._mode_name_ja(m) for m in _leg_modes(leg)),
+                _fmt_km(leg["km"]),
+                engine._format_duration_ja(leg["minutes"] * 60),
+            )
+            for leg in legs
+        ]
+        # One stats column width for every card, so they line up down the page.
+        self.stats_w = max(
+            max(
+                self.icon + px(6) + draw.textlength(mode_label, font=self.chip_font),
+                draw.textlength(dist, font=self.dist_font),
+                self.icon + px(6) + draw.textlength(dur, font=self.chip_font),
+            )
+            for _, mode_label, dist, dur in self.stats
+        )
+        self.line_gap = px(8)
+        self.stats_h = self.chip_ascent + self.line_gap + self.dist_ascent + self.line_gap + self.chip_ascent
+
+    def _draw_thumb(self, leg: Dict[str, Any], modes: list, color, thumb_x: int, thumb_y: int, badge: str) -> None:
+        """The destination's photo (or a tinted tile with the mode's icon) with its number badge."""
+        px, draw = self.px, self.draw
+        image_path = _image_at(self.waypoints, leg.get("to_at") or [])
+        thumb = (
+            _rounded_thumbnail(image_path, (self.thumb_w, self.thumb_h), px(_CORNER_RADIUS))
+            if image_path else None
+        )
+        if thumb is not None:
+            self.page.paste(thumb, (thumb_x, thumb_y), thumb)
+        else:
+            draw.rounded_rectangle(
+                [thumb_x, thumb_y, thumb_x + self.thumb_w, thumb_y + self.thumb_h],
+                radius=px(_CORNER_RADIUS), fill=_mix(tuning.OUTRO_PANEL_COLOR, color, 0.18),
+            )
+            self.engine._draw_mode_icon(
+                draw, modes[0], thumb_x + self.thumb_w / 2, thumb_y + self.thumb_h / 2, self.thumb_h // 2, color,
+            )
+        _draw_photo_badge(self.page, thumb_x + px(8), thumb_y + px(8), badge, self.badge_font, px)
+
+    def _draw_names(self, leg: Dict[str, Any], start_card: bool, text_x: int, text_w: int, top: int) -> None:
+        """Left: the destination name over where the leg started, centred on the card."""
+        px, draw = self.px, self.draw
+        lines, font, size = _name_lines(
+            draw, leg["to"], self.bold, px(tuning.OUTRO_ROUTE_NAME_FONT_SIZE), px(16), text_w
+        )
+        line_h = size + px(4)
+        from_size = px(tuning.OUTRO_ROUTE_FROM_FONT_SIZE)
+        block = len(lines) * line_h - px(4) + px(10) + from_size
+        name_y = top + (self.row_h - block) / 2 - px(2)
+        for n, line in enumerate(lines):
+            draw.text((text_x, name_y + n * line_h), line, font=font, fill=tuning.OUTRO_TITLE_COLOR)
+        labels = video_text.current_labels()
+        origin = _truncate_to_width(
+            draw, labels["overview_start"] if start_card else labels["outro_route_from"].format(name=leg["from"]),
+            self.from_font, text_w,
+        )
+        draw.text(
+            (text_x, name_y + block - from_size), origin, font=self.from_font, fill=tuning.OUTRO_SUBTITLE_COLOR,
+        )
+
+    def _draw_stats(
+        self, modes: list, mode_label: str, dist: str, dur: str, color, divider_x: int, stats_right: int, top: int,
+    ) -> None:
+        """Right: mode, distance and time, right-aligned behind a thin divider."""
+        px, draw, engine, icon = self.px, self.draw, self.engine, self.icon
+        draw.line(
+            [(divider_x, top + px(22)), (divider_x, top + self.row_h - px(22))],
+            fill=tuning.OUTRO_CHIP_COLOR, width=max(1, px(2)),
+        )
+        y = top + (self.row_h - self.stats_h) / 2 - px(2)
+        mode_w = icon + px(6) + draw.textlength(mode_label, font=self.chip_font)
+        engine._draw_mode_icon(
+            draw, modes[0], stats_right - mode_w + icon / 2, y + self.chip_ascent / 2 + px(2), icon, color,
+        )
+        draw.text((stats_right, y), mode_label, font=self.chip_font, fill=color, anchor="ra")
+        y += self.chip_ascent + self.line_gap
+        draw.text((stats_right, y), dist, font=self.dist_font, fill=tuning.OUTRO_TITLE_COLOR, anchor="ra")
+        y += self.dist_ascent + self.line_gap
+        dur_w = icon + px(6) + draw.textlength(dur, font=self.chip_font)
+        engine._draw_clock_icon(
+            draw, stats_right - dur_w + icon / 2, y + self.chip_ascent / 2 + px(2), int(icon * 0.85),
+            tuning.OUTRO_SUBTITLE_COLOR,
+        )
+        draw.text((stats_right, y), dur, font=self.chip_font, fill=tuning.OUTRO_LABEL_COLOR, anchor="ra")
+
+    def paint(self, i: int, cx0: int, top: int) -> None:
+        """Draws card `i` of the route cards at column x `cx0` and row top `top`."""
+        px = self.px
+        badge, leg_index = self.cards[i]
+        start_card = leg_index is None
+        # The S card: the start's photo and name, no leg stats.
+        leg = (
+            {"to": self.legs[0]["from"], "to_at": self.legs[0].get("from_at"), "from": ""}
+            if start_card else self.legs[leg_index]
+        )
+        modes, mode_label, dist, dur = self.stats[0 if start_card else leg_index]
+        stats_right = cx0 + self.card_w - px(18)
+        divider_x = cx0 + self.card_w - px(18) if start_card else stats_right - self.stats_w - px(16)
+        color = _mode_rgb(self.engine, modes[0])
+        thumb_x, thumb_y = cx0 + self.pad, top + self.pad
+
+        self.draw.rounded_rectangle(
+            [cx0, top, cx0 + self.card_w, top + self.row_h], radius=px(16), fill=tuning.OUTRO_PANEL_COLOR,
+        )
+        self._draw_thumb(leg, modes, color, thumb_x, thumb_y, badge)
+        text_x = thumb_x + self.thumb_w + px(16)
+        self._draw_names(leg, start_card, text_x, divider_x - px(14) - text_x, top)
+        if not start_card:
+            self._draw_stats(modes, mode_label, dist, dur, color, divider_x, stats_right, top)
+
+
+def _draw_extra_rows(
+    page: Image.Image, draw: ImageDraw.ImageDraw, waypoints: List[Dict[str, Any]], rows: list, row_tops: list,
+    x0: int, card_w: int, col_gap: int, px, title_font, badge_font,
+) -> list:
+    """Draws the stop-by and closed-place sections (titles and cards); returns the leg cards' slots (index, x, top)."""
+    slots = []
+    number = 0  # stop-bys are numbered +1, +2 ... after the leg cards
+    for (kind, items), top in zip(rows, row_tops):
+        if kind in ("title", "closed_title"):
+            draw.text(
+                (x0, top + px(12)),
+                video_text.current_labels()["outro_stopby_title" if kind == "title" else "outro_closed_title"],
+                font=title_font, fill=tuning.OUTRO_LABEL_COLOR,
+            )
+        for col, item in enumerate(items):
+            cx0 = x0 + col * (card_w + col_gap)
+            if kind == "stopbys":
+                number += 1
+                _draw_stopby_card(page, waypoints, item, cx0, top, card_w, px, f"+{number}", badge_font)
+            elif kind == "closed":
+                _draw_stopby_card(page, waypoints, item, cx0, top, card_w, px, "×", badge_font)
+            else:
+                slots.append((item, cx0, top))
+    return slots
+
+
 def _build_route_page(
     project_name: str, waypoints: List[Dict[str, Any]], size: Tuple[int, int],
     brief: Dict[str, Any], heading: Optional[Dict[str, Any]] = None,
@@ -668,33 +880,12 @@ def _build_route_page(
         heading, height, natural_top - px(10), heading_top + _heading_height(lines, k) + px(4))
     panel_top = header_h + px(10)
     panel_h = _summary_height(brief, px)
-    legs_top = panel_top + panel_h + px(32)
     cols = tuning.OUTRO_ROUTE_COLS
     sb_title_h = px(12) + px(tuning.OUTRO_STOPBY_TITLE_FONT_SIZE) + px(12)
 
     cards = route_cards(legs)
-    # Leg cards OUTRO_ROUTE_COLS to a row; after the last one, a title and
-    # every stop-by in route order (the start pin's first) as shorter cards.
-    rows: List[Tuple[str, List[Any]]] = [
-        ("legs", list(range(n, min(n + cols, len(cards))))) for n in range(0, len(cards), cols)
-    ]
-    stopbys = _stopbys(brief, "start_batch", "start_batch_at")
-    for leg in legs:
-        stopbys += _stopbys(leg, "batch", "batch_at")
-    if stopbys:
-        rows.append(("title", []))
-        rows.extend(("stopbys", stopbys[n:n + cols]) for n in range(0, len(stopbys), cols))
-    # Then the closed places (the editor's "Closed"), their own section with a × badge.
-    closed = _stopbys(brief, "closed", "closed_at")
-    if closed:
-        rows.append(("closed_title", []))
-        rows.extend(("closed", closed[n:n + cols]) for n in range(0, len(closed), cols))
-
-    row_tops, y = [], legs_top
-    for kind, _ in rows:
-        row_tops.append(y)
-        y += sb_title_h if kind in ("title", "closed_title") else row_h + row_gap
-    page_h = max(height, y - row_gap + px(70))
+    rows = _route_rows(brief, legs, cards, cols)
+    row_tops, page_h = _row_tops(rows, panel_top + panel_h + px(32), sb_title_h, row_h, row_gap, height, px)
 
     page = Image.new("RGB", (width, page_h), tuning.OUTRO_BG_COLOR)
     page.info["header_h"] = panel_top - px(10)
@@ -702,144 +893,20 @@ def _build_route_page(
     draw = ImageDraw.Draw(page)
     if header_color:
         draw.rectangle([0, 0, width, panel_top - px(10)], fill=header_color)
-    from_font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_REGULAR, px(tuning.OUTRO_ROUTE_FROM_FONT_SIZE))
-    chip_font = _load_font(bold, px(tuning.OUTRO_LEG_FONT_SIZE))
     badge_font = _load_font(bold, px(15))
 
     if heading.get("burn_text", True):  # False: the title is a text-track item (outro_step.outro_text_item)
         _draw_heading(draw, lines, width / 2, heading_top, box_w, k)
     _draw_summary(page, engine, brief, px, x0, box_w, panel_top, panel_h)
 
-    pad = px(12)
-    thumb_h = row_h - 2 * pad
-    thumb_w = int(thumb_h * tuning.OUTRO_ROUTE_THUMB_ASPECT)
-    icon = px(tuning.OUTRO_LEG_FONT_SIZE + 2)
-    dist_font = _load_font(
-        _GraphicsEngineBase.FONT_CANDIDATES_EXTRABOLD, px(tuning.OUTRO_ROUTE_DISTANCE_FONT_SIZE)
-    )
-    chip_ascent = chip_font.getmetrics()[0]
-    dist_ascent = dist_font.getmetrics()[0]
-
     # OUTRO_ROUTE_COLS cards to a row, together as wide as the summary.
     col_gap = px(tuning.OUTRO_ROUTE_COL_GAP)
     card_w = (box_w - col_gap * (cols - 1)) // cols
-    stats = [
-        (
-            _leg_modes(leg),
-            video_text.current_labels()["mode_join"].join(engine._mode_name_ja(m) for m in _leg_modes(leg)),
-            _fmt_km(leg["km"]),
-            engine._format_duration_ja(leg["minutes"] * 60),
-        )
-        for leg in legs
-    ]
-    # One stats column width for every card, so they line up down the page.
-    stats_w = max(
-        max(
-            icon + px(6) + draw.textlength(mode_label, font=chip_font),
-            draw.textlength(dist, font=dist_font),
-            icon + px(6) + draw.textlength(dur, font=chip_font),
-        )
-        for _, mode_label, dist, dur in stats
-    )
-    line_gap = px(8)
-    stats_h = chip_ascent + line_gap + dist_ascent + line_gap + chip_ascent
-
+    painter = _RouteCardPainter(page, draw, engine, waypoints, legs, cards, px, card_w, row_h, bold, badge_font)
     title_font = _load_font(bold, px(tuning.OUTRO_STOPBY_TITLE_FONT_SIZE))
-    slots = []
-    number = 0  # stop-bys are numbered +1, +2 ... after the leg cards
-    for (kind, items), top in zip(rows, row_tops):
-        if kind in ("title", "closed_title"):
-            draw.text(
-                (x0, top + px(12)),
-                video_text.current_labels()["outro_stopby_title" if kind == "title" else "outro_closed_title"],
-                font=title_font, fill=tuning.OUTRO_LABEL_COLOR,
-            )
-        for col, item in enumerate(items):
-            cx0 = x0 + col * (card_w + col_gap)
-            if kind == "stopbys":
-                number += 1
-                _draw_stopby_card(page, waypoints, item, cx0, top, card_w, px, f"+{number}", badge_font)
-            elif kind == "closed":
-                _draw_stopby_card(page, waypoints, item, cx0, top, card_w, px, "×", badge_font)
-            else:
-                slots.append((item, cx0, top))
-
+    slots = _draw_extra_rows(page, draw, waypoints, rows, row_tops, x0, card_w, col_gap, px, title_font, badge_font)
     for i, cx0, top in slots:
-        badge, leg_index = cards[i]
-        start_card = leg_index is None
-        # The S card: the start's photo and name, no leg stats.
-        leg = (
-            {"to": legs[0]["from"], "to_at": legs[0].get("from_at"), "from": ""} if start_card else legs[leg_index]
-        )
-        modes, mode_label, dist, dur = stats[0 if start_card else leg_index]
-        stats_right = cx0 + card_w - px(18)
-        divider_x = cx0 + card_w - px(18) if start_card else stats_right - stats_w - px(16)
-        color = _mode_rgb(engine, modes[0])
-        thumb_x, thumb_y = cx0 + pad, top + pad
-
-        draw.rounded_rectangle(
-            [cx0, top, cx0 + card_w, top + row_h], radius=px(16), fill=tuning.OUTRO_PANEL_COLOR,
-        )
-
-        image_path = _image_at(waypoints, leg.get("to_at") or [])
-        thumb = (
-            _rounded_thumbnail(image_path, (thumb_w, thumb_h), px(_CORNER_RADIUS))
-            if image_path else None
-        )
-        if thumb is not None:
-            page.paste(thumb, (thumb_x, thumb_y), thumb)
-        else:
-            draw.rounded_rectangle(
-                [thumb_x, thumb_y, thumb_x + thumb_w, thumb_y + thumb_h],
-                radius=px(_CORNER_RADIUS), fill=_mix(tuning.OUTRO_PANEL_COLOR, color, 0.18),
-            )
-            engine._draw_mode_icon(
-                draw, modes[0], thumb_x + thumb_w / 2, thumb_y + thumb_h / 2, thumb_h // 2, color,
-            )
-        _draw_photo_badge(page, thumb_x + px(8), thumb_y + px(8), badge, badge_font, px)
-
-        # Left: the destination name over where the leg started, centred on the card.
-        text_x = thumb_x + thumb_w + px(16)
-        text_w = divider_x - px(14) - text_x
-        lines, font, size = _name_lines(draw, leg["to"], bold, px(tuning.OUTRO_ROUTE_NAME_FONT_SIZE), px(16), text_w)
-        line_h = size + px(4)
-        from_size = px(tuning.OUTRO_ROUTE_FROM_FONT_SIZE)
-        block = len(lines) * line_h - px(4) + px(10) + from_size
-        name_y = top + (row_h - block) / 2 - px(2)
-        for n, line in enumerate(lines):
-            draw.text((text_x, name_y + n * line_h), line, font=font, fill=tuning.OUTRO_TITLE_COLOR)
-        labels = video_text.current_labels()
-        origin = _truncate_to_width(
-            draw, labels["overview_start"] if start_card else labels["outro_route_from"].format(name=leg["from"]),
-            from_font, text_w,
-        )
-        draw.text(
-            (text_x, name_y + block - from_size), origin, font=from_font, fill=tuning.OUTRO_SUBTITLE_COLOR,
-        )
-        if start_card:
-            continue
-
-        # Right: mode, distance and time, right-aligned behind a thin divider.
-        draw.line(
-            [(divider_x, top + px(22)), (divider_x, top + row_h - px(22))],
-            fill=tuning.OUTRO_CHIP_COLOR, width=max(1, px(2)),
-        )
-        y = top + (row_h - stats_h) / 2 - px(2)
-        mode_w = icon + px(6) + draw.textlength(mode_label, font=chip_font)
-        engine._draw_mode_icon(
-            draw, modes[0], stats_right - mode_w + icon / 2, y + chip_ascent / 2 + px(2), icon, color,
-        )
-        draw.text((stats_right, y), mode_label, font=chip_font, fill=color, anchor="ra")
-        y += chip_ascent + line_gap
-        draw.text((stats_right, y), dist, font=dist_font, fill=tuning.OUTRO_TITLE_COLOR, anchor="ra")
-        y += dist_ascent + line_gap
-        dur_w = icon + px(6) + draw.textlength(dur, font=chip_font)
-        engine._draw_clock_icon(
-            draw, stats_right - dur_w + icon / 2, y + chip_ascent / 2 + px(2), int(icon * 0.85),
-            tuning.OUTRO_SUBTITLE_COLOR,
-        )
-        draw.text((stats_right, y), dur, font=chip_font, fill=tuning.OUTRO_LABEL_COLOR, anchor="ra")
-
+        painter.paint(i, cx0, top)
     return page
 
 
@@ -915,28 +982,15 @@ def _summary_height(brief: Dict[str, Any], px) -> int:
     return h + px(44) if len(_mode_totals(brief)) > 1 else h
 
 
-def _draw_summary(
-    page: Image.Image, engine, brief: Dict[str, Any], px, x0: int, box_w: int,
-    top: int, panel_h: int,
-) -> None:
-    """A row of stat tiles (distance, time, places, longest leg), then, on a
-    trip with more than one travel mode, each mode's distance, time and share."""
-    draw = ImageDraw.Draw(page)
-    bold = _GraphicsEngineBase.FONT_CANDIDATES_BOLD
+def _summary_tiles(engine, brief: Dict[str, Any]) -> list:
+    """The four stat tiles: (icon drawer, label, value, note) for distance, time, places and the longest leg."""
     labels = video_text.current_labels()["outro_summary"]
-    small_font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_REGULAR, px(14))
-    legend_font = _load_font(bold, px(tuning.OUTRO_LEG_FONT_SIZE))
-    value_font = _load_font(
-        _GraphicsEngineBase.FONT_CANDIDATES_EXTRABOLD, px(tuning.OUTRO_SUMMARY_VALUE_FONT_SIZE)
-    )
-    muted, text = tuning.OUTRO_SUBTITLE_COLOR, tuning.OUTRO_LABEL_COLOR
-
     legs = brief["legs"]
     longest = max(legs, key=lambda leg: leg["km"])
     longest_mode = _leg_modes(longest)[0]
     accent = tuple(reversed(tuning.DEFAULT_MARKER_COLOR))
     stops = len(route_cards(legs))  # every card, start and end too: no return stops, a round trip's start once
-    tiles = [
+    return [
         (lambda d, cx, cy, s: engine._draw_total_icon(d, cx, cy, s, tuning.OUTRO_TITLE_COLOR),
          labels["distance"], _fmt_km(brief["total_km"]), video_text.plural(labels, "legs", len(legs), count=len(legs))),
         (lambda d, cx, cy, s: engine._draw_clock_icon(d, cx, cy, s, tuning.OUTRO_TITLE_COLOR),
@@ -947,44 +1001,42 @@ def _draw_summary(
          labels["longest"], _fmt_km(longest["km"]), f"→ {longest['to']}"),
     ]
 
-    # No outer frame: the tiles span the full width, like the cards below.
-    pad, gap = 0, px(tuning.OUTRO_ROUTE_COL_GAP)
-    tile_bg = tuning.OUTRO_PANEL_COLOR
-    tile_h = px(100)
-    tile_w = (box_w - 2 * pad - gap * (len(tiles) - 1)) / len(tiles)
-    icon = px(30)
-    ty = top + pad
-    for i, (icon_fn, label, value, sub) in enumerate(tiles):
-        tx = x0 + pad + i * (tile_w + gap)
-        draw.rounded_rectangle([tx, ty, tx + tile_w, ty + tile_h], radius=px(16), fill=tile_bg)
-        icon_fn(draw, tx + px(16) + icon / 2, ty + tile_h / 2, icon)
-        text_x = tx + px(16) + icon + px(14)
-        text_w = tx + tile_w - px(12) - text_x
-        draw.text((text_x, ty + px(14)), label, font=small_font, fill=muted)
-        # A long value shrinks to fit the tile, and is only cut past the minimum.
-        font, size = value_font, px(tuning.OUTRO_SUMMARY_VALUE_FONT_SIZE)
-        while draw.textlength(value, font=font) > text_w and size > px(16):
-            size -= 1
-            font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_EXTRABOLD, size)
-        draw.text(
-            (text_x, ty + px(34) + (px(tuning.OUTRO_SUMMARY_VALUE_FONT_SIZE) - size) * 0.6),
-            _truncate_to_width(draw, value, font, text_w), font=font, fill=tuning.OUTRO_TITLE_COLOR,
-        )
-        if sub:
-            draw.text(
-                (text_x, ty + px(72)), _truncate_to_width(draw, sub, small_font, text_w),
-                font=small_font, fill=muted,
-            )
 
-    # Split by travel mode, only when there is more than one.
-    totals = _mode_totals(brief)
-    if len(totals) < 2:
-        return
+def _draw_summary_tile(
+    draw: ImageDraw.ImageDraw, tile: tuple, tx: float, ty: float, tile_w: float, tile_h: int, px,
+    small_font, value_font, muted,
+) -> None:
+    """One stat tile: its panel, icon, label, value (shrunk to fit) and note."""
+    icon_fn, label, value, sub = tile
+    icon = px(30)
+    draw.rounded_rectangle([tx, ty, tx + tile_w, ty + tile_h], radius=px(16), fill=tuning.OUTRO_PANEL_COLOR)
+    icon_fn(draw, tx + px(16) + icon / 2, ty + tile_h / 2, icon)
+    text_x = tx + px(16) + icon + px(14)
+    text_w = tx + tile_w - px(12) - text_x
+    draw.text((text_x, ty + px(14)), label, font=small_font, fill=muted)
+    # A long value shrinks to fit the tile, and is only cut past the minimum.
+    font, size = value_font, px(tuning.OUTRO_SUMMARY_VALUE_FONT_SIZE)
+    while draw.textlength(value, font=font) > text_w and size > px(16):
+        size -= 1
+        font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_EXTRABOLD, size)
+    draw.text(
+        (text_x, ty + px(34) + (px(tuning.OUTRO_SUMMARY_VALUE_FONT_SIZE) - size) * 0.6),
+        _truncate_to_width(draw, value, font, text_w), font=font, fill=tuning.OUTRO_TITLE_COLOR,
+    )
+    if sub:
+        draw.text(
+            (text_x, ty + px(72)), _truncate_to_width(draw, sub, small_font, text_w),
+            font=small_font, fill=muted,
+        )
+
+
+def _draw_mode_split(
+    draw: ImageDraw.ImageDraw, engine, totals: list, x: float, y: float, px, legend_font,
+) -> None:
+    """Each travel mode's icon, name, distance, time and share of the trip, in one row."""
     total_km = sum(km for _, km, _ in totals) or 1.0
-    y = ty + tile_h + px(18)
     legend_icon = px(20)
     ascent = legend_font.getmetrics()[0]
-    x = x0 + pad
     for mode, km, minutes in totals:
         color = _mode_rgb(engine, mode)
         engine._draw_mode_icon(draw, mode, x + legend_icon / 2, y + ascent / 2 + px(2), legend_icon, color)
@@ -997,8 +1049,38 @@ def _draw_summary(
             f"{_fmt_km(km)}{sep}{engine._format_duration_ja(minutes * 60)}{sep}"
             f"{round(100 * km / total_km)}%"
         )
-        draw.text((x, y), detail, font=legend_font, fill=text)
+        draw.text((x, y), detail, font=legend_font, fill=tuning.OUTRO_LABEL_COLOR)
         x += draw.textlength(detail, font=legend_font) + px(34)
+
+
+def _draw_summary(
+    page: Image.Image, engine, brief: Dict[str, Any], px, x0: int, box_w: int,
+    top: int, panel_h: int,
+) -> None:
+    """A row of stat tiles (distance, time, places, longest leg), then, on a
+    trip with more than one travel mode, each mode's distance, time and share."""
+    draw = ImageDraw.Draw(page)
+    small_font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_REGULAR, px(14))
+    legend_font = _load_font(_GraphicsEngineBase.FONT_CANDIDATES_BOLD, px(tuning.OUTRO_LEG_FONT_SIZE))
+    value_font = _load_font(
+        _GraphicsEngineBase.FONT_CANDIDATES_EXTRABOLD, px(tuning.OUTRO_SUMMARY_VALUE_FONT_SIZE)
+    )
+    tiles = _summary_tiles(engine, brief)
+
+    # No outer frame: the tiles span the full width, like the cards below.
+    gap = px(tuning.OUTRO_ROUTE_COL_GAP)
+    tile_h = px(100)
+    tile_w = (box_w - gap * (len(tiles) - 1)) / len(tiles)
+    for i, tile in enumerate(tiles):
+        _draw_summary_tile(
+            draw, tile, x0 + i * (tile_w + gap), top, tile_w, tile_h, px, small_font, value_font,
+            tuning.OUTRO_SUBTITLE_COLOR,
+        )
+
+    # Split by travel mode, only when there is more than one.
+    totals = _mode_totals(brief)
+    if len(totals) >= 2:
+        _draw_mode_split(draw, engine, totals, x0, top + tile_h + px(18), px, legend_font)
 
 
 def _scroll_offsets(
@@ -1082,33 +1164,15 @@ def end_card_seconds() -> float:
     return tuning.OUTRO_LOGO_FADE_SECONDS + tuning.OUTRO_LOGO_HOLD_SECONDS
 
 
-def _write_scroll_clip(
-    page: Image.Image, output_path: Path, fps: int, size: Tuple[int, int],
-    start_hold: Optional[float] = None,
-) -> bool:
-    """Crops the tall page frame by frame at each _scroll_offsets offset, with
-    the title (the page's top `header_h` rows) pinned in a box that the cards
-    fade out under (no box when the page is not `pinned`), and pipes the raw frames straight into ffmpeg. Once every
-    card is gone the title fades into the logo end card."""
-    width, height = size
-    k = height / _CANVAS_H
-    # Not pinned: the title is a timeline text item whose box covers these same top rows. They are kept
-    # plain background, so nothing shows there once that box ends, and the scroll ends when the cards are under it.
-    pinned = bool(page.info.get("pinned", True))
-    header_h = int(page.info.get("header_h", 0))
-    page_px = np.asarray(page, dtype=np.uint8)
-    bg = np.asarray(tuning.OUTRO_BG_COLOR, dtype=np.float32)
-
-    # Scroll until the last non-background row has passed under the box.
+def _scroll_distance(page_px: np.ndarray, header_h: int, bg: np.ndarray) -> int:
+    """How far to scroll: until the last non-background row has passed under the box."""
     content = np.flatnonzero((page_px[header_h:] != bg.astype(np.uint8)).any(axis=(1, 2)))
-    distance = int(content[-1]) + 1 if content.size else 0
-    if page_px.shape[0] < distance + height:
-        pad = np.empty((distance + height - page_px.shape[0], width, 3), dtype=np.uint8)
-        pad[:] = bg.astype(np.uint8)
-        page_px = np.concatenate([page_px, pad])
-    end_card = _end_card(size)
-    offsets = _scroll_offsets(distance, fps, k, 0.0 if end_card is not None else None, start_hold)
+    return int(content[-1]) + 1 if content.size else 0
 
+
+def _scroll_frame_maker(page_px: np.ndarray, header_h: int, pinned: bool, bg: np.ndarray, size: Tuple[int, int], k: float):
+    """`frame_at(top)`: the page cropped at `top`, its pinned title kept and its edges faded into the background."""
+    width, height = size
     # Per-row blend weight toward the background: 1 at the box / bottom edge,
     # 0 once OUTRO_SCROLL_EDGE_FADE_PX in.
     fade = max(1, int(round(tuning.OUTRO_SCROLL_EDGE_FADE_PX * k)))
@@ -1126,6 +1190,35 @@ def _write_scroll_clip(
         frame[:header_h] = header
         return frame
 
+    return frame_at
+
+
+def _write_scroll_clip(
+    page: Image.Image, output_path: Path, fps: int, size: Tuple[int, int],
+    start_hold: Optional[float] = None,
+) -> bool:
+    """Crops the tall page frame by frame at each _scroll_offsets offset, with
+    the title (the page's top `header_h` rows) pinned in a box that the cards
+    fade out under (no box when the page is not `pinned`), and pipes the raw frames straight into ffmpeg. Once every
+    card is gone the title fades into the logo end card."""
+    width, height = size
+    k = height / _CANVAS_H
+    # Not pinned: the title is a timeline text item whose box covers these same top rows. They are kept
+    # plain background, so nothing shows there once that box ends, and the scroll ends when the cards are under it.
+    pinned = bool(page.info.get("pinned", True))
+    header_h = int(page.info.get("header_h", 0))
+    page_px = np.asarray(page, dtype=np.uint8)
+    bg = np.asarray(tuning.OUTRO_BG_COLOR, dtype=np.float32)
+
+    distance = _scroll_distance(page_px, header_h, bg)
+    if page_px.shape[0] < distance + height:
+        pad = np.empty((distance + height - page_px.shape[0], width, 3), dtype=np.uint8)
+        pad[:] = bg.astype(np.uint8)
+        page_px = np.concatenate([page_px, pad])
+    end_card = _end_card(size)
+    offsets = _scroll_offsets(distance, fps, k, 0.0 if end_card is not None else None, start_hold)
+
+    frame_at = _scroll_frame_maker(page_px, header_h, pinned, bg, size, k)
     frames = (frame_at(top) for top in offsets)
     if end_card is not None:
         last = frame_at(offsets[-1])
@@ -1343,15 +1436,13 @@ def decor_spots(width: int, k: float, lines: List[Tuple[str, Any, float]]) -> Tu
     return sx, tx, px
 
 
-def _heading_decor(width: int, top: float, k: float, lines: List[Tuple[str, Any, float]]) -> Image.Image:
-    """What sits behind and around the scrapbook's heading: soft mountain ridges fading out above the cards, a red
-    sun, a small torii on the ridge, a pine sprig, and a red seal beside the heading's biggest line (seal_text).
-    `lines`: (text, font, centre y) of each heading line. Drawn at 2x and shrunk, so the edges stay smooth."""
-    z = 2
-    h = int(top + 30 * k)
-    img = Image.new("RGBA", (width * z, h * z), (0, 0, 0, 0))
-    ink = (150, 118, 96)
-    xs = np.arange(0, width * z + 1, 6, dtype=np.float32)
+_DECOR_INK = (150, 118, 96)
+_DECOR_ZOOM = 2  # the decor is drawn at 2x and shrunk, so the edges stay smooth
+
+
+def _ridge_layers(img: Image.Image, xs: np.ndarray, width: int, h: int, top: float, k: float) -> np.ndarray:
+    """Composites the two soft mountain ridges (fading out downward) onto `img`; returns the front ridge's y per x."""
+    z = _DECOR_ZOOM
 
     def ridge(base_y, peaks):
         y = np.full_like(xs, base_y * z)
@@ -1366,15 +1457,22 @@ def _heading_decor(width: int, top: float, k: float, lines: List[Tuple[str, Any,
     ):
         ys = ridge(base_y, peaks)
         layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
-        ImageDraw.Draw(layer).polygon(list(zip(xs, ys)) + [(width * z, h * z), (0, h * z)], fill=(*ink, a))
-        ImageDraw.Draw(layer).line(list(zip(xs, ys)), fill=(*ink, a + 50), width=int(2 * k * z))
+        ImageDraw.Draw(layer).polygon(list(zip(xs, ys)) + [(width * z, h * z), (0, h * z)], fill=(*_DECOR_INK, a))
+        ImageDraw.Draw(layer).line(list(zip(xs, ys)), fill=(*_DECOR_INK, a + 50), width=int(2 * k * z))
         # Fades out downward, so the cards sit on clean paper.
         mask = np.asarray(layer.getchannel("A"), np.float32) * (1 - fade) ** 1.5
         layer.putalpha(Image.fromarray(mask.astype(np.uint8)))
         img.alpha_composite(layer)
         front = ys
-    d = ImageDraw.Draw(img)
-    sx, tx, px = (v * z for v in decor_spots(width, k, lines))
+    return front
+
+
+def _draw_scenery(
+    d: ImageDraw.ImageDraw, xs: np.ndarray, front: np.ndarray, spots: Tuple[float, float, float], top: float, k: float,
+) -> None:
+    """The sun, a small torii on the front ridge and a pine sprig, at the x positions in `spots` (decor_spots)."""
+    z = _DECOR_ZOOM
+    sx, tx, px = (v * z for v in spots)
     tw, th, lw = 60 * k * z, 70 * k * z, int(5 * k * z)
     # Sun, upper left, left of the torii.
     r = 46 * k * z
@@ -1382,7 +1480,7 @@ def _heading_decor(width: int, top: float, k: float, lines: List[Tuple[str, Any,
     d.ellipse([sx - r, sy - r, sx + r, sy + r], outline=(*tuning.OUTRO_SCRAPBOOK_STAMP_COLOR, 150), width=int(3 * k * z))
     # A small torii standing on the front ridge.
     ty = float(np.interp(tx, xs, front))
-    col = (*ink, 170)
+    col = (*_DECOR_INK, 170)
     d.line([(tx - tw, ty - th), (tx + tw, ty - th)], fill=col, width=lw + 2)
     d.line([(tx - tw * 0.8, ty - th * 0.75), (tx + tw * 0.8, ty - th * 0.75)], fill=col, width=lw)
     d.line([(tx - tw * 0.55, ty - th), (tx - tw * 0.6, ty)], fill=col, width=lw)
@@ -1395,6 +1493,18 @@ def _heading_decor(width: int, top: float, k: float, lines: List[Tuple[str, Any,
         for ang in range(-150, -29, 30):
             a = math.radians(ang)
             d.line([(cx, cy), (cx + 24 * k * z * math.cos(a), cy + 24 * k * z * math.sin(a))], fill=col, width=int(2 * k * z))
+
+
+def _heading_decor(width: int, top: float, k: float, lines: List[Tuple[str, Any, float]]) -> Image.Image:
+    """What sits behind and around the scrapbook's heading: soft mountain ridges fading out above the cards, a red
+    sun, a small torii on the ridge, a pine sprig, and a red seal beside the heading's biggest line (seal_text).
+    `lines`: (text, font, centre y) of each heading line. Drawn at 2x and shrunk, so the edges stay smooth."""
+    z = _DECOR_ZOOM
+    h = int(top + 30 * k)
+    img = Image.new("RGBA", (width * z, h * z), (0, 0, 0, 0))
+    xs = np.arange(0, width * z + 1, 6, dtype=np.float32)
+    front = _ridge_layers(img, xs, width, h, top, k)
+    _draw_scenery(ImageDraw.Draw(img), xs, front, decor_spots(width, k, lines), top, k)
     img = img.resize((width, h), Image.LANCZOS)
     if lines and seal_text(lines[0][0]):
         text, font, cy = max(lines, key=lambda line: line[1].size)
@@ -1420,17 +1530,17 @@ def _place(canvas: Image.Image, img: Image.Image, cx: float, cy: float, scale: f
     canvas.alpha_composite(im, (int(cx - im.width / 2), int(cy - im.height / 2)))
 
 
-def _write_scrapbook_clip(
-    title: str, waypoints: List[Dict[str, Any]], brief: Optional[Dict[str, Any]],
-    output_path: Path, fps: int, size: Tuple[int, int], colors: Optional[Dict[str, Any]] = None,
-    heading: Optional[Dict[str, Any]] = None, cover_path: Optional[Path] = None,
-) -> bool:
-    """Footprints walk the route across the paper and each stop's polaroid (S, 1, 2 … E) pops up as they reach it, then a round stamp with the title,
-    distance and travel time lands in the bottom-right cell; then the logo end card, as after the scroll."""
-    width, height = size
-    stops = [(badge, wp) for badge, wp in _route_badges(waypoints) if _first_image(wp)][: tuning.OUTRO_MAX_CARDS]
-    # The title and subtitle across the top: a text-track item the editor can restyle (outro_step), or burned
-    # in (burn_text) when the caller wants them in the video. Either way the cards keep below their band.
+_SCRAPBOOK_POP_SECONDS = 0.35  # a card's pop-up
+_SCRAPBOOK_START_SECONDS = 0.3  # before the first footprint
+_SCRAPBOOK_STAMP_SECONDS = 0.25  # the stamp landing
+
+
+def _scrapbook_heading(heading: Optional[Dict[str, Any]], height: int) -> tuple:
+    """(heading lines to burn into the video, the band's height, the decor's heading lines, the sizes).
+
+    The title and subtitle across the top: a text-track item the editor can restyle (outro_step), or burned
+    in (burn_text) when the caller wants them in the video. Either way the cards keep below their band.
+    """
     k = height / 1080
     sizes = [(heading or {}).get(f"{w}_size") or d for w, d in zip(("title", "subtitle"), SCRAPBOOK_HEADING_SIZES)]
     head = [(t, f) for t, f in (
@@ -1444,28 +1554,28 @@ def _write_scrapbook_clip(
         y += font.size * 1.3
     if not (heading or {}).get("burn_text", True):
         head = []
-    position = (heading or {}).get("content_position")
-    card_w, spots, (sx, sy, sr) = scrapbook_layout(len(stops), size, top, float(position) if isinstance(position, (int, float)) else 0.5)
-    cards = []
-    for (badge, wp), (cx, cy, angle) in zip(stops, spots):
-        card = _polaroid(
-            _first_image(wp), badge, str(wp.get("label") or wp.get("name") or ""), int(card_w),
-            (colors or {}).get("marker", tuning.OUTRO_BADGE_COLOR),
-        )
-        if card is not None:
-            cards.append((card, cx, cy, angle))
-    lines = [title]
-    if brief and brief.get("legs"):
-        lines += [_fmt_km(brief["total_km"]), _engine()._format_duration_ja(brief["total_minutes"] * 60)]
-    stamp = _stamp(int(sr), lines)
+    return head, top, decor_lines, sizes
 
+
+def _scrapbook_paper(width: int, height: int) -> Image.Image:
+    """The paper: warm, noisy and darker toward the corners, like a lit page."""
     noise = np.random.default_rng(1).normal(0, 5, (height, width, 1))
-    # Darker toward the corners, like a lit page.
     yy, xx = np.mgrid[0:height, 0:width].astype(np.float32)
     shade = 1 - tuning.OUTRO_SCRAPBOOK_VIGNETTE * (((xx - width / 2) / (width / 2)) ** 2 + ((yy - height / 2) / (height / 2)) ** 2) / 2
     paper = np.asarray(tuning.OUTRO_SCRAPBOOK_PAPER_COLOR, np.float32) + noise
     paper = np.clip(paper * shade[..., None], 0, 255).astype(np.uint8)
-    paper_bg = Image.fromarray(paper)
+    return Image.fromarray(paper)
+
+
+def _scrapbook_base(
+    paper_bg: Image.Image, size: Tuple[int, int], top: float, k: float, head: list, decor_lines: list, sizes: list,
+    heading: Optional[Dict[str, Any]],
+) -> Tuple[Image.Image, Optional[Image.Image]]:
+    """(the page with its heading band, the band without the title or None).
+
+    The band without the title is what the editor's preview covers the burned title with, to draw the live one.
+    """
+    width, _height = size
     base = paper_bg.convert("RGBA")
     if top:
         base.alpha_composite(_heading_decor(width, top, k, decor_lines))
@@ -1484,96 +1594,175 @@ def _write_scrapbook_clip(
         hd.line([(width / 2 - half, rule_y), (width / 2 - 3 * dot, rule_y)], fill=ink, width=max(2, int(2 * k)))
         hd.line([(width / 2 + 3 * dot, rule_y), (width / 2 + half, rule_y)], fill=ink, width=max(2, int(2 * k)))
         hd.ellipse([width / 2 - dot, rule_y - dot, width / 2 + dot, rule_y + dot], fill=ink)
-    # The heading band without the title: the editor's preview covers the burned title with it and draws the live one.
     cover = base.crop((0, 0, width, int(math.ceil(top)))).convert("RGB") if top else None
     if (heading or {}).get("title_layer") is not None:
         layer = heading["title_layer"]
         base.alpha_composite(layer.resize(size) if layer.size != size else layer)
-    # The journey: footprints walk from each card's spot to the next, and the card pops up when they get there;
-    # after the last one they walk on to the stamp.
-    trail = Image.new("RGBA", size, (0, 0, 0, 0))
+    return base, cover
+
+
+def _scrapbook_timeline(cards: list, k: float, sx: float, sy: float, sr: float) -> Tuple[list, list, float, float]:
+    """The journey's timing: footprints walk from each card's spot to the next, and the card pops up when they get
+    there; after the last one they walk on to the stamp. Returns (when each card pops, (time, footprint) as the
+    walk reaches it, when the stamp lands, the clip's end)."""
     feet = dict(foot=26 * k, step=30 * k)
-    pile = Image.new("RGBA", size, (0, 0, 0, 0))
-    pop, start = 0.35, 0.3
     walk = min(tuning.OUTRO_SCRAPBOOK_WALK_SECONDS, 6.0 / max(1, len(cards)))
     pop_at, marks = [], []  # when each card pops; (time, footprint) as the walk reaches it
-    t = start
+    t = _SCRAPBOOK_START_SECONDS
     for i in range(len(cards) + 1):
         if i:
             to, trim = (cards[i][1:3], 0.0) if i < len(cards) else ((sx, sy), sr * 1.05)
             steps = _footsteps(cards[i - 1][1:3], to, 0.16 if i % 2 else -0.16, tuning.OUTRO_SCRAPBOOK_FOOTPRINT_COLOR, trim=trim, **feet)
-            leg_start = t + pop * 0.5
+            leg_start = t + _SCRAPBOOK_POP_SECONDS * 0.5
             marks += [(leg_start + walk * (j + 1) / len(steps), mark) for j, mark in enumerate(steps)]
             t = leg_start + walk
         if i < len(cards):
             pop_at.append(t)
     stamp_at = t
-    end = stamp_at + 0.25 + tuning.OUTRO_SCRAPBOOK_HOLD_SECONDS
+    return pop_at, marks, stamp_at, stamp_at + _SCRAPBOOK_STAMP_SECONDS + tuning.OUTRO_SCRAPBOOK_HOLD_SECONDS
 
-    def compose() -> Image.Image:
-        out = base.copy()
-        out.alpha_composite(trail)
-        out.alpha_composite(pile)
-        return out
 
-    def springy(e: float) -> float:
-        """0 -> 1, overshooting a little before it settles (ease-out back)."""
-        e -= 1
-        return 1 + 2.7 * e ** 3 + 1.7 * e ** 2
+def _springy(e: float) -> float:
+    """0 -> 1, overshooting a little before it settles (ease-out back)."""
+    e -= 1
+    return 1 + 2.7 * e ** 3 + 1.7 * e ** 2
 
-    settled = compose()
 
-    def frames():
-        nonlocal settled
-        landed = walked = 0
-        last = None
-        for f in range(int(round(end * fps))):
-            t = f / fps
-            changed = False
-            while walked < len(marks) and t >= marks[walked][0]:
-                im, x, y = marks[walked][1]
-                trail.alpha_composite(im, (max(0, x), max(0, y)))
-                walked += 1
-                changed = True
-            while landed < len(cards) and t >= pop_at[landed] + pop:
-                card, cx, cy, angle = cards[landed]
-                _place(pile, card, cx, cy, 1.0, 1.0, angle)
-                landed += 1
-                changed = True
-            if changed:
-                settled = compose()
-            img = settled.copy()
-            for i in range(landed, len(cards)):
-                u = (t - pop_at[i]) / pop
-                if u > 0:
-                    card, cx, cy, angle = cards[i]
-                    _place(img, card, cx, cy, 0.4 + 0.6 * springy(min(u, 1.0)), min(1.0, u * 2.5), angle)
-            u = (t - stamp_at) / 0.25
-            if u > 0:
-                e = min(u, 1.0)
-                _place(img, stamp, sx, sy, 1.8 - 0.8 * e, e, -12)
-            last = np.asarray(img.convert("RGB"), dtype=np.float32)
-            yield last
-        end_card = _end_card(size, paper_bg, _INK)
-        if end_card is not None:
-            # Barn door: the logo card closes in from the top and bottom edges at once, meeting in the middle.
-            steps = max(1, int(round(tuning.OUTRO_LOGO_FADE_SECONDS * fps)))
-            rows = np.arange(height, dtype=np.float32)[:, None, None]
-            soft = max(6.0, height / 30)
-            for i in range(steps):
-                band = _ease((i + 1) / steps) * height / 2
-                edge = np.maximum(band - rows, rows - (height - band))  # >0 inside a door: px from its edge
-                shadow = 1 - 0.45 * np.clip(1 + edge / soft, 0, 1)  # each door casts a soft shadow on the photos
-                yield np.where(edge > 0, end_card, last * shadow)
-            for _ in range(int(round(tuning.OUTRO_LOGO_HOLD_SECONDS * fps))):
-                yield end_card
+def _barn_door_frames(end_card: np.ndarray, last: np.ndarray, height: int, fps: int):
+    """The logo card closing in from the top and bottom edges at once, meeting in the middle, then held."""
+    steps = max(1, int(round(tuning.OUTRO_LOGO_FADE_SECONDS * fps)))
+    rows = np.arange(height, dtype=np.float32)[:, None, None]
+    soft = max(6.0, height / 30)
+    for i in range(steps):
+        band = _ease((i + 1) / steps) * height / 2
+        edge = np.maximum(band - rows, rows - (height - band))  # >0 inside a door: px from its edge
+        shadow = 1 - 0.45 * np.clip(1 + edge / soft, 0, 1)  # each door casts a soft shadow on the photos
+        yield np.where(edge > 0, end_card, last * shadow)
+    for _ in range(int(round(tuning.OUTRO_LOGO_HOLD_SECONDS * fps))):
+        yield end_card
 
-    ok = _pipe_frames(frames(), output_path, fps, size)
+
+def _scrapbook_cards(
+    stops: list, spots: list, card_w: float, colors: Optional[Dict[str, Any]],
+) -> list:
+    """The polaroids (card, x, y, angle) of the stops that have a photo."""
+    cards = []
+    for (badge, wp), (cx, cy, angle) in zip(stops, spots):
+        card = _polaroid(
+            _first_image(wp), badge, str(wp.get("label") or wp.get("name") or ""), int(card_w),
+            (colors or {}).get("marker", tuning.OUTRO_BADGE_COLOR),
+        )
+        if card is not None:
+            cards.append((card, cx, cy, angle))
+    return cards
+
+
+def _write_scrapbook_clip(
+    title: str, waypoints: List[Dict[str, Any]], brief: Optional[Dict[str, Any]],
+    output_path: Path, fps: int, size: Tuple[int, int], colors: Optional[Dict[str, Any]] = None,
+    heading: Optional[Dict[str, Any]] = None, cover_path: Optional[Path] = None,
+) -> bool:
+    """Footprints walk the route across the paper and each stop's polaroid (S, 1, 2 … E) pops up as they reach it, then a round stamp with the title,
+    distance and travel time lands in the bottom-right cell; then the logo end card, as after the scroll."""
+    width, height = size
+    stops = [(badge, wp) for badge, wp in _route_badges(waypoints) if _first_image(wp)][: tuning.OUTRO_MAX_CARDS]
+    head, top, decor_lines, sizes = _scrapbook_heading(heading, height)
+    k = height / 1080
+    position = (heading or {}).get("content_position")
+    card_w, spots, (sx, sy, sr) = scrapbook_layout(len(stops), size, top, float(position) if isinstance(position, (int, float)) else 0.5)
+    cards = _scrapbook_cards(stops, spots, card_w, colors)
+    lines = [title]
+    if brief and brief.get("legs"):
+        lines += [_fmt_km(brief["total_km"]), _engine()._format_duration_ja(brief["total_minutes"] * 60)]
+    stamp = _stamp(int(sr), lines)
+
+    paper_bg = _scrapbook_paper(width, height)
+    base, cover = _scrapbook_base(paper_bg, size, top, k, head, decor_lines, sizes, heading)
+    pop_at, marks, stamp_at, end = _scrapbook_timeline(cards, k, sx, sy, sr)
+    scene = _ScrapbookScene(
+        cards, marks, pop_at, stamp, (sx, sy), stamp_at, end, base, paper_bg, size,
+        Image.new("RGBA", size, (0, 0, 0, 0)), Image.new("RGBA", size, (0, 0, 0, 0)),
+    )
+
+    ok = _pipe_frames(_scrapbook_frames(scene, fps), output_path, fps, size)
     if ok and cover is not None and cover_path is not None:
         partial = cover_path.with_name(f".{cover_path.name}.partial")
         cover.save(partial, format="PNG")
         replace_into(partial, cover_path)
     return ok
+
+
+class _ScrapbookScene(NamedTuple):
+    """What the scrapbook's frames are drawn from; `trail` and `pile` are painted on as the clip plays."""
+
+    cards: list
+    marks: list
+    pop_at: list
+    stamp: Image.Image
+    stamp_xy: Tuple[float, float]
+    stamp_at: float
+    end: float
+    base: Image.Image
+    paper_bg: Image.Image
+    size: Tuple[int, int]
+    trail: Image.Image
+    pile: Image.Image
+
+
+def _scrapbook_compose(scene: _ScrapbookScene) -> Image.Image:
+    out = scene.base.copy()
+    out.alpha_composite(scene.trail)
+    out.alpha_composite(scene.pile)
+    return out
+
+
+def _scrapbook_land(scene: _ScrapbookScene, t: float, walked: int, landed: int) -> Tuple[int, int, bool]:
+    """Paints the footprints reached and the polaroids that have finished popping by `t` onto the trail and the
+    pile; (footprints painted, cards landed, whether anything changed)."""
+    changed = False
+    while walked < len(scene.marks) and t >= scene.marks[walked][0]:
+        im, x, y = scene.marks[walked][1]
+        scene.trail.alpha_composite(im, (max(0, x), max(0, y)))
+        walked += 1
+        changed = True
+    while landed < len(scene.cards) and t >= scene.pop_at[landed] + _SCRAPBOOK_POP_SECONDS:
+        card, cx, cy, angle = scene.cards[landed]
+        _place(scene.pile, card, cx, cy, 1.0, 1.0, angle)
+        landed += 1
+        changed = True
+    return walked, landed, changed
+
+
+def _scrapbook_frame(scene: _ScrapbookScene, settled: Image.Image, landed: int, t: float) -> Image.Image:
+    """The settled page with the cards still popping up and the stamp landing at time `t`."""
+    img = settled.copy()
+    for i in range(landed, len(scene.cards)):
+        u = (t - scene.pop_at[i]) / _SCRAPBOOK_POP_SECONDS
+        if u > 0:
+            card, cx, cy, angle = scene.cards[i]
+            _place(img, card, cx, cy, 0.4 + 0.6 * _springy(min(u, 1.0)), min(1.0, u * 2.5), angle)
+    u = (t - scene.stamp_at) / _SCRAPBOOK_STAMP_SECONDS
+    if u > 0:
+        e = min(u, 1.0)
+        _place(img, scene.stamp, *scene.stamp_xy, 1.8 - 0.8 * e, e, -12)
+    return img
+
+
+def _scrapbook_frames(scene: _ScrapbookScene, fps: int):
+    """The scrapbook clip's frames (float32 RGB): the journey, then the logo card closing in over the last one."""
+    settled = _scrapbook_compose(scene)
+    landed = walked = 0
+    last = None
+    for f in range(int(round(scene.end * fps))):
+        t = f / fps
+        walked, landed, changed = _scrapbook_land(scene, t, walked, landed)
+        if changed:
+            settled = _scrapbook_compose(scene)
+        last = np.asarray(_scrapbook_frame(scene, settled, landed, t).convert("RGB"), dtype=np.float32)
+        yield last
+    end_card = _end_card(scene.size, scene.paper_bg, _INK)
+    if end_card is not None:
+        yield from _barn_door_frames(end_card, last, scene.size[1], fps)
 
 
 def _route_badges(waypoints: List[Dict[str, Any]]) -> List[Tuple[str, Dict[str, Any]]]:
@@ -1596,20 +1785,23 @@ def _route_badges(waypoints: List[Dict[str, Any]]) -> List[Tuple[str, Dict[str, 
     return out
 
 
-def _leg_detail_card(
-    engine, leg: Dict[str, Any], ends: Tuple[Tuple[str, str], Tuple[str, str]], size: Tuple[int, int], marker_rgb,
-) -> Image.Image:
-    """The route map pop-up's other side: from → to, the leg's distance and time big, then its modes (icon, name,
-    distance) and its climb. Drawn to fill the pop-up's photo area."""
-    w, h = size
-    k = h / 432
-    labels = video_text.current_labels()
-    bold, regular = _GraphicsEngineBase.FONT_CANDIDATES_BOLD, _GraphicsEngineBase.FONT_CANDIDATES_REGULAR
-    muted = (120, 126, 138)
-    card = Image.new("RGBA", size, (247, 248, 250, 255))
-    d = ImageDraw.Draw(card)
+def _project_colors(settings: Optional[Dict[str, Any]]) -> Dict[str, Tuple[int, int, int]]:
+    """The project's pin and route colours (settings are BGR, like tuning) as RGB."""
+    out = {}
+    for key, name in (("marker_color", "marker"), ("line_color", "line")):
+        value = (settings or {}).get(key)
+        if isinstance(value, (list, tuple)) and len(value) >= 3:
+            out[name] = tuple(int(v) for v in reversed(value[:3]))
+    return out
 
-    # From → to, each with its badge.
+
+_LEG_CARD_RULE = (222, 225, 231)
+_LEG_CARD_MUTED = (120, 126, 138)
+
+
+def _draw_leg_ends(d: ImageDraw.ImageDraw, ends: tuple, w: int, k: float, marker_rgb) -> None:
+    """From → to, each with its badge, and the rule under them."""
+    bold = _GraphicsEngineBase.FONT_CANDIDATES_BOLD
     font = _load_font(bold, int(28 * k))
     r = int(17 * k)
     y = int(52 * k)
@@ -1624,25 +1816,31 @@ def _leg_detail_card(
         for j, line in enumerate(lines):
             d.text((x0 + 2 * r + 10 * k, y + (j - (len(lines) - 1) / 2) * nf.size * 1.15), line, font=nf,
                    fill=_INK, anchor="lm")
-    d.text((w / 2, y), "→", font=_load_font(bold, int(34 * k)), fill=muted, anchor="mm")
-    d.line([(24 * k, 96 * k), (w - 24 * k, 96 * k)], fill=(222, 225, 231), width=max(1, int(2 * k)))
+    d.text((w / 2, y), "→", font=_load_font(bold, int(34 * k)), fill=_LEG_CARD_MUTED, anchor="mm")
+    d.line([(24 * k, 96 * k), (w - 24 * k, 96 * k)], fill=_LEG_CARD_RULE, width=max(1, int(2 * k)))
 
-    # Distance and time.
+
+def _draw_leg_stats(d: ImageDraw.ImageDraw, engine, leg: Dict[str, Any], labels: dict, w: int, k: float) -> None:
+    """The leg's distance and time, big, side by side, with their dividers."""
+    bold, regular = _GraphicsEngineBase.FONT_CANDIDATES_BOLD, _GraphicsEngineBase.FONT_CANDIDATES_REGULAR
     label_font = _load_font(regular, int(26 * k))
     value_font = _load_font(bold, int(66 * k))
     stats = [(labels.get("distance_label", "Distance"), _fmt_km(leg["km"])),
              (labels.get("duration_fallback", "Time"), engine._format_duration_ja(leg["minutes"] * 60))]
     for n, (label, value) in enumerate(stats):
         cx = w * (0.27 if n == 0 else 0.73)
-        d.text((cx, 140 * k), label, font=label_font, fill=muted, anchor="mm")
+        d.text((cx, 140 * k), label, font=label_font, fill=_LEG_CARD_MUTED, anchor="mm")
         vf = value_font
         while vf.size > 20 and d.textlength(value, font=vf) > w * 0.44:
             vf = _load_font(bold, vf.size - 2)
         d.text((cx, 205 * k), value, font=vf, fill=_INK, anchor="mm")
-    d.line([(w / 2, 125 * k), (w / 2, 245 * k)], fill=(222, 225, 231), width=max(1, int(2 * k)))
-    d.line([(24 * k, 275 * k), (w - 24 * k, 275 * k)], fill=(222, 225, 231), width=max(1, int(2 * k)))
+    d.line([(w / 2, 125 * k), (w / 2, 245 * k)], fill=_LEG_CARD_RULE, width=max(1, int(2 * k)))
+    d.line([(24 * k, 275 * k), (w - 24 * k, 275 * k)], fill=_LEG_CARD_RULE, width=max(1, int(2 * k)))
 
-    # Modes, then the climb.
+
+def _draw_leg_modes(d: ImageDraw.ImageDraw, engine, leg: Dict[str, Any], labels: dict, w: int, k: float) -> None:
+    """The leg's travel modes (icon, name, distance), then its climb."""
+    bold = _GraphicsEngineBase.FONT_CANDIDATES_BOLD
     chips = []
     for piece in leg.get("pieces") or [leg]:
         mode = piece.get("mode", "walking")
@@ -1658,18 +1856,45 @@ def _leg_detail_card(
         x += icon + 10 * k + d.textlength(text, font=chip_font) + 28 * k
     if leg.get("ascent_m"):
         climb = f"{labels.get('elevation_profile', '')} +{int(leg['ascent_m'])} m".strip()
-        d.text((w - 28 * k, cy), climb, font=chip_font, fill=muted, anchor="rm")
+        d.text((w - 28 * k, cy), climb, font=chip_font, fill=_LEG_CARD_MUTED, anchor="rm")
+
+
+def _leg_detail_card(
+    engine, leg: Dict[str, Any], ends: Tuple[Tuple[str, str], Tuple[str, str]], size: Tuple[int, int], marker_rgb,
+) -> Image.Image:
+    """The route map pop-up's other side: from → to, the leg's distance and time big, then its modes (icon, name,
+    distance) and its climb. Drawn to fill the pop-up's photo area."""
+    w, h = size
+    k = h / 432
+    labels = video_text.current_labels()
+    card = Image.new("RGBA", size, (247, 248, 250, 255))
+    d = ImageDraw.Draw(card)
+    _draw_leg_ends(d, ends, w, k, marker_rgb)
+    _draw_leg_stats(d, engine, leg, labels, w, k)
+    _draw_leg_modes(d, engine, leg, labels, w, k)
     return card
 
 
-def _project_colors(settings: Optional[Dict[str, Any]]) -> Dict[str, Tuple[int, int, int]]:
-    """The project's pin and route colours (settings are BGR, like tuning) as RGB."""
-    out = {}
-    for key, name in (("marker_color", "marker"), ("line_color", "line")):
-        value = (settings or {}).get(key)
-        if isinstance(value, (list, tuple)) and len(value) >= 3:
-            out[name] = tuple(int(v) for v in reversed(value[:3]))
-    return out
+def _write_grid_outro(frame_path: Path, partial_path: Path, duration_sec: float, project_name: str, shown: list, brief) -> bool:
+    """The single-frame grid outro: one frame held for `duration_sec`. False when ffmpeg fails (logged)."""
+    frame = _build_frame(project_name or "", shown, brief)
+    frame.save(frame_path)
+
+    ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
+    cmd = [
+        ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(),
+        "-loop", "1", "-i", str(frame_path),
+        "-t", f"{duration_sec:.3f}",
+        "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
+        str(partial_path),
+    ]
+    result = subprocess.run(
+        cmd, capture_output=True, encoding="utf-8", errors="replace"
+    )
+    if result.returncode != 0:
+        logger.error("Outro generation failed: %s", result.stderr.strip())
+        return False
+    return True
 
 
 def generate_outro_clip(
@@ -1710,43 +1935,22 @@ def generate_outro_clip(
 
     try:
         if style == "scrapbook":
-            if not _write_scrapbook_clip(
+            written = _write_scrapbook_clip(
                 (heading or {}).get("subtitle") or project_name or "", waypoints, brief, partial_path, tuning.INTRO_FPS,
                 size or (1920, 1080), _project_colors(settings), heading,
                 cover_path=video_dir_path / f"{Path(output_filename).stem}.title_bg.png",
-            ):
-                return None
-            replace_into(partial_path, output_path)
-            logger.info("Outro clip generated: %s (scrapbook)", output_path)
-            return str(output_path)
-        if style == "scroll":
+            )
+            note = "(scrapbook)"
+        elif style == "scroll":
             size = size or (_CANVAS_W, _CANVAS_H)
             page = _build_scroll_page(project_name or "", waypoints_with_image, size, brief, heading)
             start_hold = tuning.OUTRO_SUMMARY_HOLD_SECONDS if has_route else None
-            if not _write_scroll_clip(page, partial_path, tuning.INTRO_FPS, size, start_hold):
-                return None
-            replace_into(partial_path, output_path)
-            logger.info(
-                "Outro clip generated: %s (%d places, scroll)", output_path, len(waypoints_with_image)
-            )
-            return str(output_path)
-
-        frame = _build_frame(project_name or "", waypoints_with_image, brief)
-        frame.save(frame_path)
-
-        ffmpeg_cmd = FFmpegManager.resolve_ffmpeg_bin()
-        cmd = [
-            ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(),
-            "-loop", "1", "-i", str(frame_path),
-            "-t", f"{duration_sec:.3f}",
-            "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
-            str(partial_path),
-        ]
-        result = subprocess.run(
-            cmd, capture_output=True, encoding="utf-8", errors="replace"
-        )
-        if result.returncode != 0:
-            logger.error("Outro generation failed: %s", result.stderr.strip())
+            written = _write_scroll_clip(page, partial_path, tuning.INTRO_FPS, size, start_hold)
+            note = f"({len(waypoints_with_image)} places, scroll)"
+        else:
+            written = _write_grid_outro(frame_path, partial_path, duration_sec, project_name, waypoints_with_image, brief)
+            note = f"({len(waypoints_with_image)} places)"
+        if not written:
             return None
         replace_into(partial_path, output_path)
     except Exception as exc:
@@ -1756,5 +1960,7 @@ def generate_outro_clip(
         frame_path.unlink(missing_ok=True)
         partial_path.unlink(missing_ok=True)
 
-    logger.info("Outro clip generated: %s (%d places)", output_path, len(waypoints_with_image))
+    logger.info("Outro clip generated: %s %s", output_path, note)
     return str(output_path)
+
+

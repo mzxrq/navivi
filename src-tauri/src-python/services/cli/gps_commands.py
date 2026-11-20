@@ -2,7 +2,7 @@
 overview/residential video rendering steps."""
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from services.logger.progress import tracker as _tracker
 from services.vdoprocessing.videopipeline.helpers import project_route_video_dir
@@ -186,7 +186,15 @@ def test_residential_video(
     )
     _tracker.clear()
 
-    # Same stop-by piece padding the pipeline applies after its render.
+    video_paths = _pad_stopby_pieces(config_path, video_paths, audio)
+    return {
+        "success": bool(video_paths),
+        "video_paths": video_paths,
+    }
+
+
+def _pad_stopby_pieces(config_path: Path, video_paths: List[str], audio: Dict[str, Any]) -> List[str]:
+    """The legs' clips with the same stop-by piece padding the pipeline applies after its render."""
     import json
 
     from services.vdoprocessing.videopipeline.leg_pieces import compute_leg_narration_splits
@@ -195,8 +203,4 @@ def test_residential_video(
     video_paths, _splits = compute_leg_narration_splits(
         video_paths, audio.get("audio_paths"), None, waypoints, str(config_path.parent)
     )
-
-    return {
-        "success": bool(video_paths),
-        "video_paths": video_paths,
-    }
+    return video_paths

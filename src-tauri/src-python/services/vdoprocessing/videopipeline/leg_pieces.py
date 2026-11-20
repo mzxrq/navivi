@@ -89,6 +89,45 @@ def _pad_video_tail(ffmpeg_cmd: str, video_path: str, pad_seconds: float) -> Opt
     return str(padded)
 
 
+def _read_piece_targets(plan_path: Path) -> Optional[dict[str, Optional[str]]]:
+    """{piece file name: target waypoint id} from a leg's piece plan, or None when it has no readable plan."""
+    if not plan_path.exists():
+        return None
+    target_id_by_file: dict[str, Optional[str]] = {}
+    try:
+        with open(plan_path, "r", encoding="utf-8") as f:
+            plan = json.load(f)
+        for entry in plan.get("pieces", []):
+            target_id_by_file[entry.get("file")] = entry.get("target_waypoint_id")
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("Narration split: could not read piece plan '%s' — %s", plan_path, exc)
+        return None
+    return target_id_by_file
+
+
+def _fit_piece_to_narration(ffmpeg_cmd: str, video_path: str, target_audio: str) -> str:
+    """The piece's clip, padded when its target's narration outlasts it (the clip itself when it fits or can't be probed)."""
+    from services.tts.ttsengine import FFmpegManager
+
+    try:
+        target_dur = FFmpegManager.get_media_duration(target_audio)
+        piece_dur = FFmpegManager.get_media_duration(video_path)
+    except (RuntimeError, OSError) as exc:
+        logger.warning("Narration split: could not probe durations for '%s' — %s", video_path, exc)
+        return video_path
+
+    # The narration starts `offset` seconds into the clip (after the
+    # silent lead-in, see cliptiming.py), so it ends at
+    # offset + target_dur, and the clip should outlast it a little
+    # (END_BUFFER_SECONDS) - that's what the clip must cover.
+    needed = read_audio_offset(video_path) + target_dur + END_BUFFER_SECONDS - piece_dur
+    if needed > _MIN_PAD_SECONDS:
+        padded = _pad_video_tail(ffmpeg_cmd, video_path, needed)
+        if padded:
+            return padded
+    return video_path
+
+
 def compute_leg_narration_splits(
     video_paths: list[str],
     audio_paths: Optional[list[str]],
@@ -147,17 +186,8 @@ def compute_leg_narration_splits(
     for leg_num, piece_indexes in legs_by_number.items():
         piece_paths = [video_paths[i] for i in piece_indexes]
         plan_path = Path(piece_paths[0]).parent / f"02_waypoint_{leg_num:02d}_pieces.json"
-        target_id_by_file: dict[str, Optional[str]] = {}
-        if plan_path.exists():
-            try:
-                with open(plan_path, "r", encoding="utf-8") as f:
-                    plan = json.load(f)
-                for entry in plan.get("pieces", []):
-                    target_id_by_file[entry.get("file")] = entry.get("target_waypoint_id")
-            except (OSError, json.JSONDecodeError) as exc:
-                logger.warning("Narration split: could not read piece plan '%s' — %s", plan_path, exc)
-                continue
-        else:
+        target_id_by_file = _read_piece_targets(plan_path)
+        if target_id_by_file is None:
             continue
 
         for video_idx, video_path in zip(piece_indexes, piece_paths):
@@ -172,26 +202,9 @@ def compute_leg_narration_splits(
             target_audio = audio_paths[t_idx]
             target_subtitle = subtitle_paths[t_idx] if t_idx < len(subtitle_paths) else None
 
-            try:
-                target_dur = FFmpegManager.get_media_duration(target_audio)
-                piece_dur = FFmpegManager.get_media_duration(video_path)
-            except (RuntimeError, OSError) as exc:
-                logger.warning("Narration split: could not probe durations for '%s' — %s", video_path, exc)
-                splits[Path(video_path).stem] = (target_audio, target_subtitle)
-                continue
-
-            final_video_path = video_path
-            # The narration starts `offset` seconds into the clip (after the
-            # silent lead-in, see cliptiming.py), so it ends at
-            # offset + target_dur, and the clip should outlast it a little
-            # (END_BUFFER_SECONDS) - that's what the clip must cover.
-            needed = read_audio_offset(video_path) + target_dur + END_BUFFER_SECONDS - piece_dur
-            if needed > _MIN_PAD_SECONDS:
-                padded = _pad_video_tail(ffmpeg_cmd, video_path, needed)
-                if padded:
-                    final_video_path = padded
-                    updated_video_paths[video_idx] = padded
-
+            final_video_path = _fit_piece_to_narration(ffmpeg_cmd, video_path, target_audio)
+            if final_video_path != video_path:
+                updated_video_paths[video_idx] = final_video_path
             splits[Path(final_video_path).stem] = (target_audio, target_subtitle)
 
     return updated_video_paths, splits

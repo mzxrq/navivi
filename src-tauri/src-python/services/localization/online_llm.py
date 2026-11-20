@@ -100,6 +100,33 @@ def error_text(response: httpx.Response) -> str:
     return response.text[:200]
 
 
+def _post_with_retries(
+    http: httpx.Client, provider: str, request: tuple, sleep: Callable[[float], None], state: dict,
+) -> Optional[str]:
+    """The model's text from one request (retried on a network error or a retryable status), or None once
+    the request is given up for the rest of the run (`state["dead"]` says why). Raises OnlineLLMError otherwise."""
+    url, headers, body, params = request
+    for attempt in range(RETRIES + 1):
+        try:
+            response = http.post(url, headers={**headers, "content-type": "application/json"}, json=body, params=params)
+        except httpx.HTTPError as exc:
+            if attempt == RETRIES:
+                raise OnlineLLMError(f"{provider} could not be reached: {exc}") from exc
+            sleep(2.0 * (attempt + 1))
+            continue
+        if response.status_code == 200:
+            return parse_response(provider, response.json()) or None
+        if response.status_code in GIVE_UP_STATUSES:
+            state["dead"] = f"{provider} answered {response.status_code}: {error_text(response)}"
+            logger.warning("Online model stopped for this run: %s", state["dead"])
+            return None
+        if response.status_code in RETRY_STATUSES and attempt < RETRIES:
+            sleep(2.0 * (attempt + 1))
+            continue
+        raise OnlineLLMError(f"{provider} answered {response.status_code}: {error_text(response)}")
+    return None
+
+
 def online_generate(
     provider: str,
     model: str,
@@ -127,30 +154,12 @@ def online_generate(
             logger.warning("Online model skipped: %s.", state["dead"])
             return None
 
-        url, headers, body, params = build_request(provider, model, base_url, key, prompt)
+        request = build_request(provider, model, base_url, key, prompt)
         http = client or httpx.Client(timeout=TIMEOUT_SECONDS)
         try:
-            for attempt in range(RETRIES + 1):
-                try:
-                    response = http.post(url, headers={**headers, "content-type": "application/json"}, json=body, params=params)
-                except httpx.HTTPError as exc:
-                    if attempt == RETRIES:
-                        raise OnlineLLMError(f"{provider} could not be reached: {exc}") from exc
-                    sleep(2.0 * (attempt + 1))
-                    continue
-                if response.status_code == 200:
-                    return parse_response(provider, response.json()) or None
-                if response.status_code in GIVE_UP_STATUSES:
-                    state["dead"] = f"{provider} answered {response.status_code}: {error_text(response)}"
-                    logger.warning("Online model stopped for this run: %s", state["dead"])
-                    return None
-                if response.status_code in RETRY_STATUSES and attempt < RETRIES:
-                    sleep(2.0 * (attempt + 1))
-                    continue
-                raise OnlineLLMError(f"{provider} answered {response.status_code}: {error_text(response)}")
+            return _post_with_retries(http, provider, request, sleep, state)
         finally:
             if client is None:
                 http.close()
-        return None
 
     return _generate

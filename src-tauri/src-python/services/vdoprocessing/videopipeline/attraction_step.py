@@ -85,19 +85,7 @@ def generate_waypoint_attraction_video(
 
     # Footage only: its own path. With photos too, both go through the photo pipeline as one clip.
     if waypoint.get("videos") and not popup_image_entry:
-        from services.vdoprocessing.user_videos import process_user_videos
-
-        output_filename = attraction_output_filename(idx, label)
-        result_path = process_user_videos(
-            generator, waypoint["videos"], waypoint.get("videoSound") or [], target_audio_duration,
-            output_filename, place_label=label, force=force,
-        )
-        if result_path:
-            return {
-                "status": "generated", "label": label, "video_path": result_path,
-                "audio_path": audio_path, "output_filename": output_filename,
-            }
-        return {"status": "failed", "label": label, "output_filename": output_filename}
+        return _footage_only_clip(waypoint, idx, label, generator, target_audio_duration, audio_path, force)
 
     if not popup_image_entry:
         return {"status": "skipped_no_image", "label": label}
@@ -143,6 +131,87 @@ def generate_waypoint_attraction_video(
         }
 
     return {"status": "failed", "label": label, "output_filename": output_filename}
+
+
+def _footage_only_clip(
+    waypoint: dict, idx: int, label: str, generator: Any, target_audio_duration: float,
+    audio_path: Optional[str], force: bool,
+) -> Dict[str, Any]:
+    """The attraction clip of a stop that has its own footage but no photo."""
+    from services.vdoprocessing.user_videos import process_user_videos
+
+    output_filename = attraction_output_filename(idx, label)
+    result_path = process_user_videos(
+        generator, waypoint["videos"], waypoint.get("videoSound") or [], target_audio_duration,
+        output_filename, place_label=label, force=force,
+    )
+    if result_path:
+        return {
+            "status": "generated", "label": label, "video_path": result_path,
+            "audio_path": audio_path, "output_filename": output_filename,
+        }
+    return {"status": "failed", "label": label, "output_filename": output_filename}
+
+
+def _skips_attraction(waypoints: list, idx: int, wp: dict, place_label: str) -> bool:
+    """Whether the stop gets no attraction video (logged): a place the walker only passes, a return stop,
+    or a stop with no photo or footage to make a clip from."""
+    # A place the walker only passes (an unconnected stop-by, or a
+    # waypoint skipped in video export) gets no attraction video (and
+    # timeline_step never uses one).
+    if no_attraction(wp):
+        reason = passed_only_reason(wp)
+        logger.info(
+            "Step 3: [%d/%d] Skipping '%s' — %s.", idx + 1, len(waypoints), place_label, reason,
+        )
+        tracker.note(f"Skipped attraction video {idx + 1}/{len(waypoints)}: {place_label} ({reason})")
+        return True
+
+    from .render_look import _is_return_stop
+
+    if _is_return_stop(waypoints, idx):
+        logger.info("Step 3: [%d/%d] Skipping '%s' — return stop (photo pops up in its leg).",
+                    idx + 1, len(waypoints), place_label)
+        return True
+
+    # Check upfront, before ever showing "Generating..." or touching
+    # ComfyUI/the local fallback — a waypoint with no popup image has
+    # nothing to generate a clip from, so skip it outright.
+    if not has_attraction_media(wp):
+        logger.info(
+            "Step 3: [%d/%d] Skipping '%s' — no popup image configured.",
+            idx + 1, len(waypoints), place_label,
+        )
+        return True
+    return False
+
+
+def _log_attraction_result(result: Dict[str, Any], idx: int, total: int, place_label: str) -> None:
+    """Logs how one stop's attraction clip came out."""
+    if result["status"] == "skipped_no_image":
+        # Shouldn't normally hit this now that we pre-check above —
+        # kept as a safety net for any other validation inside
+        # generate_waypoint_attraction_video.
+        logger.info(
+            "Step 3: [%d/%d] Skipping '%s' — no popup image configured.",
+            idx + 1, total, place_label,
+        )
+    elif result["status"] == "generated":
+        logger.info(
+            "Step 3: [%d/%d] '%s' complete -> %s",
+            idx + 1, total, place_label, result["video_path"],
+        )
+    elif result["status"] == "pending":
+        logger.info(
+            "Step 3: [%d/%d] '%s' has multiple clips pending approval — "
+            "combining deferred, call attraction-finalize once ready.",
+            idx + 1, total, place_label,
+        )
+    else:
+        logger.warning(
+            "Step 3: [%d/%d] '%s' FAILED to produce a video.",
+            idx + 1, total, place_label,
+        )
 
 
 from .audio_step import is_passed_only, is_unvisited_stopby, no_attraction, passed_only_reason, read_photo_cuts  # noqa: E402,F401  (shared rule: see audio_step)
@@ -196,33 +265,7 @@ def render_attraction_videos(
 
     for idx, wp in enumerate(waypoints):
         place_label = wp.get("label", f"waypoint_{idx}")
-
-        # A place the walker only passes (an unconnected stop-by, or a
-        # waypoint skipped in video export) gets no attraction video (and
-        # timeline_step never uses one).
-        if no_attraction(wp):
-            reason = passed_only_reason(wp)
-            logger.info(
-                "Step 3: [%d/%d] Skipping '%s' — %s.", idx + 1, len(waypoints), place_label, reason,
-            )
-            tracker.note(f"Skipped attraction video {idx + 1}/{len(waypoints)}: {place_label} ({reason})")
-            continue
-
-        from .render_look import _is_return_stop
-
-        if _is_return_stop(waypoints, idx):
-            logger.info("Step 3: [%d/%d] Skipping '%s' — return stop (photo pops up in its leg).",
-                        idx + 1, len(waypoints), place_label)
-            continue
-
-        # Check upfront, before ever showing "Generating..." or touching
-        # ComfyUI/the local fallback — a waypoint with no popup image has
-        # nothing to generate a clip from, so skip it outright.
-        if not has_attraction_media(wp):
-            logger.info(
-                "Step 3: [%d/%d] Skipping '%s' — no popup image configured.",
-                idx + 1, len(waypoints), place_label,
-            )
+        if _skips_attraction(waypoints, idx, wp, place_label):
             continue
 
         tracker.show(f"Generating attraction video {idx + 1}/{len(waypoints)}: {place_label}")
@@ -246,19 +289,8 @@ def render_attraction_videos(
             force=force,
         )
 
-        if result["status"] == "skipped_no_image":
-            # Shouldn't normally hit this now that we pre-check above —
-            # kept as a safety net for any other validation inside
-            # generate_waypoint_attraction_video.
-            logger.info(
-                "Step 3: [%d/%d] Skipping '%s' — no popup image configured.",
-                idx + 1, len(waypoints), place_label,
-            )
-        elif result["status"] == "generated":
-            logger.info(
-                "Step 3: [%d/%d] '%s' complete -> %s",
-                idx + 1, len(waypoints), place_label, result["video_path"],
-            )
+        _log_attraction_result(result, idx, len(waypoints), place_label)
+        if result["status"] == "generated":
             # Narration audio is deliberately NOT muxed in here — this clip
             # stays silent, same as every other clip the pipeline produces
             # (see render_step.py's own note). Its narration audio (already
@@ -266,17 +298,6 @@ def render_attraction_videos(
             # timeline.json as a separate track by pipeline.py's own
             # attraction_audio_paths, and only muxed at final export.
             generated_videos.append(result["video_path"])
-        elif result["status"] == "pending":
-            logger.info(
-                "Step 3: [%d/%d] '%s' has multiple clips pending approval — "
-                "combining deferred, call attraction-finalize once ready.",
-                idx + 1, len(waypoints), place_label,
-            )
-        else:
-            logger.warning(
-                "Step 3: [%d/%d] '%s' FAILED to produce a video.",
-                idx + 1, len(waypoints), place_label,
-            )
 
     tracker.clear()
     logger.info(

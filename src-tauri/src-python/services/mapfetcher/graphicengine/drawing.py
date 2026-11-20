@@ -171,44 +171,63 @@ class _DrawingMixin:
         _draw_pin_ground_shadow(frame, cx, cy, radius)
 
         if is_circle:
-            radius = int(radius * 0.65)
-            head_cy = cy
-            cv2.circle(frame, (cx, head_cy), radius + 3, (255, 255, 255), -1, cv2.LINE_AA)
-            if split_color is not None:
-                # Split colored circle
-                cv2.circle(frame, (cx, head_cy), radius, pin_color, -1, cv2.LINE_AA)
-                cv2.ellipse(frame, (cx, head_cy), (radius, radius), 0, -90, 90, split_color, -1, cv2.LINE_AA)
-            else:
-                cv2.circle(frame, (cx, head_cy), radius, pin_color, -1, cv2.LINE_AA)
+            radius, head_cy = self._draw_circle_pin(frame, cx, cy, radius, pin_color, split_color)
         else:
-            # White halo (slightly larger all round, including a bit past the
-            # tip) so the pin reads against busy map tiles.
+            self._draw_teardrop_pin(frame, cx, cy, head_cy, radius, pin_color, split_color)
+        self._draw_pin_label(frame, cx, head_cy, radius, number)
+
+    @staticmethod
+    def _draw_circle_pin(
+        frame: np.ndarray, cx: int, cy: int, radius: int, pin_color, split_color,
+    ) -> Tuple[int, int]:
+        """A plain disc pin (a stop-by dot) with a white ring, its right half in `split_color` when given.
+        Returns (its radius, its centre y)."""
+        radius = int(radius * 0.65)
+        head_cy = cy
+        cv2.circle(frame, (cx, head_cy), radius + 3, (255, 255, 255), -1, cv2.LINE_AA)
+        if split_color is not None:
+            # Split colored circle
+            cv2.circle(frame, (cx, head_cy), radius, pin_color, -1, cv2.LINE_AA)
+            cv2.ellipse(frame, (cx, head_cy), (radius, radius), 0, -90, 90, split_color, -1, cv2.LINE_AA)
+        else:
+            cv2.circle(frame, (cx, head_cy), radius, pin_color, -1, cv2.LINE_AA)
+        return radius, head_cy
+
+    @staticmethod
+    def _draw_teardrop_pin(
+        frame: np.ndarray, cx: int, cy: int, head_cy: int, radius: int, pin_color, split_color,
+    ) -> None:
+        """The teardrop body with a white halo, its right half in `split_color` when given."""
+        # White halo (slightly larger all round, including a bit past the
+        # tip) so the pin reads against busy map tiles.
+        cv2.fillPoly(
+            frame, [_pin_silhouette(cx, head_cy, radius + 4, cy + 4)],
+            (255, 255, 255), cv2.LINE_AA,
+        )
+
+        if split_color is not None:
+            # Fill the WHOLE silhouette with the left color first, then
+            # overwrite only the right half (x >= cx) with the split
+            # color — via a mask rather than two separately-clipped
+            # fillPoly calls, so the teardrop's own curved/tapered outline
+            # (not a plain rectangle) is respected on both halves without
+            # having to intersect it with a half-plane by hand.
+            silhouette = [_pin_silhouette(cx, head_cy, radius, cy)]
+            mask = np.zeros(frame.shape[:2], dtype=np.uint8)
+            cv2.fillPoly(mask, silhouette, 255, cv2.LINE_AA)
+            cv2.fillPoly(frame, silhouette, pin_color, cv2.LINE_AA)
+            right_mask = mask.copy()
+            right_mask[:, :cx] = 0
+            frame[right_mask > 0] = split_color
+        else:
+            # Colored pin body.
             cv2.fillPoly(
-                frame, [_pin_silhouette(cx, head_cy, radius + 4, cy + 4)],
-                (255, 255, 255), cv2.LINE_AA,
+                frame, [_pin_silhouette(cx, head_cy, radius, cy)],
+                pin_color, cv2.LINE_AA,
             )
 
-            if split_color is not None:
-                # Fill the WHOLE silhouette with the left color first, then
-                # overwrite only the right half (x >= cx) with the split
-                # color — via a mask rather than two separately-clipped
-                # fillPoly calls, so the teardrop's own curved/tapered outline
-                # (not a plain rectangle) is respected on both halves without
-                # having to intersect it with a half-plane by hand.
-                silhouette = [_pin_silhouette(cx, head_cy, radius, cy)]
-                mask = np.zeros(frame.shape[:2], dtype=np.uint8)
-                cv2.fillPoly(mask, silhouette, 255, cv2.LINE_AA)
-                cv2.fillPoly(frame, silhouette, pin_color, cv2.LINE_AA)
-                right_mask = mask.copy()
-                right_mask[:, :cx] = 0
-                frame[right_mask > 0] = split_color
-            else:
-                # Colored pin body.
-                cv2.fillPoly(
-                    frame, [_pin_silhouette(cx, head_cy, radius, cy)],
-                    pin_color, cv2.LINE_AA,
-                )
-
+    def _draw_pin_label(self, frame: np.ndarray, cx: int, head_cy: int, radius: int, number: Optional[Any]) -> None:
+        """The white centre, with `number` in dark text inside it when given."""
         # White center — always drawn (not just when there's no number) so
         # every numbered pin gets the same dark-on-white number. Smaller
         # than before (0.65 vs 0.8) so more of the pin's own color shows
@@ -217,42 +236,43 @@ class _DrawingMixin:
         hole_radius = max(2, int(radius * 0.65))
         cv2.circle(frame, (cx, head_cy), hole_radius, (255, 255, 255), -1, cv2.LINE_AA)
 
-        if number is not None:
-            label = str(number)
-            # radius/26 — sized back down to fit the smaller white center
-            # above (was radius/22, tuned for the previous 0.8 hole).
-            font_scale = max(0.45, radius / 26.0)
-            thickness = max(2, round(radius / 7))
-            # Two-plus-character labels ("10", "11", ...) are visibly
-            # wider than a single digit/letter at the same font_scale —
-            # shrinking both a notch keeps them from crowding the white
-            # center's edge the way a single character never does.
-            if len(label) > 1:
-                font_scale *= 0.7
-                thickness = max(2, round(thickness * 0.75))
-            (tw, th), baseline = cv2.getTextSize(label, self.font_cv, font_scale, thickness)
-            # Center on the glyph's own visual bounding box (th tall, plus
-            # baseline for any descenders) rather than assuming no
-            # descenders — round() instead of integer-divide keeps this
-            # accurate at small radii too. getTextSize's box alone still
-            # measurably undershoots upward — cv2.LINE_AA's stroke
-            # rendering bleeds the visible ink down by roughly half the
-            # stroke thickness beyond what getTextSize accounts for
-            # (verified empirically across marker sizes 14-44px: without
-            # this the number sits ~1-5px below true center, scaling with
-            # thickness) — so pull it back up by that amount too.
-            text_x = cx - round(tw / 2)
-            text_y = head_cy + round((th - baseline) / 2) - round(thickness / 2)
-            cv2.putText(
-                frame,
-                label,
-                (text_x, text_y),
-                self.font_cv,
-                font_scale,
-                tuning.PIN_NUMBER_TEXT_COLOR,
-                thickness,
-                cv2.LINE_AA,
-            )
+        if number is None:
+            return
+        label = str(number)
+        # radius/26 — sized back down to fit the smaller white center
+        # above (was radius/22, tuned for the previous 0.8 hole).
+        font_scale = max(0.45, radius / 26.0)
+        thickness = max(2, round(radius / 7))
+        # Two-plus-character labels ("10", "11", ...) are visibly
+        # wider than a single digit/letter at the same font_scale —
+        # shrinking both a notch keeps them from crowding the white
+        # center's edge the way a single character never does.
+        if len(label) > 1:
+            font_scale *= 0.7
+            thickness = max(2, round(thickness * 0.75))
+        (tw, th), baseline = cv2.getTextSize(label, self.font_cv, font_scale, thickness)
+        # Center on the glyph's own visual bounding box (th tall, plus
+        # baseline for any descenders) rather than assuming no
+        # descenders — round() instead of integer-divide keeps this
+        # accurate at small radii too. getTextSize's box alone still
+        # measurably undershoots upward — cv2.LINE_AA's stroke
+        # rendering bleeds the visible ink down by roughly half the
+        # stroke thickness beyond what getTextSize accounts for
+        # (verified empirically across marker sizes 14-44px: without
+        # this the number sits ~1-5px below true center, scaling with
+        # thickness) — so pull it back up by that amount too.
+        text_x = cx - round(tw / 2)
+        text_y = head_cy + round((th - baseline) / 2) - round(thickness / 2)
+        cv2.putText(
+            frame,
+            label,
+            (text_x, text_y),
+            self.font_cv,
+            font_scale,
+            tuning.PIN_NUMBER_TEXT_COLOR,
+            thickness,
+            cv2.LINE_AA,
+        )
 
     def draw_compass(
         self,
@@ -278,11 +298,23 @@ class _DrawingMixin:
         cv2.circle(overlay, (cx, cy), radius, (255, 255, 255), -1, cv2.LINE_AA)
         cv2.addWeighted(overlay, 0.88, frame, 0.12, 0, frame)
         cv2.circle(frame, (cx, cy), radius, (210, 210, 210), 2, cv2.LINE_AA)
+        self._draw_compass_ticks(frame, cx, cy, radius)
+        self._draw_compass_needle(frame, cx, cy, radius)
 
-        # Cardinal ticks — short lines just inside the disc's own edge at
-        # N/E/S/W, N drawn slightly bolder/longer than the other three so
-        # it still reads as "the important one" even though the needle
-        # itself already points there.
+        # "N" label above the disc.
+        label = "N"
+        font_scale = radius / 34.0 * 0.55
+        (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_DUPLEX, font_scale, 2)
+        cv2.putText(
+            frame, label, (cx - label_w // 2, cy - radius - 8),
+            cv2.FONT_HERSHEY_DUPLEX, font_scale, (60, 60, 60), 2, cv2.LINE_AA,
+        )
+
+    @staticmethod
+    def _draw_compass_ticks(frame: np.ndarray, cx: int, cy: int, radius: int) -> None:
+        """Cardinal ticks — short lines just inside the disc's own edge at N/E/S/W, N drawn slightly
+        bolder/longer than the other three so it still reads as "the important one" even though the
+        needle itself already points there."""
         for angle_deg, is_north in ((270, True), (0, False), (90, False), (180, False)):
             rad = math.radians(angle_deg)
             outer = (cx + radius * 0.92 * math.cos(rad), cy + radius * 0.92 * math.sin(rad))
@@ -293,9 +325,10 @@ class _DrawingMixin:
                 (150, 150, 150), 2 if is_north else 1, cv2.LINE_AA,
             )
 
-        # The needle itself: a two-tone diamond (red tip pointing north,
-        # gray tail pointing south) — the classic compass-rose needle
-        # silhouette, rather than a plain arrow.
+    @staticmethod
+    def _draw_compass_needle(frame: np.ndarray, cx: int, cy: int, radius: int) -> None:
+        """The needle itself: a two-tone diamond (red tip pointing north, gray tail pointing south) — the
+        classic compass-rose needle silhouette, rather than a plain arrow."""
         needle_len = radius * 0.62
         needle_w = radius * 0.16
         north_tip = (cx, int(cy - needle_len))
@@ -311,15 +344,6 @@ class _DrawingMixin:
             (60, 55, 210), cv2.LINE_AA,
         )
         cv2.circle(frame, (cx, cy), max(2, int(radius * 0.08)), (255, 255, 255), -1, cv2.LINE_AA)
-
-        # "N" label above the disc.
-        label = "N"
-        font_scale = radius / 34.0 * 0.55
-        (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_DUPLEX, font_scale, 2)
-        cv2.putText(
-            frame, label, (cx - label_w // 2, cy - radius - 8),
-            cv2.FONT_HERSHEY_DUPLEX, font_scale, (60, 60, 60), 2, cv2.LINE_AA,
-        )
 
     def draw_frame_border(
         self,

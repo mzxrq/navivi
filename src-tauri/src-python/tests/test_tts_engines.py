@@ -2,12 +2,13 @@
 
 import asyncio
 import wave
+from pathlib import Path
 
 import pytest
 
 from services import tuning
 from services.cli import voice_commands
-from services.tts import phrase_cache, ttsengine, voices
+from services.tts import clients, phrase_cache, ttsengine, voices
 from services.tts.ttsengine import (
     IrodoriTTSClient, KokoroTTSClient, Qwen3TTSClient, _atempo_filter, apply_speed, make_tts_client, tts_config_from_settings,
 )
@@ -139,7 +140,7 @@ class TestKokoroClient:
 
     def test_its_lines_never_collide_with_irodoris_in_the_cache(self, client, tmp_path, voice_lib, monkeypatch):
         irodori = make_tts_client({"tts": {"voice": "alice"}}, tmp_path / "i")
-        monkeypatch.setattr(ttsengine, "ensure_reference_latent", lambda voice: None)
+        monkeypatch.setattr(clients, "ensure_reference_latent", lambda voice: None)
         hits = []
 
         async def post(self, payload):
@@ -192,7 +193,7 @@ class TestVoiceActions:
 
 class TestServerWav:
     def test_the_worker_script_has_no_navivi_imports_so_the_kokoro_venv_can_run_it(self):
-        source = (ttsengine.Path(ttsengine.__file__).with_name("kokoro_server.py")).read_text(encoding="utf-8")
+        source = (Path(ttsengine.__file__).with_name("kokoro_server.py")).read_text(encoding="utf-8")
         assert "from services" not in source and "import services" not in source
 
 
@@ -237,8 +238,8 @@ class TestQwen3Client:
 
         cooldowns = []
         monkeypatch.setattr(Qwen3TTSClient, "_post_speech", post)
-        monkeypatch.setattr(ttsengine, "apply_speed", lambda audio, speed: audio + f"@{speed}".encode())
-        monkeypatch.setattr(ttsengine, "wait_for_gpu_cooldown", lambda reason="": cooldowns.append(reason) or 0.0)
+        monkeypatch.setattr(clients, "apply_speed", lambda audio, speed: audio + f"@{speed}".encode())
+        monkeypatch.setattr(clients, "wait_for_gpu_cooldown", lambda reason="": cooldowns.append(reason) or 0.0)
         c = make_tts_client({"tts": {"engine": "qwen3", "voice": "alice", "speed": 1.25}}, tmp_path / "out")
         c.sent = sent
         c.cooldowns = cooldowns
@@ -293,7 +294,7 @@ class TestQwen3Client:
         assert len(client.sent) == 3
 
     def test_its_cache_entries_are_not_irodoris_or_kokoros(self, client, tmp_path, voice_lib, monkeypatch):
-        monkeypatch.setattr(ttsengine, "ensure_reference_latent", lambda voice: None)
+        monkeypatch.setattr(clients, "ensure_reference_latent", lambda voice: None)
 
         async def post(self, payload):
             return b"IRODORI"
@@ -412,7 +413,7 @@ class TestQwen3Actions:
 class TestQwen3ServerScript:
     @staticmethod
     def source():
-        return ttsengine.Path(ttsengine.__file__).with_name("qwen3_server.py").read_text(encoding="utf-8")
+        return Path(ttsengine.__file__).with_name("qwen3_server.py").read_text(encoding="utf-8")
 
     def test_it_has_no_navivi_imports_so_its_venv_can_run_it(self):
         assert "from services" not in self.source() and "import services" not in self.source()
@@ -430,7 +431,7 @@ class TestQwen3ServerScript:
 def _load_qwen3_server():
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("qwen3_server_under_test", ttsengine.Path(ttsengine.__file__).with_name("qwen3_server.py"))
+    spec = importlib.util.spec_from_file_location("qwen3_server_under_test", Path(ttsengine.__file__).with_name("qwen3_server.py"))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)  # only stdlib imports at the top: torch and qwen_tts load later, inside the functions
     return module

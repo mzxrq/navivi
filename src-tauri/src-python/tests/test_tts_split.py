@@ -1,7 +1,7 @@
 import asyncio
 import wave
 
-from services.tts import ttsengine
+from services.tts import clients
 from services.tts.ttsengine import IrodoriTTSClient, split_text_for_tts
 
 
@@ -58,7 +58,7 @@ def test_long_text_is_spoken_in_chunks_and_joined(tmp_path, monkeypatch):
         return _wav_bytes(tmp_path / "src.wav", 1.0)
 
     monkeypatch.setattr(client, "call_api", fake_call)
-    monkeypatch.setattr(ttsengine, "cut_off_ratio", lambda wav: 0.0)  # the flat fake never fades out
+    monkeypatch.setattr(clients, "cut_off_ratio", lambda wav: 0.0)  # the flat fake never fades out
     text = "これは長い文章です。" * 12  # 12 identical 10-char sentences, 120 characters
     out = asyncio.run(client.generate_speech(text, "long.wav"))
     # Sentences grouped until a chunk has TTS_MIN_CHUNK_CHARS (20): 2 per request, 6 requests of a fixed 1.0 s
@@ -112,7 +112,7 @@ def test_kept_sentences_are_reused_and_only_edited_or_picked_ones_spoken_again(t
         return _wav_bytes(tmp_path / "src.wav", 1.0 + 0.01 * len(made))  # every take differs
 
     monkeypatch.setattr(client, "call_api", fake_call)
-    monkeypatch.setattr(ttsengine, "cut_off_ratio", lambda wav: 0.0)
+    monkeypatch.setattr(clients, "cut_off_ratio", lambda wav: 0.0)
     client.pieces_dir, client.pieces_voice = tmp_path / "pieces", {"voice": "a"}
     first = ["一つ目の文は少し長めに書いてここで終わります。", "二つ目の文も少し長めに書いてここで終わります。", "三つ目の文も少し長めに書いてここで終わります。"]
 

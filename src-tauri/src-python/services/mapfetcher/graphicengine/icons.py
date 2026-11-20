@@ -19,6 +19,104 @@ _ROUTE_SVG_PATH = _ICON_DIR / "route.svg"
 _SVG_COMMAND_CHARS = set("MmLlHhVvCcZz")
 _SVG_TOKEN_RE = re.compile(r"[MmLlHhVvCcZz]|-?\d+\.?\d*(?:[eE][+-]?\d+)?")
 _SVG_TRANSFORM_RE = re.compile(r"(translate|scale)\(\s*([-\d.eE]+)[ ,]+([-\d.eE]+)\s*\)")
+_BEZIER_STEPS = 10  # a cubic Bezier is sampled into this many straight segments
+
+Point = Tuple[float, float]
+
+
+class _SvgPathParser:
+    """Walks the tokens of an SVG path (M/L/H/V/C/Z, absolute or relative) into closed polygons."""
+
+    def __init__(self, tokens: List[str]):
+        self.tokens = tokens
+        self.pos = 0
+        self.cur: Point = (0.0, 0.0)
+        self.start: Point = (0.0, 0.0)
+        self.cmd: Optional[str] = None
+        self.polygons: List[List[Point]] = []
+        self.poly: List[Point] = []
+
+    def _read_float(self) -> float:
+        value = float(self.tokens[self.pos])
+        self.pos += 1
+        return value
+
+    def _close(self) -> None:
+        if self.poly:
+            self.polygons.append(self.poly)
+        self.cur = self.start
+        self.poly = []
+        self.cmd = None
+
+    def _move(self) -> None:
+        x, y = self._read_float(), self._read_float()
+        if self.cmd == "m":
+            x, y = self.cur[0] + x, self.cur[1] + y
+        self.cur = (x, y)
+        self.start = self.cur
+        if self.poly:
+            self.polygons.append(self.poly)
+        self.poly = [self.cur]
+        # A bare coordinate pair right after M/m (no new command
+        # letter) is an implicit LINETO, per the SVG path grammar.
+        self.cmd = "L" if self.cmd == "M" else "l"
+
+    def _cubic(self) -> None:
+        cur = self.cur
+        x1, y1 = self._read_float(), self._read_float()
+        x2, y2 = self._read_float(), self._read_float()
+        x, y = self._read_float(), self._read_float()
+        if self.cmd == "c":
+            x1, y1 = cur[0] + x1, cur[1] + y1
+            x2, y2 = cur[0] + x2, cur[1] + y2
+            x, y = cur[0] + x, cur[1] + y
+        steps = _BEZIER_STEPS
+        for step in range(1, steps + 1):
+            t = step / steps
+            mt = 1 - t
+            bx = mt**3 * cur[0] + 3 * mt**2 * t * x1 + 3 * mt * t**2 * x2 + t**3 * x
+            by = mt**3 * cur[1] + 3 * mt**2 * t * y1 + 3 * mt * t**2 * y2 + t**3 * y
+            self.poly.append((bx, by))
+        self.cur = (x, y)
+
+    def _segment(self) -> None:
+        """One drawing command's worth of tokens (L/H/V/C), appended to the current polygon."""
+        cmd, cur = self.cmd, self.cur
+        if cmd in ("L", "l"):
+            x, y = self._read_float(), self._read_float()
+            if cmd == "l":
+                x, y = cur[0] + x, cur[1] + y
+            self.cur = (x, y)
+            self.poly.append(self.cur)
+        elif cmd in ("H", "h"):
+            x = self._read_float()
+            self.cur = (cur[0] + x if cmd == "h" else x, cur[1])
+            self.poly.append(self.cur)
+        elif cmd in ("V", "v"):
+            y = self._read_float()
+            self.cur = (cur[0], cur[1] + y if cmd == "v" else y)
+            self.poly.append(self.cur)
+        elif cmd in ("C", "c"):
+            self._cubic()
+        else:
+            self.pos += 1  # an unrecognized leading token — skip it defensively
+
+    def parse(self) -> List[List[Point]]:
+        while self.pos < len(self.tokens):
+            tok = self.tokens[self.pos]
+            if tok in _SVG_COMMAND_CHARS:
+                self.cmd = tok
+                self.pos += 1
+                if self.cmd in "Zz":
+                    self._close()
+                    continue
+                if self.cmd in "Mm":
+                    self._move()
+                    continue
+            self._segment()
+        if self.poly:
+            self.polygons.append(self.poly)
+        return self.polygons
 
 
 def _parse_svg_path_polygons(d: str) -> List[List[Tuple[float, float]]]:
@@ -27,81 +125,38 @@ def _parse_svg_path_polygons(d: str) -> List[List[Tuple[float, float]]]:
     potrace itself emits) flattened into closed polygons: each cubic Bezier
     is sampled into straight segments, since PIL's ImageDraw can't stroke or
     fill a curve directly."""
-    tokens = _SVG_TOKEN_RE.findall(d)
-    pos = 0
+    return _SvgPathParser(_SVG_TOKEN_RE.findall(d)).parse()
 
-    def read_float() -> float:
-        nonlocal pos
-        value = float(tokens[pos])
-        pos += 1
-        return value
 
-    cur = (0.0, 0.0)
-    start = (0.0, 0.0)
-    cmd: Optional[str] = None
-    polygons: List[List[Tuple[float, float]]] = []
-    poly: List[Tuple[float, float]] = []
+def _svg_group_transform(svg_text: str) -> Tuple[float, float, float, float]:
+    """(tx, ty, sx, sy) of the file's <g transform="translate(...) scale(...)">; (0, 0, 1, 1) when it has none."""
+    group_match = re.search(r"<g\s+transform=\"([^\"]+)\"", svg_text)
+    tx = ty = 0.0
+    sx = sy = 1.0
+    if group_match:
+        for name, a, b in _SVG_TRANSFORM_RE.findall(group_match.group(1)):
+            if name == "translate":
+                tx, ty = float(a), float(b)
+            elif name == "scale":
+                sx, sy = float(a), float(b)
+    return tx, ty, sx, sy
 
-    while pos < len(tokens):
-        tok = tokens[pos]
-        if tok in _SVG_COMMAND_CHARS:
-            cmd = tok
-            pos += 1
-            if cmd in "Zz":
-                if poly:
-                    polygons.append(poly)
-                cur = start
-                poly = []
-                cmd = None
-                continue
-            if cmd in "Mm":
-                x, y = read_float(), read_float()
-                if cmd == "m":
-                    x, y = cur[0] + x, cur[1] + y
-                cur = (x, y)
-                start = cur
-                if poly:
-                    polygons.append(poly)
-                poly = [cur]
-                # A bare coordinate pair right after M/m (no new command
-                # letter) is an implicit LINETO, per the SVG path grammar.
-                cmd = "L" if cmd == "M" else "l"
-                continue
-        if cmd in ("L", "l"):
-            x, y = read_float(), read_float()
-            if cmd == "l":
-                x, y = cur[0] + x, cur[1] + y
-            cur = (x, y)
-            poly.append(cur)
-        elif cmd in ("H", "h"):
-            x = read_float()
-            cur = (cur[0] + x if cmd == "h" else x, cur[1])
-            poly.append(cur)
-        elif cmd in ("V", "v"):
-            y = read_float()
-            cur = (cur[0], cur[1] + y if cmd == "v" else y)
-            poly.append(cur)
-        elif cmd in ("C", "c"):
-            x1, y1 = read_float(), read_float()
-            x2, y2 = read_float(), read_float()
-            x, y = read_float(), read_float()
-            if cmd == "c":
-                x1, y1 = cur[0] + x1, cur[1] + y1
-                x2, y2 = cur[0] + x2, cur[1] + y2
-                x, y = cur[0] + x, cur[1] + y
-            steps = 10
-            for step in range(1, steps + 1):
-                t = step / steps
-                mt = 1 - t
-                bx = mt**3 * cur[0] + 3 * mt**2 * t * x1 + 3 * mt * t**2 * x2 + t**3 * x
-                by = mt**3 * cur[1] + 3 * mt**2 * t * y1 + 3 * mt * t**2 * y2 + t**3 * y
-                poly.append((bx, by))
-            cur = (x, y)
-        else:
-            pos += 1  # an unrecognized leading token — skip it defensively
-    if poly:
-        polygons.append(poly)
-    return polygons
+
+def _normalized_polygons(polygons: List[List[Point]]) -> Tuple[Tuple[Point, ...], ...]:
+    """The polygons scaled into 0..1 (aspect ratio kept, longest side spanning 0..1, centered on the shorter one)."""
+    xs = [x for poly in polygons for x, _ in poly]
+    ys = [y for poly in polygons for _, y in poly]
+    min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
+    span = max(max_x - min_x, max_y - min_y) or 1.0
+    # Centered within the longer axis's own span, so the shorter axis sits
+    # in the middle of the square it's about to be scaled into instead of
+    # hugging one edge.
+    off_x = (span - (max_x - min_x)) / 2
+    off_y = (span - (max_y - min_y)) / 2
+    return tuple(
+        tuple(((x - min_x + off_x) / span, (y - min_y + off_y) / span) for x, y in poly)
+        for poly in polygons
+    )
 
 
 @lru_cache(maxsize=None)
@@ -126,16 +181,7 @@ def _load_svg_icon_polygons(
     except OSError:
         return ()
 
-    group_match = re.search(r"<g\s+transform=\"([^\"]+)\"", svg_text)
-    tx = ty = 0.0
-    sx = sy = 1.0
-    if group_match:
-        for name, a, b in _SVG_TRANSFORM_RE.findall(group_match.group(1)):
-            if name == "translate":
-                tx, ty = float(a), float(b)
-            elif name == "scale":
-                sx, sy = float(a), float(b)
-
+    tx, ty, sx, sy = _svg_group_transform(svg_text)
     polygons: List[List[Tuple[float, float]]] = []
     for attrs in re.findall(r"<path\b([^>]*)>", svg_text):
         d_match = re.search(r'\bd="([^"]+)"', attrs)
@@ -156,20 +202,7 @@ def _load_svg_icon_polygons(
             polygons.append([(x * sx + tx, y * sy + ty) for x, y in poly])
     if not polygons:
         return ()
-
-    xs = [x for poly in polygons for x, _ in poly]
-    ys = [y for poly in polygons for _, y in poly]
-    min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
-    span = max(max_x - min_x, max_y - min_y) or 1.0
-    # Centered within the longer axis's own span, so the shorter axis sits
-    # in the middle of the square it's about to be scaled into instead of
-    # hugging one edge.
-    off_x = (span - (max_x - min_x)) / 2
-    off_y = (span - (max_y - min_y)) / 2
-    return tuple(
-        tuple(((x - min_x + off_x) / span, (y - min_y + off_y) / span) for x, y in poly)
-        for poly in polygons
-    )
+    return _normalized_polygons(polygons)
 
 
 def _signed_area(poly) -> float:

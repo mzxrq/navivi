@@ -58,31 +58,25 @@ class Cue:
     char_index: int  # offset into the CLEAN text: the cue sits right before this char
 
 
-def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
-    """Returns (spoken text without tags, cues in order)."""
-    if not text:
-        return "", []
-    parts: List[str] = []
-    cues: List[Cue] = []
-    length = 0
-    pos = 0
-    stop = None  # the last {n}: a {go} ends that stop's description
-    scene = 1
-    photos = 0
-    nexts = 0
-    cards = {"view": 0, "turn": 0, "slow": 0, "fast": 0, "stop": 0, "at": 0}  # {view} street views, {turn} automatic turn photos
-    last = ""  # the last character kept
-    for match in CUE_RE.finditer(text):
-        piece = text[pos:match.start()]
-        parts.append(piece)
-        length += len(piece)
-        last = piece[-1:] or last
-        tag = match.group(1)
+class _CueScan:
+    """The cues found so far while strip_cues walks a script, with the counters that number repeated tags."""
+
+    def __init__(self) -> None:
+        self.cues: List[Cue] = []
+        self.stop: Optional[str] = None  # the last {n}: a {go} ends that stop's description
+        self.scene = 1
+        self.photos = 0
+        self.nexts = 0
+        self.cards = {"view": 0, "turn": 0, "slow": 0, "fast": 0, "stop": 0, "at": 0}  # {view} street views, {turn} automatic turn photos
+
+    def add(self, tag: str, length: int) -> None:
+        """Records the cue for `tag`, which sits right before character `length` of the clean text."""
+        cues, cards = self.cues, self.cards
         if tag.isdigit():
-            stop = tag
+            self.stop = tag
         if tag.startswith("photo:"):
-            photos += 1
-            cues.append(Cue(f"photo{photos}:{tag[6:].strip()}", length))
+            self.photos += 1
+            cues.append(Cue(f"photo{self.photos}:{tag[6:].strip()}", length))
         elif tag.partition(":")[0] in ("view", "view wait", "view wait slow", "turn", "turn wait"):
             tag, _, name = tag.partition(":")
             kind = tag.split()[0]
@@ -107,22 +101,39 @@ def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
             if n and all(c.tag != f"{kind}end{n}" for c in cues):
                 cues.append(Cue(f"{kind}end{n}", length))
         elif tag == "next":
-            nexts += 1
-            cues.append(Cue(f"next{nexts}", length))
+            self.nexts += 1
+            cues.append(Cue(f"next{self.nexts}", length))
         elif tag == "scene":
-            scene += 1
-            cues.append(Cue(f"scene{scene}", length))
+            self.scene += 1
+            cues.append(Cue(f"scene{self.scene}", length))
         elif tag != "go":
             cues.append(Cue(tag, length))
-        elif stop is not None:
-            cues.append(Cue("go" + stop, length))
+        elif self.stop is not None:
+            cues.append(Cue("go" + self.stop, length))
+
+
+def strip_cues(text: Optional[str]) -> Tuple[str, List[Cue]]:
+    """Returns (spoken text without tags, cues in order)."""
+    if not text:
+        return "", []
+    parts: List[str] = []
+    scan = _CueScan()
+    length = 0
+    pos = 0
+    last = ""  # the last character kept
+    for match in CUE_RE.finditer(text):
+        piece = text[pos:match.start()]
+        parts.append(piece)
+        length += len(piece)
+        last = piece[-1:] or last
+        scan.add(match.group(1), length)
         pos = match.end()
         # "pass {1} Katsuragi": a tag between two spaces takes one with it, or the voice reads a double space.
         if last == " " and text[pos:pos + 1] == " ":
             pos += 1
     parts.append(text[pos:])
     clean = "".join(parts)
-    return clean, _close_views(clean, cues)
+    return clean, _close_views(clean, scan.cues)
 
 
 def _close_views(clean: str, cues: List[Cue]) -> List[Cue]:
