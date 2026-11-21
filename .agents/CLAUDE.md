@@ -134,7 +134,8 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
 
 - `main.py` — argv dispatcher only. Per-stage modes (`gps`, `map`, `residential`, `tts`, `tts-all`,
   `attraction-tts[-all]`, `attraction[-all]`, `attraction-finalize`, `intro`, `outro`, `subtitle[-all]`,
-  `concat`, `mux`, `transition`, `overview-script`, `all`, default = overview) live in `services/cli/`.
+  `concat`, `mux`, `overview-script`, default = overview) live in `services/cli/`; a whole render is `full_pipeline`
+  (the old `all` and `transition` modes were removed 2026-11-21).
   Also `get_furigana` (readings) and `extract_words` (whole words with readings from a script) for the pronunciation dictionary, both via `services/localization/japanese_words.py` (fugashi + UniDic, pykakasi as the fallback).
 - `services/vdoprocessing/videopipeline/pipeline.py::run_full_pipeline` — the real 8-stage pipeline:
   GPS → TTS (+cues) → subtitles → attraction videos → route render → leg narration splits →
@@ -166,12 +167,21 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
   A badge pays for the route it buries (`_recap_cards_route_cover`, `_ROUTE_COVER_PULL_PX`, per badge WIDTH of line)
   and far more for a pin head it hides (`_recap_cards_pin_cover`), even beside its own pin, so a dense loop's badges go
   out over open water; one left more than `_BADGE_FAR_PX` from its pin sets `badge_far` and `_draw_recap_dot` then draws
-  the numbered pin. A cluster's head is picked by the pins its whole block would hide. The course passes its drawn path
+  the numbered pin (the course overview always draws numbered pins). A cluster's head is picked by the pins its whole block would hide. The course passes its drawn path
   resampled every 6 px (a ferry leg's raw points are only its ends). The course map is fetched
   `tuning.COURSE_OPEN_ZOOM` wider (`overview_framing._widen`) and the video eases out to it (`course._open_zoom`). After the trace,
   stop-bys and closed places come up one by one across their sentence (`_set_reveal_times`, with a ring `_draw_ripple`),
   the walked stops' badges fade to `_BADGE_DIM`, and the tagline showing at `trace_end` holds (`tagline_at(hold_from=)`).
-  The GL ending stays a hard cut (a crossfade was tried 2026-11-21; the user preferred the cut). The ending reads
+  The GL ending stays a hard cut (a crossfade was tried 2026-11-21; the user preferred the cut).
+  Camera moves are real map zooms: `course.zoom_view(t)` gives the view (the opening ease-out, then `dense_zooms`:
+  runs of 3+ stops whose stretch is `COURSE_DENSE_ZOOM_MIN`x smaller than the whole ROUTE, not the frame), the GL map
+  is captured once per distinct view (`_course_gl_frames`, `gl_view_state`, frames saved to a temp dir as they come),
+  and `_course_zoomed_map` redraws route, trace, pins, walker and photo cards on it at their zoomed places but normal
+  size (badges fade out). A passing photo card takes one of the eight spots just outside its pin's teardrop
+  (`_pass_card_spots`), clear of panels, cards still up and EVERY pin (its own too) first; while zoomed it re-picks its
+  side in the zoomed layout (`_zoom_card_side`, kept for the whole zoom). Cards up together share one size
+  (`pass_crowd_scales`, `COURSE_PASS_CARD_CROWD_MIN_SCALE`) and stay at least `COURSE_PASS_CARD_MIN_SECONDS`. With a Mapbox key the course background is always the GL map
+  (`mapfetcher.fetch_image`) so the styles match; without one, or if the capture fails, the base frame is cropped. The ending reads
   job_config.json from the folders ABOVE the output dir, so a test render outside the project silently has no ending.
   One badge per PLACE (a return stop shares the first visit's, `_recap_popup_set`), all on one frame-wide lattice
   (`_recap_card_slots`, cells offered nearest-pin-first) so they line up in rows and columns and can never overlap.
