@@ -983,6 +983,7 @@ class _OverviewRenderMixin:
             self._recap_popup_set(active_popups, stop_popup), w, h,
             reserved_boxes=reserved_boxes, route_obstacles=recap_obstacle_arr,
             background=pre_popup_frame, leaders=False,
+            total_points=1 + max((ap["index"] for ap in active_popups), default=0),
         )
         final_frame = self._render_recap_frame(pre_popup_frame, active_popups, group_popups=laid_out)
         cv2.imwrite(out_img, final_frame)

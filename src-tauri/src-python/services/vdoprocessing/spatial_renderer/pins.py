@@ -284,4 +284,5 @@ class _PinMixin:
             if self._is_loop_route:
                 return "E", self._START_PIN_COLOR, self._END_PIN_COLOR
             return "E", self._END_PIN_COLOR, None
-        return wp.get("order"), self._pin_color(wp), None
+        # `pin_color`: its recap badge's own color (popups._recap_cards_match_pin_colors).
+        return wp.get("order"), wp.get("pin_color") or self._pin_color(wp), None

@@ -738,6 +738,7 @@ class _CourseOverviewMixin:
                                             route_obstacles=route_obstacle_arr,
                                             background=current_bg if pill_recap else None,
                                             leaders=not pill_recap,
+                                            total_points=stop_popup["index"] + 1 if stop_popup else None,
                                             clutter_pull=self._CLUTTER_PULL_COURSE_PX)
         return pill_recap, laid_out, {ap["index"]: ap for ap in laid_out}
 

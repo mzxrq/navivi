@@ -8,7 +8,11 @@ from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
 
 
 class _Layout(_PopupMixin, _PinMixin):
-    pass
+    # What the real renderer's base class (spatial_renderer/base.py) gives the pin colors.
+    from services import tuning as _t
+
+    _START_PIN_COLOR, _END_PIN_COLOR, _STOPBY_PIN_COLOR = _t.START_PIN_COLOR, _t.END_PIN_COLOR, _t.STOPBY_PIN_COLOR
+    _is_loop_route = False
 
 
 def _layout():
@@ -584,3 +588,27 @@ def test_a_far_badge_brings_back_its_pins_number():
     layout._draw_pin = lambda frame, wp, total, scale=1.0: calls.append("pin")
     layout._draw_recap_dot(None, {"x": 1, "y": 1, "badge_far": True, "data": {}}, 3)
     assert calls == ["pin"]
+
+
+def test_a_numbered_pin_wears_its_badges_color_and_a_start_badge_the_start_pins():
+    from services import tuning
+
+    start = dict(_popup(300, 300, "S", 0), index=0)
+    stops = [dict(_popup(700 + 200 * k, 500, f"N{k}", k + 1), index=10 * (k + 1)) for k in range(3)]
+    laid = _layout()._layout_recap_cards([start] + stops, 1920, 1080, leaders=False, total_points=31)
+    for p in laid:
+        if p is start:
+            assert tuple(p["recap_line_color"]) == tuple(tuning.START_PIN_COLOR) and "pin_color" not in p
+        elif p is stops[-1]:  # the highest index is the route's end: the badge takes the E pin's red
+            assert tuple(p["recap_line_color"]) == tuple(tuning.END_PIN_COLOR)
+        else:
+            assert p["pin_color"] == p["recap_line_color"]
+            assert _layout()._pin_label_and_color(p, 100)[1] == p["recap_line_color"]
+
+
+def test_on_a_loop_the_last_badge_is_a_numbered_stop_not_the_end():
+    """A loop route's E has no badge of its own (it shares S's), so the last badge is a numbered stop."""
+    start = dict(_popup(300, 300, "S", 0), index=0)
+    stops = [dict(_popup(700 + 200 * k, 500, f"N{k}", k + 1), index=10 * (k + 1)) for k in range(3)]
+    _layout()._layout_recap_cards([start] + stops, 1920, 1080, leaders=False, total_points=41)  # E is index 40
+    assert stops[-1]["pin_color"] == stops[-1]["recap_line_color"]

@@ -2262,9 +2262,11 @@ A connected stop-by is loose as well: the walker passes every
         background: Optional[np.ndarray] = None,
         leaders: bool = True,
         clutter_pull: Optional[float] = None,
+        total_points: Optional[int] = None,
     ) -> List[Dict]:
         """Places EVERY recap card at once and returns them in the order
-        they should be revealed.
+        they should be revealed. `total_points` (the route's) lets each pin wear its badge's color
+        (_recap_cards_match_pin_colors).
 
         `card_room` (cards that stay up for the whole walk): the lattice is
         pitched for the real PHOTO card, not the slim badge, and the card
@@ -2358,7 +2360,23 @@ A connected stop-by is loose as well: the walker passes every
             bx, by = p.get("beside_box") or (px_, py_)
             gap = math.hypot(max(bx - px_, 0, px_ - bx - geom.card_w), max(by - py_, 0, py_ - by - bh))
             p["badge_far"] = gap > self._BADGE_FAR_PX
+        self._recap_cards_match_pin_colors(ordered, total_points)
         return ordered
+
+    def _recap_cards_match_pin_colors(self, ordered: List[Dict], total_points: Optional[int]) -> None:
+        """A badge and its pin wear one color (with no leader line, color and number are all that tie them):
+        a numbered stop's pin takes its badge's own color (`pin_color`, see _pin_label_and_color); a pin whose
+        color means something (S green, E red, stop-by black, closed red) keeps it and the badge takes it.
+        `total_points` (the route's) tells which stop is E; without it none is treated as E (the badges alone
+        cannot say: a loop route's E has no badge of its own, so the last badge is a numbered stop)."""
+        total = total_points if total_points is not None else 1 << 30
+        for p in ordered:
+            label, color, _ = self._pin_label_and_color(
+                {**p, "data": p.get("data") or {}, "index": p.get("index", -1)}, total)
+            if label in ("S", "E", "×", "・"):
+                p["recap_line_color"] = tuple(color)
+            else:
+                p["pin_color"] = p["recap_line_color"]
 
     def _render_recap_frame(
         self,
