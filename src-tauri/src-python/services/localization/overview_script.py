@@ -1311,8 +1311,13 @@ def ollama_generate(model: str = "gemma2:2b") -> Generate:
     """A `generate` backed by a local Ollama model."""
     import ollama
 
+    from services import tuning
+
+    # The library's own default is no timeout at all; a timeout falls back like any model failure (the facts-only piece).
+    client = ollama.Client(timeout=tuning.OLLAMA_SCRIPT_TIMEOUT_SECONDS)
+
     def _generate(prompt: str, max_chars: int) -> Optional[str]:
-        response = ollama.chat(model=model, messages=[{"role": "user", "content": prompt}])
+        response = client.chat(model=model, messages=[{"role": "user", "content": prompt}])
         return response["message"]["content"]
 
     return _generate

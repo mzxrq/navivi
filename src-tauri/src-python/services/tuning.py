@@ -98,6 +98,10 @@ def ensure_free_ram(
         gc.collect()
 
 
+# --- Local script model (Ollama) ----------------------------------------------
+# One overview-script request; a cold model load on a CPU takes minutes, a stuck server must not hang the draft.
+OLLAMA_SCRIPT_TIMEOUT_SECONDS: float = 300.0
+
 # --- On-video text labels ----------------------------------------------------
 # Video text comes from assets/config/labels_<lang>.json (services/video_text.py); LABELS_JA and
 # PIPELINE_LABELS remain for older callers.

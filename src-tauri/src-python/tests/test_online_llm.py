@@ -199,3 +199,27 @@ class TestPipelineWiring:
         assert ensure_overview_narration(str(cfg)) is True
         assert seen["text"] == "オンラインの本文"
         assert json.loads(cfg.read_text(encoding="utf-8"))["overview_narration"] == "{start}drafted"
+
+
+def test_the_local_model_has_a_timeout(monkeypatch):
+    """The ollama library waits forever by default: a stuck local server must fail the request (the draft
+    then uses the facts-only piece) instead of hanging overview-script."""
+    import sys
+    import types
+
+    from services import tuning
+    from services.localization import overview_script
+
+    made = {}
+
+    class FakeClient:
+        def __init__(self, **kw):
+            made.update(kw)
+
+        def chat(self, model, messages):
+            return {"message": {"content": f"{model}: ok"}}
+
+    monkeypatch.setitem(sys.modules, "ollama", types.SimpleNamespace(Client=FakeClient))
+    generate = overview_script.ollama_generate("gemma2:2b")
+    assert made["timeout"] == tuning.OLLAMA_SCRIPT_TIMEOUT_SECONDS
+    assert generate("hi", 10) == "gemma2:2b: ok"
