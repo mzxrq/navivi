@@ -212,3 +212,15 @@ def test_checkpoint_part_only_exists_with_a_marker(icon, tmp_path):
     assert first and first == pinimage.marker_inputs_hash(cfg)
     other = _write_png(tmp_path / "other.png", np.full((8, 8, 4), 255, np.uint8))
     assert pinimage.marker_inputs_hash({"settings": {"routeMarker": other}}) != first
+
+
+def test_a_pins_number_is_written_in_the_pins_own_color():
+    g = GraphicsEngine()
+    for color in ((200, 90, 30), (40, 40, 220), (20, 20, 20)):  # blue, red, black (BGR)
+        frame = _canvas()
+        g.draw_marker(frame, 150, 200, number=8, color=color)
+        head = frame[150:200, 125:175].reshape(-1, 3).astype(int)
+        # Some ink in the white centre is the pin's color, none is the old near-black #111.
+        assert (np.abs(head - np.array(color)).sum(axis=1) < 40).any()
+        if color != (20, 20, 20):
+            assert not (np.abs(head - 17).sum(axis=1) < 30).any()
