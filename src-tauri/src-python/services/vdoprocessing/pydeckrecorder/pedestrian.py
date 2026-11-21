@@ -1297,10 +1297,10 @@ async def _record_leg(
                             fit();
                         }
 
-                        if (stopbyPlaces && stopbyPlaces.length) {
+                        if (stopbyPlaces) {
                             const via = document.createElement('div');
                             via.id = 'hud-stopbys';
-                            via.textContent = stopbyPlaces.join(' ・ ');
+                            via.textContent = stopbyPlaces;
                             document.body.appendChild(via);
                         }
 
@@ -1335,7 +1335,8 @@ async def _record_leg(
                      compass_svg(int(tuning.RESIDENTIAL_COMPASS_SIZE_PX))
                      if tuning.RESIDENTIAL_SHOW_COMPASS else "",
                      hud_labels["distance_label"], progress_text,
-                     progress[0] if progress else None, progress[1] if progress else None, stopby_chain or None],
+                     progress[0] if progress else None, progress[1] if progress else None,
+                     hud_labels["separator"].join(stopby_chain) if stopby_chain else None],
                 )
 
                 hud_card_cache: Dict[Tuple[int, int, bool], str] = {}
