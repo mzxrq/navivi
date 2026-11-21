@@ -67,12 +67,14 @@ def ffprobe_exe() -> Optional[str]:
 
 
 def gpsbabel_exe() -> Path:
-    """The path GPSBabel is expected at (it may not exist; the caller reports that)."""
+    """The path GPSBabel is expected at (it may not exist; the caller reports that). One on PATH counts too,
+    as for ffmpeg and in the Rust shell's own lookup (runtime.rs gpsbabel), which the import already uses."""
     found = _first_existing([
         _from_tools("gpsbabel", f"gpsbabel{EXE}"),
         bin_dir() / "GPSBabel" / f"gpsbabel{EXE}",
     ])
-    return found or bin_dir() / "GPSBabel" / f"gpsbabel{EXE}"
+    on_path = None if found else shutil.which("gpsbabel")
+    return found or (Path(on_path) if on_path else bin_dir() / "GPSBabel" / f"gpsbabel{EXE}")
 
 
 def uv_exe() -> Optional[str]:

@@ -1,6 +1,7 @@
 """Where the tools live: next to the code in development, in the folders the Rust shell names when installed."""
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -53,7 +54,11 @@ def test_gpsbabel_falls_back_to_where_it_is_expected(monkeypatch, tmp_path):
     exe = runtime_paths.EXE
     monkeypatch.setenv("NAVIVI_BIN_DIR", str(tmp_path / "bin"))
     monkeypatch.setenv("NAVIVI_TOOLS_DIR", str(tmp_path / "tools"))
+    monkeypatch.setattr(runtime_paths.shutil, "which", lambda name: None)
     assert runtime_paths.gpsbabel_exe() == tmp_path / "bin" / "GPSBabel" / f"gpsbabel{exe}"
+    # One on PATH is used, as the Rust shell's import does (runtime.rs gpsbabel).
+    monkeypatch.setattr(runtime_paths.shutil, "which", lambda name: f"/usr/bin/{name}")
+    assert runtime_paths.gpsbabel_exe() == Path("/usr/bin/gpsbabel")
     shipped = _touch(tmp_path / "tools" / "gpsbabel" / f"gpsbabel{exe}")
     assert runtime_paths.gpsbabel_exe() == shipped
 
