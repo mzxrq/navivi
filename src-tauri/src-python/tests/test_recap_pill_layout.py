@@ -391,7 +391,7 @@ def test_a_run_of_touching_badges_never_mixes_kinds():
     Stops and stop-bys interleaved along one stretch of route."""
     pops = []
     for i in range(8):
-        p = _popup(260 + 150 * i, 520, "s%d" % i, i + 1)
+        p = _popup(260 + 100 * i, 520, "s%d" % i, i + 1)
         if i % 2:
             p["data"]["is_stopby"] = True
         pops.append(p)
@@ -539,3 +539,48 @@ def test_every_staying_card_is_the_same_size():
         assert not (a[0] < hud[0][2] and hud[0][0] < a[2] and a[1] < hud[0][3] and hud[0][1] < a[3])
         for b in boxes[i + 1:]:
             assert not (a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3])
+
+
+def test_the_start_badge_keeps_the_cell_nearest_its_pin():
+    """Stops on both sides of the start (on a loop, also where the route ends) used to share out
+    the cells beside it in the matching, and the start's badge was sent to the end of the row."""
+    start = dict(_popup(1640, 560, "S", 0), index=0)
+    crowd = [dict(_popup(x, 560, f"N{k}", k + 1), index=10 * (k + 1))
+             for k, x in enumerate((1430, 1500, 1570, 1710, 1780, 1850))]
+    laid = _layout()._layout_recap_cards([start] + crowd, 1920, 1080, leaders=False)
+    centre = start["beside_box"][0] + 17
+    assert all(abs(centre - 1640) <= abs(p["beside_box"][0] + 17 - 1640) for p in laid)
+
+
+def test_the_start_badge_never_splits_a_row_of_stop_bys():
+    """The start among stop-bys on both sides: it moves to the end of their block, so they stay together."""
+    start = dict(_popup(1640, 560, "S", 0), index=0)
+    sides = []
+    for k, x in enumerate((1430, 1500, 1570, 1710, 1780, 1850)):
+        p = dict(_popup(x, 560, f"B{k}", k + 1), index=10 * (k + 1))
+        p["data"]["is_stopby"] = True
+        sides.append(p)
+    _layout()._layout_recap_cards([start] + sides, 1920, 1080, leaders=False)
+    row = sorted((p for p in [start] + sides if p["beside_box"][1] == start["beside_box"][1]),
+                 key=lambda p: p["beside_box"][0])
+    assert len(row) > 2 and row.index(start) in (0, len(row) - 1)
+
+
+def test_a_badge_leaves_a_dense_route_loop_clear():
+    """Beside its pin a badge may rest on the line, but of two cells it takes the one that leaves it clear."""
+    import numpy as np
+
+    loop = np.array([[900 + 60 * np.cos(a), 600 + 60 * np.sin(a)] for a in np.linspace(0, 6.28, 300)])
+    pin = _popup(900, 600, "AB", 1)
+    _layout()._layout_recap_cards([pin], 1920, 1080, route_obstacles=loop, leaders=False)
+    bx, by = pin["beside_box"]
+    covered = (loop[:, 0] >= bx) & (loop[:, 0] <= bx + 34) & (loop[:, 1] >= by) & (loop[:, 1] <= by + 180)
+    assert not covered.any()
+
+
+def test_a_far_badge_brings_back_its_pins_number():
+    calls = []
+    layout = _layout()
+    layout._draw_pin = lambda frame, wp, total, scale=1.0: calls.append("pin")
+    layout._draw_recap_dot(None, {"x": 1, "y": 1, "badge_far": True, "data": {}}, 3)
+    assert calls == ["pin"]

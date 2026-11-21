@@ -246,7 +246,12 @@ class _PinMixin:
         """Plain color dot for the recap screen's "pill badge" style — no
         number, no teardrop tail. The number now lives in the badge card
         itself (see _render_pill_badge), so the pin only needs to carry
-        its color; a numbered circle there would just repeat the badge."""
+        its color; a numbered circle there would just repeat the badge.
+        Unless the badge sat far from it (`badge_far`, see _layout_recap_cards): then the number
+        on both is what ties them together."""
+        if wp.get("badge_far"):
+            self._draw_pin(frame, wp, total_points, scale=scale)
+            return
         _, pin_color, _ = self._pin_label_and_color(wp, total_points)
         px, py = int(wp.get("pin_x", wp["x"])), int(wp.get("pin_y", wp["y"]))
         self._draw_recap_dot_color(frame, px, py, pin_color, scale)
