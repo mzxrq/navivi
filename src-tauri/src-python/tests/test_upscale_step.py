@@ -62,6 +62,7 @@ def gpu(monkeypatch):
 
     monkeypatch.setattr(comfyui_i2v_client, "ComfyUII2VClient", lambda: client)
     monkeypatch.setattr(upscale_step, "_model_path", lambda: Path(__file__))
+    monkeypatch.setattr(upscale_step, "_comfy_installed", lambda: True)
     monkeypatch.setattr(upscale_step, "free_vram_mb", lambda: 7000)
     from services import gpu_cooldown
 
@@ -112,6 +113,16 @@ def test_missing_model_uses_cpu_without_comfyui(tmp_path, gpu, monkeypatch):
     cfg, _ = _project(tmp_path, small=(640, 480))
     result = upscale_step.upscale_waypoint_images(str(cfg))
     assert result["cpu"] == 1 and not gpu.inputs and not gpu.freed
+
+
+def test_without_comfyui_no_model_is_downloaded(tmp_path, gpu, monkeypatch):
+    """No ComfyUI: the model is not fetched into an engine folder that would then exist (render_estimate read
+    that as ComfyUI installed), and the photos go straight to the CPU resize."""
+    monkeypatch.setattr(upscale_step, "_comfy_installed", lambda: False)
+    monkeypatch.setattr(upscale_step, "ensure_model", lambda: pytest.fail("the model must not be fetched"))
+    cfg, _ = _project(tmp_path, small=(640, 480))
+    result = upscale_step.upscale_waypoint_images(str(cfg))
+    assert result["cpu"] == 1 and result["gpu"] == 0 and not gpu.inputs
 
 
 def test_comfyui_failure_falls_back_to_cpu(tmp_path, gpu, monkeypatch):

@@ -61,6 +61,12 @@ def _model_path() -> Path:
     return ComfyUII2VClient._SERVER_DIR / "models" / "upscale_models" / tuning.IMAGE_UPSCALE_MODEL
 
 
+def _comfy_installed() -> bool:
+    from services import runtime_paths
+
+    return runtime_paths.venv_python(runtime_paths.engine_dir("ComfyUI")).exists()
+
+
 def model_scale() -> int:
     return int(tuning.IMAGE_UPSCALE_MODELS.get(tuning.IMAGE_UPSCALE_MODEL, {}).get("scale", 4))
 
@@ -228,10 +234,14 @@ def upscale_waypoint_images(config_file_path: str, force: bool = False) -> dict:
     out_dir = upscale_dir(project_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    use_gpu = bool(todo) and ensure_model() is not None
+    # Without ComfyUI installed the model would be downloaded into an engine folder that only then exists
+    # (render_estimate then took ComfyUI for installed), and every photo would fail over to the CPU anyway.
+    comfy = _comfy_installed()
+    use_gpu = bool(todo) and comfy and ensure_model() is not None
     if todo and not use_gpu:
         logger.warning(
-            "Step 2c: no upscale model %s — resizing on the CPU instead.", tuning.IMAGE_UPSCALE_MODEL
+            "Step 2c: %s — resizing on the CPU instead.",
+            f"no upscale model {tuning.IMAGE_UPSCALE_MODEL}" if comfy else "ComfyUI is not installed",
         )
     client = None
     if use_gpu and todo:

@@ -219,7 +219,8 @@ def estimate(config: dict) -> dict:
     hw = hardware_profile()
     history = load_history()
     units = workload(config)
-    has_comfy = runtime_paths.engine_dir("ComfyUI").exists()
+    # Its venv, not the folder: the photo upscale used to create the folder (for its model) without ComfyUI.
+    has_comfy = runtime_paths.venv_python(runtime_paths.engine_dir("ComfyUI")).exists()
 
     stages, measured = {}, 0
     for stage in STAGES:
