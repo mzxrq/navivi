@@ -1012,7 +1012,8 @@ class VideoExporter:
             f"[v0][v1]xfade=transition=fade:duration={d:.3f}:offset={first_len:.3f}[v];"
             # Sound is not faded: the second clip's voice starts at full volume as its picture begins to show.
             f"[0:a]atrim=end={first_len:.3f},asetpts=N/SR/TB,apad=whole_dur={first_len:.3f}[a0];"
-            f"[a0][1:a]concat=n=2:v=0:a=1,apad[a]"
+            # A bounded pad: an endless apad with -shortest fails in ffmpeg 6.1 ("No space left on device").
+            f"[a0][1:a]concat=n=2:v=0:a=1,apad=whole_dur={first_len + second_len:.3f}[a]"
         )
         out = tmp_dir / f"seg_{index:04d}_fade.mp4"
         cmd = [

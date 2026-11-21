@@ -66,7 +66,7 @@ def _clip(tmp_path, name, seconds, fps, audio_seconds=None):
 
 
 def _stream_lengths(path):
-    fp = _ffmpeg().replace("ffmpeg.exe", "ffprobe.exe").replace("ffmpeg.EXE", "ffprobe.exe")
+    fp = FFmpegManager.resolve_ffprobe_bin()
     import json
     j = json.loads(subprocess.run([fp, "-v", "error", "-show_streams", "-of", "json", str(path)],
                                   capture_output=True, encoding="utf-8").stdout)
