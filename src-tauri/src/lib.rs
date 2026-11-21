@@ -241,7 +241,7 @@ fn run_in_slot(
                     if status.success() {
                         return Ok(out_str);
                     } else {
-                        return Err(if err_str.is_empty() { "Process terminated".to_string() } else { err_str });
+                        return Err(failure_text(&out_str, &err_str));
                     }
                 }
                 Err(e) => return Err(e.to_string()),
@@ -280,9 +280,15 @@ async fn run_python_utility(action: String, payload: String) -> Result<String, S
     if out.status.success() {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     } else {
-        let err = String::from_utf8_lossy(&out.stderr).into_owned();
-        Err(if err.is_empty() { "Process terminated".to_string() } else { err })
+        Err(failure_text(&String::from_utf8_lossy(&out.stdout), &String::from_utf8_lossy(&out.stderr)))
     }
+}
+
+/// What a failed run reports: main.py prints its failure as JSON on STDOUT (stderr only carries progress text),
+/// so that goes first; returning stderr alone left the app showing "Process terminated" for every error.
+fn failure_text(stdout: &str, stderr: &str) -> String {
+    let text = if stdout.trim().is_empty() { stderr.trim() } else { stdout.trim() };
+    if text.is_empty() { "Process terminated".to_string() } else { text.to_string() }
 }
 
 #[tauri::command(async)]
@@ -910,6 +916,13 @@ fn unzip_into(source_file: &str, dest_dir: &str) -> Result<(), String> {
 #[cfg(test)]
 mod asset_tests {
     use super::*;
+
+    #[test]
+    fn a_failed_run_reports_main_pys_json_not_an_empty_stderr() {
+        assert_eq!(failure_text("{\"success\": false, \"error\": \"bad\"}\n", ""), "{\"success\": false, \"error\": \"bad\"}");
+        assert_eq!(failure_text("", "Traceback ..."), "Traceback ...");
+        assert_eq!(failure_text(" ", " "), "Process terminated");
+    }
 
     #[test]
     fn a_same_named_file_is_reused_only_when_its_bytes_match() {
