@@ -445,7 +445,8 @@ def _end_pin(waypoint_id, fallback_glyph, arrived: bool, settings: dict, pins: _
 
 
 def _leg_pin_fields(leg: _Leg, waypoints: list, settings: dict, pins: _Pins, leg_count: int) -> dict:
-    """The leg's two pins and the HUD's "stop N of total" count (the one dest_pin's own glyph is drawn from)."""
+    """The leg's two pins and the HUD's "stop N of total" count: places in the order they are reached (S is 1,
+    each leg's destination the next), so a return stop counts on instead of repeating the number it came back to."""
     item, seq_idx = leg.item, leg.seq_idx
     return {
         "start_pin": _end_pin(item.get("start_waypoint_id"), "S" if seq_idx == 0 else None, True, settings, pins),
@@ -455,7 +456,9 @@ def _leg_pin_fields(leg: _Leg, waypoints: list, settings: dict, pins: _Pins, leg
             item.get("end_waypoint_id"), "E" if seq_idx == leg_count - 1 else None,
             _is_return_stop(waypoints, leg.end_pos), settings, pins,
         ),
-        "total_stops": sum(1 for g in pins.glyph_by_pos if g),
+        # shortcut: a single-leg test render (leg_index) sees one leg, so it reads 2/2 (as S/E above do), fine for a preview.
+        "stop_number": seq_idx + 2,
+        "total_stops": leg_count + 1,
     }
 
 

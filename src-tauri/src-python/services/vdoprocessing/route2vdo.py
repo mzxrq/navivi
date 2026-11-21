@@ -847,6 +847,7 @@ class RouteAnimator:
             start_pin=res_data.get("start_pin"),
             dest_pin=res_data.get("dest_pin"),
             total_stops=res_data.get("total_stops"),
+            stop_number=res_data.get("stop_number"),
             theme=self.graphics.theme,
         )
 

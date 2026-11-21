@@ -275,6 +275,7 @@ def render_residential_leg_pydeck(
     start_pin: Optional[Dict] = None,
     dest_pin: Optional[Dict] = None,
     total_stops: Optional[int] = None,
+    stop_number: Optional[int] = None,
     hud_card_png: Optional[Callable[[float, float, bool, float], bytes]] = None,
     theme: Optional[str] = None,
     bottom_reserve_px: float = 0.0,
@@ -689,7 +690,7 @@ def render_residential_leg_pydeck(
             except (TypeError, ValueError):
                 return None
 
-        current_stop = _stop_number(dest_pin)
+        current_stop = stop_number or _stop_number(dest_pin)
         progress = (current_stop, total_stops) if current_stop and total_stops else None
         # The chain pill's own start/end circle badges -- the same S/E/number glyph already on that
         # waypoint's map pin (pin_icons' numbered teardrop), not a fresh number of our own.
