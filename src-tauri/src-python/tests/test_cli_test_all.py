@@ -34,3 +34,14 @@ def test_force_keeps_imported_footage_and_music(monkeypatch, tmp_path):
     assert all(p.exists() for p in own)
     assert not any(p.exists() for p in generated)
     assert stages[0] == len(stages)  # the [n/N] counter ends on N
+
+
+def test_an_outro_that_was_not_made_says_why(tmp_path, monkeypatch):
+    """The app shows a failed reply's `error` (src/services/stopRegen.ts); without one it showed a generic message."""
+    import services.vdoprocessing.videopipeline as videopipeline
+    from services.cli.intro_outro_commands import test_outro_video
+
+    (tmp_path / "job_config.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(videopipeline, "render_outro_clip", lambda path: None)
+    reply = test_outro_video(str(tmp_path / "job_config.json"))
+    assert reply["success"] is False and "photo" in reply["error"]

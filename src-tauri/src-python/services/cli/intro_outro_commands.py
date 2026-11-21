@@ -38,6 +38,8 @@ def test_intro_video(job_config_path: str, output_video_dir: Optional[str] = Non
     return {
         "success": bool(intro_path),
         "video_path": intro_path,
+        # The app shows `error` when success is false (src/services/stopRegen.ts).
+        **({} if intro_path else {"error": "No intro was made: no stop has a photo yet, or making it failed (see the log)."}),
     }
 
 
@@ -60,4 +62,5 @@ def test_outro_video(job_config_path: str, output_video_dir: Optional[str] = Non
     return {
         "success": bool(outro_path),
         "video_path": outro_path,
+        **({} if outro_path else {"error": "No outro was made: no stop has a photo yet, or making it failed (see the log)."}),
     }
