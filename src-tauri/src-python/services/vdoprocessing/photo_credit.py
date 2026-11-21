@@ -2,7 +2,7 @@
 editor) in a small dark box at the bottom left or right. The credit is typed per photo in the stop editor
 (waypoint imageCredits[path].text, corner); a photo found online without one shows its author and license."""
 
-from pathlib import Path
+from pathlib import PureWindowsPath
 from typing import List, Optional
 
 from services import tuning
@@ -49,8 +49,9 @@ def credit_items(
     images = photos_kept(waypoint)
     credits = waypoint.get("imageCredits") or {}
     # The pipeline hands photos over as absolute (or upscaled) paths; the credits are keyed by the saved relative one.
-    by_name = {Path(k).name.lower(): v for k, v in credits.items()}
-    by_stem = {Path(k).stem.lower(): v for k, v in credits.items()}
+    # PureWindowsPath splits on both / and \ on any OS.
+    by_name = {PureWindowsPath(k).name.lower(): v for k, v in credits.items()}
+    by_stem = {PureWindowsPath(k).stem.lower(): v for k, v in credits.items()}
     videos = len([v for v in waypoint.get("videos") or [] if v])
     slots = videos + len(images)
     share = clip_seconds / slots if slots else 0.0
@@ -61,7 +62,7 @@ def credit_items(
             edges = cued
     items = []
     for i, path in enumerate(images):
-        p = Path(path)
+        p = PureWindowsPath(path)
         credit = credits.get(path) or by_name.get(p.name.lower()) or next(
             (v for stem, v in by_stem.items() if p.stem.lower().startswith(stem)), None)
         text = credit_text(credit)
