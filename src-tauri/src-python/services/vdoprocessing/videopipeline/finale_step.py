@@ -514,8 +514,11 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
         )
         part = out.with_name(out.stem + ".part.mp4")
         if not _pipe_frames(_finale_frames(scene), part, fps, size):
+            part.unlink(missing_ok=True)
             return None
-        part.replace(out)
+        from services.projectfiles import replace_into
+
+        replace_into(part, out)  # retried, as the outro does: the editor may be previewing the old clip (Windows)
         from services.vdoprocessing.cliptiming import timing_sidecar_path, write_audio_offset
 
         if voice:
