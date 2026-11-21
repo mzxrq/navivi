@@ -125,11 +125,19 @@ def _recap_badges(engine, stops, extent, size, reserved, route_px):
 
     from services.mapfetcher.mapgeometry import RouteGeometryProcessor as G
 
+    from services.vdoprocessing.route_inputs import same_place
+
     w, h = size
-    popups = []
+    popups, places = [], []
     for stop in stops:
         if not stop["photo"]:
             continue
+        # One badge per PLACE, as the overview recap (_recap_popup_set): a return stop, or a loop's E back at
+        # S, is a second visit to a place already badged. A stop-by is always its own place.
+        if stop["badge"] != "・":
+            if any(same_place(stop, p) for p in places):
+                continue
+            places.append(stop)
         x, y = G.project_latlon_to_pixel(stop["lat"], stop["lon"], extent, w, h)
         if not (0 <= x <= w and 0 <= y <= h):
             continue

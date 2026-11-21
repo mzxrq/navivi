@@ -118,6 +118,12 @@ def test_the_finale_lays_out_every_stops_badge_with_no_leader_lines():
     assert len(badges) == 4
     assert all(b.get("suppress_leader_line") for b in badges)
 
+    # A return to stop 1 and a loop's E back at S: same places, so no second badge for either.
+    back_to_1 = dict(stops[1], badge="1", index=4, name="P1 (back)")
+    end_at_start = dict(stops[0], badge="E", index=5, name="P0 (back)")
+    again = _recap_badges(GraphicsEngine(), stops[:3] + [back_to_1, end_at_start], extent, (1920, 1080), [], None)
+    assert sorted(b["label"] for b in again) == ["P0", "P1", "P2"]
+
 
 def tmp_path_photo():
     return "photo.jpg"  # only its presence matters to the layout
