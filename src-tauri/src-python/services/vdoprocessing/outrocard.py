@@ -21,6 +21,7 @@ import itertools
 import math
 import random
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
@@ -1239,18 +1240,32 @@ def _pipe_frames(frames, output_path: Path, fps: int, size: Tuple[int, int]) -> 
         "-c:v", "libx264", *tuning.ffmpeg_thread_args(), "-crf", "18", "-preset", "fast",
         "-pix_fmt", "yuv420p", str(output_path),
     ]
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+    # ffmpeg's messages go to a file (as in color_match): an unread pipe can fill and hang the writes, and when
+    # ffmpeg quits early the BrokenPipeError below still gets its reason.
+    err = tempfile.TemporaryFile()
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=err)
+
+    def ffmpeg_said() -> str:
+        err.seek(0)
+        return err.read().decode("utf-8", errors="replace").strip()
+
     try:
         for frame in frames:
             proc.stdin.write(np.asarray(frame).astype(np.uint8).tobytes())
         proc.stdin.close()
-        stderr = proc.stderr.read().decode("utf-8", errors="replace")
         if proc.wait() != 0:
-            logger.error("Outro generation failed: %s", stderr.strip())
+            logger.error("Outro generation failed: %s", ffmpeg_said())
             return False
+    except BrokenPipeError:
+        proc.kill()
+        proc.wait()
+        logger.error("Outro generation failed: ffmpeg stopped early: %s", ffmpeg_said())
+        return False
     except Exception:
         proc.kill()
         raise
+    finally:
+        err.close()
     return True
 
 

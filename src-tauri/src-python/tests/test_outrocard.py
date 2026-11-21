@@ -493,3 +493,25 @@ def test_closed_places_get_their_own_section_after_the_stop_bys(tmp_path):
     t = outrocard.tuning
     title_h = 12 + t.OUTRO_STOPBY_TITLE_FONT_SIZE + 12
     assert with_closed.height - plain.height == title_h + t.OUTRO_ROUTE_ROW_HEIGHT + t.OUTRO_ROUTE_ROW_GAP
+
+
+def test_pipe_frames_reports_ffmpeg_quitting_early_as_a_failure(tmp_path):
+    """ffmpeg that cannot write its output quits while frames are still coming: a failed outro, not a BrokenPipeError."""
+    import numpy as np
+
+    from services.vdoprocessing.outrocard import _pipe_frames
+
+    frames = (np.zeros((720, 1280, 3), np.uint8) for _ in range(300))
+    out = tmp_path / "missing_dir" / "outro.mp4"
+    assert _pipe_frames(frames, out, 30, (1280, 720)) is False
+    assert not out.exists()
+
+
+def test_pipe_frames_writes_a_clip(tmp_path):
+    import numpy as np
+
+    from services.vdoprocessing.outrocard import _pipe_frames
+
+    out = tmp_path / "outro.mp4"
+    assert _pipe_frames((np.zeros((90, 160, 3), np.uint8) for _ in range(10)), out, 30, (160, 90)) is True
+    assert out.stat().st_size > 0
