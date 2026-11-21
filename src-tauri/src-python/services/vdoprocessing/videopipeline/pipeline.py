@@ -507,7 +507,8 @@ def render_from_timeline(
         export_dir.mkdir(parents=True, exist_ok=True)
         output_video_path = str(export_dir / f"{project_dir.name}.mp4")
 
-    print(f"NLE Engine: Re-rendering video from {timeline_path.name}...")
+    # Progress text goes to stderr: stdout carries only main.py's JSON result.
+    print(f"NLE Engine: Re-rendering video from {timeline_path.name}...", file=sys.stderr)
     logger.info("NLE Engine: Re-rendering video from %s...", timeline_path.name)
 
     last = [-1]
@@ -523,6 +524,6 @@ def render_from_timeline(
         on_progress=progress,
     )
 
-    print(f"Fast re-render complete  {final_path}")
+    print(f"Fast re-render complete  {final_path}", file=sys.stderr)
     logger.info("NLE Engine: Fast re-render complete  %s", final_path)
     return final_path
