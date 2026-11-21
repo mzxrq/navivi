@@ -135,3 +135,19 @@ def test_kept_sentences_are_reused_and_only_edited_or_picked_ones_spoken_again(t
     client.redo_texts, client.pieces_voice = frozenset(), {"voice": "b"}
     asyncio.run(client.generate_speech("".join(edited), "n.wav"))
     assert len(sent) == 3  # another voice: all of it
+
+
+def test_picked_sentences_are_counted_the_way_the_editor_lists_them(tmp_path):
+    """VoicePiecesDialog.tsx numbers only sentences that have a take (as voice_pieces.listing does): picking the
+    2nd one redoes that sentence, even when the manifest also holds one with no take."""
+    import json
+
+    from services.tts import voice_pieces
+
+    (tmp_path / "a.wav").write_bytes(b"x")
+    (tmp_path / "c.wav").write_bytes(b"y")
+    (tmp_path / voice_pieces.MANIFEST).write_text(json.dumps({"voice": None, "pieces": [
+        {"text": "一つ目。", "takes": ["a.wav"]}, {"text": "空。", "takes": []}, {"text": "三つ目。", "takes": ["c.wav"]},
+    ]}), encoding="utf-8")
+    assert [p["text"] for p in voice_pieces.listing(tmp_path)][1] == "三つ目。"
+    assert voice_pieces.texts(tmp_path, [1]) == {"三つ目。"}

@@ -86,6 +86,6 @@ def listing(folder: Path) -> List[Dict[str, Any]]:
 
 
 def texts(folder: Path, indexes: List[int]) -> set:
-    """The sentences at `indexes` of the kept list (what the editor showed)."""
-    pieces = _manifest(folder).get("pieces") or []
+    """The sentences at `indexes` of the kept list (what the editor showed: like `listing`, only those with a take)."""
+    pieces = [p for p in _manifest(folder).get("pieces") or [] if p.get("takes")]
     return {pieces[i]["text"] for i in indexes if 0 <= i < len(pieces)}

@@ -372,7 +372,7 @@ class IrodoriTTSClient(_LocalServerClient):
         takes: List[bytes] = []
         pieces = []
         for chunk in chunks or [text]:
-            chunk_takes = None if chunk in self.redo_texts else kept.get(chunk)
+            chunk_takes = None if chunk in self.redo_texts else kept.get(chunk) or None  # a sentence kept with no take is spoken
             if chunk_takes is None:
                 chunk_takes = await self._speak_redoing(chunk)
             pieces.append((chunk, chunk_takes))
