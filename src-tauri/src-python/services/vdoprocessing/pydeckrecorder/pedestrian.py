@@ -2120,16 +2120,10 @@ async def _record_leg(
                 # layers first lets the actual pin read clearly in the held
                 # frame instead of looking like an oversized blurry circle.
                 if not crashed and last_png_bytes is not None:
-                    # The HUD card's own remaining-distance/time reads "0 m
-                    # / 0 分" the instant the walker arrives (see
-                    # _remaining_minutes) -- correct while still walking,
-                    # but meaningless as a held arrival frame. Swapped here
-                    # for the LEG'S OWN total distance/time instead, so the
-                    # freeze below reads as "here's the walk you just did"
-                    # rather than a nonsense zero.
-                    total_m = (total_leg_km or 0.0) * 1000.0
-                    total_min = _remaining_minutes(total_m, total_leg_km or 0.0, travel_speed_kmh)
-                    total_dist_text = f"{total_m:.0f} m" if total_m < 1000 else f"{total_m / 1000.0:.1f} km"
+                    # The countdown ends on 0 and holds there. It used to swap in the leg's own total here ("the
+                    # walk you just did"), but under the same label as the countdown it read as the counter
+                    # jumping back to the start (2026-11-21).
+                    total_m, total_min, total_dist_text = 0.0, 0, "0 m"
                     await page.evaluate(
                         """([distText, minText]) => {
                             if (window.deckgl) {

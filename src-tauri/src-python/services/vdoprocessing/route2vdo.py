@@ -601,8 +601,10 @@ class RouteAnimator:
         import cv2
 
         def render(distance_km: float, duration_seconds: float, arrived: bool = False, share: float = 1.0) -> bytes:
+            if arrived:
+                share = 0.0  # the countdown ends on 0 (see pedestrian's arrival hold)
             distance_km, duration_seconds = share * leg[0], share * leg[1]
-            left_km, left_s = (0.0, 0.0) if arrived else (distance_km, duration_seconds)
+            left_km, left_s = distance_km, duration_seconds
             card = self.graphics.render_summary_card(
                 distance_km=distance_km,
                 duration_seconds=duration_seconds,
