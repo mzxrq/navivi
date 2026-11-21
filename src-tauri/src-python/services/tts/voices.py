@@ -104,10 +104,11 @@ def voice_file(voice_id: str) -> Optional[Path]:
     root = voices_dir()
     if not voice_id or not root.is_dir():
         return None
-    for path in sorted(root.iterdir()):
-        if path.is_file() and path.stem == voice_id and path.suffix.lower() in VOICE_EXTENSIONS:
-            return path
-    return None
+    files = [p for p in sorted(root.iterdir()) if p.is_file() and p.suffix.lower() in VOICE_EXTENSIONS]
+    # Exact first, then ignoring case: Windows file names do, so "A.wav" would overwrite an existing "a.wav".
+    return next((p for p in files if p.stem == voice_id), None) or next(
+        (p for p in files if p.stem.casefold() == voice_id.casefold()), None
+    )
 
 
 def voice_exists(voice_id: str) -> bool:

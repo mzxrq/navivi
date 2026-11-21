@@ -283,3 +283,13 @@ class TestBundledVoices:
     def test_without_a_bundle_nothing_happens(self, lib):
         assert voices.sync_stock_voices() == []
         assert [v["id"] for v in voices.list_voices()] == ["none"]
+
+
+def test_a_voice_id_differing_only_in_case_is_the_same_voice(lib, tmp_path):
+    """Windows file names ignore case: adding "Alice" must not silently overwrite "alice.wav"."""
+    voices.add_voice(str(_wav(tmp_path / "one.wav")), "alice")
+    with pytest.raises(FileExistsError):
+        voices.add_voice(str(_wav(tmp_path / "two.wav", level=99)), "Alice")
+    assert voices.voice_file("Alice") == lib / "alice.wav"
+    voices.add_voice(str(_wav(tmp_path / "two.wav", level=99)), "Alice", replace=True)
+    assert [p.name for p in lib.iterdir()] == ["Alice.wav"]
