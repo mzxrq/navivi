@@ -336,7 +336,9 @@ COURSE_CARD_POP_SECONDS = 0.45
 # COURSE_PASS_CARD_SECONDS, or until the next stop's card pops (never under _MIN_SECONDS), then shrinks
 # into the stop's pill badge over COURSE_PASS_CARD_SHRINK_SECONDS.
 COURSE_PASS_CARD_SECONDS = 2.5
-COURSE_PASS_CARD_MIN_SECONDS = 0.9
+COURSE_PASS_CARD_MIN_SECONDS = 1.8  # 0.9 flashed past where the trace passes stops a fraction of a second apart
+# Cards up together share one size: 1/sqrt(most up at once) of the full one, never under this share of it.
+COURSE_PASS_CARD_CROWD_MIN_SCALE = 0.5
 COURSE_PASS_CARD_SHRINK_SECONDS = 0.45
 COURSE_PASS_CARD_SCALE = 1.8
 COURSE_STATS_SLIDE_SECONDS = 0.6
@@ -352,6 +354,14 @@ COURSE_BOTTOM_BAND_FRACTION = 0.17
 # video opens on the route's framing and eases out to the whole map over COURSE_OPEN_ZOOM_SECONDS.
 COURSE_OPEN_ZOOM = 1.12
 COURSE_OPEN_ZOOM_SECONDS = 1.2
+# While the trace runs through a tight group of stops (at least _MIN_STOPS whose stretch of route, with their
+# photo cards, is _MIN times smaller than the whole route), the map eases in on it (at most _MAX: it is one
+# image, softer past ~1.5x) and back out once the trace leaves, each ease taking _EASE_SECONDS.
+COURSE_DENSE_ZOOM_MIN = 1.8
+COURSE_DENSE_ZOOM_MAX = 1.5
+COURSE_DENSE_ZOOM_MAX_GL = 2.0  # on the GL map the zoom is real (sharp), so it may go closer
+COURSE_DENSE_MIN_STOPS = 3
+COURSE_DENSE_EASE_SECONDS = 0.8
 # The "walk" overview keeps the same bottom band clear for its captions (no headline above).
 OVERVIEW_BOTTOM_BAND_FRACTION = 0.17
 # Walk / Route map overviews: the route also keeps clear of this top share (the "next stop" banner).

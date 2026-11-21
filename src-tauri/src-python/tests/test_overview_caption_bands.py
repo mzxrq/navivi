@@ -41,11 +41,12 @@ def test_the_course_map_is_widened_about_its_middle():
 
 
 def test_the_course_opening_zoom_ends_on_the_whole_map():
-    import numpy as np
+    import pytest
 
     from services import tuning
-    from services.vdoprocessing.spatial_renderer.course import _open_zoom
+    from services.vdoprocessing.spatial_renderer.course import zoom_view
 
-    frame = np.random.default_rng(0).integers(0, 255, (108, 192, 3), dtype=np.uint8)
-    assert np.array_equal(_open_zoom(frame, tuning.COURSE_OPEN_ZOOM_SECONDS), frame)
-    assert not np.array_equal(_open_zoom(frame, 0.0), frame)
+    s, x0, y0 = zoom_view(0.0, [], 1920, 1080)  # opens on the route's own framing: the middle of the wider map
+    assert s == pytest.approx(tuning.COURSE_OPEN_ZOOM)
+    assert (x0 + 1920 / (2 * s), y0 + 1080 / (2 * s)) == pytest.approx((960, 540))
+    assert zoom_view(tuning.COURSE_OPEN_ZOOM_SECONDS, [], 1920, 1080) is None  # and ends on the whole map
