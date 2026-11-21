@@ -1117,6 +1117,7 @@ class _CourseOverviewMixin:
         frame = route_bg
         heading = _Heading(self._initial_heading(trace.path))
         ripples = self._course_ripples(scene, timing)
+        gl_last = (None, None)  # (path, image) of the GL map view last read
 
         for i in range(total_frames):
             t = i / fps
@@ -1126,7 +1127,9 @@ class _CourseOverviewMixin:
                 keep, layer = self._course_overlay(scene, state, route_bg)
             view = zoom_view(t, getattr(self, "_course_zooms", ()), *route_bg.shape[1::-1])
             gl_path = getattr(self, "_course_gl", {}).get(_view_key(view)) if view else None
-            zoomed = (view, cv2.imread(gl_path), scene, state, panels.reserved) if gl_path else None
+            if gl_path and gl_path != gl_last[0]:  # frames holding one view share its image
+                gl_last = (gl_path, cv2.imread(gl_path))
+            zoomed = (view, gl_last[1], scene, state, panels.reserved) if gl_path else None
             frame = self._course_frame(
                 i, t, route_bg, keep, layer, trace, timing, panels, heading, total_smooth_dist, view, zoomed)
             for at, x, y, color in ripples:
