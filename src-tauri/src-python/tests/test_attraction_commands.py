@@ -43,3 +43,22 @@ class TestResolveAttractionAudio:
         config_path = tmp_path / "job_config.json"
         info = _resolve_attraction_audio(config_path, 0, "石標")
         assert info == {"audio_path": None, "duration_seconds": 0.0}
+
+
+class TestCheckedWaypoint:
+    """`attraction <i>` (the timeline's "Make again") takes the stops the pipeline makes a clip for:
+    a stop with only its own footage has one too."""
+
+    def test_footage_only_stop_is_accepted(self):
+        from services.cli.attraction_commands import _checked_waypoint
+
+        wp = {"label": "滝", "videos": ["C:/p/assets/video/user/fall.mp4"]}
+        assert _checked_waypoint([wp], 0) is wp
+
+    def test_stop_with_nothing_to_show_is_refused(self):
+        import pytest
+
+        from services.cli.attraction_commands import _checked_waypoint
+
+        with pytest.raises(ValueError, match="no photo or video"):
+            _checked_waypoint([{"label": "滝"}], 0)

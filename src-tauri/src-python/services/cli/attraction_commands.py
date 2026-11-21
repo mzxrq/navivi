@@ -16,6 +16,7 @@ from services.vdoprocessing.videopipeline.audio_step import no_attraction, passe
 from services.vdoprocessing.videopipeline.helpers import (
     attraction_audio_filename,
     attraction_output_filename,
+    has_attraction_media,
     output_is_valid,
     project_attraction_video_dir,
     project_audio_dir,
@@ -126,8 +127,8 @@ def _checked_waypoint(waypoints: list, waypoint_index: int) -> dict:
     waypoint = waypoints[waypoint_index]
     if not isinstance(waypoint, dict):
         raise ValueError(f"Waypoint {waypoint_index} must be an object")
-    if not waypoint.get("popup_image"):
-        raise ValueError(f"Waypoint {waypoint_index} has no popup_image")
+    if not has_attraction_media(waypoint):
+        raise ValueError(f"Waypoint {waypoint_index} has no photo or video")
     if no_attraction(waypoint):
         raise ValueError(f"Waypoint {waypoint_index}: {passed_only_reason(waypoint)} (no attraction clip)")
     return waypoint
@@ -165,11 +166,14 @@ def test_attraction_videos(
     """Generate attraction videos for every waypoint with a popup image."""
     from services.vdoprocessing.comfyui_i2v_client import ComfyUII2VClient
 
+    from services.vdoprocessing.videopipeline.render_look import _is_return_stop
+
     config_path, waypoints = _load_waypoints(job_config_path)
+    # The stops the pipeline makes a clip for (attraction_step._skips_attraction): own footage counts, a return stop doesn't.
     candidates = [
         (index, waypoint)
         for index, waypoint in enumerate(waypoints)
-        if isinstance(waypoint, dict) and waypoint.get("popup_image") and not no_attraction(waypoint)
+        if has_attraction_media(waypoint) and not no_attraction(waypoint) and not _is_return_stop(waypoints, index)
     ]
     for index, waypoint in enumerate(waypoints):
         if no_attraction(waypoint):
