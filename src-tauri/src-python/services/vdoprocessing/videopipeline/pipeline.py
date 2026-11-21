@@ -16,7 +16,7 @@ from services.logger.progress import tracker
 from services.render_estimate import StageRecorder
 from services.localization.overview_script import overview_style
 from services.vdoprocessing.stopby_visits import set_visit_all_stopbys
-from services.vdoprocessing.vdoexporter import VideoExporter, sweep_stale_temp_files
+from services.vdoprocessing.vdoexporter import VideoExporter, _volume, sweep_stale_temp_files
 
 from .attraction_step import render_attraction_videos
 from .audio_step import apply_cued_scripts, generate_audio, require_some_voice, set_route_only_legs, stop_tts_server
@@ -449,7 +449,7 @@ def move_timed_narration(timeline_data: dict) -> int:
             timeline_data.setdefault("unlinked_audio", []).append({
                 "path": track["audio_path"],
                 "start": float(track["audio_start"]),
-                "volume": float(track.get("volume", 1.0)),
+                "volume": _volume(track.get("volume"), 1.0),
             })
         track["audio_path"] = None
         track["audio_offset"] = 0.0

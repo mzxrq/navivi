@@ -85,3 +85,15 @@ def test_joined_video_keeps_audio_and_video_in_step_across_frame_rates(tmp_path)
     lengths = _stream_lengths(out)
     assert abs(lengths["video"] - lengths["audio"]) < 0.3
     assert lengths["video"] > 11.0  # 3 + (4 + 0.5 + 3 dissolve) + 2
+
+
+def test_a_null_volume_exports_at_the_default(tmp_path):
+    """A timeline with "volume": null (a hand edit, or NaN saved by JSON.stringify) exports instead of failing."""
+    from services.vdoprocessing.vdoexporter import _volume
+
+    assert _volume(None, 1.0) == 1.0 and _volume(float("nan"), 0.25) == 0.25 and _volume("x", 0.5) == 0.5
+    assert _volume(0, 1.0) == 0.0 and _volume("0.3", 1.0) == 0.3
+    track = _clip(tmp_path, "a", 2.0, 30, audio_seconds=1.0)
+    out = tmp_path / "joined.mp4"
+    VideoExporter.concat_from_timeline({"video_tracks": [{**track, "volume": None}], "fps": 30}, str(out))
+    assert out.exists()

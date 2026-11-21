@@ -384,6 +384,15 @@ def sweep_stale_temp_files(directory, recursive: bool = False, min_age_seconds: 
     return removed
 
 
+def _volume(value, default: float) -> float:
+    """A timeline volume; null (a hand edit, or NaN saved by JSON.stringify) or nonsense means the default. 0 = silent."""
+    try:
+        volume = float(value)
+    except (TypeError, ValueError):
+        return default
+    return volume if volume == volume else default
+
+
 def _replace_with_retry(src: str, dst: str) -> None:
     for attempt in range(_REPLACE_RETRY_ATTEMPTS):
         try:
@@ -1067,9 +1076,9 @@ class VideoExporter:
                 target_fps=target_fps,
                 trim_in=float(track.get("trim_in") or 0.0),
                 trim_out=float(track["trim_out"]) if track.get("trim_out") else None,
-                volume=float(track.get("volume", 1.0)), muted=bool(track.get("muted")),
+                volume=_volume(track.get("volume"), 1.0), muted=bool(track.get("muted")),
                 extra_audio=track.get("extra_audio_path"),
-                extra_volume=float(track.get("extra_audio_volume") if track.get("extra_audio_volume") is not None else 0.5),
+                extra_volume=_volume(track.get("extra_audio_volume"), 0.5),
                 duration=float(track["duration"]) if track.get("duration") else None,
                 content_shift=float(track.get("content_shift") or 0.0),
                 end_hold=tuning.ENDING_HOLD_SECONDS
@@ -1233,7 +1242,7 @@ class VideoExporter:
         """Narration the editor unlinked from its clip, each mixed in at its own timeline time."""
         items = [
             x for x in timeline_data.get("unlinked_audio") or []
-            if x.get("path") and Path(x["path"]).exists() and float(x.get("volume", 1.0)) > 0.001
+            if x.get("path") and Path(x["path"]).exists() and _volume(x.get("volume"), 1.0) > 0.001
         ]
         if not items:
             return
@@ -1267,7 +1276,7 @@ class VideoExporter:
         music_path = music.get("path")
         if music_path and Path(music_path).exists():
             mixed = tmp_dir / "with_music.mp4"
-            volume = max(0.0, float(music.get("volume", 0.25)))
+            volume = max(0.0, _volume(music.get("volume"), 0.25))
             result = subprocess.run(
                 [
                     ffmpeg_cmd, "-y", *tuning.ffmpeg_log_args(), "-i", str(output_path),
