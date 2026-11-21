@@ -1,4 +1,5 @@
-import { documentDir, join } from "@tauri-apps/api/path";
+import { docsDir } from "../utils/docsDir";
+import { join } from "@tauri-apps/api/path";
 import { fileSystem } from "../config/constants";
 import { callSidecar } from "./sidecar";
 
@@ -21,7 +22,7 @@ export async function preparePhotos(paths: string[]): Promise<PreparedPhotos> {
   const heic = paths.filter(isHeic);
   if (heic.length === 0) return { paths, converted: 0, failed: [] };
 
-  const outDir = await join(await documentDir(), fileSystem.rootFolder, "Imports", String(Date.now()));
+  const outDir = await join(await docsDir(), fileSystem.rootFolder, "Imports", String(Date.now()));
   const reply = await callSidecar<{ images: Record<string, string>; failed: Record<string, string> }>("convert_images", {
     paths: heic,
     out_dir: outDir,

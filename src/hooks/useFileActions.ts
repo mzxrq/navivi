@@ -1,10 +1,11 @@
+import { docsDir } from "../utils/docsDir";
 import { LatLon, legAlongTrack, legElevations, stopsAlongTrack, tidyPlaceName, TrackStop } from "../utils/gpxTrack";
 import { announceVcRuntimeMissing, isVcRuntimeMissing } from "../services/setup";
 import { invoke } from "@tauri-apps/api/core";
 import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
 import { open } from "@tauri-apps/plugin-dialog";
-import { documentDir, join } from "@tauri-apps/api/path";
+import { join } from "@tauri-apps/api/path";
 import { readTextFile, readFile, readDir, mkdir, writeFile } from "@tauri-apps/plugin-fs";
 import { fileSystem } from "../config/constants";
 import { PHOTO_EXTENSIONS, isHeic, isPhoto, preparePhotos } from "../services/imageImport";
@@ -143,7 +144,7 @@ export function useFileActions() {
     if (skipped > 0) showToast(skipped === 1 ? t`1 file was skipped: only photos, GPX files and documents can be dropped here.` : t`${skipped} files were skipped: only photos, GPX files and documents can be dropped here.`, "warning");
     if (usable.length === 0) return;
     try {
-      const dir = await join(await documentDir(), fileSystem.rootFolder, "Imports", String(Date.now()));
+      const dir = await join(await docsDir(), fileSystem.rootFolder, "Imports", String(Date.now()));
       await mkdir(dir, { recursive: true });
       const paths: string[] = [];
       for (const file of usable) {

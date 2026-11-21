@@ -1,4 +1,5 @@
-import { documentDir, join, basename, dirname } from "@tauri-apps/api/path";
+import { docsDir } from "../utils/docsDir";
+import { join, basename, dirname } from "@tauri-apps/api/path";
 import { writeTextFile, writeFile, mkdir, exists, rename, readTextFile, readDir, BaseDirectory, open as fsOpen } from "@tauri-apps/plugin-fs";
 import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
@@ -131,7 +132,7 @@ export const saveProjectData = async (
   safeFolderName?: string,
   thumbnailDataUrl?: string | null,
 ) => {
-  const docsPath = await documentDir();
+  const docsPath = await docsDir();
 
   let projName = overrideName || metadata.project_name || appConfig.defaultProjectName;
 
@@ -414,7 +415,7 @@ export const saveProjectData = async (
 // map tiles to the shared cache). Run after the project is in the database, since it removes `.history/`.
 export async function tidyProjectFolder(projectDir: string): Promise<void> {
   try {
-    const sharedTileCache = await join(await documentDir(), fileSystem.rootFolder, fileSystem.cacheFolder, "tiles");
+    const sharedTileCache = await join(await docsDir(), fileSystem.rootFolder, fileSystem.cacheFolder, "tiles");
     const report = await invoke<{ moved: string[]; removed: string[]; kept: string[] }>("tidy_project_folder", {
       projectDir,
       sharedTileCache,
@@ -447,7 +448,7 @@ async function freeWorkspaceDir(docsPath: string, projectName: string): Promise<
 
 // A copy of a project folder under a new name, with its own project id so it is a separate project in the database.
 export async function duplicateProjectFolder(sourceDir: string, name: string): Promise<string> {
-  const destDir = await freeWorkspaceDir(await documentDir(), name);
+  const destDir = await freeWorkspaceDir(await docsDir(), name);
   const config = JSON.parse(await readProjectFile(sourceDir, (await readDir(sourceDir)).map((e) => e.name ?? "")));
   await invoke("duplicate_project_folder", { sourceDir, destDir });
   let id = await basename(destDir);
@@ -480,7 +481,7 @@ export const loadProjectData = async (forcePath?: string, isFolder = false) => {
     }
   }
 
-  const docsPath = await documentDir();
+  const docsPath = await docsDir();
   let projectDir = "";
   let fileContent = "";
   let isDirectory = false;
@@ -582,7 +583,7 @@ export const loadProjectData = async (forcePath?: string, isFolder = false) => {
 
 export const scanProjectsOnDisk = async (): Promise<RecentProjects[]> => {
   try {
-    const docsPath = await documentDir();
+    const docsPath = await docsDir();
     const projectsRoot = await join(docsPath, fileSystem.rootFolder, fileSystem.projectsFolder);
     if (!(await exists(projectsRoot))) return [];
 
@@ -709,7 +710,7 @@ export async function toAbsoluteProjectPath(filePath: string | undefined, projec
   const isUnixAbs = normFile.startsWith("/");
 
   if (!isWindowsAbs && !isUnixAbs) {
-    return await join(projectDir, filePath.replace(/\//g, "\\"));
+    return await join(projectDir, normFile);
   }
 
   try {
@@ -721,7 +722,7 @@ export async function toAbsoluteProjectPath(filePath: string | undefined, projec
   const assetsIdx = normFile.indexOf("/assets/");
   if (assetsIdx !== -1) {
     const relAsset = normFile.slice(assetsIdx + 1);
-    return await join(projectDir, relAsset.replace(/\//g, "\\"));
+    return await join(projectDir, relAsset);
   }
 
   return filePath;

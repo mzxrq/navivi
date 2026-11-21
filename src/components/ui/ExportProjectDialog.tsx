@@ -1,6 +1,7 @@
+import { docsDir } from "../../utils/docsDir";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { documentDir, join } from "@tauri-apps/api/path";
+import { join } from "@tauri-apps/api/path";
 import { save } from "@tauri-apps/plugin-dialog";
 import { mkdir, exists } from "@tauri-apps/plugin-fs";
 import { t } from "@lingui/core/macro";
@@ -46,7 +47,7 @@ export function ExportProjectDialog() {
 
   const run = async () => {
     try {
-      const folder = await join(await documentDir(), fileSystem.rootFolder, fileSystem.projectsFolder);
+      const folder = await join(await docsDir(), fileSystem.rootFolder, fileSystem.projectsFolder);
       if (!(await exists(folder))) await mkdir(folder, { recursive: true });
       const dest = await save({
         defaultPath: await join(folder, `${name}.${fileSystem.extensions.project}`),

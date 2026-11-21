@@ -1,6 +1,7 @@
+import { docsDir } from "../../utils/docsDir";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { documentDir, join } from "@tauri-apps/api/path";
+import { join } from "@tauri-apps/api/path";
 import { exists, mkdir, readDir, readTextFile } from "@tauri-apps/plugin-fs";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
@@ -19,7 +20,7 @@ export interface LibraryTrack {
 const AUDIO = /\.(mp3|wav|m4a|aac|ogg|flac)$/i;
 
 export async function musicFolder(): Promise<string> {
-  return join(await documentDir(), "Navivi", "Music");
+  return join(await docsDir(), "Navivi", "Music");
 }
 
 // Every audio file in the folder; library.json (optional) adds a title, tags and the credit for a file.
