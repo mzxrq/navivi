@@ -976,8 +976,9 @@ class _VoiceRun:
 
         try:
             return await make()
-        except ValueError:
-            # Safety net for missing script
+        except ValueError as exc:
+            # Safety net for missing script; also a garbled reply (JSONDecodeError) - logged, or the leg goes silent unexplained.
+            logger.warning("TTS for %s gave no audio (%s). Skipping audio.", label, exc)
             return None
         except Exception as exc:
             logger.warning("TTS crashed for %s (%s). Restarting server and retrying once...", label, exc)
