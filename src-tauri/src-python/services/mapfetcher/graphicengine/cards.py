@@ -755,18 +755,22 @@ class _CardMixin:
     def _columns_spec(
         self, distance_km: float, duration_seconds: float, mode_breakdown: Optional[Dict[str, float]],
         mode_duration: Optional[Dict[str, float]], total_dist: float, total_dur: float, banner_theme: bool,
+        remaining: bool = False,
     ) -> list:
         """(label, mode, distance, duration, color) per column of the columns card: one per mode plus a Total
-        when there is more than one, a lone mode with its own total, or just the distance without a breakdown."""
+        when there is more than one, a lone mode with its own total, or just the distance without a breakdown.
+        `remaining`: the Total column is what is LEFT of the trip (a leg's card), labelled remaining_label."""
         mode_duration = mode_duration or {}
         multi_mode = bool(mode_breakdown) and len(mode_breakdown) > 1
+        total_label = self.summary_card_labels.get(
+            "remaining_label" if remaining else "total_label") or self.summary_card_labels["total_label"]
         if multi_mode:
             columns = [
                 (self._mode_name_ja(mode), mode, dist, mode_duration.get(mode, 0.0), self._mode_accent(mode))
                 for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1])
             ]
             columns.append((
-                self.summary_card_labels["total_label"], "total", total_dist, total_dur,
+                total_label, "total", total_dist, total_dur,
                 self.ui["card_text"],
             ))
         elif mode_breakdown and len(mode_breakdown) == 1:
@@ -778,7 +782,7 @@ class _CardMixin:
                     self._mode_accent(single_mode),
                 ),
                 (
-                    self.summary_card_labels["total_label"], "total", total_dist, total_dur,
+                    total_label, "total", total_dist, total_dur,
                     self.ui["card_text"],
                 ),
             ]
@@ -874,7 +878,8 @@ class _CardMixin:
         total_dur = duration_seconds if total_seconds is None else total_seconds
         font_label, font_value, font_time = self._columns_fonts(scale)
         columns = self._columns_spec(
-            distance_km, duration_seconds, mode_breakdown, mode_duration, total_dist, total_dur, banner_theme
+            distance_km, duration_seconds, mode_breakdown, mode_duration, total_dist, total_dur, banner_theme,
+            remaining=total_km is not None,  # a leg's card: its "total" is the trip still ahead
         )
 
         label_ascent, _ = font_label.getmetrics()

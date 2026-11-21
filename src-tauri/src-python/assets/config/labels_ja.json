@@ -21,6 +21,7 @@
   "separator": " ・ ",
   "mode_join": "・",
   "total_label": "合計",
+  "remaining_label": "残り",
   "course_tagline": {
     "far": "{start}から、{to}へ",
     "ferry": "海をわたり、{to}へ",

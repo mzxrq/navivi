@@ -18,3 +18,12 @@ def test_the_leg_card_ends_its_countdown_on_zero_when_arrived():
     walking, arrived = drawn
     assert (walking["distance_km"], walking["total_km"]) == (0.9, 0.9 + 22.5)
     assert (arrived["distance_km"], arrived["duration_seconds"], arrived["total_km"]) == (0.0, 0.0, 22.5)
+
+
+def test_the_leg_cards_second_column_says_what_is_left_not_the_total():
+    from services.mapfetcher.graphicengine import GraphicsEngine
+
+    g = GraphicsEngine()
+    left = g._columns_spec(0.9, 600.0, {"walking": 0.9}, {"walking": 600.0}, 22.0, 9000.0, False, remaining=True)
+    whole = g._columns_spec(0.9, 600.0, {"walking": 0.9}, {"walking": 600.0}, 22.0, 9000.0, False)
+    assert left[-1][0] == g.summary_card_labels["remaining_label"] != whole[-1][0] == g.summary_card_labels["total_label"]

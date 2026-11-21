@@ -23,6 +23,8 @@ _HUD_CSS_TEMPLATE = string.Template("""
     padding: 14px 34px; border-radius: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
     white-space: nowrap; z-index: 1000;
 }
+/* Until its first text is set (the opening photo plays first) the banner was an empty red bar. */
+#hud-banner:has(#hud-banner-text:empty) { display: none; }
 #hud-banner .icon { font-size: 28px; line-height: 1; }
 #hud-banner .icon svg { display: inline-block; width: 0.8em; height: 0.8em; vertical-align: -0.1em; }
 #hud-chain {
