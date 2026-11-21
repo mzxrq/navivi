@@ -234,6 +234,8 @@ class _LocalServerClient:
         while time.monotonic() < deadline:
             if await self._is_server_up():
                 logger.info("Irodori TTS server is up at %s.", self.base_url)
+                # The idle clock restarts now: a first-run model download/load can take most of the idle timeout.
+                self._touch_activity()
                 return
             process = type(self)._server_process
             if process is not None and process.poll() is not None:

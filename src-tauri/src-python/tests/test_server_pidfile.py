@@ -94,3 +94,24 @@ def test_comfyui_stops_waiting_when_the_other_servers_pid_is_gone(tmp_path, monk
     monkeypatch.setattr(cls, "_pid_command_line", staticmethod(lambda pid: None))
     with pytest.raises(RuntimeError, match="stopped before it was ready"):
         cls()._ensure_server_running()
+
+
+@pytest.mark.parametrize("cls", [IrodoriTTSClient, KokoroTTSClient, Qwen3TTSClient], ids=lambda c: c.__name__)
+def test_a_server_that_comes_up_restarts_its_idle_clock(cls, tmp_path, monkeypatch):
+    """A first run can spend most of the idle timeout downloading and loading the model: the watchdog
+    (idle_watchdog.py, activity file mtime) must count from when the server is up, not from its launch."""
+    import os
+
+    activity = tmp_path / ".activity"
+    activity.write_text("")
+    os.utime(activity, (1, 1))  # launched long ago
+    monkeypatch.setattr(cls, "_ACTIVITY_FILE", activity)
+
+    async def up(self):
+        return True
+
+    monkeypatch.setattr(cls, "_is_server_up", up)
+    client = cls.__new__(cls)
+    client.base_url = "http://127.0.0.1:1/v1/audio/speech"
+    asyncio.run(client._wait_until_healthy())
+    assert activity.stat().st_mtime > 1

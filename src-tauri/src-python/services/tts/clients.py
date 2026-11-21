@@ -180,6 +180,7 @@ class IrodoriTTSClient(_LocalServerClient):
     # --- one request ------------------------------------------------------
 
     async def _post_speech(self, payload: Dict[str, Any]) -> bytes:
+        self._touch_activity()  # a long request in flight is activity too (idle_watchdog.py)
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 self.base_url, json=payload, timeout=httpx.Timeout(tuning.TTS_REQUEST_TIMEOUT_SECONDS, connect=10.0),
