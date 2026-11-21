@@ -4,7 +4,7 @@ main.py
 CLI entry point for the GPS-to-navigation-video pipeline.
 
 Every isolated pipeline command (GPS parsing, TTS, attraction videos,
-subtitles, video rendering/concat, and test_all) lives in services/cli/ —
+subtitles, video rendering/concat) lives in services/cli/ —
 this file is just the argv dispatch on top of them, plus the two
 whole-pipeline commands (full_pipeline, render_timeline) that live in
 services/vdoprocessing/videopipeline/.
@@ -37,8 +37,6 @@ try:
         test_outro_video,
         test_video_concat,
         test_mux_audio,
-        test_transition_editor,
-        test_all,
         test_overview_map,
         test_overview_video,
         test_overview_script,
@@ -82,7 +80,7 @@ if __name__ == "__main__":
             "Usage: python main.py <path/to/job_config.json> "
             "[gps|map|overview|residential|tts|tts-all|overview-tts|attraction-tts|attraction-tts-all|"
             "attraction|attraction-all|attraction-finalize|intro|outro|subtitle|subtitle-all|concat|mux|"
-            "transition|all|overview-script|leg-scripts|upscale-images] [index] [--force] [--no-llm]\n"
+            "overview-script|leg-scripts|upscale-images] [index] [--force] [--no-llm]\n"
             "       (output dir is always <job_config's directory_path>/video; no mode = the overview map video)\n"
             "       (--force bypasses checkpointing and regenerates everything)\n"
             "       python main.py full_pipeline <path/to/job_config.json> [output_dir] [--force]\n"
@@ -353,9 +351,6 @@ if __name__ == "__main__":
                     job_config_arg, sys.argv[3], sys.argv[4],
                     output_dir_arg, sys.argv[5] if len(sys.argv) > 5 else None,
                 )
-            elif mode_arg == "transition":
-                # [NOTE] [Transition] Renders the overview/storyboard map animation, including configured popup transitions — thin wrapper over test_overview_video.
-                result = test_transition_editor(job_config_arg, route_dir_arg, force=force_arg)
             elif mode_arg == "overview-script":
                 # [NOTE] [LLM] Drafts a tour-guide overview narration from the route (the way between stops, each stop described, {n}/{go} cues) into overview_script_draft.txt — never over overview_narration.
                 result = test_overview_script(job_config_arg, use_llm=not no_llm_arg)
@@ -365,9 +360,6 @@ if __name__ == "__main__":
                 result = leg_scripts(job_config_arg)
             elif mode_arg == "overview":
                 result = test_overview_video(job_config_arg, route_dir_arg, force=force_arg)
-            elif mode_arg == "all":
-                # [NOTE] [Core] Runs every isolated stage above in the pipeline's order and settings (TTS, subtitles, attractions, overview+residential, intro/outro, concat) — NOT the same as full_pipeline (no timeline.json, no audio in the concat).
-                result = test_all(job_config_arg, output_dir_arg, force=force_arg)
             else:
                 # A typo must not start a long overview render over the finished clip.
                 raise ValueError(f"Unknown mode '{mode_arg}'. Run main.py with no arguments for the list.")

@@ -9,8 +9,7 @@ each pipeline step's test_* command lives next to its own concerns:
 - subtitle_commands: subtitle generation from TTS audio
 - intro_outro_commands: intro/outro clip generation
 - script_commands: drafting the overview narration from the route
-- combine_commands: video concat, audio mux, the transition editor, and test_all
-  (which runs every isolated stage above as one combined project test)
+- combine_commands: video concat and audio mux (the whole render is main.py full_pipeline)
 """
 
 from .helpers import _output_dir_from_config, _load_tts_waypoints
@@ -29,7 +28,7 @@ from .attraction_commands import (
 )
 from .subtitle_commands import test_subtitle, test_subtitles
 from .intro_outro_commands import test_intro_video, test_outro_video
-from .combine_commands import test_video_concat, test_mux_audio, test_transition_editor, test_all
+from .combine_commands import test_video_concat, test_mux_audio
 from .script_commands import test_overview_script
 
 __all__ = [
@@ -53,7 +52,5 @@ __all__ = [
     "test_outro_video",
     "test_video_concat",
     "test_mux_audio",
-    "test_transition_editor",
-    "test_all",
     "test_overview_script",
 ]
