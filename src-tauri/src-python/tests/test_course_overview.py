@@ -51,6 +51,13 @@ def test_taglines_cycle_and_fade():
     assert tagline_at([], 3.0) == ("", 0.0)
 
 
+def test_the_tagline_showing_when_the_trace_ends_stays():
+    lines, p = ["A", "B", "C"], tuning.COURSE_TAGLINE_SECONDS
+    assert tagline_at(lines, 10 * p, hold_from=p + 0.01) == ("B", 1.0)  # caught fading in
+    assert tagline_at(lines, 10 * p, hold_from=2 * p - 0.01) == ("C", 1.0)  # caught fading out
+    assert tagline_at(lines, p + 2.0, hold_from=50.0)[0] == "B"  # before the hold it still cycles
+
+
 def _brief():
     walk = {"mode": "walking", "km": 1.0, "minutes": 20}
     boat = {"mode": "ferry", "km": 7.0, "minutes": 20}

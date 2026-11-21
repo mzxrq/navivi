@@ -27,3 +27,25 @@ def test_route_sits_between_bands(route):
     assert px(route["max_lat"]) >= top - 1e-6
     assert px(route["min_lat"]) <= 1080 - bottom + 1e-6
     assert box["min_lon"] <= route["min_lon"] and box["max_lon"] >= route["max_lon"]
+
+
+def test_the_course_map_is_widened_about_its_middle():
+    """The course video opens on the middle 1/COURSE_OPEN_ZOOM of the map: the old box must be that middle."""
+    from services.vdoprocessing.videopipeline.overview_framing import _widen
+
+    box = {"min_lat": 34.2, "max_lat": 34.3, "min_lon": 135.0, "max_lon": 135.2}
+    wide = _widen(box, 1.12)
+    assert abs((wide["max_lon"] - wide["min_lon"]) / 0.2 - 1.12) < 1e-9
+    assert abs((wide["min_lon"] + wide["max_lon"]) / 2 - 135.1) < 1e-9
+    assert wide["min_lat"] < box["min_lat"] < box["max_lat"] < wide["max_lat"]
+
+
+def test_the_course_opening_zoom_ends_on_the_whole_map():
+    import numpy as np
+
+    from services import tuning
+    from services.vdoprocessing.spatial_renderer.course import _open_zoom
+
+    frame = np.random.default_rng(0).integers(0, 255, (108, 192, 3), dtype=np.uint8)
+    assert np.array_equal(_open_zoom(frame, tuning.COURSE_OPEN_ZOOM_SECONDS), frame)
+    assert not np.array_equal(_open_zoom(frame, 0.0), frame)

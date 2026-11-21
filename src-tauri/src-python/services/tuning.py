@@ -332,12 +332,26 @@ COURSE_TRACE_MAX_SECONDS = 40.0
 COURSE_TAGLINE_SECONDS = 5.0
 COURSE_TAGLINE_FADE_SECONDS = 0.5
 COURSE_CARD_POP_SECONDS = 0.45
+# As the trace passes a stop, its photo card pops up beside it (COURSE_PASS_CARD_SCALE at 1080p) for
+# COURSE_PASS_CARD_SECONDS, or until the next stop's card pops (never under _MIN_SECONDS), then shrinks
+# into the stop's pill badge over COURSE_PASS_CARD_SHRINK_SECONDS.
+COURSE_PASS_CARD_SECONDS = 2.5
+COURSE_PASS_CARD_MIN_SECONDS = 0.9
+COURSE_PASS_CARD_SHRINK_SECONDS = 0.45
+COURSE_PASS_CARD_SCALE = 1.8
 COURSE_STATS_SLIDE_SECONDS = 0.6
+# Stop-bys (then closed places) come one at a time across their sentence: at least _STAGGER apart,
+# at most _MAX_STEP, so a long sentence with few places still shows them early on.
 COURSE_STOPBY_STAGGER_SECONDS = 0.15
+COURSE_STOPBY_MAX_STEP_SECONDS = 1.6
 # Share of the frame kept clear of the route at the top (headline) and bottom (subtitles, stats card,
 # stop-by notice), on top of OVERVIEW_PADDING_BY_SPAN_KM.
 COURSE_TOP_BAND_FRACTION = 0.10
 COURSE_BOTTOM_BAND_FRACTION = 0.17
+# The course map is fetched this much wider than the route's own framing, for the badges' room; the
+# video opens on the route's framing and eases out to the whole map over COURSE_OPEN_ZOOM_SECONDS.
+COURSE_OPEN_ZOOM = 1.12
+COURSE_OPEN_ZOOM_SECONDS = 1.2
 # The "walk" overview keeps the same bottom band clear for its captions (no headline above).
 OVERVIEW_BOTTOM_BAND_FRACTION = 0.17
 # Walk / Route map overviews: the route also keeps clear of this top share (the "next stop" banner).
