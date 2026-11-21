@@ -37,6 +37,8 @@ def load_pipeline():
 
     # Japanese first: it loads the model, and the other languages reuse it.
     _pipelines["j"] = KPipeline(lang_code="j", repo_id=REPO_ID)
+    global _last_request
+    _last_request = time.monotonic()  # idle from now: a slow first load must not count as unused time
     _ready.set()
 
 

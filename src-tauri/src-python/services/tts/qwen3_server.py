@@ -70,6 +70,8 @@ def load_model():
             raise
         print("Loading on the GPU failed (%s), using the CPU" % exc, flush=True)
         _load("cpu")
+    global _last_request
+    _last_request = time.monotonic()  # idle from now: a slow first load must not count as unused time
     _ready.set()
 
 
