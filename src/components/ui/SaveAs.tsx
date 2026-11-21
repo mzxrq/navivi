@@ -1,6 +1,7 @@
+import { docsDir } from "../../utils/docsDir";
 import { useState, useEffect } from "react";
 import { exists } from "@tauri-apps/plugin-fs";
-import { documentDir, join } from "@tauri-apps/api/path";
+import { join } from "@tauri-apps/api/path";
 import { Folder, Loader2 } from "./icons";
 import { fileSystem } from "../../config/constants";
 import { t } from "@lingui/core/macro";
@@ -48,7 +49,7 @@ export function SaveAs({
         const sanitizedBase =
           baseName.toLowerCase().replace(/[^a-z0-9]+/g, "_") || "untitled";
 
-        const docsPath = await documentDir();
+        const docsPath = await docsDir();
         const projectsRootPath = await join(
           docsPath,
           fileSystem.rootFolder,

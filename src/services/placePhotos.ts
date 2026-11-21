@@ -1,6 +1,7 @@
+import { docsDir } from "../utils/docsDir";
 import { fetch } from "@tauri-apps/plugin-http";
 import { getVersion } from "@tauri-apps/api/app";
-import { documentDir, join } from "@tauri-apps/api/path";
+import { join } from "@tauri-apps/api/path";
 import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
 import { fileSystem } from "../config/constants";
 
@@ -264,7 +265,7 @@ export const fileNameFor = (title: string, contentType: string) => {
 export async function downloadPhotos(candidates: PhotoCandidate[], signal?: AbortSignal): Promise<{ path: string; credit: PhotoCredit }[]> {
   if (candidates.length === 0) return [];
   agent ??= userAgent();
-  const dir = await join(await documentDir(), fileSystem.rootFolder, "Imports", `photos-${Date.now()}`);
+  const dir = await join(await docsDir(), fileSystem.rootFolder, "Imports", `photos-${Date.now()}`);
   await mkdir(dir, { recursive: true });
   const out: { path: string; credit: PhotoCredit }[] = [];
   for (const c of candidates) {
