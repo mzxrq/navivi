@@ -158,7 +158,7 @@ def _recap_badges(engine, stops, extent, size, reserved, route_px):
         return layout._layout_recap_cards(popups, w, h, reserved_boxes=reserved, route_obstacles=route_px,
                                           leaders=False)
     except Exception as exc:  # a layout that can't place them is no reason to lose the clip
-        logger.info("Finale: no recap badges (%s).", exc)
+        logger.warning("Finale: no recap badges (%s).", exc, exc_info=True)
         return []
 
 
@@ -231,7 +231,7 @@ def _summary_card(engine, config_path: Path):
 
         return render
     except Exception as exc:
-        logger.info("Finale: no summary card (%s).", exc)
+        logger.warning("Finale: no summary card (%s).", exc, exc_info=True)
         return None
 
 
