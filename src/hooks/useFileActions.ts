@@ -147,8 +147,11 @@ export function useFileActions() {
       const dir = await join(await docsDir(), fileSystem.rootFolder, "Imports", String(Date.now()));
       await mkdir(dir, { recursive: true });
       const paths: string[] = [];
-      for (const file of usable) {
-        const dest = await join(dir, file.name.replace(/[<>:"|?*]/g, "_"));
+      for (const [i, file] of usable.entries()) {
+        // A folder per file: two dropped DSC_0001.JPG must not overwrite each other. The name stays the file's own.
+        const sub = await join(dir, String(i + 1));
+        await mkdir(sub, { recursive: true });
+        const dest = await join(sub, file.name.replace(/[<>:"|?*]/g, "_"));
         await writeFile(dest, new Uint8Array(await file.arrayBuffer()));
         paths.push(dest);
       }

@@ -268,12 +268,13 @@ export async function downloadPhotos(candidates: PhotoCandidate[], signal?: Abor
   const dir = await join(await docsDir(), fileSystem.rootFolder, "Imports", `photos-${Date.now()}`);
   await mkdir(dir, { recursive: true });
   const out: { path: string; credit: PhotoCredit }[] = [];
-  for (const c of candidates) {
+  for (const [i, c] of candidates.entries()) {
     try {
       const response = await fetch(c.downloadUrl, { signal, headers: { "User-Agent": await agent } });
       if (!response.ok) continue;
       const bytes = new Uint8Array(await response.arrayBuffer());
-      const path = await join(dir, fileNameFor(c.title, response.headers.get("content-type") ?? ""));
+      // Numbered: two titles can clean to the same name, and the second photo would replace the first under both credits.
+      const path = await join(dir, `${i + 1} ${fileNameFor(c.title, response.headers.get("content-type") ?? "")}`);
       await writeFile(path, bytes);
       out.push({ path, credit: { title: c.title, author: c.author, license: c.license, url: c.url } });
     } catch (e) {
