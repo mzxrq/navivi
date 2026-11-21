@@ -8,11 +8,7 @@ from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
 
 
 class _Layout(_PopupMixin, _PinMixin):
-    # What the real renderer's base class (spatial_renderer/base.py) gives the pin colors.
-    from services import tuning as _t
-
-    _START_PIN_COLOR, _END_PIN_COLOR, _STOPBY_PIN_COLOR = _t.START_PIN_COLOR, _t.END_PIN_COLOR, _t.STOPBY_PIN_COLOR
-    _is_loop_route = False
+    _is_loop_route = False  # the real renderer reads it from the project (base.py)
 
 
 def _layout():
