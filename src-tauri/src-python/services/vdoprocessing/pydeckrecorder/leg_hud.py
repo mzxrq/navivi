@@ -44,6 +44,14 @@ _HUD_CSS_TEMPLATE = string.Template("""
     background: $pill_text; color: $pill_bg; font-size: 0.62em; font-weight: 900;
     line-height: 1; text-align: center; -webkit-text-stroke: 0.4px $pill_bg;
 }
+/* The leg's stop-bys: their own pill under the chain, so a stop-heavy leg doesn't shrink the chain to nothing. */
+#hud-stopbys {
+    position: fixed; top: 128px; left: 24px; z-index: 1000; overflow: hidden; box-sizing: border-box;
+    max-width: calc(50vw - 24px); text-overflow: ellipsis;
+    background: $pill_bg; color: $pill_text; border: 1px solid $divider;
+    font-family: "Noto Sans JP", sans-serif; font-weight: 700; font-size: 22px; line-height: 1.2;
+    padding: 8px 20px; border-radius: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.35); white-space: nowrap;
+}
 /* Small standalone pill, centered at the very top: which numbered stop this leg is walking toward. */
 #hud-stopcount {
     position: fixed; top: 40px; left: 50%; transform: translateX(-50%); z-index: 1000; overflow: hidden;

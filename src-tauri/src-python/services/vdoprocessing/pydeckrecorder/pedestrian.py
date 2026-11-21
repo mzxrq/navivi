@@ -257,6 +257,7 @@ def render_residential_leg_pydeck(
     context_path: Optional[List[List[float]]] = None,
     arrival_hold_seconds: float = 2.0,
     route_chain: Optional[List[str]] = None,
+    stopby_chain: Optional[List[str]] = None,
     topdown_transition_seconds: float = tuning.LEG_ZOOM_SECONDS,
     topdown_zoom_delta: float = 1.0,
     dest_popup_image: Optional[str] = None,
@@ -324,8 +325,9 @@ def render_residential_leg_pydeck(
     than the clip cutting away the instant the walker arrives.
 
     `route_chain`: optional ["友ヶ島", "深山ノ鼻", "加太", ...] -- this leg's
-    own place names in travel order (start through destination, including
-    any stop-bys in between). Shown as a static breadcrumb pill in the
+    own place names in travel order (start through destination, minus its
+    stop-bys). `stopby_chain`: those stop-bys' names, on their own pill under it.
+    Shown as a static breadcrumb pill in the
     top-left corner (e.g. "友ヶ島 → 深山ノ鼻 → 加太"), separate from the
     top-right destination banner, so a viewer can place this leg within
     the wider trip at a glance. Omit to leave the corner empty.
@@ -709,7 +711,7 @@ def render_residential_leg_pydeck(
             hud_card_png=hud_card_png, theme=theme, bottom_reserve_px=bottom_reserve_px,
             segment_colors=segment_colors, opening_photo=opening_photo,
             opening_view=opening_view, end_view_path=end_view_path, wait_spots=wait_spots, prior_trail=prior_trail,
-            hold_end_card=hold_end_card, progress=progress, chain_badges=chain_badges,
+            hold_end_card=hold_end_card, progress=progress, chain_badges=chain_badges, stopby_chain=stopby_chain,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -739,6 +741,7 @@ async def _record_leg(
     hold_end_card: bool = False,
     progress: Optional[Tuple[int, int]] = None,
     chain_badges: Optional[Tuple[Optional[str], Optional[str]]] = None,
+    stopby_chain: Optional[List[str]] = None,
 ):
     """`wait_spots`: [(walk seconds, card, hold seconds)] for {view wait} street views (see _wait_view_plan).
     `hold_end_card`: the arrival photo card (pip) stays up at the end instead of fading: the next leg slides on with it
@@ -1226,7 +1229,7 @@ async def _record_leg(
                     hud_labels["stop_progress"].format(n=progress[0], total=progress[1]) if progress else None
                 )
                 await page.evaluate(
-                    """async ([css, bannerIcon, timeLabel, cardIcon, chainPlaces, chainBadges, useImgCard, compassSvg, distLabel, progressText, progressN, progressTotal]) => {
+                    """async ([css, bannerIcon, timeLabel, cardIcon, chainPlaces, chainBadges, useImgCard, compassSvg, distLabel, progressText, progressN, progressTotal, stopbyPlaces]) => {
                         const style = document.createElement('style');
                         style.textContent = css;
                         document.head.appendChild(style);
@@ -1293,6 +1296,13 @@ async def _record_leg(
                             fit();
                         }
 
+                        if (stopbyPlaces && stopbyPlaces.length) {
+                            const via = document.createElement('div');
+                            via.id = 'hud-stopbys';
+                            via.textContent = stopbyPlaces.join(' ・ ');
+                            document.body.appendChild(via);
+                        }
+
                         if (compassSvg) {
                             const compassWrap = document.createElement('div');
                             compassWrap.id = 'hud-compass-wrap';
@@ -1324,7 +1334,7 @@ async def _record_leg(
                      compass_svg(int(tuning.RESIDENTIAL_COMPASS_SIZE_PX))
                      if tuning.RESIDENTIAL_SHOW_COMPASS else "",
                      hud_labels["distance_label"], progress_text,
-                     progress[0] if progress else None, progress[1] if progress else None],
+                     progress[0] if progress else None, progress[1] if progress else None, stopby_chain or None],
                 )
 
                 hud_card_cache: Dict[Tuple[int, int, bool], str] = {}

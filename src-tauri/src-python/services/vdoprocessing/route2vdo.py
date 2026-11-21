@@ -77,6 +77,18 @@ _LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text
 _LEG_RECORDED_PARTS = ("kw.route_chain", "kw.target_duration_seconds", "kw.start_cue_seconds", "kw.arrival_wait_seconds")
 
 
+def _split_stopby_chain(res_data: Dict[str, Any]) -> Tuple[List[str], List[str]]:
+    """(the leg's places in travel order without its stop-bys, the stop-bys' names): two pills, so a leg with many
+    stop-bys doesn't shrink its place chain to nothing. The destination always stays in the chain."""
+    labels = res_data.get("labels") or []
+    flags = res_data.get("stopbys") or []
+    pairs = [(l, i < len(flags) and bool(flags[i])) for i, l in enumerate(labels) if l]
+    last = len(pairs) - 1
+    chain = [l for k, (l, s) in enumerate(pairs) if k == last or not s]
+    stopbys = [l for k, (l, s) in enumerate(pairs) if k != last and s]
+    return chain, stopbys
+
+
 def _reported_speed_kmh(mode_speed_kmh: Dict[str, float], mode: str) -> float:
     """Same speed the overview's summary card uses for this mode (render_step.py)."""
     return mode_speed_kmh.get(mode) or mode_speed_kmh.get("car") or 70.0
@@ -665,7 +677,7 @@ class RouteAnimator:
                     self.spatial_renderer.render_waypoints([res_data], fps)
                 )
                 continue
-            plan = self._plan_leg(ctx, i, res_data, res_sequence, leg_latlon, dest_label, leg_mode, leg_labels, prev_end_view)
+            plan = self._plan_leg(ctx, i, res_data, res_sequence, leg_latlon, dest_label, leg_mode, prev_end_view)
             prev_end_view = plan.kwargs.get("end_view_path")
             if self.config.get("only_leg_file") is not None and plan.num != self.config["only_leg_file"]:
                 continue  # "Make again" for one leg: the others were only needed for what this one takes from them
@@ -802,9 +814,10 @@ class RouteAnimator:
         )
 
     def _leg_base_kwargs(
-        self, ctx: "_ResContext", res_data: Dict[str, Any], leg_mode: str, leg_labels: List[str],
+        self, ctx: "_ResContext", res_data: Dict[str, Any], leg_mode: str,
         landmarks: List[Dict[str, Any]], photos: "_LegPhotos",
     ) -> Dict[str, Any]:
+        chain, stopbys = _split_stopby_chain(res_data)
         # Narration-synced video length (else a paced distance fallback, see render_step's res_sequence build); real
         # legs run from meters to kilometers, so literal walking pace would make clips seconds to HOURS long. The HUD's
         # remaining-time estimate stays real-world.
@@ -817,7 +830,8 @@ class RouteAnimator:
             bottom_reserve_px=0,
             walker_color=res_data.get("line_color"),
             target_duration_seconds=target_duration,
-            landmarks=landmarks, route_chain=leg_labels or None, context_path=ctx.context_path,
+            landmarks=landmarks, route_chain=chain or None, context_path=ctx.context_path,
+            **({"stopby_chain": stopbys} if stopbys else {}),
             # Straight-down chase cam (still follows/rotates, never tilts); settings.res_follow_pitch opts into a tilt.
             follow_pitch=self.config.get("res_follow_pitch", 0.0),
             dest_popup_image=photos.dest_image,
@@ -889,7 +903,7 @@ class RouteAnimator:
 
     def _plan_leg(
         self, ctx: "_ResContext", i: int, res_data: Dict[str, Any], res_sequence: List[Dict],
-        leg_latlon: List, dest_label: str, leg_mode: str, leg_labels: List[str], prev_end_view: Optional[str],
+        leg_latlon: List, dest_label: str, leg_mode: str, prev_end_view: Optional[str],
     ) -> "_LegPlan":
         landmarks = self._leg_landmarks(ctx, i, res_data, leg_mode, leg_latlon)
         # Each connectToRoute landmark cuts the leg into one more piece, piece[k] being the walk TOWARD landmark[k] (the
@@ -908,7 +922,7 @@ class RouteAnimator:
         # A connected stop-by can split ONE leg into several files sharing this "02_waypoint_{N:02d}_" prefix, so
         # "already rendered" is checked by the whole prefix.
         leg_glob_prefix = f"02_waypoint_{leg_file_num:02d}_"
-        leg_kwargs = self._leg_base_kwargs(ctx, res_data, leg_mode, leg_labels, landmarks, photos)
+        leg_kwargs = self._leg_base_kwargs(ctx, res_data, leg_mode, landmarks, photos)
         self._add_optional_leg_kwargs(leg_kwargs, res_data)
         self._add_leg_joins(leg_kwargs, ctx, i, res_data, res_sequence, photos, prev_end_view, leg_glob_prefix)
         # Marks a join at a stop with nothing to tell: the timeline cuts there (same frame), no dissolve.

@@ -425,6 +425,8 @@ def _leg_map_fields(leg: _Leg, route_labels: list, route_popups: list, settings:
             None if leg.start_idx + k in pins.closed_points else label
             for k, label in enumerate(route_labels[leg.start_idx : end_idx + 1])
         ],
+        # Per label: a stop-by (route2vdo puts those on the leg's own stop-by pill, not the place chain).
+        "stopbys": [bool((route_popups[j] or {}).get("is_stopby")) for j in range(leg.start_idx, end_idx + 1)],
         "popups": leg_popups,
         # Each leg gets its own departure + arrival pair (shown at its opening, shrink) instead of relying on the
         # previous leg's arrival preview.
