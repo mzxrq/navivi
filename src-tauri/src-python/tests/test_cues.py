@@ -95,3 +95,13 @@ def test_no_intro_shot_is_shorter_than_the_minimum():
     shots = plan_shots(6.0, "main", ["p1", "p2", "p3", "p4"], {"main": 0.5, "p1": 0.5, "p2": 0.5, "p3": 0.5, "p4": 0.5}, cf, 2)
     assert (6.0 + (len(shots) - 1) * cf) / len(shots) >= least
     assert all(sec >= least for _, sec in cued_layout(12.0, [(0.0, "a"), (1.0, "b"), (6.0, "c")]))
+
+
+def test_a_snapped_sentence_start_never_lands_after_the_next_cue():
+    """A cue at a sentence start is snapped to the end of a nearby pause; a cue just after it keeps its estimate.
+    Close together, the snap used to carry the first past the second ({view} at 0.96 s, {1} at 0.38 s)."""
+    from services.localization.cues import cue_times, strip_cues
+
+    clean, cues = strip_cues("{view}、")  # its {/view} closes at the comma
+    times = cue_times(cues, clean, 1.1, [{"start": 0.49, "end": 1.1, "duration": 0.61}])
+    assert times["view1"] <= times["viewend1"] <= 1.1  # was 1.1 then 0.49: the card closed before it opened

@@ -187,10 +187,15 @@ def cue_times(
     total_chars = max(1, len(clean))
     mapper = SpeakingTimelineMapper(duration_seconds, pauses or [])
     times: Dict[str, float] = {}
-    for cue in cues:
+    last = 0.0
+    # In text order (an auto-closed span's end is listed last but sits earlier), each no earlier than the one before:
+    # snapping a sentence-start cue to its pause can move it past a cue just after it ({view} 0.96 s, {1} 0.38 s).
+    for cue in sorted(cues, key=lambda c: c.char_index):
+        if cue.tag in times:
+            continue
         char_index = cue.char_index
         if mapper.total_speaking_time <= 0:
-            times.setdefault(cue.tag, duration_seconds * char_index / total_chars)
+            times[cue.tag] = duration_seconds * char_index / total_chars
             continue
         speaking = mapper.total_speaking_time * (char_index / total_chars)
         # allocate() walks `speaking` seconds of pure speech across the clip,
@@ -209,7 +214,8 @@ def cue_times(
         at_boundary = char_index == 0 or clean[char_index - 1] in _SENTENCE_END_CHARS
         if cue.tag.startswith("go") or at_boundary:
             reached = _snap_to_pause_end(reached, pauses or [])
-        times.setdefault(cue.tag, reached)
+        last = max(last, min(reached, duration_seconds))
+        times[cue.tag] = last
     return times
 
 
