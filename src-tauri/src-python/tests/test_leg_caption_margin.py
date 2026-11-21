@@ -2,6 +2,7 @@
 
 import pytest
 
+from services import tuning
 from services.vdoprocessing.pydeckrecorder.leg_camera import (
     _LEG_TOP_MARGIN_PX,
     _fit_view_for_path,
@@ -27,7 +28,7 @@ def _screen_ys(lons, lats, view):
 def test_band_covers_two_caption_lines():
     assert subtitle_band_px(1080, lines=2) > subtitle_band_px(1080, lines=1) > 150
     assert _leg_bottom_margin_px(0) == 100.0
-    assert _leg_bottom_margin_px(272) == 332.0
+    assert _leg_bottom_margin_px(272) == 272.0 + tuning.LEG_FRAME_BOTTOM_PIN_PX
 
 
 @pytest.mark.parametrize("name", PATHS)
