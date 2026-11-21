@@ -156,7 +156,23 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
   whole video; `_course_hud` reads `suppress_leader_line`). Only a `pop_up_card` recap still passes leaders — a wide
   photo card carries no number, so the line is all that ties it to a pin — and that is the last user of `_RECAP_BADGE_GAP`.
   The course style also raises the clear-space pull (`clutter_pull=_CLUTTER_PULL_COURSE_PX`), since its map is never
-  faded back and its badges stay up over the live route for the whole video.
+  faded back and its badges stay up over the live route for the whole video. While the trace passes a stop, its photo
+  card pops beside the pin first and shrinks into the badge (`course._course_pass_cards`, `tuning.COURSE_PASS_CARD_*`),
+  its progress rail shrinks to the room right of the stop-by / closed notices as they come up (`_course_rail_left`),
+  and its summary is always the discs-and-chips `create_summary_card_circles`, whatever `summary_card_style` says.
+  The start's badge claims the free cell nearest its pin before the matching (`_recap_cards_lock_start`) and keeps it
+  through the run ordering: on a loop it also marks the end, and a crowded corner once sent it across the frame.
+  The walk overview draws no preview badge for the stop ahead (removed 2026-11-21); the HUD's "next" line remains.
+  A badge pays for the route it buries (`_recap_cards_route_cover`, `_ROUTE_COVER_PULL_PX`, per badge WIDTH of line)
+  and far more for a pin head it hides (`_recap_cards_pin_cover`), even beside its own pin, so a dense loop's badges go
+  out over open water; one left more than `_BADGE_FAR_PX` from its pin sets `badge_far` and `_draw_recap_dot` then draws
+  the numbered pin. A cluster's head is picked by the pins its whole block would hide. The course passes its drawn path
+  resampled every 6 px (a ferry leg's raw points are only its ends). The course map is fetched
+  `tuning.COURSE_OPEN_ZOOM` wider (`overview_framing._widen`) and the video eases out to it (`course._open_zoom`). After the trace,
+  stop-bys and closed places come up one by one across their sentence (`_set_reveal_times`, with a ring `_draw_ripple`),
+  the walked stops' badges fade to `_BADGE_DIM`, and the tagline showing at `trace_end` holds (`tagline_at(hold_from=)`).
+  The GL ending stays a hard cut (a crossfade was tried 2026-11-21; the user preferred the cut). The ending reads
+  job_config.json from the folders ABOVE the output dir, so a test render outside the project silently has no ending.
   One badge per PLACE (a return stop shares the first visit's, `_recap_popup_set`), all on one frame-wide lattice
   (`_recap_card_slots`, cells offered nearest-pin-first) so they line up in rows and columns and can never overlap.
   A badge within `_BADGE_BESIDE_PIN` of its own pin may rest on the route line and its leader is not charged the
