@@ -20,6 +20,9 @@ _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
 def _decode(raw: bytes) -> str:
+    # Notepad's "Unicode" is UTF-16 with a byte order mark; cp932 would read it as garbage.
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return raw.decode("utf-16", errors="replace")
     for encoding in ("utf-8-sig", "cp932"):
         try:
             return raw.decode(encoding)

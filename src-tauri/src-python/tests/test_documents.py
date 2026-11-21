@@ -166,3 +166,14 @@ def test_course_times_box_is_read_as_a_chain():
 def test_a_page_without_a_times_box_has_no_times_section():
     story = [_line("Leave Kyoshi Station, turn left and follow the railroad tracks to the crossing.", 22.7, 400 - 9 * i) for i in range(4)]
     assert SECTION_TIMES not in _layout_text(story + [_line("Mt. Takano", 300, 200), _line("15 min.", 310, 190)])
+
+
+def test_a_notepad_unicode_text_file_reads_as_text(tmp_path):
+    """Notepad's "Unicode" saves UTF-16 with a byte order mark; Shift-JIS (older Notepad) still reads too."""
+    from services.documents import read_document
+
+    for name, data in (("le.txt", "白浜の円月島です。".encode("utf-16")), ("be.txt", "﻿白浜の円月島です。".encode("utf-16-be")),
+                       ("sjis.txt", "白浜の円月島です。".encode("shift_jis"))):
+        (tmp_path / name).write_bytes(data)
+        result = read_document(str(tmp_path / name))
+        assert result["success"] and "白浜の円月島です。" in result["text"], name
