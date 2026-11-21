@@ -20,6 +20,7 @@ from typing import Final, List, Optional, Tuple, Union
 from services import tuning
 from services.vdoprocessing.vdoeditor import VideoEditor
 from services.vdoprocessing.vdoexporter import VideoExporter
+from services.projectfiles import replace_into
 from services.config.job_config import JobConfigManager
 from services.logger.logger import setup_logger
 from services.vdoprocessing.videopipeline.helpers import output_is_valid, project_attraction_video_dir
@@ -640,20 +641,17 @@ class AttractionVideoGenerator:
                     label_text=burned_label,
                     denoise=tuning.ATTRACTION_DENOISE if generated_pan is not None else None,  # generated clips only
                 )
-                os.replace(work_path, final_path)
-                record_place_label(final_path, place_label, burned=not on_track)
-                return str(final_path)
             except Exception as exc:
                 logger.warning(
                     "Fused finalize (trim/scale/label in one pass) failed for %s "
                     "(%s: %s) — falling back to the slower per-stage pipeline.",
                     video_path, type(exc).__name__, exc,
                 )
-
-            self._fit_and_finalize_stagewise(
-                video_path, trim_to, hold_to, work_path, burned_label
-            )
-            os.replace(work_path, final_path)
+                self._fit_and_finalize_stagewise(
+                    video_path, trim_to, hold_to, work_path, burned_label
+                )
+            # Outside the fallback: a clip open in the editor's preview (Windows) is retried, not re-encoded.
+            replace_into(work_path, final_path)
             record_place_label(final_path, place_label, burned=not on_track)
             return str(final_path)
         finally:
@@ -751,18 +749,17 @@ class AttractionVideoGenerator:
 
     def _upscale_stage(self, final_output: str) -> None:
         """Stagewise fallback, stage 2: the clip scaled up in place; a failure keeps the original resolution."""
+        upscale_tmp = str(Path(final_output).with_name(f"upscaled_{uuid.uuid4().hex[:6]}.mp4"))
         try:
-            upscale_tmp = str(
-                Path(final_output).with_name(f"upscaled_{uuid.uuid4().hex[:6]}.mp4")
-            )
             VideoExporter.upscale_video(
                 input_video_path=final_output,
                 output_video_path=upscale_tmp,
                 target_width=self._TARGET_WIDTH,
                 target_height=self._TARGET_HEIGHT,
             )
-            os.replace(upscale_tmp, final_output)
+            replace_into(upscale_tmp, final_output)
         except Exception as exc:
+            Path(upscale_tmp).unlink(missing_ok=True)
             logger.warning(
                 "Upscale failed for %s (%s) — keeping original resolution.",
                 final_output,
@@ -772,17 +769,16 @@ class AttractionVideoGenerator:
     @staticmethod
     def _label_stage(final_output: str, place_label: str) -> None:
         """Stagewise fallback, stage 3: the place name burned in place; a failure keeps the clip unlabeled."""
+        labeled_tmp = str(Path(final_output).with_name(f"labeled_{uuid.uuid4().hex[:6]}.mp4"))
         try:
-            labeled_tmp = str(
-                Path(final_output).with_name(f"labeled_{uuid.uuid4().hex[:6]}.mp4")
-            )
             VideoExporter.burn_static_label(
                 input_video_path=final_output,
                 text=place_label,
                 output_video_path=labeled_tmp,
             )
-            os.replace(labeled_tmp, final_output)
+            replace_into(labeled_tmp, final_output)
         except Exception as exc:
+            Path(labeled_tmp).unlink(missing_ok=True)
             logger.warning(
                 "Place-name label burn failed for %s (%s) — keeping clip unlabeled.",
                 final_output,

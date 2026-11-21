@@ -24,7 +24,7 @@ from services import runtime_paths, tuning, video_text
 from services.mapbox_token import resolve_mapbox_token
 from services.mapfetcher.maplanguage import resolve_map_style
 from services.mapfetcher.street_photos import attach_cue_spans, clear_of, resolve_mapillary_token, street_view_landmarks, turn_photos
-from services.projectfiles import meta_dir, write_json_atomic
+from services.projectfiles import meta_dir, replace_into, write_json_atomic
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.route_inputs import photo_inputs_hash, returns_to
 
@@ -473,7 +473,7 @@ class RouteAnimator:
             cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
         if result.returncode == 0 and os.path.exists(temp_out):
-            os.replace(temp_out, video_path)
+            replace_into(temp_out, video_path)
         else:
             logger.warning("Failed to freeze video end. Skipping freeze frame.")
 
