@@ -190,6 +190,7 @@ def test_residential_video(
     return {
         "success": bool(video_paths),
         "video_paths": video_paths,
+        **({} if video_paths else {"error": "No walking clip was made: the route has no leg to render (see the log)."}),
     }
 
 
