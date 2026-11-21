@@ -49,7 +49,8 @@ def _protect_glossary_terms(text: str, glossary: dict) -> Tuple[str, Dict[str, s
     """
     processed_text = text
     placeholder_map: Dict[str, str] = {}
-    for i, (jp_name, raw_value) in enumerate(glossary.items()):
+    # Longest first, so 三段壁 is swapped whole before a shorter term such as 三段 cuts into it.
+    for i, (jp_name, raw_value) in sorted(enumerate(glossary.items()), key=lambda e: -len(e[1][0])):
         if jp_name in processed_text:
             placeholder = f"__PLACE_{i}__"
 

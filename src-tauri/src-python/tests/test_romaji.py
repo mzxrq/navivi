@@ -76,3 +76,12 @@ class TestLoadGlossary:
         # Even pointing at a different (nonexistent) path, the cached value wins.
         result = RomajiConverter.load_glossary(tmp_path / "other.json")
         assert result == {"大阪": "Osaka"}
+
+
+def test_the_longer_glossary_term_wins():
+    """Glossary terms keep their curated romaji even when one contains another (三段 inside 三段壁)."""
+    from services.localization.romaji import _protect_glossary_terms, _restore_glossary_terms
+
+    glossary = {"三段": "Sandan", "三段壁": "Sandanbeki"}
+    text, mapping = _protect_glossary_terms("三段壁へ", glossary)
+    assert _restore_glossary_terms(text, mapping).split()[0] == "Sandanbeki"
