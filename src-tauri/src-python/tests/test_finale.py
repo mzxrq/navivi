@@ -96,3 +96,28 @@ def test_an_unchanged_finale_is_reused_not_captured_again(tmp_path: Path, monkey
     assert len(captures) == 1
     render_finale_clip(str(cfg), force=True)
     assert len(captures) == 2
+
+
+def test_the_finale_lays_out_every_stops_badge_with_no_leader_lines():
+    from services.mapfetcher.graphicengine import GraphicsEngine
+    from services.vdoprocessing.videopipeline.finale_step import _recap_badges
+
+    extent = (0.0, 1000.0, 0.0, 1000.0)  # Web Mercator metres: a stop at (y, x) metres lands mid-frame
+    from services.mapfetcher.mapgeometry import _inverse_mercator_y, EARTH_RADIUS_METERS
+    import math
+
+    def at(mx, my):
+        return _inverse_mercator_y(my), math.degrees(mx / EARTH_RADIUS_METERS)
+
+    stops = []
+    for i, (badge, mx) in enumerate([("S", 200.0), ("1", 400.0), ("2", 600.0), ("E", 800.0)]):
+        lat, lon = at(mx, 500.0)
+        stops.append({"lat": lat, "lon": lon, "index": i, "order": i, "badge": badge, "name": f"P{i}",
+                      "photo": tmp_path_photo(), "color": (0, 160, 0), "at": i})
+    badges = _recap_badges(GraphicsEngine(), stops, extent, (1920, 1080), [], None)
+    assert len(badges) == 4
+    assert all(b.get("suppress_leader_line") for b in badges)
+
+
+def tmp_path_photo():
+    return "photo.jpg"  # only its presence matters to the layout

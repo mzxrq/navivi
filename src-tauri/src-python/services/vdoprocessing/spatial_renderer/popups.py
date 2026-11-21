@@ -2371,6 +2371,8 @@ A connected stop-by is loose as well: the walker passes every
         cannot say: a loop route's E has no badge of its own, so the last badge is a numbered stop)."""
         total = total_points if total_points is not None else 1 << 30
         for p in ordered:
+            if p.get("border_color") is not None:
+                continue  # the caller coloured this one itself (the finale: its dot and badge already match)
             label, color, _ = self._pin_label_and_color(
                 {**p, "data": p.get("data") or {}, "index": p.get("index", -1)}, total)
             if label in ("S", "E", "×", "・"):
