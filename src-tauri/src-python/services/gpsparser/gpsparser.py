@@ -107,9 +107,9 @@ class GPSParser:
         """ Get the input raw file path from the configuration. """
         if self.config and hasattr(self.config, 'data'):
             source_files = self.config.data.get("source_files", {})
-            input_file = source_files.get("gps_route") or self.config.data.get("input_file")
-            if input_file:
-                return self.resolve_config_path(input_file)
+            # A config that names no track (hand-written, or older) uses the app's own file beside it.
+            input_file = source_files.get("gps_route") or self.config.data.get("input_file") or "raw_track.gpx"
+            return self.resolve_config_path(input_file)
 
         logger.warning("Input file not specified in configuration.")
         return None
@@ -162,7 +162,9 @@ class GPSParser:
         # [NOTE] [GPS] Shells out to the bundled GPSBabel binary to normalize arbitrary GPS formats into CSV.
         input_file = self.get_input_file_path()
         if not input_file or not input_file.exists():
-            raise FileNotFoundError(f"Input file could not be resolved or found: {input_file}")
+            raise FileNotFoundError(
+                f"The route's GPS track was not found: {input_file}. Draw or import the route, then save the project."
+            )
 
         input_format = self.detect_format(str(input_file))
         output_file_directory = self._gps_output_directory()
