@@ -202,7 +202,8 @@ def test_only_unburned_attraction_clips_get_a_place_item(tmp_path, monkeypatch):
 def test_left_aligned_still_label_burns_at_the_corner(tmp_path):
     item = {"start": 0, "end": 5, **place_text_item("常行寺")}
     text = write_caption_ass([], None, (1920, 1080), tmp_path / "t.ass", check_font=False, texts=[item]).read_text(encoding="utf-8")
-    (only,) = _events(text)
+    glow, only = _events(text)  # its 3.75 px shadow is exported as a glow layer under the label
+    assert r"\blur" in glow and glow.endswith("}常行寺") and r"\shad0" in only
     # Left edge 22 px in, block centre 10 + 98/2 = 59 px down; no fade or pop.
     assert r"{\an4\pos(22,59)" in only and r"\fad" not in only and r"\fscx" not in only
     assert only.endswith("}常行寺")

@@ -177,3 +177,24 @@ class TestCaptionAss:
     def test_play_res_follows_frame_aspect(self, tmp_path):
         text, _, _ = self._write(tmp_path, [{"start": 0, "end": 1, "text": "x"}], size=(1080, 1920))
         assert "PlayResX: 608\nPlayResY: 1080" in text
+
+
+class TestGlow:
+    """The editor shows the shadow as a halo (text-shadow: 0 0 blur); libass's \shad is a hard offset copy."""
+
+    def test_a_wide_shadow_is_exported_as_a_glow_layer_under_the_line(self, tmp_path):
+        style = introclip.DEFAULT_TITLE_STYLE.merged({"shadow": 12, "shadow_color": "#102030", "outline_width": 0})
+        events = introclip.title_events("Trip", "", 0.0, 5.0, style, introclip.DEFAULT_SUBTITLE_STYLE, 960, 540)
+        glow, text = [e[2] for e in events]
+        assert r"\blur3" in glow and r"\shad0" in glow and r"\bord6" in glow  # r/4 blur, border grown by r/2
+        assert r"\c&H302010&" in glow and r"\3c&H302010&" in glow  # the halo is the shadow colour
+        assert r"\shad0" in text and r"\shad12" not in text  # no hard copy beside it
+        assert glow.endswith("}Trip") and text.endswith("}Trip")
+
+    def test_the_untouched_default_shadow_stays_a_plain_one_pixel_shadow(self):
+        events = introclip.title_events("T", "", 0.0, 5.0, introclip.DEFAULT_TITLE_STYLE, introclip.DEFAULT_SUBTITLE_STYLE, 960, 540)
+        assert len(events) == 1 and r"\shad1" in events[0][2] and r"\blur" not in events[0][2]
+
+    def test_a_background_box_has_no_glow(self):
+        style = introclip.DEFAULT_TITLE_STYLE.merged({"shadow": 12, "background": True})
+        assert not style.has_glow()

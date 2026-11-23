@@ -17,6 +17,7 @@ RGB = Tuple[int, int, int]
 
 # libass scales .srt style values from a 288-line script to the frame height.
 _SRT_UNITS_PER_PX = 288 / 1080
+_GLOW_MIN_PX = 1.0  # TextStyle.shadow's default: an untouched style keeps its plain 1 px drop shadow
 
 
 def parse_color(value: Any) -> Optional[Tuple[RGB, Optional[float]]]:
@@ -220,15 +221,37 @@ class TextStyle:
             changes["max_chars_per_line"] = int(max_chars)
         return replace(self, **changes)
 
-    def to_ass_tags(self) -> str:
-        """Inline override tags for an .ass event (intro text)."""
+    def has_glow(self) -> bool:
+        """The editor draws the shadow as a blurred halo around the text (CSS `text-shadow: 0 0 blur`), but
+        libass's \\shad is a hard offset copy, so a shadow wider than the untouched default's _GLOW_MIN_PX is
+        exported as a glow layer under the text instead (to_glow_tags; the text itself then takes \\shad0)."""
+        return not self.background and self.shadow > _GLOW_MIN_PX
+
+    def _font_tags(self) -> str:
         return (
             f"\\fn{self.font_family}\\fs{self.font_size}"
             f"\\b{int(self.bold)}\\i{int(self.italic)}\\u{int(self.underline)}"
+        )
+
+    def to_ass_tags(self) -> str:
+        """Inline override tags for an .ass event (intro text)."""
+        return (
+            f"{self._font_tags()}"
             f"\\c&H{_bgr(self.color)}&\\3c&H{_bgr(self.outline_color)}&"
             f"\\4c&H{_bgr(self.shadow_color)}&"
             f"\\alpha&H{255 - int(round(self.opacity * 255)):02X}&"
-            f"\\bord{self.outline_width:g}\\shad{self.shadow:g}\\fsp{self.letter_spacing:g}"
+            f"\\bord{self.outline_width:g}\\shad{0 if self.has_glow() else self.shadow:g}\\fsp{self.letter_spacing:g}"
+        )
+
+    def to_glow_tags(self) -> str:
+        """Override tags for the glow event drawn just under the text: the same line in the shadow colour, its
+        border grown by half the shadow width and blurred by a quarter of it, so the halo reaches `shadow` px
+        from the glyph edge like the editor's preview."""
+        glow = f"&H{_bgr(self.shadow_color)}&"
+        return (
+            f"{self._font_tags()}\\c{glow}\\3c{glow}"
+            f"\\alpha&H{255 - int(round(self.opacity * 255)):02X}&"
+            f"\\bord{self.outline_width + self.shadow / 2:g}\\shad0\\blur{self.shadow / 4:g}\\fsp{self.letter_spacing:g}"
         )
 
     def with_installed_font(self, fallback: str) -> "TextStyle":
