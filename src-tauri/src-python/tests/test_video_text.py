@@ -160,7 +160,7 @@ class TestCards:
         assert eng.summary_card_labels["mode_name"]["ferry"] == "Boat"
         assert eng.summary_card_labels["mode_name"]["walking"] == "Walk"
 
-    @pytest.mark.parametrize("style", ["glass", "taskbar", "stacked", "columns"])
+    @pytest.mark.parametrize("style", ["glass", "taskbar", "stacked", "columns", "circles"])
     def test_english_cards_render_and_differ_from_japanese(self, tmp_path, style):
         kwargs = dict(
             distance_km=12.3, duration_seconds=95 * 60,

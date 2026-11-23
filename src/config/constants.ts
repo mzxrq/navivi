@@ -1,3 +1,5 @@
+import type { SummaryCardStyle } from "../types";
+
 export const appConfig = {
     name: "Navivi",
     version: "1.0.0", // await syncing with package.json
@@ -61,7 +63,7 @@ type Rgb = [number, number, number];
 // project saved before the controls existed renders exactly as before. src-python/tests/test_look_options.py keeps the
 // forwarded keys honest; change both sides together.
 export const videoLookDefaults = {
-    summary_card_style: "columns" as "glass" | "taskbar" | "stacked" | "columns",
+    summary_card_style: "columns" as SummaryCardStyle,
     theme: "dark" as "light" | "dark",
     card_border_color: [230, 230, 230] as Rgb,
     card_border_thickness: 1,

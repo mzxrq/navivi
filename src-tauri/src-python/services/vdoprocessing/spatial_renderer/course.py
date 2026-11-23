@@ -214,6 +214,7 @@ class _Panels(NamedTuple):
     rail_marks: List[Tuple[float, str, Tuple]]
     closed_offset: int
     reserved: List[Tuple[float, float, float, float]]
+    notice_lift: int = 0  # how far the bottom notices ride up so they sit above the progress rail
 
 
 class _Trace(NamedTuple):
@@ -515,9 +516,12 @@ class _CourseOverviewMixin:
         rail_h = self.graphics.route_progress_rail_height(h) if rail_marks else 0
         if rail_h:
             reserved.append((0.0, float(h - margin - rail_h), float(w), float(h)))
-        closed_offset = self._reserve_notices(reserved, timing, w, h)
+        # [NOTE] [Course] The notices share the foot of the frame with the rail and used to sit on it,
+        # hiding S and the first ticks: they ride up by the rail's height plus a small gap.
+        notice_lift = -(rail_h + int(12 * h / 1080)) if rail_h else 0
+        closed_offset = self._reserve_notices(reserved, timing, w, h, notice_lift)
         return _Panels(summary_card, taglines, leg_stops, headline_font, margin, totals, stats_y,
-                       rail_marks, closed_offset, reserved)
+                       rail_marks, closed_offset, reserved, notice_lift)
 
     def _course_leg_stops(self, on_route: List[Dict], total_points: int) -> List[Tuple[float, str, str]]:
         """(distance, glyph, name) per named stop: the headline names the stretch being drawn ("A → B"),
@@ -545,17 +549,17 @@ class _CourseOverviewMixin:
             ))
         return rail_marks
 
-    def _reserve_notices(self, reserved: List, timing: _Timing, w: int, h: int) -> int:
+    def _reserve_notices(self, reserved: List, timing: _Timing, w: int, h: int, lift: int = 0) -> int:
         """Adds the stop-by notice (bottom left) and the closed-place one beside it to `reserved`;
         returns the closed notice's x offset."""
         closed_offset = 0
         if timing.stopbys:
-            box = self.graphics.stopby_notice_box(w, h)
+            box = self.graphics.stopby_notice_box(w, h, y_offset=lift)
             reserved.append(tuple(float(v) for v in box))
             closed_offset = box[2] - box[0] + int(24 * h / 1080)
         if timing.closed:
             reserved.append(tuple(float(v) for v in self.graphics.stopby_notice_box(
-                w, h, "closed", closed_offset)))
+                w, h, "closed", closed_offset, lift)))
         return closed_offset
 
     def _course_cards(
@@ -791,11 +795,12 @@ class _CourseOverviewMixin:
                 margin_y=panels.stats_y, slide_offset_y=-(1 - u) * 80)
         if timing.extras_at is not None and t >= timing.extras_at:
             frame = self.graphics.render_stopby_notice(
-                frame, alpha=_smoothstep((t - timing.extras_at) / _NOTICE_FADE_SECONDS))
+                frame, alpha=_smoothstep((t - timing.extras_at) / _NOTICE_FADE_SECONDS),
+                y_offset=panels.notice_lift)
         if timing.closed and timing.closed_at is not None and t >= timing.closed_at:
             frame = self.graphics.render_stopby_notice(
                 frame, alpha=_smoothstep((t - timing.closed_at) / _NOTICE_FADE_SECONDS), kind="closed",
-                x_offset=panels.closed_offset)
+                x_offset=panels.closed_offset, y_offset=panels.notice_lift)
         return frame
 
     def _course_ending(

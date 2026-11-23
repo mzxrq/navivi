@@ -114,8 +114,8 @@ def _map_frame(frame_bgr, extent, route, stops, line_bgr, line_px, drawn: float)
 
 def _recap_badges(engine, stops, extent, size, reserved, route_px):
     """Every stop laid out as the overview recap lays its pill badges out —
-    same slim capsules, same no-overlap lattice, same one-line-per-cluster
-    leader lines — by borrowing the recap's own layout (_layout_recap_cards)
+    same slim capsules, same no-overlap lattice, no leader lines (the badge's
+    number and its pin's are the tie) — by borrowing the recap's own layout (_layout_recap_cards)
     with this clip's graphics engine. Returns them in the order the recap
     would reveal them. [] for a stop set it can't place."""
     from services.vdoprocessing.spatial_renderer.pins import _PinMixin
@@ -146,23 +146,16 @@ def _recap_badges(engine, stops, extent, size, reserved, route_px):
     layout.config = {}
     layout.graphics = engine
     try:
-        return layout._layout_recap_cards(popups, w, h, reserved_boxes=reserved, route_obstacles=route_px)
+        return layout._layout_recap_cards(popups, w, h, reserved_boxes=reserved, route_obstacles=route_px, leaders=False)
     except Exception as exc:  # a layout that can't place them is no reason to lose the clip
         logger.info("Finale: no recap badges (%s).", exc)
         return []
 
 
 def _with_badges(img: Image.Image, engine, badges, alphas) -> Image.Image:
-    """`img` with each badge drawn at its own alpha, lines first and then the
-    capsules — the recap's own order, so no line lands on top of a badge."""
+    """`img` with each badge drawn at its own alpha. No leader lines, as in the overview recap."""
     frame = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)
     shown = [(b, a) for b, a in zip(badges, alphas) if a > 0.01]
-    for badge, alpha in shown:
-        hud = badge.copy()
-        hud["hud_corner"] = None
-        hud["draw_leader_line"] = not badge.get("suppress_leader_line")
-        hud["leader_line_color"] = badge.get("recap_line_color") or badge.get("border_color")
-        frame = engine.render_popup_box(frame, hud, alpha=alpha, line_only=True)
     for badge, alpha in shown:
         hud = badge.copy()
         hud["hud_corner"] = None

@@ -76,6 +76,7 @@ export function VideoLookSettings({ options, onChange }: Props) {
               { id: "taskbar", label: t`Taskbar` },
               { id: "stacked", label: t`Stacked` },
               { id: "columns", label: t`Columns` },
+              { id: "circles", label: t`Chips` },
             ]}
           />
         </Row>

@@ -91,7 +91,7 @@ export interface TextStyle {
 }
 
 // start dev 1 settings
-export type SummaryCardStyle = "glass" | "taskbar" | "stacked" | "columns";
+export type SummaryCardStyle = "glass" | "taskbar" | "stacked" | "columns" | "circles";
 export type LookMode = "walking" | "driving" | "car" | "ferry" | "airplane";
 export type VideoTextLanguage = "auto" | "en" | "ja";
 

@@ -179,7 +179,7 @@ WAYPOINT_LABEL_FONT_SCALE = 0.85
 # Summary-card text, px at the card's 2x render scale.
 SUMMARY_CARD_LABEL_FONT_SIZE = 20
 SUMMARY_CARD_VALUE_FONT_SIZE = 34
-# Summary card template: "glass", "taskbar", "stacked" or "columns" (cards.py create_summary_card_*);
+# Summary card template: "glass", "taskbar", "stacked", "columns" or "circles" (cards.py create_summary_card_*);
 # settings.summary_card_style overrides.
 DEFAULT_SUMMARY_CARD_STYLE = "columns"  # the user's choice (2026-09-30)
 # "columns" card: every column's text area is at least as wide as these
