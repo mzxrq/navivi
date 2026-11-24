@@ -612,7 +612,10 @@ class _CourseOverviewMixin:
         summary: Optional[Dict],
         overview_path: str,
         bounding_box: Optional[Dict[str, float]] = None,
+        preview_only: bool = False,
     ) -> str:
+        """Renders the course overview video; with `preview_only`, just its last frame (laid out exactly as the video
+        is) to a PNG beside `overview_path`, no GL captures and no video, for a quick look at the badges."""
         cues = dict(self.config.get("overview_cue_seconds") or {})
         audio_seconds = float(self.config.get("overview_audio_seconds") or 0.0)
         total_points = len(points)
@@ -656,6 +659,15 @@ class _CourseOverviewMixin:
         scene = _Scene(on_route, extras, laid_out, cards, returns, labels, label_at, total_points, fps, draw_marker)
 
         _log_timing(timing, len(laid_out))
+        if preview_only:
+            n = max(0, int(math.ceil(timing.end_at * fps)) - 1)
+            state = self._course_plate_state(scene, n / fps, timing.extras_at)
+            keep, layer = self._course_overlay(scene, state, route_bg)
+            frame = self._course_frame(n, n / fps, route_bg, keep, layer, trace, timing, panels,
+                                       _Heading(self._initial_heading(trace.path)), total_smooth_dist)
+            png = overview_path.rsplit(".", 1)[0] + "_recap.png"
+            cv2.imencode(".png", frame)[1].tofile(png)  # imwrite fails on non-ASCII Windows paths
+            return png
         views = [v for i in range(int(math.ceil(timing.end_at * fps)))
                  if (v := zoom_view(i / fps, self._course_zooms, w, h)) is not None]
         with tempfile.TemporaryDirectory(prefix="navivi_course_zoom_") as gl_dir:

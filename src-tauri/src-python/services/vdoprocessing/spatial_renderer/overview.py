@@ -1136,7 +1136,7 @@ class _OverviewRenderMixin:
             result = self._render_course_overview(
                 current_bg, w, h, fps, points, smooth_path, mode_breakpoints, cum_smooth_dist,
                 total_smooth_dist, active_popups, route_obstacle_arr, summary, overview_path,
-                bounding_box=bounding_box,
+                bounding_box=bounding_box, preview_only=preview_recap_only,
             )
         else:
             result = self._ov_render_walk_video(
