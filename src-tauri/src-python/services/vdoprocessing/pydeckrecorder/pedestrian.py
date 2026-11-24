@@ -257,7 +257,7 @@ def render_residential_leg_pydeck(
     context_path: Optional[List[List[float]]] = None,
     arrival_hold_seconds: float = 2.0,
     route_chain: Optional[List[str]] = None,
-    stopby_chain: Optional[List[str]] = None,
+    stopby_chain: Optional[List[List[Any]]] = None,
     topdown_transition_seconds: float = tuning.LEG_ZOOM_SECONDS,
     topdown_zoom_delta: float = 1.0,
     dest_popup_image: Optional[str] = None,
@@ -327,7 +327,8 @@ def render_residential_leg_pydeck(
 
     `route_chain`: optional ["友ヶ島", "深山ノ鼻", "加太", ...] -- this leg's
     own place names in travel order (start through destination, minus its
-    stop-bys). `stopby_chain`: those stop-bys' names, on their own pill under it.
+    stop-bys). `stopby_chain`: those stop-bys as [name, index of the route_chain place they come before, lat, lon], drawn
+    inline in the same banner (A → stop-by → B), lighter than the numbered places.
     Shown as a static breadcrumb pill in the
     top-left corner (e.g. "友ヶ島 → 深山ノ鼻 → 加太"), separate from the
     top-right destination banner, so a viewer can place this leg within
@@ -742,7 +743,7 @@ async def _record_leg(
     hold_end_card: bool = False,
     progress: Optional[Tuple[int, int]] = None,
     chain_badges: Optional[Tuple[Optional[str], Optional[str]]] = None,
-    stopby_chain: Optional[List[str]] = None,
+    stopby_chain: Optional[List[List[Any]]] = None,
 ):
     """`wait_spots`: [(walk seconds, card, hold seconds)] for {view wait} street views (see _wait_view_plan).
     `hold_end_card`: the arrival photo card (pip) stays up at the end instead of fading: the next leg slides on with it
@@ -1226,11 +1227,26 @@ async def _record_leg(
                     pass
                 await page.wait_for_timeout(2500)
 
+                # [NOTE] [HUD] One banner: numbered places and the stop-bys between them, in walk order
+                # (a stop-by is [name, index of the chain place it comes before, lat, lon]). Items are
+                # (text, badge, is_stopby). The banner shows one stretch at a time: from the last stop-by passed
+                # (else the start) to the next one (else the end), switched in `_draw_walker_frame`.
+                banner_items: List[Tuple[str, Optional[str], bool]] = []
+                badges = ([chain_badges[0]] + [None] * (len(route_chain) - 2) + [chain_badges[1]]
+                          if route_chain and len(route_chain) >= 2 and chain_badges else [None] * len(route_chain or []))
+                for k, place in enumerate(route_chain or []):
+                    banner_items += [(s[0], None, True) for s in (stopby_chain or []) if s[1] == k]
+                    banner_items.append((place, badges[k], False))
+                banner_items += [(s[0], None, True) for s in (stopby_chain or []) if s[1] >= len(route_chain or [])]
+                banner_stop_items = [i for i, it in enumerate(banner_items) if it[2]]
+                # Without every stop-by's position the stretch can't follow the walker: the whole chain stays up.
+                _stopby_frames_ok = all(s[2] is not None and s[3] is not None for s in (stopby_chain or []))
+
                 progress_text = (
                     hud_labels["stop_progress"].format(n=progress[0], total=progress[1]) if progress else None
                 )
                 await page.evaluate(
-                    """async ([css, bannerIcon, timeLabel, cardIcon, chainPlaces, chainBadges, useImgCard, compassSvg, distLabel, progressText, progressN, progressTotal, stopbyPlaces]) => {
+                    """async ([css, bannerIcon, timeLabel, cardIcon, chainPlaces, chainBadges, useImgCard, compassSvg, distLabel, progressText, progressN, progressTotal, chainVia, firstStop]) => {
                         const style = document.createElement('style');
                         style.textContent = css;
                         document.head.appendChild(style);
@@ -1257,6 +1273,7 @@ async def _record_leg(
                                 if (i > 0) {
                                     const arrow = document.createElement('span');
                                     arrow.className = 'arrow';
+                                    arrow.dataset.i = i;
                                     arrow.innerHTML = '<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-0.1em"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
                                     chain.appendChild(arrow);
                                 }
@@ -1265,11 +1282,13 @@ async def _record_leg(
                                     const circle = document.createElement('span');
                                     circle.className = 'badge';
                                     circle.textContent = badge;
+                                    circle.dataset.i = i;
                                     chain.appendChild(circle);
                                 }
                                 const place = document.createElement('span');
-                                place.className = 'place';
+                                place.className = chainVia && chainVia[i] ? 'place via' : 'place';
                                 place.textContent = p;
+                                place.dataset.i = i;
                                 chain.appendChild(place);
                             });
                             document.body.appendChild(chain);
@@ -1293,15 +1312,24 @@ async def _record_leg(
                                 }
                             };
                             new ResizeObserver(fit).observe(neighbor);
+                            // Only items a..b show (the arrow before item a stays hidden), then the font refits.
+                            // `closed` (a closed place's "×name") replaces the whole stretch while it is up.
+                            const only = document.createElement('span');
+                            only.className = 'place';
+                            only.style.display = 'none';
+                            chain.appendChild(only);
+                            window.__chainWindow = (a, b, closed) => {
+                                for (const el of chain.children) {
+                                    if (el === only) continue;
+                                    const i = +el.dataset.i;
+                                    el.style.display = closed || i < a || i > b || (i === a && el.className === 'arrow') ? 'none' : '';
+                                }
+                                only.textContent = closed || '';
+                                only.style.display = closed ? '' : 'none';
+                                fit();
+                            };
                             if (document.fonts && document.fonts.ready) { await document.fonts.ready; }
-                            fit();
-                        }
-
-                        if (stopbyPlaces) {
-                            const via = document.createElement('div');
-                            via.id = 'hud-stopbys';
-                            via.textContent = stopbyPlaces;
-                            document.body.appendChild(via);
+                            if (firstStop >= 0) { window.__chainWindow(0, firstStop); } else { fit(); }
                         }
 
                         if (compassSvg) {
@@ -1328,15 +1356,15 @@ async def _record_leg(
                             document.body.appendChild(img);
                         }
                     }""",
-                    [_hud_css(theme), mode_hud["banner_icon"], mode_hud["time_label"], mode_hud["icon"], route_chain,
-                     ([chain_badges[0]] + [None] * (len(route_chain) - 2) + [chain_badges[1]])
-                     if route_chain and len(route_chain) >= 2 and chain_badges else None,
+                    [_hud_css(theme), mode_hud["banner_icon"], mode_hud["time_label"], mode_hud["icon"],
+                     [p for p, _, _ in banner_items], [b for _, b, _ in banner_items],
                      hud_card_png is not None,
                      compass_svg(int(tuning.RESIDENTIAL_COMPASS_SIZE_PX))
                      if tuning.RESIDENTIAL_SHOW_COMPASS else "",
                      hud_labels["distance_label"], progress_text,
                      progress[0] if progress else None, progress[1] if progress else None,
-                     hud_labels["separator"].join(stopby_chain) if stopby_chain else None],
+                     [v for _, _, v in banner_items],
+                     banner_stop_items[0] if banner_stop_items and _stopby_frames_ok else -1],
                 )
 
                 hud_card_cache: Dict[Tuple[int, int, bool], str] = {}
@@ -1837,6 +1865,23 @@ async def _record_leg(
                 last_png_bytes = None
                 crashed = False
 
+                # The frame where the walker is nearest each stop-by (never before the one ahead of it): the banner
+                # moves on to the next stretch from there. [] = no switching.
+                banner_pass: List[int] = []
+                if banner_stop_items and _stopby_frames_ok:
+                    for s in stopby_chain:
+                        near = int(((smooth_df["lat"] - s[2]) ** 2 + (smooth_df["lon"] - s[3]) ** 2).to_numpy().argmin())
+                        banner_pass.append(max(near, banner_pass[-1] if banner_pass else 0))
+                # A closed place shows alone ("×name") from the frame the walker is nearest it, for as long as its
+                # card holds (see _quiet_card's hold_seconds): (first frame, last frame, text).
+                closed_spans: List[Tuple[int, int, str]] = []
+                for lm in (landmarks or []):
+                    if lm.get("inaccessible") and lm.get("label") and lm.get("lat") is not None and lm.get("lon") is not None:
+                        near = int(((smooth_df["lat"] - lm["lat"]) ** 2 + (smooth_df["lon"] - lm["lon"]) ** 2).to_numpy().argmin())
+                        hold = float(lm.get("freeze_seconds") or tuning.POPUP_MIN_DISPLAY_SECONDS)
+                        closed_spans.append((near, near + int(round(hold * fps)), f"×{lm['label']}"))
+                banner_stretch = {"key": (0, None)}
+
                 async def _draw_walker_frame(index: int):
                     """Draws/writes exactly one walking frame at `index` and
                     returns its PNG bytes, or None if ffmpeg crashed (sets
@@ -1876,7 +1921,21 @@ async def _record_leg(
                     banner_text, dist_text = _hud_text(
                         dest_label, rem_m, arrive_threshold_m, mode=mode_hud["mode"], labels=hud_labels
                     )
+                    stretch_js = ""
+                    if banner_pass or closed_spans:
+                        passed = bisect.bisect_right(banner_pass, index)
+                        closed_now = next((t for a, b, t in reversed(closed_spans) if a <= index <= b), None)
+                        if (passed, closed_now) != banner_stretch["key"]:
+                            banner_stretch["key"] = (passed, closed_now)
+                            first, last = 0, len(banner_items) - 1
+                            if banner_pass:
+                                first = banner_stop_items[passed - 1] if passed else 0
+                                last = banner_stop_items[passed] if passed < len(banner_stop_items) else last
+                            stretch_js = (
+                                f"if (window.__chainWindow) window.__chainWindow({first}, {last}, {json.dumps(closed_now)});"
+                            )
                     js = f"""
+                    {stretch_js}
                     if (window.deckgl) {{
                         const currentLayers = window.deckgl.props.layers || [];
                         const afterRemoval = currentLayers.filter(l => !['walker-trail', 'walker-dot', 'walker-halo'].includes(l.id));

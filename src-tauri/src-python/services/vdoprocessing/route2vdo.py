@@ -77,15 +77,24 @@ _LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text
 _LEG_RECORDED_PARTS = ("kw.route_chain", "kw.target_duration_seconds", "kw.start_cue_seconds", "kw.arrival_wait_seconds")
 
 
-def _split_stopby_chain(res_data: Dict[str, Any]) -> Tuple[List[str], List[str]]:
-    """(the leg's places in travel order without its stop-bys, the stop-bys' names): two pills, so a leg with many
-    stop-bys doesn't shrink its place chain to nothing. The destination always stays in the chain."""
+def _split_stopby_chain(res_data: Dict[str, Any]) -> Tuple[List[str], List[List[Any]]]:
+    """(the leg's numbered places in travel order, its stop-bys as [name, index of the chain place they come before,
+    lat, lon]): the banner shows the stop-bys inline, in the order walked, and switches as the walker passes each.
+    lat/lon come from the leg's per-point lats/lons (labels run parallel to them) and are None when they don't line up.
+    The destination always stays in the chain."""
     labels = res_data.get("labels") or []
     flags = res_data.get("stopbys") or []
-    pairs = [(l, i < len(flags) and bool(flags[i])) for i, l in enumerate(labels) if l]
-    last = len(pairs) - 1
-    chain = [l for k, (l, s) in enumerate(pairs) if k == last or not s]
-    stopbys = [l for k, (l, s) in enumerate(pairs) if k != last and s]
+    lats, lons = res_data.get("lats"), res_data.get("lons")
+    aligned = lats is not None and lons is not None and len(lats) == len(labels) == len(lons)
+    rows = [(i, l) for i, l in enumerate(labels) if l]
+    last = len(rows) - 1
+    chain: List[str] = []
+    stopbys: List[List[Any]] = []
+    for k, (i, l) in enumerate(rows):
+        if k != last and i < len(flags) and flags[i]:
+            stopbys.append([l, len(chain), float(lats[i]) if aligned else None, float(lons[i]) if aligned else None])
+        else:
+            chain.append(l)
     return chain, stopbys
 
 
