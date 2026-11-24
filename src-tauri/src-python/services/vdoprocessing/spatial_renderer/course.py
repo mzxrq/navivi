@@ -628,6 +628,7 @@ class _CourseOverviewMixin:
         # The drawn path resampled every few px: a ferry leg is one long segment whose raw points are
         # only its ends, so a badge or card on the middle of it counted as covering no route.
         dense = np.column_stack([np.interp(np.arange(0.0, total, 6.0), cum, path[:, i]) for i in (0, 1)])
+        self._course_route_px = dense  # zoomed cards keep off the route too (_zoom_card_place)
         obstacles = dense if route_obstacle_arr is None or not len(route_obstacle_arr) else np.vstack(
             [dense, route_obstacle_arr])
         pill_recap, laid_out, cards = self._course_cards(
@@ -1105,49 +1106,96 @@ class _CourseOverviewMixin:
             return {}
         return dict(zip(keys, sink.paths)) if len(sink.paths) == len(keys) else {}
 
-    def _zoom_card_side(
-        self, card: Dict, scene: _Scene, t: float, view: Tuple[float, float, float], reserved,
-        cw: int, ch: int, w: int, h: int,
-    ) -> int:
-        """Which of _pass_card_spots a card takes while zoomed: the first clear of the panels, then of every pin,
-        at the zoom's closest view (kept for the whole zoom, so the card follows its pin without jumping)."""
+    def _zoom_card_place(
+        self, card: Dict, scene: _Scene, t: float, view: Tuple[float, float, float], reserved, w: int, h: int,
+    ) -> Tuple[int, int, float]:
+        """(x, y, scale) of a card while zoomed, at the zoom's closest view (kept for the whole zoom, so the card follows
+        its pin without jumping). Every card of one zoom is placed together, at one size (see _zoom_place_group)."""
         ease = tuning.COURSE_DENSE_EASE_SECONDS
-        hold = next(((s, x0, y0) for t_in, t_out, s, x0, y0 in getattr(self, "_course_zooms", ())
-                     if t_in - ease < t < t_out + ease), view)
+        zoom = next((z for z in getattr(self, "_course_zooms", ()) if z[0] - ease < t < z[1] + ease), None)
+        hold = tuple(zoom[2:]) if zoom else view
         cache = self.__dict__.setdefault("_zoom_card_sides", {})
         key = (card["index"], hold)
         if key not in cache:
-            s, x0, y0 = hold
+            group = [c for c in scene.cards.values() if c.get("pass_box") and zoom is not None
+                     and zoom[0] - ease <= c.get("course_at", 0.0) <= zoom[1] + ease]
+            if not any(c is card for c in group):
+                group.append(card)
+            self._zoom_place_group(sorted(group, key=lambda c: c.get("course_at", 0.0)), hold, scene, reserved, w, h,
+                                   cache)
+        return cache[key]
 
-            def at(x: float, y: float) -> Tuple[float, float]:
-                return (x - x0) * s, (y - y0) * s
+    def _zoom_place_group(self, group: List[Dict], hold, scene: _Scene, reserved, w: int, h: int, cache: Dict) -> None:
+        """Places a zoom's cards, in the order they pop, all at ONE size (a lone smaller card read as a mistake): the
+        largest, down to COURSE_ZOOM_CARD_MIN_SCALE of the full one, at which each finds a spot within 150 px clear of
+        the panels, the cards still up, every pin and the route.
 
-            pins = [_pin_head_box(self.graphics, *at(p.get("pin_x", p["x"]), p.get("pin_y", p["y"])))
-                    for p in scene.on_route]
-            spots = self._pass_card_spots(*at(card.get("pin_x", card["x"]), card.get("pin_y", card["y"])), cw, ch, w, h)
+        [NOTE] [Course] The cards ring the group: each goes out along the line from the middle of the pins in view
+        through its own pin, so it lands outside the cluster in open space on its pin's side, never among the other
+        pins and the route (the 8 spots round its own pin all lay inside the crowd, Tomogashima 5-8, 2026-11-24)."""
+        from .popups import _card_bottom_limit
+
+        s, x0, y0 = hold
+
+        def at(x: float, y: float) -> Tuple[float, float]:
+            return (x - x0) * s, (y - y0) * s
+
+        pins = [_pin_head_box(self.graphics, *at(p.get("pin_x", p["x"]), p.get("pin_y", p["y"])))
+                for p in scene.on_route]
+        route = getattr(self, "_course_route_px", None)
+        zr = None if route is None else (route - np.array([x0, y0])) * s
+        inside = [(qx, qy) for qx, qy in (at(p.get("pin_x", p["x"]), p.get("pin_y", p["y"])) for p in scene.on_route)
+                  if 0 <= qx <= w and 0 <= qy <= h]
+        cx, cy = np.mean(inside, axis=0) if inside else (w / 2, h / 2)
+        margin, r0 = self._RECAP_CARD_MARGIN, float(self.graphics.marker_radius) + 8
+        shrink = tuning.COURSE_PASS_CARD_SHRINK_SECONDS
+
+        floor = tuning.COURSE_PASS_CARD_SCALE * h / 1080 * tuning.COURSE_ZOOM_CARD_MIN_SCALE
+        scales = [min(float(c["pass_scale"]) for c in group)]
+        while scales[-1] * 0.85 >= floor:
+            scales.append(scales[-1] * 0.85)
+
+        for sc in scales:
+            last = sc == scales[-1]
+            cw, ch = self.graphics.beside_card_footprint(sc)
+            max_x, max_y = max(margin, w - cw - margin), max(margin, _card_bottom_limit(h, margin) - ch)
 
             def hits(boxes, x, y):
                 return sum(1 for b in boxes if x < b[2] and b[0] < x + cw and y < b[3] and b[1] < y + ch)
 
-            # [NOTE] [Course] Cards up together must not overlap: each keeps off the earlier ones still showing when it
-            # pops up (they were placed first, so this never loops), the way _course_pass_cards does on the whole map.
-            shrink = tuning.COURSE_PASS_CARD_SHRINK_SECONDS
-            start = card.get("course_at", 0.0)
-            cards = []
-            for other in scene.cards.values():
-                if other is card or not other.get("pass_box"):
-                    continue
-                if not (other.get("course_at", 0.0) < start < other["pass_until"] + shrink):
-                    continue
-                ow, oh = self.graphics.beside_card_footprint(float(other["pass_scale"]))
-                side = self._zoom_card_side(other, scene, t, view, reserved, ow, oh, w, h)
-                ox, oy = self._pass_card_spots(*at(other.get("pin_x", other["x"]), other.get("pin_y", other["y"])), ow, oh, w, h)[side]
-                cards.append((ox, oy, ox + ow, oy + oh))
+            def covered(x: float, y: float) -> int:
+                return 0 if zr is None else int(np.count_nonzero(
+                    (zr[:, 0] >= x) & (zr[:, 0] <= x + cw) & (zr[:, 1] >= y) & (zr[:, 1] <= y + ch)))
 
-            cache[key] = min(
-                range(len(spots)), key=lambda n: (hits(reserved, *spots[n]), hits(cards, *spots[n]), hits(pins, *spots[n]), n)
-            )
-        return cache[key]
+            placed: Dict[int, Tuple[int, int]] = {}
+            ok = True
+            for c in group:
+                px, py = at(c.get("pin_x", c["x"]), c.get("pin_y", c["y"]))
+                base = math.atan2(py - cy, px - cx) if math.hypot(px - cx, py - cy) > 1 else -math.pi / 2
+                up = [(ox, oy, ox + cw, oy + ch) for o in group if o["index"] in placed
+                      and o.get("course_at", 0.0) < c.get("course_at", 0.0) < o["pass_until"] + shrink
+                      for ox, oy in [placed[o["index"]]]]
+                spots = []
+                for step in range(14 if last else 6):  # full size only near its pin; only the smallest goes further
+                    for da in (0, 15, -15, 30, -30, 45, -45, 60, -60):
+                        a = base + math.radians(da)
+                        ca, sa = math.cos(a), math.sin(a)
+                        r = r0 + abs(ca) * cw / 2 + abs(sa) * ch / 2 + step * 30
+                        x, y = px + ca * r - cw / 2, py + sa * r - ch / 2
+                        spots.append((int(min(max(x, margin), max_x)), int(min(max(y, margin), max_y)), step, abs(da)))
+                spot = next(((x, y) for x, y, _, _ in spots if not hits(reserved, x, y) and not hits(up, x, y)
+                             and not hits(pins, x, y) and covered(x, y) <= 2), None)
+                if spot is None:
+                    ok = False
+                    if not last:
+                        break
+                    spot = min(spots, key=lambda q: (hits(reserved, q[0], q[1]), hits(up, q[0], q[1]),
+                                                     hits(pins, q[0], q[1]), covered(q[0], q[1]), q[2], q[3]))[:2]
+                placed[c["index"]] = spot
+            if ok or last:
+                for c in group:
+                    cache[(c["index"], hold)] = (*placed[c["index"]], sc)
+                return
 
     def _course_zoomed_map(
         self, i: int, t: float, view: Tuple[float, float, float], gl_bg: np.ndarray, scene: _Scene, state,
@@ -1196,13 +1244,10 @@ class _CourseOverviewMixin:
             scene.draw_marker(frame, moved(ap), scene.total_points, scale=scale)
         for index, shrinking, u in passing:
             card = scene.cards[index]
-            hud, a = self._course_pass_hud(card, bool(shrinking), u)
-            # Its usual size, on the side of its pin that is clear in the ZOOMED layout (the whole-map spot
-            # landed on other pins once they spread apart), moved as it grows in or shrinks away as usual.
-            px, py = card.get("pin_x", card["x"]), card.get("pin_y", card["y"])
-            cw, ch = self.graphics.beside_card_footprint(float(card["pass_scale"]))
-            side = self._zoom_card_side(card, scene, t, view, reserved, cw, ch, w, h)
-            sx, sy = self._pass_card_spots(*at(px, py), cw, ch, w, h)[side]
+            # Beside its pin in the ZOOMED layout (the whole-map spot landed on other pins once they spread apart),
+            # smaller in a crowd, moved as it grows in or shrinks away as usual.
+            sx, sy, sc = self._zoom_card_place(card, scene, t, view, reserved, w, h)
+            hud, a = self._course_pass_hud(dict(card, pass_scale=sc), bool(shrinking), u)
             (bx, by), (cx0, cy0) = hud["beside_box"], card["pass_box"]
             frame = self.graphics.render_popup_box(
                 frame, dict(hud, beside_box=(int(sx + bx - cx0), int(sy + by - cy0))), alpha=a, skip_line=True)

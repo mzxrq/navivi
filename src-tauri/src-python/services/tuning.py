@@ -339,6 +339,9 @@ COURSE_PASS_CARD_SECONDS = 2.5
 COURSE_PASS_CARD_MIN_SECONDS = 1.8  # 0.9 flashed past where the trace passes stops a fraction of a second apart
 # Cards up together share one size: 1/sqrt(most up at once) of the full one, never under this share of it.
 COURSE_PASS_CARD_CROWD_MIN_SCALE = 0.5
+# While zoomed a crowd's card may shrink further, down to this share of the full size, to fit right beside its own
+# pin: at half size Tomogashima's 5-8 still landed on other pins and the route.
+COURSE_ZOOM_CARD_MIN_SCALE = 0.3
 COURSE_PASS_CARD_SHRINK_SECONDS = 0.45
 COURSE_PASS_CARD_SCALE = 1.8
 COURSE_STATS_SLIDE_SECONDS = 0.6
