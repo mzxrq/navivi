@@ -1226,6 +1226,8 @@ class _CourseOverviewMixin:
         head_at = np.array(at(*head), dtype=float)
         if t >= timing.route_at and k > 0:
             self._draw_trace_line(frame, zoomed, k, head_at)
+        if timing.route_at <= t < timing.trace_end + _TRACE_TAIL_SECONDS:  # under the badges and cards drawn next
+            self._draw_walker(frame, i, t, k, head_at, zoomed, timing, heading)
 
         shown, _anim, bumps, arrived, extra_on, passing, dim = state
         badge_alpha = max(0.0, 1.0 - (s - 1.0) / 0.15) * dim
@@ -1252,8 +1254,6 @@ class _CourseOverviewMixin:
             frame = self.graphics.render_popup_box(
                 frame, dict(hud, beside_box=(int(sx + bx - cx0), int(sy + by - cy0))), alpha=a, skip_line=True)
 
-        if timing.route_at <= t < timing.trace_end + _TRACE_TAIL_SECONDS:
-            self._draw_walker(frame, i, t, k, head_at, zoomed, timing, heading)
         return frame
 
     def _course_play(
@@ -1313,10 +1313,11 @@ class _CourseOverviewMixin:
             frame = route_bg.copy()
             if t >= timing.route_at and k > 0:
                 self._draw_trace_line(frame, trace, k, head)
-            blended = cv2.add(cv2.multiply(frame, keep, dtype=cv2.CV_32F), layer)
-            frame = np.clip(blended, 0, 255, out=blended).astype(np.uint8)
+            # Under the cards-and-pins layer: the walker or ferry passes BEHIND a badge, not over it.
             if timing.route_at <= t < timing.trace_end + _TRACE_TAIL_SECONDS:
                 self._draw_walker(frame, i, t, k, head, trace, timing, heading)
+            blended = cv2.add(cv2.multiply(frame, keep, dtype=cv2.CV_32F), layer)
+            frame = np.clip(blended, 0, 255, out=blended).astype(np.uint8)
             if view is not None:
                 frame = _crop_zoom(frame, *view)
         return self._composite_course_panels(
