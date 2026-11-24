@@ -864,7 +864,9 @@ class _CourseOverviewMixin:
         taken = [
             (bx, by, bx + cw, by + ch)
             for ap in laid_out if ap.get("beside_box")
-            for (bx, by), (cw, ch) in [(ap["beside_box"], self.graphics.beside_card_footprint(ap.get("card_scale", 1.0)))]
+            for (bx, by), (cw, ch) in [(ap["beside_box"], self.graphics.beside_card_footprint(
+                is_pill_badge=True, pill_name_chars=len(str(ap.get("label") or "")))
+                if ap.get("is_pill_badge") else self.graphics.beside_card_footprint(ap.get("card_scale", 1.0)))]
         ] + [
             (ap.get("pin_x", ap["x"]) - r, ap.get("pin_y", ap["y"]) - r,
              ap.get("pin_x", ap["x"]) + r, ap.get("pin_y", ap["y"]) + r)
@@ -885,7 +887,10 @@ class _CourseOverviewMixin:
                 if 0 <= x and x + sw <= w and 0 <= y and y + sh <= h
                 and not any(x < b[2] and b[0] < x + sw and y < b[3] and b[1] < y + sh for b in taken)
             ]
-            x, y = (free or sides)[0]
+            def overlap(c):
+                return sum(max(0, min(c[0] + sw, b[2]) - max(c[0], b[0])) * max(0, min(c[1] + sh, b[3]) - max(c[1], b[1]))
+                           for b in taken)
+            x, y = free[0] if free else min(sides, key=overlap)
             label_at[id(ap)] = (x, y)
             taken.append((x, y, x + sw, y + sh))
         return labels, label_at

@@ -51,12 +51,14 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 
 # Bump when the overview's rendering code changes what it draws, so
 # checkpointed overviews made by older code are re-rendered.
-# v57: the course style arranges its pill badges the way the recap does (no leader lines, packed tight, over the map's
+# v59: a badge across the route from its pin comes back beside it, a course zoom waits for its last card, and a pin
+# nudged apart from its neighbours slides along the route instead of off it; v58: no white
+# halo on the ferry sprite, and zoomed-in course cards keep off each other; v57: the course style arranges its pill badges the way the recap does (no leader lines, packed tight, over the map's
 # clear space), a reserved box over the TOP of the badge band shortens its columns instead of wiping them out, and its
 # stops are plain colour dots; v56: top HUD panels 1.5x bigger; v55: the recap sits on a plain plate and arranges its
 # badges on one lattice in walked order (see CLAUDE.md "overview recap's pill badges"); v54: a return stop takes no
 # number of its own. Older history: git log.
-OVERVIEW_RENDER_VERSION = 57
+OVERVIEW_RENDER_VERSION = 59
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.

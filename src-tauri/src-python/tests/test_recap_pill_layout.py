@@ -608,3 +608,42 @@ def test_on_a_loop_the_last_badge_is_a_numbered_stop_not_the_end():
     stops = [dict(_popup(700 + 200 * k, 500, f"N{k}", k + 1), index=10 * (k + 1)) for k in range(3)]
     _layout()._layout_recap_cards([start] + stops, 1920, 1080, leaders=False, total_points=41)  # E is index 40
     assert stops[-1]["pin_color"] == stops[-1]["recap_line_color"]
+
+
+def test_a_badge_stranded_across_the_route_comes_back_beside_its_pin():
+    """The lattice cell is as tall as the longest name, so a stop in tight water can be left a badge across the route from
+    it. That badge moves to clear space beside the pin; a badge merely far away (no route between) keeps its grid cell."""
+    import numpy as np
+
+    from services.vdoprocessing.spatial_renderer.popups import _RecapCardsGeom
+
+    route = np.array([[x, 400.0] for x in range(0, 1900, 6)])  # a line between the pin and its badge
+    pin = (300.0, 600.0)
+    layout = _layout()
+
+    def run(obstacles):
+        geom = _RecapCardsGeom([(1000, 60)], 34, 180, False, obstacles, 20)
+        geom.card_hs = [180]
+        slot_for = [0]
+        layout._recap_cards_pull_in(geom, slot_for, [pin], set(), 1920, 1080, [], obstacles)
+        return geom.slots[slot_for[0]]
+
+    x, y = run(route)
+    assert abs(x + 17 - pin[0]) < 150 and abs(y + 90 - pin[1]) < 200
+    assert not np.any((route[:, 0] >= x) & (route[:, 0] <= x + 34) & (route[:, 1] >= y) & (route[:, 1] <= y + 180))
+    assert run(None) == (1000, 60)  # nothing between them: stays on the grid
+
+
+def test_a_nudged_pin_slides_along_the_route_not_off_it():
+    """Two stops a few px apart on one line are pushed apart ALONG it: pushed sideways (up to 1.5 radii), a pin read as
+    unconnected to the route it sits on. A stop-by well off the route is still nudged freely."""
+    import numpy as np
+
+    route = np.array([[x, 500.0] for x in range(100, 900, 5)])
+    a, b = _popup(400, 500, "a", 1), _popup(410, 500, "b", 2)
+    near, off = _popup(300, 700, "n", 3), _popup(306, 700, "o", 4)  # 200 px off the route
+    layout = _layout()
+    layout._declutter_pins([a, b, near, off], route=route)
+    assert abs(a["pin_y"] - 500) < 1 and abs(b["pin_y"] - 500) < 1
+    assert b["pin_x"] - a["pin_x"] > 10  # still moved apart
+    assert abs(off["pin_x"] - near["pin_x"]) > 6  # off the route: nudged as before
