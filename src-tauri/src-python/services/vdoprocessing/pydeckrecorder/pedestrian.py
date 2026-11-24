@@ -404,8 +404,9 @@ def render_residential_leg_pydeck(
 
     `dest_popup_narration_seconds`/`start_popup_narration_seconds`: the
     narration length of the destination/departure waypoint, passed by
-    route2vdo.py. Accepted for its callers but not used yet: the photo holds
-    do not wait for narration (leg_pieces.py pads the clip's tail instead).
+    route2vdo.py. The arrival card (and each stop-by's, from its landmark's
+    `narration_audio_seconds`) stays small until its voice is done, then grows
+    fullscreen. The departure's is not used.
 
     `start_cue_seconds`: when the leg's narration carries a {start} cue, the
     second of the narration at which the walker should START moving. The
@@ -728,7 +729,7 @@ def render_residential_leg_pydeck(
             segment_colors=segment_colors, opening_photo=opening_photo,
             opening_view=opening_view, end_view_path=end_view_path, wait_spots=wait_spots, prior_trail=prior_trail,
             hold_end_card=hold_end_card, progress=progress, chain_badges=chain_badges, stopby_chain=stopby_chain,
-            piece_start_cues=piece_start_cues,
+            piece_start_cues=piece_start_cues, dest_popup_narration_seconds=dest_popup_narration_seconds,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -760,6 +761,7 @@ async def _record_leg(
     chain_badges: Optional[Tuple[Optional[str], Optional[str]]] = None,
     stopby_chain: Optional[List[List[Any]]] = None,
     piece_start_cues: Optional[List[Optional[float]]] = None,
+    dest_popup_narration_seconds: Optional[float] = None,
 ):
     """`wait_spots`: [(walk seconds, card, hold seconds)] for {view wait} street views (see _wait_view_plan).
     `hold_end_card`: the arrival photo card (pip) stays up at the end instead of fading: the next leg slides on with it
@@ -1770,7 +1772,7 @@ async def _record_leg(
                             lm, *view, output_size, f"{tag}_{k}",
                             pitch=follow_pitch,
                             **_quiet_card(lm),
-                            small_hold_seconds=wait_s if wait_s > 0 else None,
+                            small_hold_seconds=_card_hold(wait_s if wait_s > 0 else None, lm.get("narration_audio_seconds")),
                         )
                         if frame_state["cuts"] > cuts_before:
                             await _open_piece()
@@ -1829,6 +1831,15 @@ async def _record_leg(
 
                 def _voice_from(offset_seconds: float) -> None:
                     voice["piece"], voice["start"] = frame_state["cuts"], frame_state["clip_start"] + offset_seconds * fps
+
+                def _card_hold(planned_s, audio_seconds, pop_s: float = 0.3):
+                    """The small card's hold before it grows fullscreen: the planned wait, or longer while this
+                    piece's voice is still talking (the trigger frame or a one-pace leg can arrive before it ends)."""
+                    left = 0.0
+                    if voice["start"] is not None and audio_seconds:
+                        left = (voice["start"] + float(audio_seconds) * fps - frame_state["count"]) / fps - pop_s
+                    hold = max(float(planned_s or 0.0), left)
+                    return hold if hold > 0 else (None if planned_s is None else 0.0)
 
                 async def _open_piece() -> None:
                     """A new piece's opening is over: hold its last frame until the piece's {start}, as the leg's
@@ -2065,7 +2076,9 @@ async def _record_leg(
                             stopby_lm, locked_lon, locked_lat, locked_zoom, output_size, index,
                             pitch=follow_pitch,
                             **_quiet_card(stopby_lm),
-                            small_hold_seconds=wait_s if wait_s > 0 else None,
+                            small_hold_seconds=_card_hold(
+                                wait_s if wait_s > 0 else None, stopby_lm.get("narration_audio_seconds"),
+                            ),
                         )
                         if any(lm.get("pops_after") == stopby_lm.get("waypoint_id") for lm in followers):
                             if frame_state["cuts"] > cuts_before:
@@ -2293,9 +2306,10 @@ async def _record_leg(
                             dest_popup_image, dest_popup_freeze_seconds,
                             "dest_arrival", marker_px=arrival_marker_px, grow=True,
                             cut_after=True, quick=True,
-                            small_hold_seconds=(
+                            small_hold_seconds=_card_hold(
                                 None if arrival_wait_seconds is None
-                                else max(0.0, arrival_wait_seconds - tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS)
+                                else max(0.0, arrival_wait_seconds - tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS),
+                                dest_popup_narration_seconds,
                             ),
                             pip_end=dest_image_display == "pip",
                             # The camera was just recentered above so the plain "directly above the pin"

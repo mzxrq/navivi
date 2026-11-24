@@ -357,7 +357,11 @@ def _leg_narration(*, waypoints: list, leg_item: dict, start_pos: int, end_pos: 
             piece_start_cues = []
         arrival_wait_seconds = piece_plans[end_pos][2]
         marker_plans = {
-            waypoints[p].get("id"): {"walk_seconds": piece_plans[p][0], "wait_seconds": piece_plans[p][2]}
+            waypoints[p].get("id"): {
+                "walk_seconds": piece_plans[p][0], "wait_seconds": piece_plans[p][2],
+                # The renderer keeps the small card up until this piece's voice is done (the markers came without it).
+                "narration_audio_seconds": audio_durations[p] if p < len(audio_durations) and audio_durations[p] else None,
+            }
             for p in stop_positions
         }
         logger.info(
