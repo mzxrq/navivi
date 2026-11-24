@@ -621,17 +621,18 @@ def test_a_badge_stranded_across_the_route_comes_back_beside_its_pin():
     pin = (300.0, 600.0)
     layout = _layout()
 
-    def run(obstacles):
+    def run(obstacles, kind=1):
         geom = _RecapCardsGeom([(1000, 60)], 34, 180, False, obstacles, 20)
         geom.card_hs = [180]
         slot_for = [0]
-        layout._recap_cards_pull_in(geom, slot_for, [pin], set(), 1920, 1080, [], obstacles)
+        layout._recap_cards_pull_in(geom, slot_for, [pin], set(), [kind], 1920, 1080, [], obstacles)
         return geom.slots[slot_for[0]]
 
-    x, y = run(route)
+    x, y = run(route)  # a stop-by
     assert abs(x + 17 - pin[0]) < 150 and abs(y + 90 - pin[1]) < 200
     assert not np.any((route[:, 0] >= x) & (route[:, 0] <= x + 34) & (route[:, 1] >= y) & (route[:, 1] <= y + 180))
     assert run(None) == (1000, 60)  # nothing between them: stays on the grid
+    assert run(route, kind=0) == (1000, 60)  # a numbered stop keeps its place in the S, 1, 2 … run
 
 
 def test_a_nudged_pin_slides_along_the_route_not_off_it():
@@ -647,3 +648,60 @@ def test_a_nudged_pin_slides_along_the_route_not_off_it():
     assert abs(a["pin_y"] - 500) < 1 and abs(b["pin_y"] - 500) < 1
     assert b["pin_x"] - a["pin_x"] > 10  # still moved apart
     assert abs(off["pin_x"] - near["pin_x"]) > 6  # off the route: nudged as before
+
+
+def test_a_closed_place_the_route_loops_around_still_gets_its_badge_beside_it():
+    """神島: with no route-free spot anywhere near, the closed place's badge rests on the line beside its own pin
+    (still off every pin) instead of staying across the map."""
+    import numpy as np
+
+    from services.vdoprocessing.spatial_renderer.popups import _RecapCardsGeom
+
+    route = np.array([[x, y] for y in range(100, 1000, 40) for x in range(0, 1900, 6)], dtype=float)  # lines everywhere
+    pin, other_pin = (300.0, 600.0), (300.0, 420.0)
+    geom = _RecapCardsGeom([(1000, 60), (1400, 60)], 34, 180, False, route, 20)
+    geom.card_hs = [180, 180]
+    slot_for = [0, 1]
+    _layout()._recap_cards_pull_in(geom, slot_for, [pin, other_pin], {1}, [2, 0], 1920, 1080, [], route)
+    x, y = geom.slots[slot_for[0]]
+    assert abs(x + 17 - pin[0]) < 150 and abs(y + 90 - pin[1]) < 250
+    for qx, qy in (pin, other_pin):
+        assert not (x - 20 <= qx <= x + 34 + 20 and y - 20 <= qy <= y + 180 + 20)
+
+
+
+def test_pill_badges_lock_only_stopby_clusters_into_one_block():
+    """Without leader lines a cluster of numbered stops is matched badge by badge (locked as one block, Tomogashima's
+    8 stops only fitted in a row 300 px off); a cluster of stop-bys still claims its block together."""
+    import numpy as np
+
+    from services.vdoprocessing.spatial_renderer.popups import _RecapCardsGeom
+
+    slots = [(100 + 48 * i, 60) for i in range(10)]
+    pins = [(300.0, 600.0), (310.0, 600.0), (320.0, 600.0)]
+    layout = _layout()
+
+    def run(kind):
+        geom = _RecapCardsGeom(slots, 34, 180, False, None, 20)
+        geom.card_hs = [180] * 3
+        return layout._recap_cards_lock_clusters(
+            geom, [[0, 1, 2]], pins, [1, 2, 3], np.zeros(len(slots)), [0] * 3, 3, [kind] * 3)
+
+    locked, free = run(0)
+    assert locked == set() and len(free) == len(slots)
+    locked, free = run(1)
+    assert locked == {0, 1, 2} and len(free) == len(slots) - 3
+
+
+def test_a_band_of_columns_slides_its_row_off_the_route():
+    """One row fits under the headline with room to spare: centred it lies on a line across the band, so the whole
+    band's row moves down below it, every column together so the badges stay in one row."""
+    import numpy as np
+
+    layout = _layout()
+    head = [(0.0, 0.0, 1920.0, 185.0)]
+    route = np.array([[x, 400.0] for x in range(0, 1920, 6)])  # crosses the centred row, clear of the bottom one
+    slots = layout._recap_card_slots(1920, 1080, 34, 395, head, route)
+    assert slots and len({y for _, y in slots}) == 1
+    y = slots[0][1]
+    assert y > 400  # below the line

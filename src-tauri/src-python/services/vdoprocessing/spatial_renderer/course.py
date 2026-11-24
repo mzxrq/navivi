@@ -830,8 +830,7 @@ class _CourseOverviewMixin:
                                             route_obstacles=route_obstacle_arr,
                                             background=current_bg if pill_recap else None,
                                             leaders=not pill_recap,
-                                            total_points=stop_popup["index"] + 1 if stop_popup else None,
-                                            clutter_pull=self._CLUTTER_PULL_COURSE_PX)
+                                            total_points=stop_popup["index"] + 1 if stop_popup else None)
         return pill_recap, laid_out, {ap["index"]: ap for ap in laid_out}
 
     def _course_pass_cards(
@@ -1470,3 +1469,4 @@ class _CourseOverviewMixin:
         ImageDraw.Draw(img).text((2 - box[0], 2 - box[1]), text, font=font, fill=(40, 30, 25, 255),
                                  stroke_width=3, stroke_fill=(255, 255, 255, 255))
         return np.array(img)[:, :, [2, 1, 0, 3]]
+    

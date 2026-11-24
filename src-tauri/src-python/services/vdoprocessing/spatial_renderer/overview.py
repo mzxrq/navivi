@@ -51,6 +51,22 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 
 # Bump when the overview's rendering code changes what it draws, so
 # checkpointed overviews made by older code are re-rendered.
+# v72: a badge resting on the route by its own stop costs less (_ROUTE_COVER_PULL_PX 260 -> 180): stop 1 stays with 2, 3.
+# v71: the walker / ferry passes behind the badges and cards, not over them.
+# v70: all of one zoom's photo cards share one size (the largest at which every one fits).
+# v69: zoomed photo cards ring the group (out from the middle of the pins through their own), clear of pins and route;
+# cards popping during a zoom-out are cut, as before v67.
+# v68: zoomed photo cards shrink in a crowd (to half) until each fits right beside its own pin, clear of the rest.
+# v67: a photo card popping once a zoom-out has begun is shown, not cut before it ever appeared.
+# v66: course badges use the walk recap's clutter pull, numbered stops take their nearest cells, and a band of
+# columns slides its row off the route and pins (Tomogashima: 4-7 left of the island, 8-11 right of it).
+# v65: zoomed photo cards keep off the route line (nearest clear spot, still beside the pin).
+# v64: pill badges of a cluster of numbered stops take the cells nearest their own pins (no one-block lock).
+# v63: the trace no longer waits at a zoom (it rushed to catch up): a card still up at the zoom-out is cut there;
+# a closed place the route loops around (神島) gets its badge beside its pin, on the line if need be.
+# v62: zoomed cards stay near their pin; numbered recap badges are no longer pulled out of their S, 1, 2 … order.
+# v61: zoomed photo cards also try the rings further out, so a crowd of them no longer covers one another.
+# v60: a course zoom's card hold stops at the trace head's exit from the view (it ran the zoom-out late, the ferry left frame).
 # v59: a badge across the route from its pin comes back beside it, a course zoom waits for its last card, and a pin
 # nudged apart from its neighbours slides along the route instead of off it; v58: no white
 # halo on the ferry sprite, and zoomed-in course cards keep off each other; v57: the course style arranges its pill badges the way the recap does (no leader lines, packed tight, over the map's
@@ -58,7 +74,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # stops are plain colour dots; v56: top HUD panels 1.5x bigger; v55: the recap sits on a plain plate and arranges its
 # badges on one lattice in walked order (see CLAUDE.md "overview recap's pill badges"); v54: a return stop takes no
 # number of its own. Older history: git log.
-OVERVIEW_RENDER_VERSION = 59
+OVERVIEW_RENDER_VERSION = 72
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -115,7 +131,6 @@ def _overview_fingerprint_parts(config: Dict, job_config: Optional[Dict], bg_pat
         else:
             parts[f"job_config.{key}"] = _fingerprint_hash(value)[:16]
     return parts
-
 
 def _read_overview_inputs(path: Path) -> Dict:
     try:
@@ -1132,7 +1147,7 @@ class _OverviewRenderMixin:
             audio_cues, walk_start_frames, num_frames, mode_breakpoints, smooth_path, cum_smooth_dist,
             total_smooth_dist,
         )
-        if self.config.get("overview_style") == "course" and not preview_recap_only:
+        if self.config.get("overview_style") == "course":
             result = self._render_course_overview(
                 current_bg, w, h, fps, points, smooth_path, mode_breakpoints, cum_smooth_dist,
                 total_smooth_dist, active_popups, route_obstacle_arr, summary, overview_path,
