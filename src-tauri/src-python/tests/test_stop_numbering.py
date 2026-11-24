@@ -59,15 +59,16 @@ def test_a_leg_only_change_keeps_the_overview(tmp_path):
     assert stale({"route.photos": "old"})
 
 
-def test_the_leg_hud_counts_places_in_travel_order_through_return_stops():
-    """S -> A -> B -> back to A -> back to S: the counter reads 2, 3, 4, 5 of 5, never A's own number again."""
-    from services.vdoprocessing.videopipeline.leg_sequence import _Leg, _Pins, _leg_pin_fields
+def test_the_leg_hud_does_not_count_return_stops():
+    """S -> A -> B -> back to A -> E: the counter reads 2, 3, 3, 4 of 4."""
+    from services.vdoprocessing.videopipeline.leg_sequence import _Leg, _Pins, _leg_pin_fields, _place_numbers
 
     wps = [{"id": n, "label": n, "lat": 0.0, "lng": float(i)} for i, n in enumerate("SAB")]
     wps += [{"id": "A2", "label": "A", "lat": 0.0, "lng": 1.0}, {"id": "S2", "label": "S", "lat": 0.0, "lng": 0.0}]
     pins = _Pins({}, ["S", "1", "2", "1", "E"], {}, {}, {}, [])
+    nums = _place_numbers([{}] * 4, wps, {})
     got = [
-        _leg_pin_fields(_Leg({}, k, 0, 1, k, k + 1, None, "walking"), wps, {}, pins, 4)
+        _leg_pin_fields(_Leg({}, k, 0, 1, k, k + 1, None, "walking"), wps, {}, pins, 4, nums)
         for k in range(4)
     ]
-    assert [(f["stop_number"], f["total_stops"]) for f in got] == [(2, 5), (3, 5), (4, 5), (5, 5)]
+    assert [(f["stop_number"], f["total_stops"]) for f in got] == [(2, 4), (3, 4), (3, 4), (4, 4)]
