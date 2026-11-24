@@ -25,3 +25,13 @@ def test_a_later_pieces_pace_cues_count_from_its_start():
     plan, _, _ = _paced_plan(KM, [(50, 5.0), (100, 10.0)], [(1, "slow", 5.0, 9.0)], start_cue_seconds=[None, 3.0])
     assert plan[1][1] == 2.0 and plan[1][3] == 1  # slow from voice 5 s = 2 s after the piece's {start} at 3 s
     assert plan[-1][0] == 100 and abs(sum(e[1] for e in plan) - 15.0) < 1e-9
+
+
+def test_a_slow_over_the_whole_walk_uses_the_early_wait_walking(tmp_path):
+    from services.vdoprocessing.videopipeline.narration_step import leg_walk_plan
+
+    store = CueStore(tmp_path)
+    store.set_cue_times("a", {"start": 2.0, "slow1": 2.0, "slowend1": 20.0})
+    assert leg_walk_plan(store, {"id": "a"}, 1, 20.0, natural_seconds=10.0) == (18.0, 2.0, 0.0)
+    store.set_cue_times("a", {"start": 2.0, "slow1": 8.0, "slowend1": 12.0})  # only part slow: arrives 3 s early as before
+    assert leg_walk_plan(store, {"id": "a"}, 1, 20.0, natural_seconds=10.0) == (15.0, 2.0, 3.0)
