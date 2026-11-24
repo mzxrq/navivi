@@ -332,6 +332,43 @@ def dense_zooms(
     return out
 
 
+def hold_zooms_for_cards(
+    zooms: List[Tuple[float, float, float, float, float]], cards: List[Tuple[float, float]],
+) -> List[Tuple[float, float, float, float, float]]:
+    """`zooms` with each one held until the last photo card popped inside it has been shown in full (`cards` =
+    (popped at, shown until)), so the camera zooms out after the card, not while it collapses. Never into the
+    next zoom's own ease."""
+    ease = tuning.COURSE_DENSE_EASE_SECONDS
+    out = []
+    for n, (t_in, t_out, *rest) in enumerate(zooms):
+        t_end = max([t_out] + [until for at, until in cards if t_in <= at <= t_out + ease])
+        if n + 1 < len(zooms):
+            t_end = min(t_end, zooms[n + 1][0] - 2 * ease)
+        out.append((t_in, max(t_out, t_end), *rest))
+    return out
+
+
+def release_zooms_before_exit(
+    zooms: List[Tuple[float, float, float, float, float]], path: np.ndarray, cum: np.ndarray, anchors: List[Tuple],
+    w: int, h: int, margin: float = 90.0,
+) -> List[Tuple[float, float, float, float, float]]:
+    """`zooms` with each one let go early enough that its zoom-out is done before the trace head (a ferry
+    leaving the pier) leaves the zoomed view, but never before the group's last stop is reached."""
+    ease = tuning.COURSE_DENSE_EASE_SECONDS
+    out = []
+    for t_in, t_out, s, x0, y0 in zooms:
+        t, t_exit = t_out, None
+        while t < anchors[-1][0]:
+            d = distance_at(anchors, t)
+            x, y = np.interp(d, cum, path[:, 0]), np.interp(d, cum, path[:, 1])
+            if not (x0 + margin <= x <= x0 + w / s - margin and y0 + margin <= y <= y0 + h / s - margin):
+                t_exit = t
+                break
+            t += 1 / 30
+        out.append((t_in, t_out if t_exit is None else min(t_out, max(t_in, t_exit - ease)), s, x0, y0))
+    return out
+
+
 def pass_crowd_scales(spans: List[Tuple[float, float]], full: float) -> List[float]:
     """One card scale per (shown from, shown until) span, in time order: cards whose spans chain into each other
     are one crowd, all the same size, `full` shrunk by the square root of the most of them up at once (at least
@@ -567,6 +604,9 @@ class _CourseOverviewMixin:
         self._course_zooms = dense_zooms(
             [ap["course_dist"] for ap in on_route], path, cum, timing.anchors, w, h,
             tuning.COURSE_DENSE_ZOOM_MAX_GL if gl else tuning.COURSE_DENSE_ZOOM_MAX)
+        self._course_zooms = hold_zooms_for_cards(
+            self._course_zooms, [(ap["course_at"], ap["pass_until"]) for ap in laid_out if "pass_until" in ap])
+        self._course_zooms = release_zooms_before_exit(self._course_zooms, path, cum, timing.anchors, w, h)
 
         route_bg, trace = self._course_route_plate(current_bg, path, cum, modes)
         labels, label_at = self._course_extra_labels(extras, cards, laid_out, on_route, w, h)
@@ -1043,7 +1083,24 @@ class _CourseOverviewMixin:
             def hits(boxes, x, y):
                 return sum(1 for b in boxes if x < b[2] and b[0] < x + cw and y < b[3] and b[1] < y + ch)
 
-            cache[key] = min(range(len(spots)), key=lambda n: (hits(reserved, *spots[n]), hits(pins, *spots[n]), n))
+            # [NOTE] [Course] Cards up together must not overlap: each keeps off the earlier ones still showing when it
+            # pops up (they were placed first, so this never loops), the way _course_pass_cards does on the whole map.
+            shrink = tuning.COURSE_PASS_CARD_SHRINK_SECONDS
+            start = card.get("course_at", 0.0)
+            cards = []
+            for other in scene.cards.values():
+                if other is card or not other.get("pass_box"):
+                    continue
+                if not (other.get("course_at", 0.0) < start < other["pass_until"] + shrink):
+                    continue
+                ow, oh = self.graphics.beside_card_footprint(float(other["pass_scale"]))
+                side = self._zoom_card_side(other, scene, t, view, reserved, ow, oh, w, h)
+                ox, oy = self._pass_card_spots(*at(other.get("pin_x", other["x"]), other.get("pin_y", other["y"])), ow, oh, w, h)[side]
+                cards.append((ox, oy, ox + ow, oy + oh))
+
+            cache[key] = min(
+                range(len(spots)), key=lambda n: (hits(reserved, *spots[n]), hits(cards, *spots[n]), hits(pins, *spots[n]), n)
+            )
         return cache[key]
 
     def _course_zoomed_map(

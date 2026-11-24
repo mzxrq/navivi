@@ -145,3 +145,28 @@ def test_a_passing_card_covers_no_pin_its_own_or_a_neighbours():
         b = _pin_head_box(course.graphics, p["x"], p["y"])
         assert not (x < b[2] and b[0] < x + 300 and y < b[3] and b[1] < y + 240)
     assert abs(x + 150 - 960) <= 400 and abs(y + 120 - 540) <= 340  # and still right by its own pin
+
+
+def test_a_zoom_is_held_until_its_last_card_has_been_shown_in_full():
+    from services.vdoprocessing.spatial_renderer.course import hold_zooms_for_cards
+
+    zooms = [(10.0, 20.0, 1.5, 0.0, 0.0), (30.0, 40.0, 1.5, 0.0, 0.0)]
+    # a card popped at 19.5 s shows until 22 s: the first zoom waits for it; a card of the second zoom shows to 45 s,
+    # but is cut at the next zoom's own ease (none here); a card popped between the zooms holds neither
+    held = hold_zooms_for_cards(zooms, [(19.5, 22.0), (35.0, 41.0), (25.0, 27.0)])
+    assert held[0][1] == 22.0 and held[1][1] == 41.0
+    # and never into the next zoom's ease
+    squeezed = hold_zooms_for_cards(zooms, [(19.5, 29.5)])
+    assert squeezed[0][1] <= zooms[1][0] - 2 * 0.8 + 1e-9
+    assert hold_zooms_for_cards(zooms, []) == zooms
+
+
+def test_zoom_lets_go_before_the_trace_head_leaves_the_view():
+    import numpy as np
+    from services.vdoprocessing.spatial_renderer.course import release_zooms_before_exit
+
+    path = np.array([[500.0, 500.0], [500.0, 100.0]])  # runs out of the 1.5x view that starts at (400, 300)
+    cum = np.array([0.0, 400.0])
+    anchors = [(0.0, 0.0), (10.0, 400.0)]
+    (t_in, t_out, *_), = release_zooms_before_exit([(1.0, 8.0, 1.5, 400.0, 300.0)], path, cum, anchors, 1920, 1080)
+    assert t_in == 1.0 and t_out < 8.0
