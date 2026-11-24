@@ -32,7 +32,8 @@ A script may carry inline tags that mark moments the video has to land on:
               ("turn1"/"turnend1"/"turnwait1", ...)
     {at N}    leg narration only: the walker must be at the leg's Nth turn (leg_script.leg_turns, 1-indexed)
               when this cue is reached, rushing ahead of its piece's own pace if it must (recorded as
-              "at1:N", "at2:N", ...; see pedestrian._at_points_plan)
+              "at1:N", "at2:N", ...; see pedestrian._at_points_plan). {at N%}: at N% of the distance of
+              its piece (the walk toward this narration's stop) instead ("at1:50%").
 
 Tags are never spoken. They are stripped before TTS and subtitles, and the
 position each one had in the spoken text is kept so its time can be worked out
@@ -45,7 +46,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|next|/slow|/fast|/stop|slow|fast|stop|at \d+|walk on \d+(?:\.\d+)?|/view|view wait slow:[^{}]+|view wait slow|view wait:[^{}]+|view:[^{}]+|view wait|view|/turn|turn wait|turn|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}")
+CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|next|/slow|/fast|/stop|slow|fast|stop|at \d+(?:\.\d+)?%|at \d+|walk on \d+(?:\.\d+)?|/view|view wait slow:[^{}]+|view wait slow|view wait:[^{}]+|view:[^{}]+|view wait|view|/turn|turn wait|turn|open|close|photo:[^{}]+|goPre\d+|go|\d+)\}")
 
 
 @dataclass(frozen=True)

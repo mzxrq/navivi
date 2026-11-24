@@ -24,7 +24,7 @@ const getThinkingSteps = () => [
   t`Polishing voiceover tone...`,
 ];
 
-export type CueTag = "start" | "arrive" | "end" | "n" | "go" | "next" | "view" | "view wait" | "view wait slow" | "/view" | "turn" | "turn wait" | "/turn" | "slow" | "fast" | "stop" | "walk on 6" | "at 1";
+export type CueTag = "start" | "arrive" | "end" | "n" | "go" | "next" | "view" | "view wait" | "view wait slow" | "/view" | "turn" | "turn wait" | "/turn" | "slow" | "fast" | "stop" | "walk on 6" | "at 1" | "at 50%";
 
 const PAIRED = new Set(["slow", "fast", "stop"]); // inserted as {tag}…{/tag} around the selection
 
@@ -47,6 +47,7 @@ const getCueHints = (): Record<CueTag, string> => ({
   stop: t`Stand still while the voice says the selected words, then walk on`,
   "walk on 6": t`Insert a cue: the walker keeps walking 6 s after the voice ends and arrives then (change the number; replaces {end})`,
   "at 1": t`Insert a cue: the walker must be at the leg's 1st turn here, rushing if it must (change the number)`,
+  "at 50%": t`Insert a cue: the walker must be 50% of the way to this stop here (change the number)`,
 });
 
 /** The text with {tag} put at the caret (or over the selection), plus where the caret goes afterwards. */

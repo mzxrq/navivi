@@ -192,7 +192,8 @@ def _at_points_plan(df_raw, leg_dist_km, plan, at_cues, start_cue_seconds=None):
     rushing ahead of the piece's own pace if it must - every piece still ends where and when it did. A cue whose
     turn index is out of range, or whose target point/time doesn't fall strictly between the piece's own start
     and end (or an earlier {at} cue already placed in it), is skipped (logged) rather than rushed anyway. Cue
-    times are voice seconds; the first piece's walk only starts at its {start} cue (`start_cue_seconds`)."""
+    times are voice seconds; the first piece's walk only starts at its {start} cue (`start_cue_seconds`).
+    {at N%} (N the string "N%"): the point N% of the piece's distance along, from its start to its stop."""
     if not at_cues:
         return plan
     from services.localization.leg_script import leg_turns
@@ -201,24 +202,35 @@ def _at_points_plan(df_raw, leg_dist_km, plan, at_cues, start_cue_seconds=None):
     by_piece: Dict[int, list] = {}
     for piece, seconds, n in at_cues:
         by_piece.setdefault(piece, []).append((seconds, n))
+    bounds: Dict[int, list] = {}  # piece -> [first raw index, last raw index]
+    prev = 0
+    for i, entry in enumerate(plan):
+        bounds.setdefault(_piece_of(i, entry), [prev, entry[0]])[1] = entry[0]
+        prev = entry[0]
     out, start_idx = [], 0
     for i, entry in enumerate(plan):
         end_idx, seconds = entry[0], entry[1]
         piece = _piece_of(i, entry)
         lead = _piece_lead(start_cue_seconds, piece)
         idx, used = start_idx, 0.0
-        for cue_seconds, n in sorted(by_piece.get(piece, [])):
+        for cue_seconds, n in sorted(by_piece.get(piece, []), key=lambda c: c[0]):
             target_t = cue_seconds - lead
-            if not (1 <= n <= len(turns)) or not (used < target_t < seconds):
-                logger.info("Leg's {at %d} cue doesn't fit its piece; skipped.", n)
+            percent = float(n[:-1]) if isinstance(n, str) else None
+            valid = 0 < percent < 100 if percent is not None else 1 <= n <= len(turns)
+            if not valid or not (used < target_t < seconds):
+                logger.info("Leg's {at %s} cue doesn't fit its piece; skipped.", n)
                 continue
-            turn = turns[n - 1]
-            seg = df_raw.iloc[idx + 1 : end_idx]
-            if seg.empty:
-                continue
-            target_idx = int(((seg["lat"] - turn["lat"]) ** 2 + (seg["lon"] - turn["lon"]) ** 2).idxmin())
-            if target_idx <= idx:
-                logger.info("Leg's {at %d} cue is behind an earlier one; skipped.", n)
+            if percent is not None:
+                a, b = bounds[piece]
+                target_idx = bisect.bisect_left(leg_dist_km, leg_dist_km[a] + (leg_dist_km[b] - leg_dist_km[a]) * percent / 100)
+            else:
+                turn = turns[n - 1]
+                seg = df_raw.iloc[idx + 1 : end_idx]
+                if seg.empty:
+                    continue
+                target_idx = int(((seg["lat"] - turn["lat"]) ** 2 + (seg["lon"] - turn["lon"]) ** 2).idxmin())
+            if not idx < target_idx < end_idx:
+                logger.info("Leg's {at %s} cue is behind an earlier one or past its stop; skipped.", n)
                 continue
             out.append((target_idx, target_t - used, 0.0, piece))
             idx, used = target_idx, target_t

@@ -12,6 +12,7 @@ after TTS the second each cue is spoken is recorded from the real audio
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -359,12 +360,17 @@ def pace_spans(times: dict, piece: int) -> list:
 
 def at_spans(times: dict, piece: int) -> list:
     """[(piece, voice seconds, turn number N)] from a narration's {at N} cues (at1:N, at2:N, ...): the walker
-    must be at the leg's Nth turn (leg_script.leg_turns, 1-indexed) when the voice reaches each one."""
+    must be at the leg's Nth turn (leg_script.leg_turns, 1-indexed) when the voice reaches each one. {at N%}
+    keeps N as the string "N%": N% of the piece's distance."""
     out = []
     for tag, seconds in times.items():
         name, sep, n = tag.partition(":")
-        if sep and name[:2] == "at" and name[2:].isdigit() and n.isdigit():
+        if not (sep and name[:2] == "at" and name[2:].isdigit()):
+            continue
+        if n.isdigit():
             out.append((piece, float(seconds), int(n)))
+        elif re.fullmatch(r"\d+(?:\.\d+)?%", n):
+            out.append((piece, float(seconds), n))
     return out
 
 
