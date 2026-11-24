@@ -334,17 +334,64 @@ def dense_zooms(
 
 def hold_zooms_for_cards(
     zooms: List[Tuple[float, float, float, float, float]], cards: List[Tuple[float, float]],
+    limits: Optional[List[float]] = None,
 ) -> List[Tuple[float, float, float, float, float]]:
     """`zooms` with each one held until the last photo card popped inside it has been shown in full (`cards` =
     (popped at, shown until)), so the camera zooms out after the card, not while it collapses. Never into the
-    next zoom's own ease."""
-    ease = tuning.COURSE_DENSE_EASE_SECONDS
+    next zoom's own ease, nor past its `limits` entry (zoom_exit_limits): the trace head must not leave the view first."""
+    ease, shrink = tuning.COURSE_DENSE_EASE_SECONDS, tuning.COURSE_PASS_CARD_SHRINK_SECONDS
     out = []
     for n, (t_in, t_out, *rest) in enumerate(zooms):
-        t_end = max([t_out] + [until for at, until in cards if t_in <= at <= t_out + ease])
+        t_end = max([t_out] + [until + shrink for at, until in cards if t_in <= at <= t_out + ease])
         if n + 1 < len(zooms):
             t_end = min(t_end, zooms[n + 1][0] - 2 * ease)
+        if limits is not None:
+            t_end = min(t_end, limits[n])
         out.append((t_in, max(t_out, t_end), *rest))
+    return out
+
+
+def cut_cards_at_zoom_out(laid_out: List[Dict], zooms: List[Tuple[float, float, float, float, float]]) -> None:
+    """Stamps `pass_cut` on each photo card popped inside a zoom (or during its zoom-out) that would still be up when
+    the camera starts to zoom out: it is gone from that moment, no shrink, so no card is ever up on the whole map
+    (shown, one popping during the zoom-out covered the badges full size). The trace never waits for a card
+    (holding it made the catch-up rush), nor is a card cut for the next (one at a time flashed each for 0.2-0.6 s)."""
+    ease, shrink = tuning.COURSE_DENSE_EASE_SECONDS, tuning.COURSE_PASS_CARD_SHRINK_SECONDS
+    for ap in laid_out:
+        if "pass_until" not in ap:
+            continue
+        for t_in, t_out, *_ in zooms:
+            if t_in <= ap["course_at"] <= t_out + ease and ap["pass_until"] + shrink > t_out:
+                ap["pass_cut"] = max(t_out, ap["course_at"])
+                break
+
+
+def _first_exit(
+    t0: float, s: float, x0: float, y0: float, path: np.ndarray, cum: np.ndarray, anchors: List[Tuple],
+    w: int, h: int, margin: float,
+) -> Optional[float]:
+    """The first time from `t0` the trace head is outside the zoomed view (zoom s at x0, y0), or None."""
+    t = t0
+    while t < anchors[-1][0]:
+        d = distance_at(anchors, t)
+        x, y = np.interp(d, cum, path[:, 0]), np.interp(d, cum, path[:, 1])
+        if not (x0 + margin <= x <= x0 + w / s - margin and y0 + margin <= y <= y0 + h / s - margin):
+            return t
+        t += 1 / 30
+    return None
+
+
+def zoom_exit_limits(
+    zooms: List[Tuple[float, float, float, float, float]], path: np.ndarray, cum: np.ndarray, anchors: List[Tuple],
+    w: int, h: int, margin: float = 90.0,
+) -> List[float]:
+    """Per zoom, the latest time its zoom-out may end: the trace head's exit from the view less the ease (inf when
+    it never leaves). Measured from the group's own end, so a card hold cannot push the search past the exit."""
+    ease = tuning.COURSE_DENSE_EASE_SECONDS
+    out = []
+    for t_in, t_out, s, x0, y0 in zooms:
+        t_exit = _first_exit(t_out, s, x0, y0, path, cum, anchors, w, h, margin)
+        out.append(math.inf if t_exit is None else t_exit - ease)
     return out
 
 
@@ -354,19 +401,9 @@ def release_zooms_before_exit(
 ) -> List[Tuple[float, float, float, float, float]]:
     """`zooms` with each one let go early enough that its zoom-out is done before the trace head (a ferry
     leaving the pier) leaves the zoomed view, but never before the group's last stop is reached."""
-    ease = tuning.COURSE_DENSE_EASE_SECONDS
-    out = []
-    for t_in, t_out, s, x0, y0 in zooms:
-        t, t_exit = t_out, None
-        while t < anchors[-1][0]:
-            d = distance_at(anchors, t)
-            x, y = np.interp(d, cum, path[:, 0]), np.interp(d, cum, path[:, 1])
-            if not (x0 + margin <= x <= x0 + w / s - margin and y0 + margin <= y <= y0 + h / s - margin):
-                t_exit = t
-                break
-            t += 1 / 30
-        out.append((t_in, t_out if t_exit is None else min(t_out, max(t_in, t_exit - ease)), s, x0, y0))
-    return out
+    limits = zoom_exit_limits(zooms, path, cum, anchors, w, h, margin)
+    return [(t_in, max(t_in, min(t_out, limit)), s, x0, y0)
+            for (t_in, t_out, s, x0, y0), limit in zip(zooms, limits)]
 
 
 def pass_crowd_scales(spans: List[Tuple[float, float]], full: float) -> List[float]:
@@ -604,9 +641,11 @@ class _CourseOverviewMixin:
         self._course_zooms = dense_zooms(
             [ap["course_dist"] for ap in on_route], path, cum, timing.anchors, w, h,
             tuning.COURSE_DENSE_ZOOM_MAX_GL if gl else tuning.COURSE_DENSE_ZOOM_MAX)
-        self._course_zooms = hold_zooms_for_cards(
-            self._course_zooms, [(ap["course_at"], ap["pass_until"]) for ap in laid_out if "pass_until" in ap])
+        cards_up = [(ap["course_at"], ap["pass_until"]) for ap in laid_out if "pass_until" in ap]
+        limits = zoom_exit_limits(self._course_zooms, path, cum, timing.anchors, w, h)
         self._course_zooms = release_zooms_before_exit(self._course_zooms, path, cum, timing.anchors, w, h)
+        self._course_zooms = hold_zooms_for_cards(self._course_zooms, cards_up, limits)
+        cut_cards_at_zoom_out(laid_out, self._course_zooms)
 
         route_bg, trace = self._course_route_plate(current_bg, path, cum, modes)
         labels, label_at = self._course_extra_labels(extras, cards, laid_out, on_route, w, h)
@@ -906,7 +945,9 @@ class _CourseOverviewMixin:
             until = ap.get("pass_until")
             if age < 0:
                 continue
-            if until is None:
+            if until is not None and t >= ap.get("pass_cut", math.inf):
+                shown.append(ap["index"])  # cut at the zoom-out: the card is gone, the badge stays
+            elif until is None:
                 shown.append(ap["index"])
                 if age < pop:
                     anim.append((ap["index"], round(age / pop, 2)))
