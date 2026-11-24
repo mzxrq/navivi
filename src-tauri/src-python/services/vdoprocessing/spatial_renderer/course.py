@@ -1120,7 +1120,9 @@ class _CourseOverviewMixin:
             out = dict(ap)
             out["x"], out["y"] = at(ap["x"], ap["y"])
             if "pin_x" in ap:
-                out["pin_x"], out["pin_y"] = at(ap["pin_x"], ap["pin_y"])
+                # The declutter nudge keeps its own pixel size: scaled with the zoom, a pin pushed off its stop read as
+                # detached from the route line it sits on.
+                out["pin_x"], out["pin_y"] = out["x"] + ap["pin_x"] - ap["x"], out["y"] + ap["pin_y"] - ap["y"]
             return out
 
         frame = gl_bg.copy()

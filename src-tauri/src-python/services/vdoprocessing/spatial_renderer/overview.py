@@ -748,7 +748,7 @@ class _OverviewRenderMixin:
         _number_popups(active_popups, points)
         _link_next_numbered_order(active_popups)
         self._ov_attach_groups(active_popups, fps)
-        self._declutter_pins(active_popups)
+        self._declutter_pins(active_popups, route=points)
         self._ov_style_badges(active_popups, len(points))
         _apply_job_overrides(active_popups, self._get_job_waypoints())
         return active_popups
