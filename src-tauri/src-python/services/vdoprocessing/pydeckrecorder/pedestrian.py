@@ -53,6 +53,15 @@ from .pin_icons import (
 from .stopby_pause import _FRAME_SHOT, _play_stopby_photo_pause, screen_props
 
 
+def _piece_lead(start_cues, piece: int) -> float:
+    """The {start} cue of narration piece `piece`: `start_cues` is one per piece, or a single value for the first."""
+    if isinstance(start_cues, (list, tuple)):
+        value = start_cues[piece] if piece < len(start_cues) else None
+    else:
+        value = start_cues if piece == 0 else None
+    return float(value or 0.0)
+
+
 def _segment_plan(df_raw, leg_dist_km, landmarks, total_seconds):
     """[(last raw point index, seconds)] for a leg cut at a stop-by, from each landmark's own `walk_seconds` (the
     last piece gets what is left of `total_seconds`). None when the leg has no cut, a landmark has no time, or the
@@ -107,7 +116,7 @@ def _wait_view_plan(df_raw, leg_dist_km, plan, landmarks, start_cue_seconds=None
     out, spots, held, walked, start_idx = [], [], 0.0, 0.0, 0
     for piece, (end_idx, seconds) in enumerate(plan):
         idx, used = start_idx, 0.0  # used: this piece's voice seconds already spent walking or waiting
-        lead = float(start_cue_seconds or 0.0) if piece == 0 else 0.0
+        lead = _piece_lead(start_cue_seconds, piece)
         for lm in (w for w in waits if w["piece"] == piece):
             show, hide = float(lm["show_seconds"]) - lead, float(lm["hide_seconds"]) - lead
             seg = df_raw.iloc[idx + 1 : end_idx]
@@ -142,7 +151,7 @@ def _paced_plan(leg_dist_km, plan, spans, start_cue_seconds=None, slow=0.5, fast
     weight = {"slow": slow, "fast": fast, "stop": 0.0}
     out, stops, held, walked, start_idx = [], [], 0.0, 0.0, 0
     for piece, (end_idx, seconds) in enumerate(plan):
-        lead = float(start_cue_seconds or 0.0) if piece == 0 else 0.0
+        lead = _piece_lead(start_cue_seconds, piece)
         own = []  # [(start, end, weight)] inside 0 … seconds
         for p, kind, a, b in spans:
             a, b = max(0.0, a - lead), min(seconds, b - lead)
@@ -196,7 +205,7 @@ def _at_points_plan(df_raw, leg_dist_km, plan, at_cues, start_cue_seconds=None):
     for i, entry in enumerate(plan):
         end_idx, seconds = entry[0], entry[1]
         piece = _piece_of(i, entry)
-        lead = float(start_cue_seconds or 0.0) if piece == 0 else 0.0
+        lead = _piece_lead(start_cue_seconds, piece)
         idx, used = start_idx, 0.0
         for cue_seconds, n in sorted(by_piece.get(piece, [])):
             target_t = cue_seconds - lead
@@ -267,6 +276,7 @@ def render_residential_leg_pydeck(
     dest_popup_narration_seconds: Optional[float] = None,
     start_popup_narration_seconds: Optional[float] = None,
     start_cue_seconds: Optional[float] = None,
+    piece_start_cues: Optional[List[Optional[float]]] = None,
     pace_cues: Optional[Dict] = None,
     at_cues: Optional[List[Tuple[int, float, int]]] = None,
     arrival_photo_hold_seconds: Optional[float] = None,
@@ -405,8 +415,11 @@ def render_residential_leg_pydeck(
     None, the narration is delayed by the whole opening so the voice starts
     with the walk. Either way the delay is written next to the clip as a
     `.timing.json` (see services/vdoprocessing/cliptiming.py) for the
-    subtitle burn and final export to apply. Only legs that are not cut by a
-    connected stop-by get one.
+    subtitle burn and final export to apply.
+
+    `piece_start_cues`: the same per narration piece of a leg cut at stop-bys
+    (the first equals `start_cue_seconds`): each later piece holds its opening's
+    last frame until its own {start}.
 
     `arrival_photo_hold_seconds`: how long the at-arrival photo stays fullscreen
     AFTER it has finished growing. The clip's last frames are these, so the
@@ -460,21 +473,22 @@ def render_residential_leg_pydeck(
         else max(3.0, (total_leg_km / travel_speed_kmh) * 3600.0)
     )
     wait_spots, stands = [], []
+    starts = piece_start_cues or start_cue_seconds
     if target_duration_seconds is not None:
-        waited_plan, wait_spots, held = _wait_view_plan(df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], landmarks, start_cue_seconds)
+        waited_plan, wait_spots, held = _wait_view_plan(df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], landmarks, starts)
         if wait_spots:
             segment_plan, leg_duration = waited_plan, leg_duration - held
             if pace_cues:
                 logger.info("Leg %s has {view wait}: its {slow}/{fast}/{stop} cues are not used.", dest_label)
         elif pace_cues and pace_cues.get("spans"):
             segment_plan, stands, held = _paced_plan(
-                leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], pace_cues["spans"], start_cue_seconds,
+                leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], pace_cues["spans"], starts,
                 pace_cues.get("slow", tuning.PACE_SLOW_FACTOR), pace_cues.get("fast", tuning.PACE_FAST_FACTOR),
             )
             leg_duration -= held
         if at_cues:  # {at N}: composes with either branch above, or neither
             segment_plan = _at_points_plan(
-                df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], at_cues, start_cue_seconds,
+                df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], at_cues, starts,
             )
     total_frames = max(10, int(leg_duration * fps))
 
@@ -714,6 +728,7 @@ def render_residential_leg_pydeck(
             segment_colors=segment_colors, opening_photo=opening_photo,
             opening_view=opening_view, end_view_path=end_view_path, wait_spots=wait_spots, prior_trail=prior_trail,
             hold_end_card=hold_end_card, progress=progress, chain_badges=chain_badges, stopby_chain=stopby_chain,
+            piece_start_cues=piece_start_cues,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -744,6 +759,7 @@ async def _record_leg(
     progress: Optional[Tuple[int, int]] = None,
     chain_badges: Optional[Tuple[Optional[str], Optional[str]]] = None,
     stopby_chain: Optional[List[List[Any]]] = None,
+    piece_start_cues: Optional[List[Optional[float]]] = None,
 ):
     """`wait_spots`: [(walk seconds, card, hold seconds)] for {view wait} street views (see _wait_view_plan).
     `hold_end_card`: the arrival photo card (pip) stays up at the end instead of fading: the next leg slides on with it
@@ -1724,10 +1740,13 @@ async def _record_leg(
                         await page.wait_for_timeout(30)
                         await _write_frame(await page.screenshot(**_FRAME_SHOT))
 
-                def _off_screen(lm) -> bool:
-                    x, y = _project_lonlat_to_px(lm["lon"], lm["lat"], locked_lon, locked_lat, locked_zoom, output_size, pitch=follow_pitch)
+                def _off_screen_at(lon, lat) -> bool:
+                    x, y = _project_lonlat_to_px(lon, lat, locked_lon, locked_lat, locked_zoom, output_size, pitch=follow_pitch)
                     w, h = output_size
                     return not (0.08 * w <= x <= 0.92 * w and _LEG_TOP_MARGIN_PX <= y <= h - _leg_bottom_margin_px(bottom_reserve_px))
+
+                def _off_screen(lm) -> bool:
+                    return _off_screen_at(lm["lon"], lm["lat"])
 
                 async def _play_followers(after: str, tag) -> None:
                     group = [lm for lm in followers if lm.get("pops_after") == after]
@@ -1754,9 +1773,7 @@ async def _record_leg(
                             small_hold_seconds=wait_s if wait_s > 0 else None,
                         )
                         if frame_state["cuts"] > cuts_before:
-                            piece_lead = (frame_state["count"] - frame_state["clip_start"]) / fps
-                            write_audio_offset(proc_ref["real_path"], piece_lead)
-                            _voice_from(piece_lead)
+                            await _open_piece()
                     if view != (locked_lon, locked_lat, locked_zoom):
                         await _ease_view(view, (locked_lon, locked_lat, locked_zoom), tuning.STOPBY_CAMERA_MOVE_SECONDS)
 
@@ -1812,6 +1829,18 @@ async def _record_leg(
 
                 def _voice_from(offset_seconds: float) -> None:
                     voice["piece"], voice["start"] = frame_state["cuts"], frame_state["clip_start"] + offset_seconds * fps
+
+                async def _open_piece() -> None:
+                    """A new piece's opening is over: hold its last frame until the piece's {start}, as the leg's
+                    first piece does, and record the voice delay beside the clip."""
+                    lead = (frame_state["count"] - frame_state["clip_start"]) / fps
+                    cue = _piece_lead(piece_start_cues, frame_state["cuts"])
+                    if lead < cue and frame_state["last"] is not None:
+                        for _ in range(int(round((cue - lead) * fps))):
+                            await _write_frame(frame_state["last"])
+                    write_audio_offset(proc_ref["real_path"], max(0.0, lead - cue))
+                    _voice_from(max(0.0, lead - cue))
+                    logger.info("Piece opening %.2fs, {start} cue %.2fs -> narration delayed %.2fs.", lead, cue, max(0.0, lead - cue))
 
                 for lm in (landmarks or []):
                     if lm.get("connect_to_route") or not lm.get("popup_image") or lm.get("show_seconds") is not None:
@@ -2040,10 +2069,7 @@ async def _record_leg(
                         )
                         if any(lm.get("pops_after") == stopby_lm.get("waypoint_id") for lm in followers):
                             if frame_state["cuts"] > cuts_before:
-                                write_audio_offset(
-                                    proc_ref["real_path"], (frame_state["count"] - frame_state["clip_start"]) / fps
-                                )
-                                _voice_from((frame_state["count"] - frame_state["clip_start"]) / fps)
+                                await _open_piece()
                             await _play_followers(stopby_lm.get("waypoint_id"), index)
 
                         # Dynamic hop to the NEXT segment's framing for the new clip!
@@ -2064,7 +2090,8 @@ async def _record_leg(
                             next_df_idx = int(sq_dist_next.idxmin())
                             
                             next_fit_lons, next_fit_lats = _framed_points(df_raw, curr_df_idx, next_df_idx + 2, landmarks)
-                            if next_fit_lons:
+                            # Only hop when the next stretch doesn't already fit the current frame.
+                            if next_fit_lons and any(_off_screen_at(lo, la) for lo, la in zip(next_fit_lons, next_fit_lats)):
                                 new_lon, new_lat, new_zoom = _fit_view_for_path(
                                     next_fit_lons, next_fit_lats, output_size,
                                     padding_frac=tuning.LEG_FRAME_PADDING, pitch=follow_pitch,
@@ -2101,10 +2128,7 @@ async def _record_leg(
                                 locked_lon, locked_lat, locked_zoom = new_lon, new_lat, new_zoom
 
                         if frame_state["cuts"] > cuts_before:
-                            piece_lead = (frame_state["count"] - frame_state["clip_start"]) / fps
-                            write_audio_offset(proc_ref["real_path"], piece_lead)
-                            _voice_from(piece_lead)
-                            logger.info("Piece opening %.2fs -> its narration delayed %.2fs.", piece_lead, piece_lead)
+                            await _open_piece()
 
                     while timed_views and timed_views[0]["piece"] < voice["piece"]:
                         timed_views.pop(0)  # its piece is over before the voice got there
@@ -2160,9 +2184,7 @@ async def _record_leg(
                         # It cut: this new piece needs its own voice delay, or the one beside it stays whatever
                         # an earlier render left there (a stale sidecar made that piece's narration start late).
                         if frame_state["cuts"] > cuts_before:
-                            piece_lead = (frame_state["count"] - frame_state["clip_start"]) / fps
-                            write_audio_offset(proc_ref["real_path"], piece_lead)
-                            _voice_from(piece_lead)
+                            await _open_piece()
                         continue
 
                     index += 1

@@ -40,7 +40,6 @@ DEFAULT_LINE_THICKNESS = 7  # thin traced route (editorial look), not a highway 
 DEFAULT_MARKER_RADIUS = 16
 DEFAULT_SUMMARY_HOLD_SECONDS = 4.0
 
-
 def _output_is_valid(path, min_bytes: int = 1024) -> bool:
     """Checkpoint helper — see spatial_renderer/overview.py's identical
     copy for why this is duplicated instead of imported from
@@ -50,7 +49,6 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
         return p.is_file() and p.stat().st_size >= min_bytes
     except OSError:
         return False
-
 
 # Bump when the leg rendering code changes what it draws (v2: stop-by
 # photos always go fullscreen, image_display ignored; v3: legs open on the
@@ -75,7 +73,6 @@ _LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text
 # The stops' names on the leg's banner and its narration timing (fix.md #9). Compared only when the leg's
 # record has them, so a leg rendered before these were checked is not re-rendered for it.
 _LEG_RECORDED_PARTS = ("kw.route_chain", "kw.target_duration_seconds", "kw.start_cue_seconds", "kw.arrival_wait_seconds")
-
 
 def _split_stopby_chain(res_data: Dict[str, Any]) -> Tuple[List[str], List[List[Any]]]:
     """(the leg's numbered places in travel order, its stop-bys as [name, index of the chain place they come before,
@@ -201,11 +198,12 @@ def _leg_fingerprint_parts(
     if quiet:
         parts["quiet_stopby"] = h(quiet)  # a stop-by whose narration was emptied re-renders only the legs passing it
     # A connected stop-by cuts the leg and the next piece opens on its photo and a camera hop; only those legs
-    # re-render when that opening changes (v3: a brief re-open and a shorter hop, which delayed the narration).
+    # re-render when that opening changes (v3: a brief re-open and a shorter hop, which delayed the narration;
+    # v4: the camera hops only when the next stretch doesn't fit the frame).
     reopen = [lm.get("label") for lm in leg_kwargs.get("landmarks") or []
               if lm.get("connect_to_route") and lm.get("popup_image")]
     if reopen:
-        parts["stopby_reopen"] = h([reopen, 3])
+        parts["stopby_reopen"] = h([reopen, 4])
     if "leg_elevations" in leg_kwargs:
         # Heatmap legs also draw the elevation profile card: re-render only them when it changes.
         parts["kw.leg_elevations"] = h([leg_kwargs["leg_elevations"], LEG_ELEVATION_CARD_VERSION])
@@ -222,7 +220,7 @@ def leg_changed_parts(leg_parts: Dict[str, str], old_parts: Dict[str, str]) -> L
         return [k for k in ("latlon", "render_version") if k in changed]
     return ([k for k in _LEG_CHECKPOINT_PARTS if k in changed]
             + [k for k in _LEG_RECORDED_PARTS if k in old_parts and k in changed]
-            + [k for k in ("kw.pace_cues", "kw.at_cues") if k in changed])  # added/removed {slow}/{fast}/{stop}/{at N} too
+            + [k for k in ("kw.pace_cues", "kw.at_cues", "kw.piece_start_cues") if k in changed])  # added/removed {slow}/{fast}/{stop}/{at N}/a later piece's {start} too
 
 
 def cut_landmark_ids(mid_markers: List[Dict[str, Any]]) -> List[Optional[str]]:
@@ -872,6 +870,8 @@ class RouteAnimator:
             }
         if res_data.get("at_cues"):
             leg_kwargs["at_cues"] = res_data["at_cues"]
+        if res_data.get("piece_start_cues"):
+            leg_kwargs["piece_start_cues"] = res_data["piece_start_cues"]
         if self.config.get("mapbox_style_id"):
             leg_kwargs["map_style"] = resolve_map_style(self.config, "mapbox/outdoors-v12")
         if res_data.get("elevations"):  # the heatmap is on

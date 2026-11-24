@@ -131,6 +131,7 @@ class _Narration(NamedTuple):
 
     total_time: float
     start_cue_seconds: object
+    piece_start_cues: list  # each piece's {start} (the first is start_cue_seconds); [] when no later piece has one
     arrival_wait_seconds: object
     marker_plans: dict
     piece_targets: list
@@ -296,7 +297,7 @@ def _piece_plan(cue_store, waypoints: list, target: int, audio_durations: list, 
     plan = leg_walk_plan(
         cue_store, waypoints[target], target, audio_seconds,
         natural_seconds=natural, use_cues=use_cues, max_wait_seconds=max_wait,
-        ignore_start=k > 0,
+        ignore_start=k > 0 and target in at_start,  # a pop-up without walking has no walk to start
     )
     if plan is None:
         # No voice for this stop (an empty script): it keeps its natural walk (a pop-up at a stop takes none)
@@ -351,6 +352,9 @@ def _leg_narration(*, waypoints: list, leg_item: dict, start_pos: int, end_pos: 
     if piece_plans:
         total_time = sum(v[0] for v in piece_plans.values())
         start_cue_seconds = piece_plans[piece_targets[0]][1]  # the first piece opens the leg
+        piece_start_cues = [piece_plans[p][1] for p in piece_targets]
+        if not any(s is not None for s in piece_start_cues[1:]):
+            piece_start_cues = []
         arrival_wait_seconds = piece_plans[end_pos][2]
         marker_plans = {
             waypoints[p].get("id"): {"walk_seconds": piece_plans[p][0], "wait_seconds": piece_plans[p][2]}
@@ -362,9 +366,12 @@ def _leg_narration(*, waypoints: list, leg_item: dict, start_pos: int, end_pos: 
         )
     else:
         total_time, start_cue_seconds, arrival_wait_seconds, marker_plans = distance_fallback, None, None, {}
+        piece_start_cues = []
     for p, after in pops_after.items():
         marker_plans.setdefault(waypoints[p].get("id"), {})["pops_after"] = after
-    return _Narration(total_time, start_cue_seconds, arrival_wait_seconds, marker_plans, piece_targets, near)
+    return _Narration(
+        total_time, start_cue_seconds, piece_start_cues, arrival_wait_seconds, marker_plans, piece_targets, near,
+    )
 
 
 def _cue_spans(cue_store, waypoints: list, piece_targets: list, use_cues: bool, spans_of: Callable) -> list:
@@ -498,6 +505,7 @@ def _leg_timing_fields(leg: _Leg, narration: _Narration, cues: tuple, waypoints:
         "travel_duration": narration.total_time,
         "segment_duration": narration.total_time,
         "start_cue_seconds": narration.start_cue_seconds,
+        "piece_start_cues": narration.piece_start_cues,
         "street_view_cues": street_view_cues,
         "turn_cues": turn_cues,  # {turn} … {/turn}: the leg's automatic turn photos
         "pace_cues": pace_cues,
