@@ -28,7 +28,7 @@ _BUILTIN_JA: Dict[str, Any] = {
     "separator": " ・ ", "mode_join": "・", "total_label": "合計", "remaining_label": "残り", "distance_label": "距離", "taskbar_card_title": "旅の概要",
     "waypoint_fallback": "ウェイポイント", "start_prefix": "出発: ", "stop_prefix": "到着: ",
     "soon_banner": "まもなく {dest}", "en_route_banner": "{dest} へ{suffix}",
-    "stop_progress": "{n}/{total} か所を巡っています", "overview_remaining_hud": "残り {distance} ・ {duration}", "hud_minutes": "{n} 分",
+    "stop_progress": "現在 {n}/{total} か所", "overview_remaining_hud": "残り {distance} ・ {duration}", "hud_minutes": "{n} 分",
     "overview_stops_hud": "{n} / {total} か所", "overview_next_hud": "次は {name}",
     "duration_seconds": "{n}秒", "duration_hours_minutes": "{h}時間{m:02d}分", "duration_minutes": "{m}分",
     "duration_fallback": "時間", "destination_fallback": "目的地", "overview_start": "開始", "overview_end": "終点",
