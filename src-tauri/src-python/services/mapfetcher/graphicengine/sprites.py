@@ -269,10 +269,7 @@ class _SpriteMixin:
         def polys(scale: float):
             return [np.array([pt(nx, ny, scale) for nx, ny in shape], dtype=np.int32) for shape in _FERRY_SHAPES]
 
-        # Halo first (scaled up 15% from the sprite's own center, same
-        # trick _get_vehicle_sprite uses), then the real silhouette on top.
-        for poly in polys(1.15):
-            cv2.fillPoly(canvas, [poly], white, cv2.LINE_AA)
+        # No white halo: it read as an odd border around the ferry on the map.
         for poly in polys(1.0):
             cv2.fillPoly(canvas, [poly], color, cv2.LINE_AA)
 
