@@ -75,7 +75,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # stops are plain colour dots; v56: top HUD panels 1.5x bigger; v55: the recap sits on a plain plate and arranges its
 # badges on one lattice in walked order (see CLAUDE.md "overview recap's pill badges"); v54: a return stop takes no
 # number of its own. Older history: git log.
-OVERVIEW_RENDER_VERSION = 74  # 73 was used by the broken merge f959dec
+OVERVIEW_RENDER_VERSION = 75  # v75: the course trace starts at {start}; {goPreN} gone; stop-by pins +N
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.

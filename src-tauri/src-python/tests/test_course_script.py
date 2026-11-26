@@ -1,5 +1,7 @@
 """The course-guide overview script (settings.overview_style "course")."""
 
+import pytest
+
 from services.localization.cues import clean_text, cue_tags
 from services.localization.overview_cues import auto_tag_overview
 from services.localization.overview_script import (
@@ -12,6 +14,7 @@ from services.localization.overview_script import (
     totals_text,
 )
 from services.localization.route_brief import build_brief
+from services.vdoprocessing.spatial_renderer.course import _course_timing
 
 
 def _line(lat0, lng0, lat1, lng1, n):
@@ -151,12 +154,21 @@ def test_a_hand_written_script_gets_start_before_the_pivot_line():
     assert clean_text(tagged) == text
 
 
-def test_the_users_example_gets_route_and_extras_tags():
+@pytest.mark.parametrize("cues, route_at", [
+    ({"start": 0.0}, 1.2),  # the map is still opening: the trace waits for it
+    ({"start": 4.0, "route": 9.0}, 4.0),  # an old script's {route} is ignored
+    ({}, 1.2),
+])
+def test_the_trace_starts_at_start_once_the_map_has_opened(cues, route_at):
+    assert _course_timing(cues, 30.0, [], [], 100.0).route_at == route_at
+
+
+def test_the_users_example_gets_start_and_extras_tags():
     text = ("友ヶ島は四つの島からなっています。これが全体のルートです。加太駅から加太の町を抜けて、港へと向かいます。"
             "島では、砲台跡やタカノス山をめぐり、南垂水広場から第四砲台跡へ。コースのゴールは、出発地と同じ加太駅です。"
             "黒色で示した地点は、ルート沿いにある追加の見どころです。砲台跡の近くの閼伽井跡です。")
     tagged = auto_tag_overview(text, ["砲台跡", "タカノス山"])
-    assert "{start}これが全体のルートです。{route}加太駅から" in tagged
+    assert "{start}これが全体のルートです。加太駅から" in tagged
     assert "{extras}黒色で示した地点は" in tagged
     assert tagged.index("{1}") < tagged.index("{extras}")  # the extras' 砲台跡 is not the stop
     assert clean_text(tagged) == text

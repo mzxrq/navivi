@@ -307,8 +307,6 @@ DEFAULT_LEG_DIRECTIONS = "brief"
 # The "course" overview (spatial_renderer/course.py). The traced line is one
 # accent over the whole planned route (settings.course_trace_color overrides).
 COURSE_TRACE_COLOR: Tuple[int, int, int] = (40, 90, 240)  # BGR, #F05A28 orange
-# Whole route shown this long after {start} when the script has no {route} cue.
-COURSE_PIVOT_HOLD_SECONDS = 2.5
 # Leg summary card margins. The card image has 14-20 px of transparent shadow, so the visible gap is about
 # this + 14 px (right) and this + 20 px (bottom); a lower bottom margin moves the card down.
 LEG_CARD_MARGIN_PX = 4
