@@ -1273,6 +1273,10 @@ msgstr "Cards stay up"
 msgid "Centre"
 msgstr "Centre"
 
+#: src/components/ui/VoiceSettings.tsx:141
+msgid "Change scenes in the intro"
+msgstr "Change scenes in the intro"
+
 #: src/components/ui/RenderOverlay.tsx:1045
 msgid "Check Audio & Video"
 msgstr "Check Audio & Video"
@@ -3290,6 +3294,10 @@ msgstr "Leave blank and it's written from your stops."
 msgid "Leave blank to use the project name."
 msgstr "Leave blank to use the project name."
 
+#: src/components/ui/VoiceSettings.tsx:137
+msgid "Leave each stop"
+msgstr "Leave each stop"
+
 #: src/features/editor/Inspector.tsx:310
 msgid "Leave empty to hide this line"
 msgstr "Leave empty to hide this line"
@@ -4740,6 +4748,10 @@ msgstr "Qwen3-TTS needs a one-time setup: a separate Python environment and the 
 msgid "Qwen3-TTS setup"
 msgstr "Qwen3-TTS setup"
 
+#: src/components/ui/VoiceSettings.tsx:136
+msgid "Reach each stop"
+msgstr "Reach each stop"
+
 #: src/features/map/components/WaypointEditor.tsx:384
 #~ msgid "Read in the overview after the stop-bys, as the reason this place can't be visited."
 #~ msgstr "Read in the overview after the stop-bys, as the reason this place can't be visited."
@@ -5413,6 +5425,10 @@ msgstr "Serious"
 msgid "Services"
 msgstr "Services"
 
+#: src/components/ui/VoiceSettings.tsx:138
+msgid "Set off after the opening"
+msgstr "Set off after the opening"
+
 #: src/components/ui/ComponentsChecklist.tsx:124
 msgid "Set up"
 msgstr "Set up"
@@ -5536,9 +5552,17 @@ msgstr "Show log"
 msgid "Show on map"
 msgstr "Show on map"
 
+#: src/components/ui/VoiceSettings.tsx:140
+msgid "Show the closed places"
+msgstr "Show the closed places"
+
 #: src/features/map/components/DrawBar.tsx:292
 msgid "Show the list of points"
 msgstr "Show the list of points"
+
+#: src/components/ui/VoiceSettings.tsx:139
+msgid "Show the stop-bys"
+msgstr "Show the stop-bys"
 
 #: src/features/editor/ExportDialog.tsx:101
 msgid "Show video"

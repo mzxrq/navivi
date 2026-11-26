@@ -23,7 +23,7 @@ Tags the user wrote win: a script with any {n} keeps its own, and one with any
 from __future__ import annotations
 
 import re
-from typing import List, Optional, Sequence
+from typing import FrozenSet, List, Optional, Sequence
 
 from services.localization.cues import clean_text, cue_tags
 from services.localization.sentence_split import SENTENCE_END
@@ -157,11 +157,24 @@ def _sentence_marks(pivot: Optional[int], extras: Optional[int], closed: Optiona
     return marks
 
 
-def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[str]:
+def auto_tag_overview(
+    script: Optional[str], labels: Sequence[str], skip: FrozenSet[str] = frozenset(),
+) -> Optional[str]:
     """`script` with {n} / {go} tags placed; `labels[i]` is visible waypoint
-    i + 1's name. Returns the script unchanged when nothing could be placed."""
+    i + 1's name. `skip` names the kinds not to add ("n", "go", "start",
+    "extras", "closed"). Returns the script unchanged when nothing could be placed."""
     if not script:
         return script
+    tagged = _place_tags(script, labels)
+    for kind in skip:
+        tag = r"\{\d+\}" if kind == "n" else r"\{%s\}" % kind
+        if not re.search(tag, script):  # a kind the user typed: none was added, theirs stay
+            tagged = re.sub(tag, "", tagged)
+    return tagged
+
+
+def _place_tags(script: str, labels: Sequence[str]) -> str:
+    """auto_tag_overview with every kind placed."""
     tags = cue_tags(script)
     has_numbers = any(t.isdigit() for t in tags)
     has_go = "{go}" in script

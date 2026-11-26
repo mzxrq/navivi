@@ -127,10 +127,19 @@ export function VoiceTab() {
     setIsDirty(true);
   };
 
-  const saveCues = (patch: { auto_overview_cues?: boolean; auto_narration_cues?: boolean }) => {
+  const saveCues = (patch: Parameters<typeof updateSettings>[0]) => {
     updateSettings(patch);
     setIsDirty(true);
   };
+
+  const cueSwitches = [
+    ["auto_cue_n", "{n}", t`Reach each stop`],
+    ["auto_cue_go", "{go}", t`Leave each stop`],
+    ["auto_cue_start", "{start}", t`Set off after the opening`],
+    ["auto_cue_extras", "{extras}", t`Show the stop-bys`],
+    ["auto_cue_closed", "{closed}", t`Show the closed places`],
+    ["auto_cue_scene", "{scene}", t`Change scenes in the intro`],
+  ] as const;
 
   const clearCache = async () => {
     setBusy("cache");
@@ -561,6 +570,16 @@ export function VoiceTab() {
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400"><Trans>The overview stops at each stop while the voice describes it, then moves on.</Trans></p>
             </div>
             <Switch checked={autoOverviewCues} onChange={(v) => saveCues({ auto_overview_cues: v })} label={t`Place cues in the overview narration`} />
+          </div>
+          <div className="py-1">
+            {cueSwitches.map(([key, tag, label]) => (
+              <div key={key} className="flex items-center gap-3 py-1 pl-6 pr-3">
+                <div className="flex-1 min-w-0 text-[13px] text-zinc-700 dark:text-zinc-300">
+                  {label} <code className="text-[11px] text-zinc-400">{tag}</code>
+                </div>
+                <Switch checked={autoOverviewCues && (settings[key] ?? true)} disabled={!autoOverviewCues} onChange={(v) => saveCues({ [key]: v })} label={label} />
+              </div>
+            ))}
           </div>
           <div className="flex items-center gap-3 px-3 py-2.5">
             <div className="flex-1 min-w-0">
