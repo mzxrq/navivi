@@ -2608,6 +2608,10 @@ A connected stop-by is loose as well: the walker passes every
             else:
                 p["pin_color"] = p["recap_line_color"]
 
+    def _recap_cards(self, active_popups: List[Dict]) -> List[Dict]:
+        """The recap's cards where cards stay: each one with a fixed spot, ready to draw as the walk drew it."""
+        return [self.walk_card_hud(ap, 0, 0, None, None) for ap in active_popups if ap.get("stay_box")]
+
     def _render_recap_frame(
         self,
         base_frame: np.ndarray,
@@ -2635,13 +2639,17 @@ A connected stop-by is loose as well: the walker passes every
             group_popups if group_popups is not None
             else [ap for ap in active_popups if self._wants_recap_card(ap)]
         )
-        if not recap_popups:
+        fixed = storyboard_for(self.config).cards_stay  # the walk's own cards and pins, where they stood
+        if not recap_popups and not fixed:
             return recap_frame
 
         total_points = 1 + max((ap["index"] for ap in active_popups), default=0)
         hud_popups = []
         for ap in recap_popups:
             if not ap.get("beside_box"):
+                continue
+            if ap.get("stay_box"):  # a card with a fixed spot is drawn exactly as the walk drew it
+                hud_popups.append(ap)
                 continue
             hud_popup = ap.copy()
             hud_popup["hud_corner"] = None
@@ -2688,7 +2696,7 @@ A connected stop-by is loose as well: the walker passes every
             recap_frame = self.graphics.render_popup_box(
                 recap_frame, hud_popup, line_only=True
             )
-        plain_dot = self.config.get("overview_recap_style", "pill_badge") != "pop_up_card"
+        plain_dot = not fixed and self.config.get("overview_recap_style", "pill_badge") != "pop_up_card"
         for ap in active_popups:
             if plain_dot:
                 self._draw_recap_dot(recap_frame, ap, total_points)

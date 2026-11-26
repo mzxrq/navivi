@@ -989,12 +989,15 @@ class _OverviewRenderMixin:
     ) -> str:
         """Just the final recap frame as an image, laid out exactly as _render_recap_and_summary does."""
         out_img = str(self.out_dir / "01_overview_recap_preview.png")
-        laid_out = self._layout_recap_cards(
-            self._recap_popup_set(active_popups, stop_popup), w, h,
-            reserved_boxes=reserved_boxes, route_obstacles=recap_obstacle_arr,
-            background=pre_popup_frame, leaders=False,
-            total_points=1 + max((ap["index"] for ap in active_popups), default=0),
-        )
+        if storyboard_for(self.config).cards_stay:
+            laid_out = self._recap_cards(active_popups)
+        else:
+            laid_out = self._layout_recap_cards(
+                self._recap_popup_set(active_popups, stop_popup), w, h,
+                reserved_boxes=reserved_boxes, route_obstacles=recap_obstacle_arr,
+                background=pre_popup_frame, leaders=False,
+                total_points=1 + max((ap["index"] for ap in active_popups), default=0),
+            )
         final_frame = self._render_recap_frame(pre_popup_frame, active_popups, group_popups=laid_out)
         cv2.imwrite(out_img, final_frame)
         return out_img

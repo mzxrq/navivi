@@ -172,13 +172,12 @@ class _TransitionMixin:
             # With the zoom next, the summary hold (ENDING_SUMMARY_HOLD_SECONDS) is the only wait.
             hold_frames = 0 if self._ending_zoom_follows(stop_popup) else max(0, int(total_freeze * fps))
 
-            if all_recap_popups:
-                # Laid out again for the recap, even when the cards stayed up
-                # through the whole walk: those sat in slots pitched for a
-                # full photo card, and leaving the badges there spaces them a
-                # card's width apart. A badge is slim, so its own lattice
-                # packs them side by side — the cross-fade below carries each
-                # card into its badge.
+            if storyboard_for(self.config).cards_stay:
+                # The same cards at the same spots: nothing moves, resizes or turns into a badge.
+                final_frame = self._render_recap_frame(
+                    outro_frame, active_popups, group_popups=self._recap_cards(active_popups)
+                )
+            elif all_recap_popups:
                 laid_out = self._layout_recap_cards(
                     all_recap_popups, w, h,
                     reserved_boxes=reserved_boxes,

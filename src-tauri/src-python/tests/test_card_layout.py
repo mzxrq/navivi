@@ -1,6 +1,7 @@
 """The overview's cards: one spot and one size per place (docs/OVERVIEW_RULES.md 8.18)."""
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from services import tuning
@@ -133,6 +134,31 @@ def test_a_standing_cards_pin_shows_before_the_walker_arrives():
     renderer._pin_pop_scale, renderer._pop_now = lambda *a: 1.0, 0
     renderer._draw_arrived_pins(SimpleNamespace(active_popups=popups, n_points=5, fps=30), None)
     assert drawn == [0, 4]
+
+
+@pytest.mark.parametrize("config", [{}, {"overview_cards_stay": False}, {"overview_recap_style": "pop_up_card"}])
+def test_the_recap_draws_each_card_where_it_stood(config):
+    renderer, popups = _laid_out(config)
+    cards = renderer._recap_cards(popups)
+    assert [(c["beside_box"], c["card_scale"]) for c in cards] == [
+        (p["stay_box"], p["stay_scale"]) for p in popups if p.get("stay_box")]
+    assert not any(c.get("is_pill_badge") for c in cards)
+
+
+@pytest.mark.parametrize("photos", [True, False])
+def test_the_recap_marks_every_place_with_its_pin_and_draws_cards_as_the_walk_did(photos):
+    renderer, popups = _renderer({}), _stops()
+    if not photos:
+        for p in popups:
+            p["data"].pop("popup_image", None)
+    renderer._ov_layout_stay_cards(popups, popups[-1], 1920, 1080, [], None)
+    pins, cards = [], []
+    renderer._draw_pin = lambda frame, wp, n, **k: pins.append(wp["index"])
+    renderer.graphics.render_popup_box = lambda frame, info, **k: cards.append(info) or frame
+    renderer._render_recap_frame(np.zeros((1080, 1920, 3), np.uint8), popups, group_popups=renderer._recap_cards(popups))
+    assert pins == [0, 1, 2, 3, 4]  # the stop-by with no photo too
+    assert len(cards) == (6 if photos else 0)  # three cards, line then box
+    assert not any("leader_line_color" in c for c in cards)  # no recap restyling
 
 
 @pytest.mark.parametrize("count", [40, 80])
