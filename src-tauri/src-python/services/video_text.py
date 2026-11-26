@@ -32,6 +32,7 @@ _BUILTIN_JA: Dict[str, Any] = {
     "overview_total_hud": "全体 {distance} ・ {duration}",
     "duration_seconds": "{n}秒", "duration_hours_minutes": "{h}時間{m:02d}分", "duration_minutes": "{m}分",
     "duration_fallback": "時間", "destination_fallback": "目的地", "overview_start": "開始", "overview_end": "終点",
+    "themed_hud": {"leg_distance": "区間距離", "leg_time": "所要時間", "extra": "追加の見どころ","loop": "周回","one_way": "片道", "base": "発着", "next": "つぎは", "previous": "前の地点", "total_distance": "合計距離", "total_time": "合計時間", "remaining_distance": "残り距離", "remaining_time": "残り時間"},
     "duration_sample": "8時間88分", "stopby_notice_title": "追加の見どころ（まるのマーカー）",
     "stopby_notice_body": "まるのマーカーは、ルートの近くにある\n追加の見どころです。立ち寄るかどうかは自由。\n時間や体力に合わせて決めてください。",
     "place_count": "{n} か所", "outro_subtitle": "訪れた{count}か所", "outro_route_from": "{name} から",
@@ -122,6 +123,15 @@ def current_language() -> str:
 
 def current_labels() -> Dict[str, Any]:
     return labels_for(current_language())
+
+
+def format_duration(labels: Dict[str, Any], seconds: float) -> str:
+    if seconds < 60:
+        return labels["duration_seconds"].format(n=max(1, int(round(seconds))))
+    hrs, mins = divmod(int(round(seconds / 60)), 60)
+    if hrs:
+        return labels["duration_hours_minutes"].format(h=hrs, m=mins)
+    return labels["duration_minutes"].format(m=mins)
 
 
 def plural(labels: Dict[str, Any], key: str, number: int, **fields: Any) -> str:
