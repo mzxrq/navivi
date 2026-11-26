@@ -297,6 +297,10 @@ DEFAULT_OVERVIEW_DESCRIBE_STOPS = True
 #            last; the course-guide script (overview_script.build_course_script).
 DEFAULT_OVERVIEW_STYLE = "walk"
 OVERVIEW_STYLES = ("walk", "course", "map")
+# The overview's cards (popups._layout_ring_cards): one size for a whole video, the largest at which every card
+# fits, from MAX (times the frame height over 1080) down in SHRINK_STEP steps, with no minimum.
+OVERVIEW_CARD_MAX_SCALE = 1.8
+OVERVIEW_CARD_SHRINK_STEP = 0.9
 # "map" overview: each main stop's photo pops up this much bigger than a walk card, then slides over to its leg
 # card (spatial_renderer/map_style.py, popup_box.slide_to_card). Its timings: storyboards/map.json.
 OVERVIEW_MAP_CARD_SCALE = 2.6

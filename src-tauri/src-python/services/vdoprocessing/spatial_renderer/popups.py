@@ -1619,9 +1619,11 @@ A connected stop-by is loose as well: the walker passes every
         Here the leader is a stub, because the card is already beside the pin it belongs to.
 
         Every card is the SAME size, and the size is the largest at which they ALL fit: the
-        whole set is tried at each size in turn, biggest first, and the first size that places
-        every one of them wins. Sizing each card on its own instead would read as a mistake —
-        one stop's photo bigger than its neighbour's for no reason a viewer can see.
+        whole set is tried at each size in turn, biggest first (OVERVIEW_CARD_MAX_SCALE for the
+        frame's height, then smaller by OVERVIEW_CARD_SHRINK_STEP, with no minimum), and the
+        first size that places every one of them wins. Sizing each card on its own instead would
+        read as a mistake — one stop's photo bigger than its neighbour's for no reason a viewer
+        can see.
 
         Everything to keep off goes into one occupancy grid (`_RING_CELL_PX` per cell), with
         each card stamped into it as it is placed, so a candidate box is one array slice."""
@@ -1639,18 +1641,18 @@ A connected stop-by is loose as well: the walker passes every
         )
         fixed, route_layer = self._ring_grids(w, h, reserved_boxes, route_obstacles)
 
-        chosen, scale = None, self._RING_CARD_SCALES[-1]
-        for size in self._RING_CARD_SCALES:
-            chosen = self._ring_attempt(size, True, w, h, pins, order, fixed, route_layer)
+        # A card may sit anywhere in the frame (a leader line joins it to its pin): size comes first.
+        steps = int(math.hypot(w, h) // self._RING_STEP_PX)
+        scale = tuning.OVERVIEW_CARD_MAX_SCALE * h / 1080
+        while True:
+            chosen = self._ring_attempt(scale, True, w, h, pins, order, fixed, route_layer, steps)
             if chosen is not None:
-                scale = size
                 break
-        if chosen is None:  # not even the smallest fits them all: show what there is room for
-            chosen = self._ring_attempt(scale, False, w, h, pins, order, fixed, route_layer)
-            logger.warning(
-                "Ring layout: only %d of %d cards fit beside their pins at the smallest size.",
-                len(chosen), len(popups),
-            )
+            if self.graphics.beside_card_footprint(scale)[0] < self._RING_CELL_PX:  # the frame has no room at all
+                chosen = self._ring_attempt(scale, False, w, h, pins, order, fixed, route_layer, steps)
+                logger.warning("Ring layout: only %d of %d cards fit anywhere.", len(chosen), len(popups))
+                break
+            scale *= tuning.OVERVIEW_CARD_SHRINK_STEP
 
         placed = []
         for i, x0, y0 in chosen:
@@ -1696,7 +1698,7 @@ A connected stop-by is loose as well: the walker passes every
         return fixed, route_layer
 
     def _ring_find_spot(
-        self, px: float, py: float, cw: int, ch: int, free
+        self, px: float, py: float, cw: int, ch: int, free, steps: int
     ) -> Optional[Tuple[float, float, float]]:
         """The nearest (r, x0, y0) around a pin where `free` accepts a cw x ch card."""
         pin_r = float(self.graphics.marker_radius)
@@ -1707,7 +1709,9 @@ A connected stop-by is loose as well: the walker passes every
         # A card over the route beats no card at all, so the keep-off-the-route rule
         # is dropped only once nothing anywhere around the pin fits with it.
         for with_route in (True, False):
-            for step in range(self._RING_STEPS):
+            for step in range(steps):
+                if spot is not None and step * self._RING_STEP_PX > spot[0]:
+                    break  # every farther ring scores worse than the spot in hand
                 for angle in angles:
                     ca, sa = math.cos(angle), math.sin(angle)
                     # Far enough out that the card clears the pin in THIS direction,
@@ -1734,8 +1738,9 @@ A connected stop-by is loose as well: the walker passes every
         order: List[int],
         fixed: np.ndarray,
         route_layer: np.ndarray,
+        steps: int,
     ) -> Optional[List[Tuple[int, float, float]]]:
-        """Every card at this one size, or None if one of them has nowhere to go."""
+        """Every card at this one size, or None if one of them has nowhere to go within `steps` rings."""
         cell = self._RING_CELL_PX
         margin = self._RECAP_CARD_MARGIN
         half_gap = self._RECAP_CARD_GAP / 2
@@ -1753,7 +1758,7 @@ A connected stop-by is loose as well: the walker passes every
 
         out: List[Tuple[int, float, float]] = []
         for i in order:
-            spot = self._ring_find_spot(*pins[i], cw, ch, free)
+            spot = self._ring_find_spot(*pins[i], cw, ch, free, steps)
             if spot is None:
                 if must_place_all:
                     return None
@@ -2221,7 +2226,7 @@ A connected stop-by is loose as well: the walker passes every
                 (obstacles[:, 0] >= x0 - pad) & (obstacles[:, 0] <= x0 + cw + pad)
                 & (obstacles[:, 1] >= y0 - pad) & (obstacles[:, 1] <= y0 + ch + pad))))
 
-        spot = self._ring_find_spot(pin[0], pin[1], cw, ch, free)
+        spot = self._ring_find_spot(pin[0], pin[1], cw, ch, free, self._RING_STEPS)
         return None if spot is None else (int(spot[1]), int(spot[2]))
 
     def _recap_cards_pull_in(self, geom, slot_for, pins_xy, locked, kinds, w, h, reserved_boxes, route_obstacles) -> None:
