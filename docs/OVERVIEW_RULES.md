@@ -1,12 +1,12 @@
 # Overview video: how it works today (audit)
 
-Branch `chore/pipeline-audit` (commit `2661bcc` plus the restore in section 7, not committed yet), 2026-11-26.
+Branch `chore/pipeline-recap` (`main` plus the walking-leg changes in `c14ef49`), 2026-11-26.
 Read from the code. All three styles render in a tiny CPU test with made-up data (`tests/test_overview_styles_render.py`). No real project was rendered.
 The walking videos are in [LEG_RULES.md](LEG_RULES.md).
 
 ## 0. State
 
-"Whole route first" could not render after merge `f959dec`. **Fixed on this branch** (section 7). `main` is still broken.
+"Whole route first" could not render after merge `f959dec`. **Fixed**, here and on `main` (section 7).
 
 ## 1. Global rules (all styles)
 
@@ -153,7 +153,7 @@ The merge joined the newer overview work (`aa82b9f`) with GitHub `main` (`04597c
 | Removal of the next-stop preview badge | The badge is back |
 | Course recap preview | Draws the Walk layout |
 
-All of it is restored here from `aa82b9f`. The overview render version is now 74, so overviews made with the merged code render again.
+All of it is restored from `aa82b9f` (`1dc61fe`). The overview render version is now 74, so overviews made with the merged code render again. A second crash, on an ending map with no room for any badge, is fixed in `e8310d2`.
 
 ## 8. Decisions for the redesign
 
