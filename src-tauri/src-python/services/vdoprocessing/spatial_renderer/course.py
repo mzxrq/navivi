@@ -23,6 +23,7 @@ from services.vdoprocessing.storyboard import of as storyboard_of
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
+from .card_circles import circle_layout, densify
 from .popups import zoom_card_alphas
 
 _TIMINGS = storyboard_of("course").timings  # this module renders the course storyboard
@@ -557,7 +558,7 @@ class _CourseOverviewMixin:
             summary, w, h, on_route, timing, total_points, total_smooth_dist)
         # The drawn path resampled every few px: a ferry leg is one long segment whose raw points are
         # only its ends, so a badge or card on the middle of it counted as covering no route.
-        dense = np.column_stack([np.interp(np.arange(0.0, total, 6.0), cum, path[:, i]) for i in (0, 1)])
+        dense = densify(path)
         self._course_route_px = dense  # zoomed cards keep off the route too (_zoom_card_place)
         obstacles = dense if route_obstacle_arr is None or not len(route_obstacle_arr) else np.vstack(
             [dense, route_obstacle_arr])
@@ -966,9 +967,9 @@ class _CourseOverviewMixin:
         return cache[key]
 
     def _zoom_place_group(self, group: List[Dict], hold, scene: _Scene, reserved, w: int, h: int, cache: Dict) -> None:
-        """Places a zoom's cards at their own size, in the order they pop, each at the nearest clear spot to its pin
-        in the zoomed view (the ring search of the whole-map layout): clear of the panels, every pin, each other and
-        each other's leaders, and of the route where it can."""
+        """Places a zoom's cards at their own size in the zoomed view, as on the whole map: round their pins
+        (card_circles), clear of the panels, every pin, the route and each other; where no circle works, each at the
+        nearest clear spot to its pin (the ring search), in the order they pop."""
         s, x0, y0 = hold
 
         def at(p: Dict) -> Tuple[float, float]:
@@ -980,12 +981,20 @@ class _CourseOverviewMixin:
         if route is not None:
             route = (route - np.array([x0, y0])) * s
             route = route[((route >= 0) & (route < (w, h))).all(axis=1)]  # off view it would block the edge cells
-        fixed, route_layer = self._ring_grids(
-            w, h, list(reserved) + [_pin_head_box(self.graphics, *at(p)) for p in scene.on_route], route)
+        keep_off = list(reserved) + [_pin_head_box(self.graphics, *at(p)) for p in scene.on_route]
         scale = group[0]["stay_scale"]  # every card has the video's one size
-        steps = int(math.hypot(w, h) // self._RING_STEP_PX)
-        spots = self._ring_attempt(scale, False, w, h, pins, order, fixed, route_layer, steps)
-        for i, x, y in self._ring_untangle(pins, spots, *self.graphics.beside_card_footprint(scale))[0]:
+        card_w, card_h = self.graphics.beside_card_footprint(scale)
+        boxes = circle_layout(
+            pins, w, h, keep_off, route, float(self.graphics.marker_radius), card_w, card_h)
+        if boxes is not None:
+            spots = [(i, box[0], box[1]) for i, box in enumerate(boxes)]
+        else:
+            fixed, route_layer = self._ring_grids(w, h, keep_off, route)
+            steps = int(math.hypot(w, h) // self._RING_STEP_PX)
+            spots = self._ring_untangle(
+                pins, self._ring_attempt(scale, False, w, h, pins, order, fixed, route_layer, steps),
+                card_w, card_h)[0]
+        for i, x, y in spots:
             cache[(group[i]["index"], hold)] = (int(x), int(y), scale)
         for c in group:  # no room anywhere: it keeps its whole-map spot
             cache.setdefault((c["index"], hold), (*c["stay_box"], scale))
@@ -1160,7 +1169,7 @@ class _CourseOverviewMixin:
         margin = panels.margin
         live = {}
         if panels.total_km is not None and panels.total_seconds is not None:
-            left = max(0.0, 1.0 - dist / max(1e-6, total_smooth_dist))  # of the route, still to be traced
+            left = max(0.0, 1.0 - dist / max(1e-6, float(trace.cum[-1])))  # of the route, still to be traced
             live = {"remaining_km": panels.total_km * left, "remaining_seconds": panels.total_seconds * left}
         frame = self.graphics.render_overview_hud(
             frame, title=panels.title, total_km=panels.total_km, total_seconds=panels.total_seconds,

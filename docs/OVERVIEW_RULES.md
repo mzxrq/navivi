@@ -471,7 +471,8 @@ Decided (option A). Done before Phase 2 (section 9, Task 20).
 |---|---|
 | One spot | A card appears where it stays: the same spot while the video runs and on the recap frame. It does not move, resize or turn into a badge. |
 | One size | Every covered card in a video has the same width and the same photo height. |
-| Scale | The size is the largest at which every covered card fits, up to a maximum (a constant in `tuning.py`). There is no minimum: cards shrink until all of them fit. They shrink further so no leader line passes under another card, down to `OVERVIEW_CARD_CLEAR_LINES_MIN_SHARE` of that fitting size. |
+| Circles | Approved 2026-11-26: cards sit on a circle round each group of pins (`spatial_renderer/card_circles.py`). No card covers the route, a pin, a panel or another card; no leader crosses or lies on another, or passes under a card; leaders may cross the route. |
+| Scale | The size is the largest at which a round circle layout exists, up to a maximum in `tuning.py`. Where none exists down to `OVERVIEW_CARD_CIRCLE_MIN_SCALE` (very many pins), cards go to the nearest free spots, shrinking until all fit and keeping leaders clear where they can. |
 | No photo | A place without a photo shows its pin only, with no card and no badge. |
 | Planned up front | One layout is worked out before the first frame, counting every card that will ever appear, including later stop-bys and closed places. |
 | Clear of | Other cards, the route, pin heads, the top and bottom panels, notices and the totals card. |
