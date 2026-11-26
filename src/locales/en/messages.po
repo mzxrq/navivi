@@ -2218,6 +2218,10 @@ msgstr "E.g. Tomogashima and Kada area..."
 msgid "E.g. Wakayama, Wakayama City"
 msgstr "E.g. Wakayama, Wakayama City"
 
+#: src/components/ui/VideoLookSettings.tsx:208
+msgid "Each stop's card stays on the map once it pops up. Off: cards close as the video moves on, and return to the same spots on the last map."
+msgstr "Each stop's card stays on the map once it pops up. Off: cards close as the video moves on, and return to the same spots on the last map."
+
 #: src/features/map/components/Sidebar.tsx:182
 msgid "Edit"
 msgstr "Edit"
@@ -6838,8 +6842,8 @@ msgid "Walk the route: a walker travels the map and stops at each place. Whole r
 msgstr "Walk the route: a walker travels the map and stops at each place. Whole route first: the whole route is shown and traced, stop-bys come last, and every stop-by gets its own stop in its leg. Route map: like Walk the route, but each stop's photo pops up big and slides over to that leg's distance and time. Each style has its own overview script; switching rewrites an automatic one."
 
 #: src/components/ui/VideoLookSettings.tsx:208
-msgid "Walk the route: each stop's card stays on the map once it pops up, instead of fading as the walker moves on."
-msgstr "Walk the route: each stop's card stays on the map once it pops up, instead of fading as the walker moves on."
+#~ msgid "Walk the route: each stop's card stays on the map once it pops up, instead of fading as the walker moves on."
+#~ msgstr "Walk the route: each stop's card stays on the map once it pops up, instead of fading as the walker moves on."
 
 #: src/components/ui/VideoLookSettings.tsx:60
 msgid "Walking"

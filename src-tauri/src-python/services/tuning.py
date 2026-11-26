@@ -333,6 +333,8 @@ COURSE_TRACE_MAX_SECONDS = 40.0
 COURSE_TAGLINE_SECONDS = 5.0
 COURSE_TAGLINE_FADE_SECONDS = 0.5
 COURSE_CARD_POP_SECONDS = 0.45  # a stop's card fades in as the trace reaches it, then stays
+# With "Cards stay up" off, a card closes when the next one pops, though never before it was up this long.
+COURSE_CARD_MIN_SECONDS = 1.8
 # Stop-bys (then closed places) come one at a time across their sentence: at least _STAGGER apart,
 # at most _MAX_STEP, so a long sentence with few places still shows them early on.
 COURSE_STOPBY_STAGGER_SECONDS = 0.15
