@@ -147,8 +147,8 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
 - Stop numbering (S, 1, 2 … E) is one rule, `route_inputs.stop_is_numbered` + `returns_to`: in the video a stop-by and a stop
   skipped in export show "+1", "+2" … (`route_inputs.stopby_labels`; "・" only for one with no number; test a glyph with
   `is_stopby_label`, never `int()`), and a return stop ("Add return stop", a copy at the same spot) shows again the number of the stop it
-  comes back to and gets no `{n}` cue. Six places count it for their own data shape — `overview_pin_glyphs` (legs/3D),
-  `spatial_renderer/overview.py`'s `order`, `waypoints.py`'s `_numbers`, `route2vdo`'s pydeck pins, `outrocard._route_badges`
+  comes back to and gets no `{n}` cue. Five places count it for their own data shape — `overview_pin_glyphs` (legs),
+  `spatial_renderer/overview.py`'s `order`, `waypoints.py`'s `_numbers`, `outrocard._route_badges`
   and `overview_script.visible_waypoints` — so a change has to go through all of them (`tests/test_stop_numbering.py`).
   The map editor's own `src/utils/stopLabel.ts` still numbers a return stop separately (it also names asset files).
 - Overview cards (all styles, `docs/OVERVIEW_RULES.md` 8.18, `tests/test_card_layout.py`,
@@ -185,15 +185,23 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
   stop-bys and closed places come up one by one across their sentence (`_set_reveal_times`, with a ring `_draw_ripple`),
   and the walked stops' cards fade to `_BADGE_DIM`.
   The GL ending stays a hard cut (a crossfade was tried 2026-11-21; the user preferred the cut).
-  Camera moves are real map zooms: `course.zoom_view(t)` gives the view (the opening ease-out, then `dense_zooms`:
-  runs of 3+ stops whose stretch is `COURSE_DENSE_ZOOM_MIN`x smaller than the whole ROUTE, not the frame), the GL map
-  is captured once per distinct view (`_course_gl_frames`, `gl_view_state`, frames saved to a temp dir as they come),
-  and `_course_zoomed_map` redraws route, trace, pins, walker and cards on it at their zoomed places but normal size.
+  Camera moves are real map zooms, in every style (`spatial_renderer/cluster_zoom.py`, 8.9): a cluster is the
+  storyboard's `cluster_min_stops` (2) or more stops in route order, each within one pin width
+  (`CLUSTER_PIN_WIDTH_RADII` marker radii) of the next on screen (`cluster_views`; true positions, not decluttered
+  pins). The course times it by its trace (`course.zoom_view(t)`: the opening ease-out, then `dense_zooms`, held until
+  the trace leaves); walk and map by the walker (`WalkCamera`, counted in written frames so a wait on the voice stays
+  in; `_NoticeWriter` swaps in `_walk_zoomed_frame`, and the walk ends back on the whole map). The GL map is captured
+  once per distinct view (`_gl_view_frames`, `gl_view_state`, frames saved to a temp dir as they come), and
+  `_course_zoomed_map` / `_walk_zoomed_frame` redraw route, pins, walker and cards on it at their zoomed places but
+  normal size. A zoomed frame redraws the Route map's card, so it restores `graphics._slide_frames` (one count a frame), and
+  that big card fades to its own zoomed spot too (`_walk_zoom_big_spot`; left in place, the pins moved under it).
   A card up during a zoom keeps its size: it fades out at its spot and in at the nearest clear one by its zoomed pin,
   and back (`popups.zoom_card_alphas`; never sliding). A card whose pin is out of view is hidden meanwhile
-  (`_zoom_card_place` → `_zoom_place_group`, the ring search, all in-view cards at once, kept for the zoom). With a Mapbox
-  key the course background is always the GL map (`mapfetcher.fetch_image`) so the styles match; without one, or if
-  the capture fails, the base map is cropped and the cards redrawn on it. The ending reads job_config.json from the
+  (`_place_zoom_cards`, circle or ring search, all in-view cards at once, kept for the zoom). The overview background
+  is always the straight-down GL map in every style (`mapfetcher.fetch_image`, GPU; no key or a failed capture is an
+  error, no raster fallback; `raster=True` only for `recap_frame` and `test_overview_map`). If only the zoom capture
+  fails, the base map is cropped and the cards redrawn on it. The flat pydeck overview (`use_pydeck_overview`) is
+  removed. The ending reads job_config.json from the
   folders ABOVE the output dir, so a test render outside the project silently has no ending.
 - Pill badge lattice detail: one badge per PLACE (a return stop shares the first visit's, `_recap_popup_set`), all on one frame-wide lattice
   (`_recap_card_slots`, cells offered nearest-pin-first) so they line up in rows and columns and can never overlap.

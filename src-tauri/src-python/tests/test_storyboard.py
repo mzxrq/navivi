@@ -11,7 +11,7 @@ from services.vdoprocessing.videopipeline.render_look import look_options
 def test_each_style_reads_its_own_file():
     assert [of(s).name for s in ("walk", "map", "course")] == ["walk", "map", "course"]
     assert of("map").leg_cards and not of("walk").leg_cards
-    assert of("course").traced_route and not of("course").pydeck_allowed
+    assert of("course").traced_route
     assert of("course").arrival_slow_seconds == 3.0
     assert of("course").cards_stay and not any(k.startswith("pass_card") for k in of("course").timings)
 

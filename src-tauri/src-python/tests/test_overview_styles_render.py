@@ -1,6 +1,7 @@
 """Each overview style renders a finished video end to end (tiny, CPU, no map download)."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -8,6 +9,7 @@ import pytest
 
 from services import tuning
 from services.mapfetcher.graphicengine import GraphicsEngine
+from services.vdoprocessing.route2vdo import RouteAnimator
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 
 
@@ -29,3 +31,10 @@ def test_an_overview_style_renders_a_finished_video(style, tmp_path):
 
     assert result and Path(result).stat().st_size > 0
     assert renderer.last_rendered_seconds > 0
+
+
+def test_a_project_still_carrying_the_old_3d_setting_renders_the_cue_driven_overview():
+    animator = RouteAnimator.__new__(RouteAnimator)
+    animator.config = {"use_pydeck_overview": True, "overview_style": "walk"}
+    animator.spatial_renderer = SimpleNamespace(render_overview=lambda *a, **k: "01_overview.mp4")
+    assert animator._overview_clip("bg.png", [], [], [], 30, None, None, None, {}) == "01_overview.mp4"

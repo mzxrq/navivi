@@ -21,9 +21,8 @@ from services.logger.logger import setup_logger
 from services.logger.progress import tracker
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
-from services.mapfetcher.maplanguage import needs_gl_labels, resolve_map_style, streets_lang
+from services.mapfetcher.maplanguage import resolve_map_style
 from services.vdoprocessing.stopby_visits import visits_stopby
-from services.vdoprocessing.storyboard import for_config as storyboard_for
 
 # Logging configuration
 logger = setup_logger("MapFetcher")
@@ -356,8 +355,10 @@ class MapFetcher:
         output_filename: str,
         output_size: Tuple[int, int] = (1920, 1080),
         max_zoom: int = 20,
+        raster: bool = False,
     ):
-        """Instance method mapping for overview maps."""
+        """The overview's background map: the deck.gl page seen straight down (GPU), or an error that says why not.
+        `raster` (stitched tiles, CPU) is only for a picture that is not the video: a preview."""
         # ---------------------------------------------------------------------
         # DYNAMIC PATH FIX: Route the overview map to the central map-image directory
         # ---------------------------------------------------------------------
@@ -368,48 +369,31 @@ class MapFetcher:
         # Override the filename path to sit correctly in the map-image folder
         final_filename = str(png_dir / Path(output_filename).name)
 
+        if raster:
+            logger.info("Fetching overview map tile (zoom<=%d)...", max_zoom)
+            result = self.downloader.fetch_overview_image(
+                bounding_box, final_filename, output_size, max_zoom
+            )
+            logger.info("Overview map tile saved -> %s", result[0])
+            return result
+
+        from services.mapfetcher.pydeck_overview import fetch_overview_image_pydeck
+
         settings = (self.config.get("settings", {}) if self.config else {}) or {}
-        # Opt-in per project (settings.overview_background: "pydeck" in
-        # job_config.json) — the default stays the existing contextily/Esri
-        # tile stitch, which needs no Mapbox token/headless-browser
-        # dependency. See pydeck_overview.py's own module docstring for why
-        # this is a separate top-down-only capture rather than reusing the
-        # residential mode's tilted pydeck camera.
-        background = str(settings.get("overview_background", "")).lower()
-        # Static raster tiles can't be relabeled, so a map in another language than the style's own
-        # (English) is drawn through the GL page, which rewrites its labels (maplanguage's localizer),
-        # unless the project gave a Studio style for that language or chose the background itself.
-        lang = streets_lang(self.config.get("map_language")) if self.config else None
-        if needs_gl_labels(settings, lang, bool(resolve_mapbox_token(settings))):
-            background = "pydeck"
-            logger.info("Map language %s: drawing the overview map through the GL page so its labels follow it.", lang)
-        # The course overview zooms in on the GL map (course._course_gl_frames): its whole-map frame must be that
-        # same map, or each zoom would switch map style.
-        if storyboard_for(settings).traced_route and resolve_mapbox_token(settings):
-            background = "pydeck"
-        if background == "pydeck":
-            from services.mapfetcher.pydeck_overview import fetch_overview_image_pydeck
-
-            logger.info("Fetching overview map background via pydeck...")
-            map_style = resolve_map_style(settings, "mapbox/streets-v12")
-            try:
-                result = fetch_overview_image_pydeck(
-                    bounding_box, final_filename, output_size,
-                    mapbox_key=resolve_mapbox_token(settings),
-                    map_style=map_style,
-                )
-                logger.info("Overview map background saved -> %s", result[0])
-                return result
-            except Exception as exc:
-                if str(settings.get("overview_background", "")).lower() == "pydeck":
-                    raise
-                logger.warning("GL overview map failed (%s); using the raster map (its labels stay in the style's language).", exc)
-
-        logger.info("Fetching overview map tile (zoom<=%d)...", max_zoom)
-        result = self.downloader.fetch_overview_image(
-            bounding_box, final_filename, output_size, max_zoom
-        )
-        logger.info("Overview map tile saved -> %s", result[0])
+        token = resolve_mapbox_token(settings)
+        if not token:
+            raise RuntimeError(
+                "The overview video needs a Mapbox token for its map. Add the token in the app settings and render again."
+            )
+        logger.info("Fetching overview map background via pydeck...")
+        try:
+            result = fetch_overview_image_pydeck(
+                bounding_box, final_filename, output_size,
+                mapbox_key=token, map_style=resolve_map_style(settings, "mapbox/streets-v12"),
+            )
+        except Exception as exc:
+            raise RuntimeError(f"The overview map could not be captured on the 3D map: {exc}") from exc
+        logger.info("Overview map background saved -> %s", result[0])
         return result
 
     # [Map] Process a residential sequence based on route DataFrame and waypoints

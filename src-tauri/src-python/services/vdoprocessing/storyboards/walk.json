@@ -7,7 +7,6 @@
   "one_card_at_a_time": false,
   "leg_cards": false,
   "ending_zoom_after_summary": true,
-  "pydeck_allowed": true,
   "traced_route": false,
   "course_brief_legs": false,
   "arrival_slow_seconds": null,
@@ -15,6 +14,7 @@
   "script_intro_in_key": false,
   "visit_all_stopbys": false,
   "ending_pin_shape": "dot",
+  "cluster_min_stops": 2,
   "sub_course_slot": "after_totals",
   "timings": {
     "sub_course_seconds": 8.0,

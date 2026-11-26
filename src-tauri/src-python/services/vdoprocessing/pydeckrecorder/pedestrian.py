@@ -4,7 +4,7 @@ camera, turn-by-turn HUD banner + distance/time card, stop-by photo moments).
 A self-contained, plain-argument function — no RouteAnimator/job_config
 coupling. Its pieces live beside it: pin_icons.py (pins and labels),
 leg_camera.py (framing/projection), leg_hud.py (HUD), stopby_pause.py (a
-stop-by's photo moment); the 3D overview is overview_pydeck.py. See
+stop-by's photo moment). See
 recorder.py/renderer.py for the sibling DRIVING-mode (vehicle scenegraph)
 pipeline this deliberately does not touch.
 """

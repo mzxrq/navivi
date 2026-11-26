@@ -13,34 +13,6 @@ _EARTH_CIRCUMFERENCE_M = 2 * math.pi * _R
 _TILE_SIZE_PX = 512
 
 
-def _bbox_view(lats: List[float], lons: List[float], output_size: Tuple[int, int], pad_frac: float = 0.15):
-    """A simple fit-bbox-to-viewport zoom/center — independent of (and
-    deliberately simpler than) mapfetcher.pydeck_overview.compute_pydeck_view,
-    since this module has no need for that function's extent-tracking
-    contract (project_latlon_to_pixel reprojection isn't used anywhere
-    here — every pin/route position is drawn as a real deck.gl layer, not
-    OpenCV-composited onto a screenshotted raster). `pad_frac` pads the
-    fitted bbox so pins/route endpoints aren't flush against frame edges.
-    """
-    min_lat, max_lat = min(lats), max(lats)
-    min_lon, max_lon = min(lons), max(lons)
-    lat_pad = max((max_lat - min_lat) * pad_frac, 0.0005)
-    lon_pad = max((max_lon - min_lon) * pad_frac, 0.0005)
-    min_lat, max_lat = min_lat - lat_pad, max_lat + lat_pad
-    min_lon, max_lon = min_lon - lon_pad, max_lon + lon_pad
-
-    center_lat = (min_lat + max_lat) / 2.0
-    center_lon = (min_lon + max_lon) / 2.0
-    out_w, out_h = output_size
-
-    lat_span_m = (max_lat - min_lat) * (math.pi / 180.0) * _R
-    lon_span_m = (max_lon - min_lon) * (math.pi / 180.0) * _R * math.cos(math.radians(center_lat))
-
-    meters_per_pixel = max(lat_span_m / out_h, lon_span_m / out_w)
-    zoom = math.log2(_EARTH_CIRCUMFERENCE_M / (_TILE_SIZE_PX * meters_per_pixel))
-    return center_lon, center_lat, zoom
-
-
 def _ease_in_out_cubic(t: float) -> float:
     """Standard ease-in-out cubic (0..1 -> 0..1) -- used to shape the
     top-down/chase-cam transitions (see `topdown_transition_seconds` on
@@ -253,37 +225,6 @@ def _recenter_view_for_target_px(
     new_view_lat = math.degrees(math.asin(sin_lat))
 
     return new_view_lon, new_view_lat
-
-
-def _nearest_index(route_latlon: List[Tuple[float, float]], lat: float, lon: float) -> int:
-    best_i, best_d = 0, float("inf")
-    for i, (rlat, rlon) in enumerate(route_latlon):
-        d = (rlat - lat) ** 2 + (rlon - lon) ** 2  # plain squared-degree distance — only used to RANK points, never as a real distance
-        if d < best_d:
-            best_d, best_i = d, i
-    return best_i
-
-
-def _point_at_fraction(route_lonlat: List[List[float]], cum_km: List[float], total_km: float, frac: float) -> List[List[float]]:
-    """The route polyline truncated (with the final partial segment
-    linearly interpolated) at real fractional distance `frac` (0..1) along
-    the route -- what a "the line has drawn this far" frame actually
-    needs, not just a truncated point INDEX (which would visibly jump in
-    steps between original GPS points instead of animating smoothly)."""
-    if frac <= 0:
-        return [route_lonlat[0]]
-    if frac >= 1:
-        return route_lonlat
-    target = frac * total_km
-    for i in range(1, len(cum_km)):
-        if cum_km[i] >= target:
-            seg_km = cum_km[i] - cum_km[i - 1]
-            t = (target - cum_km[i - 1]) / seg_km if seg_km > 0 else 0.0
-            lon0, lat0 = route_lonlat[i - 1]
-            lon1, lat1 = route_lonlat[i]
-            interp = [lon0 + (lon1 - lon0) * t, lat0 + (lat1 - lat0) * t]
-            return route_lonlat[:i] + [interp]
-    return route_lonlat
 
 
 def _clear_card_spot(

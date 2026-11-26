@@ -4,6 +4,8 @@ changed in its file. An unset or unknown style uses walk.
 
 ending_pin_shape: the pins in the ending zoom into the start (or end) point - "dot", or "teardrop" (with the
 overview's S / 1 / +1 labels). Any other value is a dot.
+cluster_min_stops: this many stops or more, each within a pin's width of the next on screen, make a cluster the
+camera zooms in on while the trace or the walker passes it.
 sub_course_slot: where the sub course plays - "after_totals", or "before_stopbys" (Whole route first, whose
 stop-bys then wait for it). Both come after the totals card.
 
@@ -34,7 +36,6 @@ class Storyboard:
     one_card_at_a_time: bool
     leg_cards: bool
     ending_zoom_after_summary: bool
-    pydeck_allowed: bool
     traced_route: bool
     course_brief_legs: bool
     arrival_slow_seconds: Optional[float]
@@ -44,6 +45,7 @@ class Storyboard:
     timings: Mapping[str, float]
     ending_pin_shape: str
     sub_course_slot: str
+    cluster_min_stops: int
 
 
 def _load(style: str) -> Storyboard:
