@@ -495,9 +495,7 @@ class _OverviewAnimationMixin:
     def _play_start_batch(self, s: _WalkState) -> None:
         """Index 0 never "arrives" through the trigger loop, so a stop-by batch
         hosted by the start pin is played here, once, right before the walker
-        sets off (draw_host_card=False: only its pin, already on every frame).
-        `batch_display_seconds` (overview.py) holds until the batch's {goPreN}
-        cue is spoken instead of the fixed per-card estimate."""
+        sets off (draw_host_card=False: only its pin, already on every frame)."""
         start_popup = s.active_popups[0] if s.active_popups else None
         if not (start_popup and start_popup.get("stopby_group")):
             return
@@ -507,7 +505,6 @@ class _OverviewAnimationMixin:
             s.video, start_frame, start_popup, start_popup.copy(),
             start_popup["stopby_group"], s.w, s.h, s.fps, s.n_points,
             route_obstacles=s.route_obstacles, draw_host_card=False,
-            total_display_seconds=start_popup.get("batch_display_seconds"),
         )
 
     def _walk_one_frame(
