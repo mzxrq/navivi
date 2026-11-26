@@ -3,6 +3,7 @@
 from services import tuning
 from services.localization.cues import tags_at_sentence_start
 from services.localization.overview_script import overview_style
+from services.vdoprocessing.storyboard import of as storyboard_of
 
 from .audio_step import overview_tagged_script
 from .helpers import attraction_videos_enabled
@@ -55,7 +56,9 @@ def _run_options(
         "overview_cue_wait_tags": tags_at_sentence_start(
             overview_tagged_script(project_config, config_path.parent)
         ),
-        "overview_cue_wait_seconds": float(settings.get("overview_cue_wait_seconds", 2.0)),
+        "overview_cue_wait_seconds": float(settings.get(
+            "overview_cue_wait_seconds", storyboard_of(overview_style(project_config)).timings["cue_wait_seconds"]
+        )),
         # The overview video type (each with its own script); "course" also
         # cycles headline taglines taken from the route (overview_script.course_taglines).
         "overview_style": overview_style(project_config),

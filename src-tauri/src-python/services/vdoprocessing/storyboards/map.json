@@ -13,5 +13,14 @@
   "arrival_slow_seconds": null,
   "course_frame": false,
   "script_intro_in_key": false,
-  "visit_all_stopbys": false
+  "visit_all_stopbys": false,
+  "timings": {
+    "sub_course_seconds": 8.0,
+    "cue_wait_seconds": 2.0,
+    "max_leg_seconds": 10.0,
+    "intro_clean_hold_seconds": 1.5,
+    "map_photo_seconds": 0.8,
+    "map_slide_seconds": 0.5,
+    "map_min_stop_seconds": 3.5
+  }
 }

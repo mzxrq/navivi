@@ -45,8 +45,9 @@ def test_the_course_opening_zoom_ends_on_the_whole_map():
 
     from services import tuning
     from services.vdoprocessing.spatial_renderer.course import zoom_view
+    from services.vdoprocessing.storyboard import of
 
     s, x0, y0 = zoom_view(0.0, [], 1920, 1080)  # opens on the route's own framing: the middle of the wider map
     assert s == pytest.approx(tuning.COURSE_OPEN_ZOOM)
     assert (x0 + 1920 / (2 * s), y0 + 1080 / (2 * s)) == pytest.approx((960, 540))
-    assert zoom_view(tuning.COURSE_OPEN_ZOOM_SECONDS, [], 1920, 1080) is None  # and ends on the whole map
+    assert zoom_view(of("course").timings["open_zoom_seconds"], [], 1920, 1080) is None  # and ends on the whole map

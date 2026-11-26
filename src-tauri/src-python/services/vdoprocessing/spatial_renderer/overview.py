@@ -289,6 +289,11 @@ def _is_numbered_stop(ap: Dict, stop_popup: Optional[Dict]) -> bool:
     )
 
 
+def _timing(config: Dict, name: str) -> float:
+    """settings.overview_<name>, else the style's storyboard timing."""
+    return float(config.get(f"overview_{name}", storyboard_for(config).timings[name]))
+
+
 def _intro_cue_walk_frames(popups: List, audio_cues: Dict, config: Dict, fps: int) -> int:
     """Frames before the walk sets off when the narration has cues: the intro's length, or the {start} cue."""
     first = popups[0] if popups else None
@@ -298,7 +303,7 @@ def _intro_cue_walk_frames(popups: List, audio_cues: Dict, config: Dict, fps: in
             intro_freeze = max(float(first["freeze_seconds"]), tuning.POPUP_MIN_DISPLAY_SECONDS)
         clean_hold = min(
             intro_freeze * _INTRO_CLEAN_HOLD_FRACTION_OF_FREEZE,
-            float(config.get("overview_intro_clean_hold_seconds", 1.5)),
+            _timing(config, "intro_clean_hold_seconds"),
         )
         return intro_frame_count(
             intro_freeze, clean_hold, max(1, int(tuning.POPUP_FADE_SECONDS * fps)), fps,
@@ -454,7 +459,7 @@ def _route_obstacle_array(route_avoid_points: List) -> np.ndarray:
 def _set_cue_waits(active_popups: List[Dict], stop_popup: Optional[Dict], audio_cues: Dict, config: Dict, fps: int) -> None:
     # A cue at the start of a sentence: the walker waits at that stop a moment (popup fading in) to stay in step.
     wait_tags = {str(t) for t in (config.get("overview_cue_wait_tags") or [])}
-    wait_frames = int(fps * float(config.get("overview_cue_wait_seconds", 2.0)))
+    wait_frames = int(fps * _timing(config, "cue_wait_seconds"))
     for ap in active_popups:
         numbered = _is_numbered_stop(ap, stop_popup)
         ap["cue_wait_frames"] = (
@@ -696,7 +701,7 @@ class _OverviewRenderMixin:
         color = tuning.SUB_COURSE_LINE_BGR
         pts = np.asarray(sub["points"], dtype=float)
         step = np.r_[0.0, np.cumsum(np.hypot(*np.diff(pts, axis=0).T))]
-        frames = max(2, int(tuning.SUB_COURSE_OVERVIEW_SECONDS * fps))
+        frames = max(2, int(storyboard_for(self.config).timings["sub_course_seconds"] * fps))
         at = np.linspace(0.0, step[-1], frames)
         path = [(int(x), int(y)) for x, y in zip(np.interp(at, step, pts[:, 0]), np.interp(at, step, pts[:, 1]))]
         # Each stop's pin appears when the marker reaches it; anchors (main stops) are already on the map.
@@ -897,7 +902,7 @@ class _OverviewRenderMixin:
         # Clean beat first, so the video opens on the route itself rather than cutting straight to a photo.
         clean_hold_sec = min(
             intro_freeze_sec * _INTRO_CLEAN_HOLD_FRACTION_OF_FREEZE,
-            float(self.config.get("overview_intro_clean_hold_seconds", 1.5)),
+            _timing(self.config, "intro_clean_hold_seconds"),
         )
         if not preview_recap_only:
             for _ in range(int(clean_hold_sec * fps)):
@@ -1216,7 +1221,7 @@ class _OverviewRenderMixin:
         fps, audio_cues = job.fps, job.audio_cues
         walk = _initial_walk(job.points, job.smooth_path, job.cum_smooth_dist, job.total_smooth_dist)
         _set_cue_waits(active_popups, stop_popup, audio_cues, self.config, fps)
-        cap_frames = int(fps * float(self.config.get("overview_max_leg_seconds", 10.0)))
+        cap_frames = int(fps * _timing(self.config, "max_leg_seconds"))
         walk = _cap_legs(walk, active_popups, cap_frames, fps)
         if audio_cues:
             walk = _retime_to_cues(

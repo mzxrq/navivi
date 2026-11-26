@@ -10,8 +10,18 @@
   "pydeck_allowed": false,
   "traced_route": true,
   "course_brief_legs": true,
-  "arrival_slow_seconds": "COURSE_ARRIVAL_SLOW_SECONDS",
+  "arrival_slow_seconds": 3.0,
   "course_frame": true,
   "script_intro_in_key": true,
-  "visit_all_stopbys": true
+  "visit_all_stopbys": true,
+  "timings": {
+    "sub_course_seconds": 8.0,
+    "cue_wait_seconds": 2.0,
+    "max_leg_seconds": 10.0,
+    "intro_clean_hold_seconds": 1.5,
+    "open_zoom_seconds": 1.2,
+    "pass_card_seconds": 2.5,
+    "pass_card_min_seconds": 1.8,
+    "stats_slide_seconds": 0.6
+  }
 }
