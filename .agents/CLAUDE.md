@@ -157,7 +157,8 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
   minimum), clustered at their pins off the route, pins and panels; walk/map stamp `stay_box` / `stay_scale`
   (`overview._ov_layout_stay_cards`), course in `course._course_cards`. A place without a photo shows its pin only
   (`no_card`). Route map's big arriving photo (`popup["big"]`) becomes the standing card when it closes.
-  `settings.overview_cards_stay` off closes walk/map cards during the walk; the recap shows them at the same spots.
+  `settings.overview_cards_stay` off closes cards during the walk (course: when the next one pops, up at least
+  `tuning.COURSE_CARD_MIN_SECONDS`); the recap / last map shows them at the same spots.
   There is no pill badge recap setting any more (`overview_recap_style` removed).
 - Course overview extras: its progress rail shrinks to the room right of the stop-by / closed notices as they come up
   (`_course_rail_left`), and its summary is always the discs-and-chips `create_summary_card_circles`, whatever

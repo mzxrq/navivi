@@ -153,6 +153,28 @@ def test_cards_up_together_while_zoomed_cover_no_card_and_no_pin():
     assert {p[2] for p in places} == {1.4}
 
 
+@pytest.mark.parametrize("switch, during, after", [(True, (0, 1), (0, 1)), (False, (1,), (0, 1))])
+def test_the_cards_stay_up_switch_closes_a_course_card_when_the_next_pops_and_brings_all_back(switch, during, after):
+    cards = [_card(0, 900, 540, (100, 100), course_at=5.0), _card(1, 100, 100, (300, 800), course_at=9.0)]
+    course, scene = _course(cards, [])
+    course.config = {"overview_style": "course", "overview_cards_stay": switch}
+
+    def shown(t):
+        return course._course_plate_state(scene, t, None, 20.0)[0]
+
+    assert shown(6.0) == (0,)
+    assert shown(15.0) == during
+    assert shown(20.5) == after  # the trace is done: every card, at its spot
+
+
+def test_a_closing_course_card_is_up_long_enough_to_be_seen():
+    cards = [_card(0, 900, 540, (100, 100), course_at=5.0), _card(1, 100, 100, (300, 800), course_at=5.2)]
+    course, scene = _course(cards, [])
+    course.config = {"overview_style": "course", "overview_cards_stay": False}
+    assert course._course_plate_state(scene, 5.0 + tuning.COURSE_CARD_MIN_SECONDS - 0.5, None, 20.0)[0] == (0, 1)
+    assert course._course_plate_state(scene, 5.0 + tuning.COURSE_CARD_MIN_SECONDS + 0.1, None, 20.0)[0] == (1,)
+
+
 def test_a_zoomed_card_keeps_off_the_route_beside_its_pin():
     """The route runs through the pin left to right: the card goes above or below it, still right by the pin, instead of
     on the line (第三砲台跡 and 友ヶ島 小展望台 covered the walk, 2026-11-24)."""

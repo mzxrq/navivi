@@ -124,7 +124,7 @@ Preview one frame without a full render: `.agents/scratch/recap-layout/shoot.py`
 | `auto_overview_cues` | on |
 | `overview_cue_wait_seconds` | 2.0 |
 | `overview_max_leg_seconds` | 10 |
-| `overview_cards_stay` | on (Walk the route only) |
+| `overview_cards_stay` | on (every style) |
 | `enable_ending_highlight` | on |
 | `enable_gl_ending_zoom` | on |
 | `use_pydeck_overview` | off (planned: on for all styles, see 8.8) |
@@ -686,10 +686,10 @@ These draw in screen space, over whatever map is underneath, so Phase 3 does not
 
 **Files:** `storyboards/{map,course}.json` (`"cards_stay": true`), `popups._cards_stay` (already `cards_stay and overview_cards_stay`), `overview_animation.py` (map style), `course.py` (`_course_pass_cards`), `VideoLookSettings.tsx:208-210` (description names every style).
 
-- [ ] Map: the big photo and leg card play as today; after the walker leaves, the stop's photo card stays, as in Walk.
-- [ ] Course: the card that pops on pass stays at card size and does not shrink into a badge; cards do not overlap (reuse the card lattice).
-- [ ] Kept cards take their spot and size from Task 20's layout (8.18).
-- [ ] Tests: one per style for on (the card is on the last route frame) and off (today's behavior). Version bump.
+- [x] Map: the big photo and leg card play as today; after the walker leaves, the stop's photo card stays, as in Walk.
+- [x] Course: the card that pops on pass stays at card size and does not shrink into a badge; cards do not overlap (reuse the card lattice).
+- [x] Kept cards take their spot and size from Task 20's layout (8.18).
+- [x] Tests: one per style for on (the card is on the last route frame) and off (today's behavior). Version bump. (Course off: a card closes when the next pops, up at least 1.8 s, and all return when the trace ends.)
 
 #### Task 13: Passed stop look: photo card by default (8.12, D7)
 

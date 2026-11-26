@@ -2218,6 +2218,10 @@ msgstr "ここにサブタイトルを入れます..."
 msgid "E.g. Wakayama, Wakayama City"
 msgstr "例：和歌山・和歌山市"
 
+#: src/components/ui/VideoLookSettings.tsx:208
+msgid "Each stop's card stays on the map once it pops up. Off: cards close as the video moves on, and return to the same spots on the last map."
+msgstr "各地点のカードは一度出たら地図に残ります。オフにすると、動画が進むとカードは閉じ、最後の地図で同じ位置に戻ります。"
+
 #: src/features/map/components/Sidebar.tsx:182
 msgid "Edit"
 msgstr "編集"
@@ -6826,8 +6830,8 @@ msgid "Walk the route: a walker travels the map and stops at each place. Whole r
 msgstr "ルートを歩く：地図上を歩きながら、各地点で止まって紹介します。ルート全体から：ルート全体を見せてからなぞり、立ち寄りスポットは最後に紹介します。区間の動画では、立ち寄りスポットごとに止まります。ルート地図：ルートを歩くと同じですが、各地点の写真が大きく表示され、その区間の距離と時間にスライドします。スタイルごとにオーバービューの原稿が異なり、切り替えると自動作成の原稿は書き直されます。"
 
 #: src/components/ui/VideoLookSettings.tsx:208
-msgid "Walk the route: each stop's card stays on the map once it pops up, instead of fading as the walker moves on."
-msgstr "ルートを歩く: 地点のカードは一度出たら地図に残り、歩き進んでも消えません。"
+#~ msgid "Walk the route: each stop's card stays on the map once it pops up, instead of fading as the walker moves on."
+#~ msgstr "ルートを歩く: 地点のカードは一度出たら地図に残り、歩き進んでも消えません。"
 
 #: src/components/ui/VideoLookSettings.tsx:60
 msgid "Walking"

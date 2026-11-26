@@ -607,7 +607,7 @@ class _CourseOverviewMixin:
         _log_timing(timing, len(laid_out))
         if preview_only:
             n = max(0, int(math.ceil(timing.end_at * fps)) - 1)
-            state = self._course_plate_state(scene, n / fps, timing.extras_at)
+            state = self._course_plate_state(scene, n / fps, timing.extras_at, timing.trace_end)
             keep, layer = self._course_overlay(scene, state, route_bg)
             frame = self._course_frame(n, n / fps, route_bg, keep, layer, trace, timing, panels,
                                        _Heading(self._initial_heading(trace.path)), total_smooth_dist)
@@ -822,14 +822,34 @@ class _CourseOverviewMixin:
             taken.append((x, y, x + sw, y + sh))
         return labels, label_at
 
-    def _course_plate_state(self, scene: _Scene, t: float, extras_at: Optional[float] = None):
+    def _course_plate_state(
+        self, scene: _Scene, t: float, extras_at: Optional[float] = None, back_at: float = math.inf,
+    ):
         """What is on the cards-and-pins layer at `t`; the layer is only rebuilt when this changes.
-        A card fades in when the trace reaches its place and stays.
+        A card fades in when the trace reaches its place and stays. With "Cards stay up" off it closes when the next
+        one pops, and every card is back at its spot from `back_at` (the trace is done).
         From `extras_at` the walked stops' cards fade back to _BADGE_DIM."""
         pop = tuning.COURSE_CARD_POP_SECONDS
-        shown = tuple(ap["index"] for ap in scene.laid_out if t >= ap["course_at"])
-        anim = tuple((ap["index"], round((t - ap["course_at"]) / pop, 2))
-                     for ap in scene.laid_out if 0 <= t - ap["course_at"] < pop)
+        stays = self._cards_stay()
+        times = sorted(ap["course_at"] for ap in scene.laid_out)
+        shown, anim = [], []
+        for ap in scene.laid_out:
+            at = since = ap["course_at"]
+            left = math.inf  # seconds before it closes
+            if not stays and at < back_at:
+                if t >= back_at:
+                    since = back_at
+                else:
+                    closes = max(at + tuning.COURSE_CARD_MIN_SECONDS, next((n for n in times if n > at), back_at))
+                    if closes < back_at:
+                        left = closes - t
+            if t < since or left <= 0:
+                continue
+            shown.append(ap["index"])
+            u = min(t - since, left) / pop
+            if u < 1:
+                anim.append((ap["index"], round(u, 2)))
+        shown, anim = tuple(shown), tuple(anim)
         bumps = tuple(
             (ap["index"], round((t - ap["course_at"]) / pop, 2))
             for ap in scene.on_route if 0 <= t - ap["course_at"] < pop
@@ -1094,7 +1114,7 @@ class _CourseOverviewMixin:
 
         for i in range(total_frames):
             t = i / fps
-            new_state = self._course_plate_state(scene, t, timing.extras_at)
+            new_state = self._course_plate_state(scene, t, timing.extras_at, timing.trace_end)
             if new_state != state:
                 state = new_state
                 keep, layer = self._course_overlay(scene, state, route_bg)
