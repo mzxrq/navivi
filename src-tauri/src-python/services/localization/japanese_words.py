@@ -85,6 +85,26 @@ def _group_reading(group) -> str:
     return _kakasi_reading("".join(t.surface for t in group))
 
 
+def phrases(text: str) -> List[str]:
+    """`text` cut where a line may break: between words (葛城 stays whole), never before a particle, a suffix,
+    a lone kanji or a closing mark. Text without Japanese comes back whole: its spaces already do that."""
+    tagger = _tagger()
+    if tagger is None or not any("ぁ" <= c <= "ヿ" or _is_kanji(c) for c in text):
+        return [text]
+    out: List[str] = []
+    glue = False  # the last token (a prefix or opening bracket) holds on to the next one
+    for token in tagger(text):
+        opening = getattr(token.feature, "pos2", "") == "括弧開"
+        attached = not opening and _pos(token) != "接頭辞" and (
+            _pos(token) in ("助詞", "接尾辞", "補助記号") or len(token.surface) == 1)
+        if out and not token.white_space and (glue or attached):
+            out[-1] += token.surface
+        else:
+            out.append(token.white_space + token.surface)
+        glue = opening or _pos(token) == "接頭辞"
+    return out
+
+
 def analyze_words(text: str) -> List[Dict[str, str]]:
     """Kanji-bearing words of `text` in order of first appearance, each as {"word", "reading"}."""
     tagger = _tagger()
