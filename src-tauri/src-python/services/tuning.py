@@ -301,6 +301,9 @@ OVERVIEW_STYLES = ("walk", "course", "map")
 # fits, from MAX (times the frame height over 1080) down in SHRINK_STEP steps, with no minimum.
 OVERVIEW_CARD_MAX_SCALE = 1.8
 OVERVIEW_CARD_SHRINK_STEP = 0.9
+# Shares of the frame's width and height the cards keep off in each top corner, for the HUD's title and remaining panels.
+OVERVIEW_HUD_KEEP_OUT_WIDTH = 0.30
+OVERVIEW_HUD_KEEP_OUT_HEIGHT = 0.11
 # "map" overview: each main stop's photo pops up this much bigger than a walk card, then slides over to its leg
 # card (spatial_renderer/map_style.py, popup_box.slide_to_card). Its timings: storyboards/map.json.
 OVERVIEW_MAP_CARD_SCALE = 2.6

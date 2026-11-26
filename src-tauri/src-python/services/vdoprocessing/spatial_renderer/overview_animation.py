@@ -6,7 +6,7 @@ helpers below, passing their shared state through `_WalkState`."""
 
 import math
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -436,9 +436,10 @@ class _OverviewAnimationMixin:
         points: List,
         route_avoid_points: List,
         route_obstacle_arr: np.ndarray,
+        standing_cards: Sequence[Dict] = (),
     ) -> Optional[np.ndarray]:
         """Drives the traveler along `smooth_path`, triggering pins/popups
-        as it goes, and writes every frame to `video`. Mutates `self.last_frame`
+        (`standing_cards`: the intro's cards, up from the first frame) as it goes, and writes every frame to `video`. Mutates `self.last_frame`
         and each popup dict's own "triggered" state in place (active_popups
         is a list of dicts shared with the caller) rather than returning
         them. Returns pre_popup_frame — the last frame's plain map+pins
@@ -474,6 +475,11 @@ class _OverviewAnimationMixin:
             min_trigger_gap_frames=min_trigger_gap_frames,
             last_trigger_frame=-min_trigger_gap_frames,
         )
+        for popup in standing_cards:
+            popup.update(standing=True, hud_corner=None, beside_box=popup["stay_box"])
+            card = self._make_baked_popup(popup, _CARD_STAYS_SECONDS, fps)
+            card["frames_left"] -= card["fade_frames"]  # already faded in, over the intro
+            s.baked_popups.append(card)
         tracker.begin_substeps(s.total_stops)
         self._play_start_batch(s)
 
@@ -719,7 +725,7 @@ class _OverviewAnimationMixin:
         """Every waypoint is shown once up front on the intro frame, but from
         here on a pin only reappears once the traveler reaches it."""
         for wp in s.active_popups:
-            if wp["data"].get("arrived") or wp["index"] == 0:
+            if wp["data"].get("arrived") or wp["index"] == 0 or wp.get("standing"):
                 self._draw_pin(frame, wp, s.n_points, scale=self._pin_pop_scale(wp, self._pop_now, s.fps))
 
     def _draw_walk_pins(self, s: _WalkState, frame: np.ndarray, at_end: bool) -> None:
@@ -760,13 +766,14 @@ class _OverviewAnimationMixin:
         # [NOTE] [Animation] Laid out once and kept on the popup so the arrival pause, the hold
         # and the lingering HUD all reuse the identical spot; every card already on screen is
         # reserved or this lone popup could land on a still-visible neighbour.
-        self._layout_recap_popups(
-            [{"popup": popup, "frames_left": 1}], s.w, s.h,
-            route_obstacles=s.route_obstacles,
-            reserved_boxes=self._active_card_boxes(
-                s.baked_popups, exclude=popup
-            ) + self._stopby_notice_reserved(s.w, s.h),
-        )
+        if not (popup.get("stay_box") or popup.get("no_card")):  # its spot is already decided
+            self._layout_recap_popups(
+                [{"popup": popup, "frames_left": 1}], s.w, s.h,
+                route_obstacles=s.route_obstacles,
+                reserved_boxes=self._active_card_boxes(
+                    s.baked_popups, exclude=popup
+                ) + self._stopby_notice_reserved(s.w, s.h),
+            )
         popup["hud_corner"] = None
         popup["draw_leader_line"] = True
 
@@ -882,6 +889,15 @@ class _OverviewAnimationMixin:
         map_stop = self._plan_cue_wait(s, clock, popup)
         display_seconds = self._flow_display_seconds(s, clock, popup, map_stop)
         self._wrap_up_earlier_cards(s, popup)
+        if popup.get("no_card"):  # its pin only
+            frame = self._redraw_other_cards(s, popup_base_frame, None)
+            if not s.is_video:
+                self._walk_turn(s, beat)
+                self._draw_pin(frame, popup, s.n_points, scale=self._pin_pop_scale(popup, self._pop_now, s.fps))
+                self._walk_draw_icon(s, frame, beat)
+            self.last_frame = frame
+            s.video.write(frame)
+            return
         new_bp = self._make_baked_popup(
             popup, display_seconds, s.fps, min_hold_seconds=tuning.OVERVIEW_POPUP_MIN_HOLD_SECONDS,
         )
@@ -892,10 +908,11 @@ class _OverviewAnimationMixin:
         self.last_frame = frame
         s.video.write(frame)
 
-    def _redraw_other_cards(self, s: _WalkState, frame: np.ndarray, new_bp: Dict) -> np.ndarray:
-        """popup_base_frame is a clean plate with no cards, so every OTHER active
-        card (an earlier waypoint's, still fading) is redrawn on this one frame;
+    def _redraw_other_cards(self, s: _WalkState, frame: np.ndarray, new_bp: Optional[Dict]) -> np.ndarray:
+        """A copy of popup_base_frame (a clean plate with no cards) with every OTHER active
+        card (an earlier waypoint's, still fading) redrawn on this one frame;
         without it that card vanished for exactly this frame (a visible blink)."""
+        frame = frame.copy()
         for other_bp in s.baked_popups:
             if other_bp is new_bp:
                 continue
@@ -1023,16 +1040,18 @@ class _OverviewAnimationMixin:
         the walk resumes. With a batch it is NOT appended: the batch makes the host's card
         vanish, and reappearing after it read as a stray "already shown image" flash."""
         lingering_bp = self._make_baked_popup(popup, display_seconds, s.fps)
-        if not stopby_group:
+        no_card = bool(popup.get("no_card"))
+        if not (stopby_group or no_card):
             s.baked_popups.append(lingering_bp)
-        hud_triggered = popup.copy()
+        stays = bool(popup.get("stay_box"))
+        hud_triggered = self.walk_card_hud(popup, s.w, s.h, s.route_obstacles, None) if stays else popup.copy()
 
         total_hold_frames = lingering_bp["total_frames"]
         fade_in_frames = lingering_bp["fade_frames"]
         temp_frame = popup_base_frame
-        base_beside_box = hud_triggered.get("beside_box")
+        base_beside_box = None if stays else hud_triggered.get("beside_box")  # a fixed card doesn't slide
         for i in range(total_hold_frames):
-            alpha = min(1.0, (i + 1) / fade_in_frames)
+            alpha = 0.0 if no_card else min(1.0, (i + 1) / fade_in_frames)
             if base_beside_box:
                 bx, by = base_beside_box
                 # Reuses _popup_slide_offset_y via a throwaway bp-shaped dict of this loop's progress.
