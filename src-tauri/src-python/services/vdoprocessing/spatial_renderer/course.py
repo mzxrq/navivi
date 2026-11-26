@@ -656,9 +656,11 @@ class _CourseOverviewMixin:
         summary = self.config.get("course_summary") or summary  # the numbers the script speaks
         summary_card = None
         if summary:
-            # Always the discs-and-chips template: the corners already hold the top bar's panels, and a
-            # third accent panel there was one too many (summary_card_style is the walk's).
-            summary_card = self.graphics.create_summary_card_circles(
+            # The discs-and-chips template unless the theme names a design: the corners already hold the top bar's
+            # panels, and a third accent panel there was one too many (summary_card_style is the walk's).
+            themed = tuning.overview_theme(self.config.get("overview_theme")).get("card_style")
+            draw = self.graphics.render_summary_card if themed else self.graphics.create_summary_card_circles
+            summary_card = draw(
                 distance_km=summary.get("total_distance_km", 0.0),
                 duration_seconds=summary.get("total_duration_seconds", 0.0),
                 mode_breakdown=summary.get("mode_breakdown"),
