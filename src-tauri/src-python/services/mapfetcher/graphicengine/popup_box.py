@@ -462,19 +462,7 @@ class _PopupBoxMixin:
         # stretch still reads as "coming from the cluster's
         # edge", not from the pin itself.
         via = popup_info.get("leader_via")
-        if popup_info.get("leader_straight"):
-            # Radial: pin straight to where the line toward the card's centre meets its edge.
-            cx, cy = box_x + total_w / 2.0, box_y + total_h / 2.0
-            dx, dy = cx - point_x, cy - point_y
-            t = 0.0
-            for p, d, lo, hi in ((point_x, dx, box_x, box_x + total_w), (point_y, dy, box_y, box_y + total_h)):
-                if d and not lo <= p <= hi:
-                    t = max(t, (lo - p) / d if d > 0 else (hi - p) / d)
-            cv2.line(
-                working_frame, (point_x, point_y), (int(point_x + dx * t), int(point_y + dy * t)),
-                line_color, line_width, cv2.LINE_AA,
-            )
-        elif via is not None:
+        if via is not None:
             via_x, via_y = int(via[0]), int(via[1])
             anchor_x = min(max(via_x, box_x), box_x + total_w)
             anchor_y = min(max(via_y, box_y), box_y + total_h)

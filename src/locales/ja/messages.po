@@ -49,7 +49,7 @@ msgid "Rose"
 msgstr "ローズ色"
 
 #. js-lingui-explicit-id
-#: src/components/ui/AppSettings.tsx:1196
+#: src/components/ui/AppSettings.tsx:1182
 msgid "Starting..."
 msgstr "ダウンロード開始中..."
 
@@ -531,8 +531,8 @@ msgstr "アクセントカラー"
 msgid "Accept and export"
 msgstr "承認して書き出す"
 
-#: src/components/ui/AppSettings.tsx:1300
-#: src/components/ui/AppSettings.tsx:1304
+#: src/components/ui/AppSettings.tsx:1286
+#: src/components/ui/AppSettings.tsx:1290
 msgid "Active model"
 msgstr "使用するモデル"
 
@@ -596,8 +596,8 @@ msgstr "この点の後に点を追加"
 msgid "Add photo"
 msgstr "写真を追加"
 
-#: src/components/ui/AppSettings.tsx:750
-#: src/components/ui/AppSettings.tsx:758
+#: src/components/ui/AppSettings.tsx:736
+#: src/components/ui/AppSettings.tsx:744
 msgid "Add place names automatically"
 msgstr "地名を自動で追加"
 
@@ -682,11 +682,11 @@ msgstr "動画を追加"
 msgid "Add voice"
 msgstr "ボイスを追加"
 
-#: src/components/ui/AppSettings.tsx:1000
+#: src/components/ui/AppSettings.tsx:986
 msgid "Add word"
 msgstr "単語を追加"
 
-#: src/components/ui/AppSettings.tsx:986
+#: src/components/ui/AppSettings.tsx:972
 msgid "Add words below or extract them from narration scripts."
 msgstr "以下に単語を追加するか、スクリプトから抽出する"
 
@@ -797,7 +797,7 @@ msgstr "すべてのナレーションの文..."
 msgid "all projects"
 msgstr "すべてのプロジェクト"
 
-#: src/components/ui/AppSettings.tsx:719
+#: src/components/ui/AppSettings.tsx:705
 #: src/components/ui/ReviewStep.tsx:98
 msgid "All projects"
 msgstr "すべてのプロジェクト"
@@ -960,11 +960,11 @@ msgstr "観光地動画"
 msgid "Audio"
 msgstr "音声"
 
-#: src/components/ui/AppSettings.tsx:940
+#: src/components/ui/AppSettings.tsx:926
 msgid "auto"
 msgstr "自動"
 
-#: src/components/ui/AppSettings.tsx:645
+#: src/components/ui/AppSettings.tsx:631
 #: src/components/ui/VoiceSettings.tsx:268
 msgid "Auto"
 msgstr "自動"
@@ -977,7 +977,7 @@ msgstr "自動編集"
 msgid "Auto edit: order clips, add fades and subtitles"
 msgstr "自動編集:クリップの並び替え、フェード、字幕を追加"
 
-#: src/components/ui/AppSettings.tsx:674
+#: src/components/ui/AppSettings.tsx:660
 msgid "Auto-Detect (Recommended)"
 msgstr "自動検出 (推奨)"
 
@@ -989,7 +989,7 @@ msgstr "自動検出 (推奨)"
 #~ msgid "Auto-Director proposal"
 #~ msgstr "オートディレクターの提案"
 
-#: src/components/ui/AppSettings.tsx:1032
+#: src/components/ui/AppSettings.tsx:1018
 msgid "Auto-fill readings"
 msgstr "読み方を自動入力"
 
@@ -1220,8 +1220,8 @@ msgstr "キャンセル"
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: src/components/ui/AppSettings.tsx:1394
-#: src/components/ui/AppSettings.tsx:1396
+#: src/components/ui/AppSettings.tsx:1380
+#: src/components/ui/AppSettings.tsx:1382
 msgid "Cancel download"
 msgstr "ダウンロードをキャンセル"
 
@@ -1310,7 +1310,7 @@ msgstr "ファイルを選択…"
 msgid "Choose a leg"
 msgstr "区間を選択"
 
-#: src/components/ui/AppSettings.tsx:1306
+#: src/components/ui/AppSettings.tsx:1292
 #: src/components/ui/ComponentsChecklist.tsx:260
 msgid "Choose a model"
 msgstr "モデルを選択"
@@ -1362,8 +1362,8 @@ msgstr "シネマティック"
 msgid "Clean map before the card"
 msgstr "カードの前にきれいな地図を表示"
 
-#: src/components/ui/AppSettings.tsx:1394
-#: src/components/ui/AppSettings.tsx:1396
+#: src/components/ui/AppSettings.tsx:1380
+#: src/components/ui/AppSettings.tsx:1382
 #: src/components/ui/NewProject.tsx:317
 #: src/components/ui/ReviewStep.tsx:182
 #: src/components/ui/StatusBar.tsx:402
@@ -1649,7 +1649,7 @@ msgstr "角のポイント:クリックでなめらかに"
 msgid "Corner radius"
 msgstr "角の丸み"
 
-#: src/components/ui/AppSettings.tsx:701
+#: src/components/ui/AppSettings.tsx:687
 msgid "Correct words or kanji that are read incorrectly by the AI voice. You can auto-extract entries from scripts by typing <0>漢字(よみがな)</0> in any narration script."
 msgstr "以下に音声が誤って読み上げる単語や漢字を修正してください。"
 
@@ -1742,7 +1742,7 @@ msgid "Could not save this version"
 msgstr "このバージョンを保存できませんでした"
 
 #. placeholder {0}: res.error
-#: src/components/ui/AppSettings.tsx:838
+#: src/components/ui/AppSettings.tsx:824
 msgid "Could not voice that word: {0}"
 msgstr "この単語を読み上げられませんでした: {0}"
 
@@ -2125,7 +2125,7 @@ msgstr "ダブルクリックで座標を入力"
 msgid "Downhill"
 msgstr "下り"
 
-#: src/components/ui/AppSettings.tsx:1413
+#: src/components/ui/AppSettings.tsx:1399
 msgid "Download"
 msgstr "ダウンロード"
 
@@ -2355,7 +2355,7 @@ msgstr "見積もり中…"
 msgid "Every caption with its start and end time in the video"
 msgstr "すべての字幕と、動画内での開始・終了時刻"
 
-#: src/components/ui/AppSettings.tsx:1068
+#: src/components/ui/AppSettings.tsx:1054
 msgid "Every subtitle starts from this look"
 msgstr "すべての字幕の基本の見た目になります"
 
@@ -2775,7 +2775,7 @@ msgstr "サンプルを生成しています。最初の1回は音声モデル�
 msgid "Generating..."
 msgstr "生成中..."
 
-#: src/components/ui/AppSettings.tsx:654
+#: src/components/ui/AppSettings.tsx:640
 msgid "Generation"
 msgstr "生成"
 
@@ -2808,7 +2808,7 @@ msgstr "フォントを追加"
 msgid "Get name from coordinate"
 msgstr "座標から名前をと取得"
 
-#: src/components/ui/AppSettings.tsx:1294
+#: src/components/ui/AppSettings.tsx:1280
 #: src/components/ui/ComponentsChecklist.tsx:249
 msgid "Get Ollama"
 msgstr "Ollama を入手"
@@ -2864,8 +2864,8 @@ msgstr "グリッド表示"
 msgid "Hard cut"
 msgstr "カット"
 
-#: src/components/ui/AppSettings.tsx:666
-#: src/components/ui/AppSettings.tsx:670
+#: src/components/ui/AppSettings.tsx:652
+#: src/components/ui/AppSettings.tsx:656
 msgid "Hardware mode"
 msgstr "ハードウェアモード"
 
@@ -2904,7 +2904,7 @@ msgstr "ログを隠す"
 msgid "Hide the route behind photos"
 msgstr "写真の背後でルートを隠す"
 
-#: src/components/ui/AppSettings.tsx:676
+#: src/components/ui/AppSettings.tsx:662
 msgid "High-spec Mode"
 msgstr "ハイスペックモード"
 
@@ -2912,11 +2912,11 @@ msgstr "ハイスペックモード"
 msgid "High-spec system detected: {gpuRenderer} ({logicalCores} CPU threads)"
 msgstr "ハイスペックシステムが検出されました: {gpuRenderer} (CPUスレッド数: {logicalCores})"
 
-#: src/components/ui/AppSettings.tsx:875
+#: src/components/ui/AppSettings.tsx:861
 msgid "High/low"
 msgstr "高低"
 
-#: src/components/ui/AppSettings.tsx:923
+#: src/components/ui/AppSettings.tsx:909
 msgid "High/low pattern, one H or L per sound of the reading (かつらぎ: LHHH). The voice is taken again until it matches."
 msgstr "高低のパターン。読みの1音ごとにHかL（かつらぎ: LHHH）。合うまで音声を取り直します。"
 
@@ -2925,8 +2925,8 @@ msgid "History"
 msgstr "履歴"
 
 #: src/components/ui/AppSettings.tsx:616
-msgid "How each stop appears on the end-of-video recap map. Pill badge: a slim capsule (number, name, photo) — every stop always gets a spot, even on a route with many waypoints. Pop-up card: the older wide photo card, which can run out of room on a large route."
-msgstr ""
+#~ msgid "How each stop appears on the end-of-video recap map. Pill badge: a slim capsule (number, name, photo) — every stop always gets a spot, even on a route with many waypoints. Pop-up card: the older wide photo card, which can run out of room on a large route."
+#~ msgstr ""
 
 #: src/components/ui/VideoLookSettings.tsx:153
 msgid "How far behind the traveler the street-level camera sits."
@@ -3195,8 +3195,8 @@ msgstr "日本語"
 msgid "Keep all"
 msgstr "すべて残す"
 
-#: src/components/ui/AppSettings.tsx:969
-#: src/components/ui/AppSettings.tsx:970
+#: src/components/ui/AppSettings.tsx:955
+#: src/components/ui/AppSettings.tsx:956
 msgid "Keep as written"
 msgstr "表記のまま読む"
 
@@ -3249,7 +3249,7 @@ msgstr "Kokoro-82Mには1回限りのセットアップが必要です。小さ�
 msgid "Kyoto Demo Route"
 msgstr "京都デモルート"
 
-#: src/components/ui/AppSettings.tsx:639
+#: src/components/ui/AppSettings.tsx:625
 msgid "Labels, route banners and cards drawn into the video. Auto follows the language the app was in when the project was last saved."
 msgstr "動画に描画されるラベル、ルートバナー、カードの言語です。「自動」では、プロジェクトを最後に保存したときのアプリの言語になります。"
 
@@ -3266,7 +3266,7 @@ msgstr "言語"
 msgid "Language of the new version"
 msgstr "新しいバージョンの言語"
 
-#: src/components/ui/AppSettings.tsx:638
+#: src/components/ui/AppSettings.tsx:624
 msgid "Language of the text in the video"
 msgstr "動画内の文字の言語"
 
@@ -3381,8 +3381,8 @@ msgstr "クリップにリンク"
 msgid "Listen"
 msgstr "聞く"
 
-#: src/components/ui/AppSettings.tsx:947
-#: src/components/ui/AppSettings.tsx:948
+#: src/components/ui/AppSettings.tsx:933
+#: src/components/ui/AppSettings.tsx:934
 msgid "Listen (a new take each time)"
 msgstr "聞く（押すたびに新しい読み）"
 
@@ -3488,7 +3488,7 @@ msgstr "探しています…"
 msgid "Looks on Wikimedia Commons for free photos of this place. Sends the place name and position to Wikimedia."
 msgstr "この場所の自由に使える写真を Wikimedia Commons から探します。場所の名前と位置が Wikimedia に送信されます。"
 
-#: src/components/ui/AppSettings.tsx:675
+#: src/components/ui/AppSettings.tsx:661
 msgid "Low-spec Mode"
 msgstr "ロースペックモード"
 
@@ -3815,7 +3815,7 @@ msgstr "続行するにはプロジェクト名を入力してください"
 msgid "Name, position, route mode, scripts and media counts for each stop"
 msgstr "各地点の名前、位置、移動手段、台本、写真・動画の数"
 
-#: src/components/ui/AppSettings.tsx:1298
+#: src/components/ui/AppSettings.tsx:1284
 #: src/features/assistant/AssistantChat.tsx:20
 #: src/features/editor/EditorView.tsx:373
 #: src/features/editor/ExportDialog.tsx:86
@@ -3932,7 +3932,7 @@ msgstr "太字なし"
 msgid "No clips yet"
 msgstr "クリップがありません"
 
-#: src/components/ui/AppSettings.tsx:983
+#: src/components/ui/AppSettings.tsx:969
 msgid "No entries yet."
 msgstr "まだ投稿がありません"
 
@@ -3944,7 +3944,7 @@ msgstr "一致するフォントがありません。"
 msgid "No free photos of this place were found."
 msgstr "この場所の自由に使える写真は見つかりませんでした。"
 
-#: src/components/ui/AppSettings.tsx:1284
+#: src/components/ui/AppSettings.tsx:1270
 msgid "No local models found. To write scripts on this PC, install Ollama and keep it running, then download a model below. Or pick an online provider above, which needs nothing installed."
 msgstr "ローカルモデルが見つかりません。このPCでスクリプトを書くには、Ollama をインストールして起動したまま、下のモデルをダウンロードしてください。インストール不要のオンラインプロバイダーを上で選ぶこともできます。"
 
@@ -3952,7 +3952,7 @@ msgstr "ローカルモデルが見つかりません。このPCでスクリプ�
 #~ msgid "No locations found in document"
 #~ msgstr "ドキュメントに場所が見つかりませんでした"
 
-#: src/components/ui/AppSettings.tsx:1313
+#: src/components/ui/AppSettings.tsx:1299
 msgid "No models installed"
 msgstr "インストールされているモデルがありません"
 
@@ -4037,7 +4037,7 @@ msgstr "字幕はまだありません。ツールバーの字幕から追加で
 msgid "No tracks yet. Put music files in the folder (use Open music folder), or choose a file from anywhere. An optional library.json can add titles, tags and credits."
 msgstr "曲がまだありません。フォルダ(「音楽フォルダを開く」)に音楽ファイルを入れるか、任意の場所からファイルを選んでください。library.jsonを置くとタイトル、タグ、クレジットを付けられます。"
 
-#: src/components/ui/AppSettings.tsx:882
+#: src/components/ui/AppSettings.tsx:868
 msgid "No words match \"{query}\"."
 msgstr "「{query}」に一致する語はありません。"
 
@@ -4325,7 +4325,7 @@ msgstr "縁取りの色"
 #~ msgid "Outline width"
 #~ msgstr "縁取りの太さ"
 
-#: src/components/ui/AppSettings.tsx:630
+#: src/components/ui/AppSettings.tsx:616
 msgid "Output"
 msgstr "出力"
 
@@ -4504,8 +4504,8 @@ msgid "Pilgrimage guide"
 msgstr "巡礼ガイド"
 
 #: src/components/ui/AppSettings.tsx:622
-msgid "Pill badge"
-msgstr ""
+#~ msgid "Pill badge"
+#~ msgstr ""
 
 #: src/components/ui/ColorSwatches.tsx:17
 msgid "Pink"
@@ -4570,8 +4570,8 @@ msgid "Pop in"
 msgstr "ポップイン"
 
 #: src/components/ui/AppSettings.tsx:623
-msgid "Pop-up card"
-msgstr ""
+#~ msgid "Pop-up card"
+#~ msgstr ""
 
 #: src/components/ui/CaptionStyleFields.tsx:223
 #: src/features/editor/Inspector.tsx:429
@@ -4699,8 +4699,8 @@ msgstr "プロバイダー"
 msgid "Purple"
 msgstr "紫"
 
-#: src/components/ui/AppSettings.tsx:656
-#: src/components/ui/AppSettings.tsx:662
+#: src/components/ui/AppSettings.tsx:642
+#: src/components/ui/AppSettings.tsx:648
 msgid "Quick export"
 msgstr "クイック書き出し"
 
@@ -4756,7 +4756,7 @@ msgstr "各地点に到着する"
 msgid "Reading"
 msgstr "読み"
 
-#: src/components/ui/AppSettings.tsx:903
+#: src/components/ui/AppSettings.tsx:889
 msgid "Reading (e.g. かだ)"
 msgstr "読み方 (例: かだ)"
 
@@ -4764,7 +4764,7 @@ msgstr "読み方 (例: かだ)"
 msgid "Reading (e.g. さんだんべき)"
 msgstr "読み(例: さんだんべき)"
 
-#: src/components/ui/AppSettings.tsx:872
+#: src/components/ui/AppSettings.tsx:858
 msgid "Reading (Furigana)"
 msgstr "読み方（フリガナ）"
 
@@ -4772,7 +4772,7 @@ msgstr "読み方（フリガナ）"
 #~ msgid "Reading guessed automatically from the scripts. Edit it to keep your own."
 #~ msgstr "台本から自動で推定した読みです。編集すると、あなたの読みとして固定されます。"
 
-#: src/components/ui/AppSettings.tsx:937
+#: src/components/ui/AppSettings.tsx:923
 msgid "Reading guessed automatically. Click to keep it as yours: the voice is then always given this reading instead of guessing from the kanji."
 msgstr "台本から自動で推定した読みです。クリックするとあなたの読みとして固定され、音声は漢字から推測せず、常にこの読みで話します。"
 
@@ -4793,7 +4793,7 @@ msgstr "読み上げています..."
 msgid "Readings of place names for the voice."
 msgstr "ナレーションでの地名の読みに使用しています。"
 
-#: src/components/ui/AppSettings.tsx:1405
+#: src/components/ui/AppSettings.tsx:1391
 #: src/components/ui/ComponentsChecklist.tsx:148
 msgid "Ready"
 msgstr "準備完了"
@@ -4803,15 +4803,15 @@ msgid "Ready to build"
 msgstr "作成の準備ができました"
 
 #: src/components/ui/AppSettings.tsx:615
-msgid "Recap marker style"
-msgstr ""
+#~ msgid "Recap marker style"
+#~ msgstr ""
 
 #: src/components/ui/ColorPicker.tsx:300
 #: src/components/view/ProjectManager.tsx:432
 msgid "Recent"
 msgstr "最近のプロジェクト"
 
-#: src/components/ui/AppSettings.tsx:1350
+#: src/components/ui/AppSettings.tsx:1336
 msgid "Recommended models"
 msgstr "おすすめのモデル"
 
@@ -4870,8 +4870,8 @@ msgstr "モデル一覧を更新"
 msgid "Reload Application"
 msgstr "アプリを再読み込み"
 
-#: src/components/ui/AppSettings.tsx:969
-#: src/components/ui/AppSettings.tsx:970
+#: src/components/ui/AppSettings.tsx:955
+#: src/components/ui/AppSettings.tsx:956
 #: src/components/ui/OnlineAiSettings.tsx:226
 #: src/components/ui/ReviewStep.tsx:111
 #: src/components/view/ProjectManager.tsx:649
@@ -5296,7 +5296,7 @@ msgstr "プロジェクトに保存されます"
 msgid "Scan script for all Kanji and add to Dictionary"
 msgstr "スクリプト内にあるすべての漢字をスキャンし辞書に追加する"
 
-#: src/components/ui/AppSettings.tsx:751
+#: src/components/ui/AppSettings.tsx:737
 msgid "Scans the scripts for place names and adds their readings (marked auto). Turning it off removes the auto words."
 msgstr "台本から地名を探して読みを追加します（autoの印）。オフにすると自動で追加された語を削除します。"
 
@@ -5332,8 +5332,8 @@ msgstr "フォントを検索"
 msgid "Search for the right place"
 msgstr "正しい場所を検索"
 
-#: src/components/ui/AppSettings.tsx:858
-#: src/components/ui/AppSettings.tsx:859
+#: src/components/ui/AppSettings.tsx:844
+#: src/components/ui/AppSettings.tsx:845
 msgid "Search words or readings"
 msgstr "語や読みを検索"
 
@@ -5625,7 +5625,7 @@ msgstr "動画のエクスポート時にスキップ"
 msgid "Skipped"
 msgstr "スキップ"
 
-#: src/components/ui/AppSettings.tsx:657
+#: src/components/ui/AppSettings.tsx:643
 msgid "Skips asset review and automatically stitches & exports finished video"
 msgstr "アセットの確認をスキップし、完成した動画を自動的に結合してエクスポートします"
 
@@ -5810,8 +5810,8 @@ msgstr "クリップのつなぎ合わせ、ナレーション、字幕"
 msgid "Stitching Videos & Finalizing Export..."
 msgstr "動画を結合し、エクスポートを確定しています．．．"
 
-#: src/components/ui/AppSettings.tsx:947
-#: src/components/ui/AppSettings.tsx:948
+#: src/components/ui/AppSettings.tsx:933
+#: src/components/ui/AppSettings.tsx:934
 #: src/components/ui/RenderOverlay.tsx:398
 #: src/features/editor/VoicePiecesDialog.tsx:186
 #: src/features/editor/VoicePiecesDialog.tsx:187
@@ -5936,7 +5936,7 @@ msgstr "サブタイトル（任意）"
 msgid "Subtitle lines in the timeline"
 msgstr "タイムライン内の字幕行"
 
-#: src/components/ui/AppSettings.tsx:1068
+#: src/components/ui/AppSettings.tsx:1054
 #: src/components/ui/ExportCsvDialog.tsx:78
 #: src/components/ui/PipelineLogPanel.tsx:50
 #: src/features/editor/EditorView.tsx:58
@@ -5984,7 +5984,7 @@ msgstr "システムログと通知"
 msgid "Table View"
 msgstr "テーブル表示"
 
-#: src/components/ui/AppSettings.tsx:631
+#: src/components/ui/AppSettings.tsx:617
 msgid "Target FPS"
 msgstr "ターゲットフレームレート"
 
@@ -6106,7 +6106,7 @@ msgstr "地図には Mapbox のトークンが必要です"
 msgid "The map overlays and cards in the video, not the app."
 msgstr "アプリではなく、動画内の地図オーバーレイとカードに適用されます。"
 
-#: src/components/ui/AppSettings.tsx:1301
+#: src/components/ui/AppSettings.tsx:1287
 msgid "The model that writes narration scripts and answers in the assistant chat. Only downloaded models are shown."
 msgstr "ナレーション原稿の作成とアシスタントチャットの返答に使うモデルです。ダウンロード済みのモデルのみ表示されます。"
 
@@ -6155,7 +6155,7 @@ msgid "The places-visited clip at the end of the video."
 msgstr "動画の最後に表示される、訪れた場所のクリップです。"
 
 #. placeholder {0}: moraCount(entry.reading)
-#: src/components/ui/AppSettings.tsx:922
+#: src/components/ui/AppSettings.tsx:908
 msgid "The reading has {0} sounds; give one H or L for each."
 msgstr "読みは{0}音です。1音ごとにHかLを入れてください。"
 
@@ -6255,13 +6255,13 @@ msgstr "このバージョン"
 #~ msgid "This downloads about 30 GB and can take an hour or more. Stay on this tab; a stopped download continues where it left off."
 #~ msgstr "約30GBをダウンロードするため、1時間以上かかることがあります。このタブを開いたままにしてください。中断してもダウンロードは続きから再開します。"
 
-#: src/components/ui/AppSettings.tsx:1339
+#: src/components/ui/AppSettings.tsx:1325
 msgid "This model cannot read photos. Scripts for stops with photos are written from the place name and location facts only. A vision model such as Gemma 4 can use the photos."
 msgstr "このモデルは写真を読み取れません。写真のある立ち寄り先でも、台本は地名と位置情報だけから作られます。Gemma 4 などの画像対応モデルなら写真を活用できます。"
 
 #. placeholder {0}: fit.sizeGb.toFixed(0)
 #. placeholder {1}: fit.ramGb.toFixed(0)
-#: src/components/ui/AppSettings.tsx:1324
+#: src/components/ui/AppSettings.tsx:1310
 msgid "This model is about {0} GB and this PC has {1} GB of memory, so it loads slowly and writes only a word or two a second. A 3-4B model is much faster here."
 msgstr "このモデルは約 {0} GB で、このPCのメモリは {1} GB です。読み込みが遅く、1秒に1〜2語しか書けません。3〜4Bクラスのモデルのほうがずっと速く動きます。"
 
@@ -6282,7 +6282,7 @@ msgid "this project"
 msgstr "このプロジェクト"
 
 #: src/components/ui/AppSettings.tsx:331
-#: src/components/ui/AppSettings.tsx:718
+#: src/components/ui/AppSettings.tsx:704
 #: src/components/ui/ReviewStep.tsx:97
 msgid "This project"
 msgstr "このプロジェクト"
@@ -6895,7 +6895,7 @@ msgstr "読み込んだデータを配置する前に地図を開く場所"
 msgid "Where to save"
 msgstr "保存先"
 
-#: src/components/ui/AppSettings.tsx:667
+#: src/components/ui/AppSettings.tsx:653
 msgid "Which pipeline to use when regenerating assets"
 msgstr "素材を再生成するときに使う処理方式"
 
@@ -6950,11 +6950,11 @@ msgstr "単語"
 msgid "Word (e.g. 三段壁)"
 msgstr "単語(例: 三段壁)"
 
-#: src/components/ui/AppSettings.tsx:892
+#: src/components/ui/AppSettings.tsx:878
 msgid "Word (e.g. 加太)"
 msgstr "単語 (例: 加太)"
 
-#: src/components/ui/AppSettings.tsx:869
+#: src/components/ui/AppSettings.tsx:855
 msgid "Word / Kanji"
 msgstr "単語 / 漢字"
 
@@ -6962,7 +6962,7 @@ msgstr "単語 / 漢字"
 msgid "Words every project shares live in App Settings, which you can open from here without opening a project."
 msgstr "すべてのプロジェクトで共有する単語はアプリ設定にあります。プロジェクトを開かずにここから開けます。"
 
-#: src/components/ui/AppSettings.tsx:741
+#: src/components/ui/AppSettings.tsx:727
 msgid "Words here apply to every project. A project's own entry for the same word wins."
 msgstr "ここにある単語はすべてのプロジェクトに適用されます。同じ単語がプロジェクト側にある場合は、プロジェクトが優先されます。"
 

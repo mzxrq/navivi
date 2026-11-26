@@ -611,20 +611,6 @@ export function AppSettings() {
                       className="w-72"
                     />
                   </Row>
-                  <Row
-                    title={t`Recap marker style`}
-                    description={t`How each stop appears on the end-of-video recap map. Pill badge: a slim capsule (number, name, photo) — every stop always gets a spot, even on a route with many waypoints. Pop-up card: the older wide photo card, which can run out of room on a large route.`}
-                  >
-                    <Segmented<"pill_badge" | "pop_up_card">
-                      value={settings.overview_recap_style ?? "pill_badge"}
-                      onChange={(v) => updateProject({ overview_recap_style: v })}
-                      options={[
-                        { id: "pill_badge", label: t`Pill badge` },
-                        { id: "pop_up_card", label: t`Pop-up card` },
-                      ]}
-                      className="w-64"
-                    />
-                  </Row>
                 </Section>
 
                 <Section title={t`Output`}>

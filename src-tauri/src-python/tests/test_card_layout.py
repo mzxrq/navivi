@@ -137,7 +137,7 @@ def test_a_standing_cards_pin_shows_before_the_walker_arrives():
     assert drawn == [0, 4]
 
 
-@pytest.mark.parametrize("config", [{}, {"overview_cards_stay": False}, {"overview_recap_style": "pop_up_card"}])
+@pytest.mark.parametrize("config", [{}, {"overview_cards_stay": False}])
 def test_the_recap_draws_each_card_where_it_stood(config):
     renderer, popups = _laid_out(config)
     cards = renderer._recap_cards(popups)
