@@ -94,6 +94,28 @@ def returns_to(waypoints: list, pos: int):
                  if not (w.get("isStopBy") or w.get("is_stopby")) and same_place(waypoints[pos], w)), None)
 
 
+def stopby_labels(waypoints: list) -> dict:
+    """{position: "+N"} for every stop-by and stop skipped in video export, counted in route order. The start, the
+    end and closed places take none; a return to one of them shows the first visit's."""
+    labels, count = {}, 0
+    for pos in range(1, len(waypoints) - 1):
+        wp = waypoints[pos]
+        if wp.get("inaccessible"):
+            continue
+        back = returns_to(waypoints, pos)
+        if back in labels:
+            labels[pos] = labels[back]
+        elif wp.get("isStopBy") or wp.get("skipAssetGeneration"):
+            count += 1
+            labels[pos] = f"+{count}"
+    return labels
+
+
+def is_stopby_label(label) -> bool:
+    """Whether a pin glyph is a stop-by's: "+N", or the plain "・" of one with no number (closed, start or end)."""
+    return label == "・" or str(label or "").startswith("+")
+
+
 def same_place(a: dict, b: dict) -> bool:
     """Two waypoints at the same real-world spot (a return stop and the stop it copies), within
     tuning.LOOP_ROUTE_MATCH_DEGREES (~30 m) - the one rule the legs and the overview both use."""

@@ -12,7 +12,7 @@ from services import tuning, video_text
 from services.gpsparser.gpscalculator import GPSMath
 from services.localization.localization import format_waypoint_label
 from services.mapfetcher.graphicengine.pinimage import marker_for
-from services.vdoprocessing.route_inputs import route_inputs_hash, same_place
+from services.vdoprocessing.route_inputs import route_inputs_hash, same_place, stopby_labels
 from services.vdoprocessing.stopby_visits import visits_stopby
 
 from .helpers import (
@@ -686,7 +686,8 @@ def _waypoint_popup(wp: dict, idx: int, count: int, pin_image, audio_seconds) ->
         "image_display": str(wp.get("image_display", "cover")).lower(),
         "triggered": False,
         **({"pin_image": pin_image} if pin_image else {}),
-        # Like MapArea.tsx, a stop-by is always a "stopby" pin ("・" dot) and skipped by the others' numbering. A
+        **({"stopby_label": wp["_stopby_label"]} if wp.get("_stopby_label") else {}),
+        # Like MapArea.tsx, a stop-by is always a "stopby" pin (here with its "+N") and skipped by the others' numbering. A
         # waypoint skipped in video export is drawn and numbered like one, but only pops up as the walker passes
         # (is_skipped: never batched, never stopped at - see popups.py).
         "is_stopby": bool(wp.get("isStopBy", False) or wp_skipped),
@@ -726,9 +727,13 @@ def inject_waypoint_popups(
     start_label = project_config.get("start_point", {}).get("label")
     end_label = project_config.get("end_point", {}).get("label")
     text_labels = video_text.current_labels()
+    # Counted over the same list the legs' glyphs are (with the true start and end), so the two agree.
+    with_ends, _, added_start = _with_true_ends(project_config, waypoints, wp_indices, len(route_popups))
+    stopbys = stopby_labels(with_ends)
 
     for idx, wp in enumerate(waypoints):
         route_point_idx = wp_indices[idx]
+        wp["_stopby_label"] = stopbys.get(idx + added_start)  # rides along to the legs' mid markers
         _pin_image = marker_for(wp, settings, marker_base_dir)
         raw_label = wp.get("label", text_labels["waypoint_fallback"])
 

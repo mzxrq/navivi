@@ -629,6 +629,7 @@ class _WaypointRenderMixin:
                 "label": marker_data.get("label"),
                 "data": {
                     "is_stopby": True,
+                    "stopby_label": marker_data.get("stopby_label"),
                     "popup_image": marker_data.get("popup_image"),
                     "freeze_seconds": marker_data.get("freeze_seconds") or self._DEFAULT_PASSBY_FREEZE_SECONDS,
                     "image_display": marker_data.get("image_display", "cover"),
@@ -640,7 +641,7 @@ class _WaypointRenderMixin:
     def _landmark_labels(self, mid_marker_pins, leg_to_label, res_points, w, h):
         """Label chips for every stop-by plus the destination: (items, sprites, resolved positions).
 
-        [NOTE] A stop-by is only a "・" dot, so its name would come from the base map tile, which is
+        [NOTE] A stop-by pin only carries its "+N", so its name would come from the base map tile, which is
         inconsistent (OSM may not tag it at this zoom); every stop-by gets the same chip as a numbered stop.
         """
         landmark_items = []

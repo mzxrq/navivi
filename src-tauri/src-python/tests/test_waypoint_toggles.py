@@ -22,7 +22,7 @@ def test_skipped_gets_no_tts_or_attraction():
 def test_skipped_is_an_unnumbered_dot():
     # Each at its own spot: stops sharing one are return stops, numbered in test_stop_numbering.py.
     wps = [dict(WP, lat=34.1), dict(WP, lat=34.2, skipAssetGeneration=True), dict(WP, lat=34.3), dict(WP, lat=34.4)]
-    assert overview_pin_glyphs(wps)[1] == "・"
+    assert overview_pin_glyphs(wps)[1] == "+1"
     assert visible_waypoints({"waypoints": wps}) == [wps[2]]
 
 
