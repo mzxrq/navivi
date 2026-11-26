@@ -27,6 +27,8 @@ _CARD_STAYS_SECONDS = 3600.0  # "until the end" for a card that stays (walk styl
 # A walk re-timed to meet its cue runs at most this much slower / faster than planned.
 _CATCH_UP_RANGE = (0.6, 2.5)  # matches overview_timing.MAX_WALK_SPEEDUP's raised cap
 _MIN_RETIME_DELTA_FRAMES = 2  # a re-time (and a stretch worth re-timing) is at least this many frames
+_PREVIEW_BADGE_MARGIN_PX = 24
+_PREVIEW_BADGE_RISE_PX = 44  # the preview badge floats this far above its coordinate
 
 
 class _NoticeWriter:
@@ -188,7 +190,7 @@ class _OverviewAnimationMixin:
                 "remaining_seconds": total_s * remaining,
                 "progress": frac,
             }
-        return self.graphics.render_overview_hud(
+        frame = self.graphics.render_overview_hud(
             frame,
             title=getattr(self, "_hud_title", None),
             mode_duration=getattr(self, "_hud_mode_duration", None),
@@ -196,6 +198,34 @@ class _OverviewAnimationMixin:
             next_stop=getattr(self, "_hud_next_stop", None),
             **live,
         )
+        return self._apply_preview_badge(frame)
+
+    def _apply_preview_badge(self, frame: np.ndarray) -> np.ndarray:
+        """The upcoming (not yet arrived) waypoint's own pill badge — see
+        _walk_one_frame, which sets self._preview_badge to it each frame (or
+        None once nothing is left to preview). Placed directly above its own
+        map coordinate with no leader line: it hasn't been reached yet, so
+        there's no pin on screen to connect it to. Cleared instantly once
+        that waypoint is itself triggered — its real full "pop up card" takes
+        over from there, and only shrinks back to this same pill badge once
+        it's been shown for a while (see _composite_baked_popups), at the
+        very spot the end-of-video recap will keep it in."""
+        popup = getattr(self, "_preview_badge", None)
+        if popup is None:
+            return frame
+        h, w = frame.shape[:2]
+        name_chars = len(str(popup.get("label") or ""))
+        badge_w, badge_h = self.graphics.beside_card_footprint(
+            is_pill_badge=True, pill_name_chars=name_chars
+        )
+        x, y = popup.get("pin_x", popup["x"]), popup.get("pin_y", popup["y"])
+        margin = _PREVIEW_BADGE_MARGIN_PX
+        box_x = int(max(margin, min(x - badge_w / 2, w - badge_w - margin)))
+        box_y = int(max(margin, min(y - badge_h - _PREVIEW_BADGE_RISE_PX, h - badge_h - margin)))
+        preview = popup.copy()
+        preview["is_pill_badge"] = True
+        preview["beside_box"] = (box_x, box_y)
+        return self.graphics.render_popup_box(frame, preview, alpha=1.0, skip_line=True)
 
     def _start_stopby_notice(self, fps: int, seconds: float, kind: str = "stopby") -> None:
         """Shows the stop-by notice (or, kind "closed", the closed-place one) once per video, from the next frame."""
@@ -662,13 +692,18 @@ class _OverviewAnimationMixin:
         popup["pop_frame"] = s.video.frames_written  # the pin pops in from here
 
     def _update_preview(self, s: _WalkState) -> None:
-        """The HUD's stop counter and its "next" line (the next real waypoint still ahead). No badge
-        is drawn over the map before arriving: a stop shows its card only once it is reached."""
+        """The next real waypoint still ahead gets a small preview badge (name,
+        number, thumbnail) before arriving, so the traveler never walks toward a
+        stop with nothing on screen naming it; also the HUD's stop counter and
+        "next" line. The badge clears the moment that waypoint triggers."""
+        self._preview_badge = None
         self._hud_stops = (s.seq_ptr, len(s.sequential_popups)) if s.sequential_popups else None
         self._hud_next_stop = None
         if s.seq_ptr < len(s.sequential_popups):
             upcoming = s.sequential_popups[s.seq_ptr]
             self._hud_next_stop = upcoming.get("label") or None
+            if not upcoming["data"].get("triggered") and upcoming["data"].get("popup_image"):
+                self._preview_badge = upcoming
 
     def _pop_trigger(self, s: _WalkState, clock: _WalkClock, current_frame: int) -> Optional[Dict]:
         """Dequeues the next popup once the trigger cooldown allows. The cooldown

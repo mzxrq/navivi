@@ -389,7 +389,7 @@ def zoom_exit_limits(
     it never leaves). Measured from the group's own end, so a card hold cannot push the search past the exit."""
     ease = tuning.COURSE_DENSE_EASE_SECONDS
     out = []
-    for t_in, t_out, s, x0, y0 in zooms:
+    for _t_in, t_out, s, x0, y0 in zooms:
         t_exit = _first_exit(t_out, s, x0, y0, path, cum, anchors, w, h, margin)
         out.append(math.inf if t_exit is None else t_exit - ease)
     return out
@@ -679,17 +679,9 @@ class _CourseOverviewMixin:
             self._course_gl = {}
 
         # After the voice, the walk overview's ending: the GL zoom to the start and its photo.
-        hard_ended = False
         if stop_popup is not None and self.config.get("enable_ending_highlight", True):
-            hard_ended = self._course_ending(
+            self._course_ending(
                 video, w, h, fps, route_bg, trace, scene, stop_popup, active_popups, bounding_box)
-
-        for ap in active_popups:
-            ap["data"]["triggered"] = False
-            ap["data"]["arrived"] = False
-        self.last_rendered_seconds = video.frames_written / fps
-        self.last_ending_hard_ended = hard_ended
-        return video.release(overview_path)
 
     def _course_route_plate(
         self, current_bg: np.ndarray, path: np.ndarray, cum: np.ndarray, modes: List[str],

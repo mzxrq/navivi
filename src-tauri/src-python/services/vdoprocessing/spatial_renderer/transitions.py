@@ -184,7 +184,6 @@ class _TransitionMixin:
                     route_obstacles=route_obstacle_arr,
                     background=base_plate,  # badges go where the map itself is empty
                     leaders=False,  # the badge's number and its pin's are the tie, not a line
-                    total_points=1 + max((ap["index"] for ap in active_popups), default=0),
                 )
                 final_frame = self._render_recap_frame(
                     outro_frame, active_popups, group_popups=laid_out

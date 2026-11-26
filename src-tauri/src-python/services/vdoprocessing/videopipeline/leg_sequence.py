@@ -216,16 +216,6 @@ def _leg_positions(leg_item: dict, seq_idx: int, id_to_position: dict) -> tuple:
     return start_pos, end_pos
 
 
-def _place_numbers(legs: list, waypoints: list, id_to_position: dict) -> list:
-    """Per leg, its destination's place count (S is 1); a return stop is no new place."""
-    numbers, places = [], 1
-    for i, item in enumerate(legs):
-        if not _is_return_stop(waypoints, _leg_positions(item, i, id_to_position)[1]):
-            places += 1
-        numbers.append(places)
-    return numbers
-
-
 def _leg_mode(waypoints: list, start_pos: int, start_idx: int, point_modes: list) -> str:
     leg_mode = (
         str(waypoints[start_pos].get("routeMode", "")).lower()
@@ -465,9 +455,8 @@ def _end_pin(waypoint_id, fallback_glyph, arrived: bool, settings: dict, pins: _
     )
 
 
-def _leg_pin_fields(leg: _Leg, waypoints: list, settings: dict, pins: _Pins, leg_count: int, stop_numbers: list) -> dict:
-    """The leg's two pins and the HUD's "stop N of total" count: places in the order they are reached (S is 1,
-    each leg's destination the next); a return stop is not a new place, so it adds nothing to N or the total."""
+def _leg_pin_fields(leg: _Leg, waypoints: list, settings: dict, pins: _Pins, leg_count: int) -> dict:
+    """The leg's two pins and the HUD's "stop N of total" count (the one dest_pin's own glyph is drawn from)."""
     item, seq_idx = leg.item, leg.seq_idx
     return {
         "start_pin": _end_pin(item.get("start_waypoint_id"), "S" if seq_idx == 0 else None, True, settings, pins),
@@ -477,9 +466,7 @@ def _leg_pin_fields(leg: _Leg, waypoints: list, settings: dict, pins: _Pins, leg
             item.get("end_waypoint_id"), "E" if seq_idx == leg_count - 1 else None,
             _is_return_stop(waypoints, leg.end_pos), settings, pins,
         ),
-        # shortcut: a single-leg test render (leg_index) sees one leg, so it reads 2/2 (as S/E above do), fine for a preview.
-        "stop_number": stop_numbers[seq_idx],
-        "total_stops": stop_numbers[-1],
+        "total_stops": sum(1 for g in pins.glyph_by_pos if g),
     }
 
 
@@ -566,7 +553,6 @@ class _Build(NamedTuple):
     pins: _Pins
     added_start: bool
     leg_count: int
-    stop_numbers: list  # per leg: its destination's place number, a return stop not counted again
 
 
 def _leg_of(build: _Build, route_df: pd.DataFrame, seq_idx: int, leg_item: dict) -> _Leg:
@@ -599,7 +585,7 @@ def _leg_entry(build: _Build, leg: _Leg) -> dict:
     return {
         **_leg_map_fields(leg, build.route_labels, build.route_popups, settings, waypoints, build.pins, build.img_size),
         **_leg_timing_fields(leg, narration, cues, waypoints, settings),
-        **_leg_pin_fields(leg, waypoints, settings, build.pins, build.leg_count, build.stop_numbers),
+        **_leg_pin_fields(leg, waypoints, settings, build.pins, build.leg_count),
         **_leg_identity_fields(leg, narration, waypoints, build.audio_pauses, build.pins, build.added_start),
     }
 
@@ -650,11 +636,9 @@ def build_leg_sequence(
         leg_index=leg_index,
     )
     pins = _pin_tables(res_waypoints, waypoints, wp_indices, settings, marker_base_dir)
-    stop_numbers = _place_numbers(sequence_data, waypoints, pins.id_to_position)
     build = _Build(
         waypoints, settings, cue_store, fetcher, audio_durations, audio_pauses, seg_durations, route_labels,
         route_popups, routing_cache, point_modes, (img_w, img_h), pins, added_start, len(sequence_data),
-        stop_numbers,
     )
     for seq_idx, leg_item in enumerate(sequence_data):
         leg = _leg_of(build, route_df, seq_idx, leg_item)
