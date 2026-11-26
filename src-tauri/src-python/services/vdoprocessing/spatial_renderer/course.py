@@ -637,14 +637,13 @@ class _CourseOverviewMixin:
         pill_recap, laid_out, cards = self._course_cards(
             on_route, extras, returns, stop_popup, panels.reserved, obstacles, current_bg, w, h)
         _set_reveal_times(on_route, stop_popup, cues, timing, fps)
-        if pill_recap:
-            self._course_pass_cards(laid_out, on_route, panels.reserved, obstacles, w, h)
         from services.mapbox_token import resolve_mapbox_token
 
         gl = bounding_box is not None and bool(resolve_mapbox_token((self._get_job_config() or {}).get("settings")))
         self._course_zooms = dense_zooms(
             [ap["course_dist"] for ap in on_route], path, cum, timing.anchors, w, h,
             tuning.COURSE_DENSE_ZOOM_MAX_GL if gl else tuning.COURSE_DENSE_ZOOM_MAX)
+        self._course_pass_cards(laid_out, on_route, panels.reserved, obstacles, w, h, self._course_zooms)
         cards_up = [(ap["course_at"], ap["pass_until"]) for ap in laid_out if "pass_until" in ap]
         limits = zoom_exit_limits(self._course_zooms, path, cum, timing.anchors, w, h)
         self._course_zooms = release_zooms_before_exit(self._course_zooms, path, cum, timing.anchors, w, h)
@@ -698,6 +697,9 @@ class _CourseOverviewMixin:
         route_bg = current_bg.copy()
         pts = [(int(x), int(y)) for x, y in path]
         self.graphics.draw_path(route_bg, pts, modes)
+        on_black = np.zeros_like(route_bg)  # where the route is, so the leader lines can pass behind it
+        self.graphics.draw_path(on_black, pts, modes)
+        self._course_route_mask = on_black.any(axis=2)
         return route_bg, _Trace(
             path, cum, pts, modes,
             tuple(self.config.get("course_trace_color") or tuning.COURSE_TRACE_COLOR),
@@ -791,6 +793,8 @@ class _CourseOverviewMixin:
         rail_marks = []
         for ap in on_route:
             glyph, color, _ = self._pin_label_and_color(ap, total_points)
+            if glyph == "E":  # loop routes give "E" the start's green; the rail's goal mark is always red
+                color = tuning.RAIL_END_COLOR
             # _pin_color returns None for a stop not yet reached, meaning "the default".
             rail_marks.append((
                 float(ap["course_dist"]) / max(1e-6, total_smooth_dist),
@@ -835,7 +839,7 @@ class _CourseOverviewMixin:
 
     def _course_pass_cards(
         self, laid_out: List[Dict], on_route: List[Dict], reserved: List, route_obstacle_arr: np.ndarray,
-        w: int, h: int,
+        w: int, h: int, zooms: Tuple = (),
     ) -> None:
         """Stamps `pass_box`, `pass_scale` and `pass_until` on each on-route stop's badge: its photo card
         pops up as the trace passes the stop, right beside its pin (clear of the frame's panels and any card
@@ -851,13 +855,21 @@ class _CourseOverviewMixin:
             until = ap["course_at"] + tuning.COURSE_PASS_CARD_SECONDS
             if k + 1 < len(passing):
                 until = min(until, passing[k + 1]["course_at"])
-            untils.append(max(until, ap["course_at"] + tuning.COURSE_PASS_CARD_MIN_SECONDS))
+            until = max(until, ap["course_at"] + tuning.COURSE_PASS_CARD_MIN_SECONDS)
+            # A card popped while the camera is zoomed in holds until the zoom is done (and a normal hold after the
+            # group's last stop), so each photo stays up for the whole group (2026-11-25).
+            ease = tuning.COURSE_DENSE_EASE_SECONDS
+            zoom_end = next((z[1] for z in zooms if z[0] - ease <= ap["course_at"] <= z[1] + ease), None)
+            if zoom_end is not None:
+                until = max(until, zoom_end + tuning.COURSE_PASS_CARD_SECONDS)
+            untils.append(until)
         scales = pass_crowd_scales(
             [(ap["course_at"], u + tuning.COURSE_PASS_CARD_SHRINK_SECONDS) for ap, u in zip(passing, untils)],
             tuning.COURSE_PASS_CARD_SCALE * h / 1080)
         gap = int(self.graphics.marker_radius) + 8
         route = route_obstacle_arr if route_obstacle_arr is not None and len(route_obstacle_arr) else None
         pins = [_pin_head_box(self.graphics, s.get("pin_x", s["x"]), s.get("pin_y", s["y"])) for s in on_route]
+        mid = np.mean([((s.get("pin_x", s["x"])), s.get("pin_y", s["y"])) for s in on_route], axis=0) if on_route else (w / 2, h / 2)
         up: List[Tuple[float, Tuple[float, float, float, float]]] = []
         for ap, until, scale in zip(passing, untils, scales):
             at = ap["course_at"]
@@ -867,7 +879,11 @@ class _CourseOverviewMixin:
             badges = [_badge_box(self.graphics, b) for b in laid_out
                       if b is not ap and b.get("beside_box") and b.get("course_at", 0.0) < at]
             px, py = ap.get("pin_x", ap["x"]), ap.get("pin_y", ap["y"])
-            near = self._pass_card_spots(px, py, card_w, card_h, w, h)
+            # [NOTE] [Course] One radial direction per stop (out from the middle of the stops), kept as `pass_angle`
+            # so the zoomed hold (_zoom_place_group) puts the card on the same side as here and in the recap.
+            angle = math.atan2(py - mid[1], px - mid[0]) if math.hypot(px - mid[0], py - mid[1]) > 1 else -math.pi / 2
+            ap["pass_angle"] = angle
+            near = self._pass_card_spots(px, py, card_w, card_h, w, h, angle)
             corners = len(self._CARD_SPILL_CORNERS)
             further = list(self._card_box_candidates(px - gap, py - gap, 2 * gap, 2 * gap, card_w, card_h, w, h))[corners:]
             best = None
@@ -887,19 +903,22 @@ class _CourseOverviewMixin:
             ap.update(pass_box=(int(x), int(y)), pass_scale=scale, pass_until=until)
             up.append((until + tuning.COURSE_PASS_CARD_SHRINK_SECONDS, (x, y, x + card_w, y + card_h)))
 
-    def _pass_card_spots(self, px: float, py: float, card_w: int, card_h: int, w: int, h: int) -> List[Tuple[int, int]]:
-        """The eight spots right around a pin's teardrop for a card of card_w x card_h: beside, above, below and
-        at the diagonals, each just clear of the teardrop, kept in the frame."""
+    def _pass_card_spots(
+        self, px: float, py: float, card_w: int, card_h: int, w: int, h: int, angle: float = -math.pi / 2,
+    ) -> List[Tuple[int, int]]:
+        """Spots for a card of card_w x card_h just clear of a pin's teardrop, radial: straight out along `angle`
+        (from the middle of the stops through this pin) first, then fanned either side, kept in the frame."""
         from .popups import _card_bottom_limit
 
-        x0, y0, x1, y1 = _pin_head_box(self.graphics, px, py)
-        g, margin = 8, self._RECAP_CARD_MARGIN
+        margin, r0 = self._RECAP_CARD_MARGIN, float(self.graphics.marker_radius) + 8
         max_x, max_y = max(margin, w - card_w - margin), max(margin, _card_bottom_limit(h, margin) - card_h)
-        xs = {"right": x1 + g, "left": x0 - g - card_w, "mid": px - card_w / 2}
-        ys = {"above": y0 - g - card_h, "below": y1 + g, "mid": py - card_h / 2}
-        order = [("right", "mid"), ("left", "mid"), ("mid", "above"), ("mid", "below"),
-                 ("right", "above"), ("left", "above"), ("right", "below"), ("left", "below")]
-        return [(int(min(max(xs[a], margin), max_x)), int(min(max(ys[b], margin), max_y))) for a, b in order]
+        spots = []
+        for da in (0, 20, -20, 40, -40, 60, -60, 90, -90):
+            ca, sa = math.cos(angle + math.radians(da)), math.sin(angle + math.radians(da))
+            r = r0 + abs(ca) * card_w / 2 + abs(sa) * card_h / 2
+            spots.append((int(min(max(px + ca * r - card_w / 2, margin), max_x)),
+                          int(min(max(py + sa * r - card_h / 2, margin), max_y))))
+        return spots
 
     def _course_extra_labels(
         self, extras: List[Dict], cards: Dict[int, Dict], laid_out: List[Dict], on_route: List[Dict],
@@ -1003,8 +1022,8 @@ class _CourseOverviewMixin:
                    beside_box=(int(cx + (full_w - now_w) / 2), int(cy + (full_h - now_h) / 2 + 14 * (1 - e))))
         return hud, e
 
-    def _course_layer(self, scene: _Scene, state, base: np.ndarray) -> np.ndarray:
-        """The cards and pins drawn over `base`."""
+    def _course_layer(self, scene: _Scene, state, base: np.ndarray, parts: str = "all") -> np.ndarray:
+        """The cards and pins drawn over `base`; `parts` "lines" is only the leader lines, "rest" all but them."""
         shown, anim, bumps, arrived, extra_on, passing, dim = state
         alpha = dict(anim)
         walked = {ap["index"] for ap in scene.on_route}
@@ -1012,9 +1031,12 @@ class _CourseOverviewMixin:
             ap["data"]["arrived"] = ap["index"] in arrived
         plate = base.copy()
         huds = [self._course_hud(scene.cards[i]) for i in shown]
-        for hud in huds:
-            plate = self.graphics.render_popup_box(
-                plate, hud, alpha=_smoothstep(alpha.get(hud["index"], 1.0)), line_only=True)
+        if parts != "rest":
+            for hud in huds:
+                plate = self.graphics.render_popup_box(
+                    plate, hud, alpha=_smoothstep(alpha.get(hud["index"], 1.0)), line_only=True)
+        if parts == "lines":
+            return plate
         bump = dict(bumps)
         for ap in scene.on_route:
             if id(ap) in scene.returns:
@@ -1047,9 +1069,28 @@ class _CourseOverviewMixin:
         whose difference is each pixel's opacity. Blended over the traced
         route, so the trace shows through their soft shadows (pasting every
         changed pixel used to bring back the untraced line around each card)."""
-        on_black = self._course_layer(scene, state, np.zeros_like(route_bg)).astype(np.float32)
-        on_white = self._course_layer(scene, state, np.full_like(route_bg, 255)).astype(np.float32)
-        opacity = np.clip(1.0 - (on_white - on_black).mean(axis=2, keepdims=True) / 255.0, 0.0, 1.0)
+        def layer(parts: str):
+            on_black = self._course_layer(scene, state, np.zeros_like(route_bg), parts).astype(np.float32)
+            on_white = self._course_layer(scene, state, np.full_like(route_bg, 255), parts).astype(np.float32)
+            return on_black, np.clip(1.0 - (on_white - on_black).mean(axis=2, keepdims=True) / 255.0, 0.0, 1.0)
+
+        # The leader lines go UNDER the route line (cut out where it runs) and under every pin and card.
+        lines, a_lines = layer("lines")
+        route = getattr(self, "_course_route_mask", None)
+        if route is not None and route.shape == a_lines.shape[:2]:
+            keep_line = (~route)[..., None]
+            lines, a_lines = lines * keep_line, a_lines * keep_line
+        cut = np.zeros(a_lines.shape[:2], dtype=bool)  # no line shows through a photo (a dimmed one is see-through)
+        for index in state[0]:
+            hud = self._course_hud(scene.cards[index])
+            if hud.get("beside_box"):
+                bx, by = hud["beside_box"]
+                cw, ch = (self.graphics.beside_card_footprint(is_pill_badge=True, pill_name_chars=len(str(hud.get("label") or "")))
+                          if hud.get("is_pill_badge") else self.graphics.beside_card_footprint(hud.get("card_scale", 1.0)))
+                cut[max(0, int(by)):max(0, int(by + ch)), max(0, int(bx)):max(0, int(bx + cw))] = True
+        lines, a_lines = lines * (~cut)[..., None], a_lines * (~cut)[..., None]
+        rest, a_rest = layer("rest")
+        on_black, opacity = rest + lines * (1.0 - a_rest), a_rest + a_lines * (1.0 - a_rest)
         # 3 channels and the rounding folded in, for the per-frame cv2 blend (3.5x numpy's).
         return np.repeat(1.0 - opacity, 3, axis=2), on_black + 0.5
 
@@ -1182,7 +1223,9 @@ class _CourseOverviewMixin:
             ok = True
             for c in group:
                 px, py = at(c.get("pin_x", c["x"]), c.get("pin_y", c["y"]))
-                base = math.atan2(py - cy, px - cx) if math.hypot(px - cx, py - cy) > 1 else -math.pi / 2
+                base = c.get("pass_angle")  # the same side as the whole-map pass and the recap
+                if base is None:
+                    base = math.atan2(py - cy, px - cx) if math.hypot(px - cx, py - cy) > 1 else -math.pi / 2
                 up = [(ox, oy, ox + cw, oy + ch) for o in group if o["index"] in placed
                       and o.get("course_at", 0.0) < c.get("course_at", 0.0) < o["pass_until"] + shrink
                       for ox, oy in [placed[o["index"]]]]

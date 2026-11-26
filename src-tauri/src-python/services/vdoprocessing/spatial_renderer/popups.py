@@ -1597,6 +1597,7 @@ A connected stop-by is loose as well: the walker passes every
     _RING_STEPS = 10
     _RING_PIN_GAP = 10  # between a pin's own marker and the card resting against it
     _RING_CELL_PX = 8  # the occupancy grid's resolution
+    _RING_UP_PX = 160.0  # extra distance charged for a spot straight above its pin
 
     def _layout_ring_cards(
         self,
@@ -1712,10 +1713,13 @@ A connected stop-by is loose as well: the walker passes every
                     reach = abs(ca) * cw / 2 + abs(sa) * ch / 2
                     r = pin_r + self._RING_PIN_GAP + reach + step * self._RING_STEP_PX
                     x0, y0 = px + ca * r - cw / 2, py + sa * r - ch / 2
+                    # A card above its pin costs _RING_UP_PX more than one below: a crowded harbour then
+                    # spreads its cards down the frame instead of piling them up over the route.
+                    r += max(0.0, -sa) * self._RING_UP_PX
                     if free(x0, y0, with_route) and (spot is None or r < spot[0]):
                         spot = (r, x0, y0)
-                if spot is not None:
-                    return spot  # this ring had room: no need to look further out
+            if spot is not None:
+                return spot  # every ring compared, so a spot below can beat a nearer one above
         return None
 
     def _ring_attempt(
@@ -2416,6 +2420,8 @@ A connected stop-by is loose as well: the walker passes every
             return []
 
         pill_badge = self.config.get("overview_recap_style", "pill_badge") != "pop_up_card"
+        if not pill_badge:
+            return self._recap_cards_clustered(popups, w, h, reserved_boxes, route_obstacles, leaders, total_points)
 
         all_pins = [_recap_cards_pin_of(p) for p in popups]
         lattice_pill, card_scale, card_w, card_h, slots = self._recap_cards_pick_slots(
@@ -2467,6 +2473,114 @@ A connected stop-by is loose as well: the walker passes every
             bx, by = p.get("beside_box") or (px_, py_)
             gap = math.hypot(max(bx - px_, 0, px_ - bx - geom.card_w), max(by - py_, 0, py_ - by - bh))
             p["badge_far"] = gap > self._BADGE_FAR_PX
+        self._recap_cards_match_pin_colors(ordered, total_points)
+        return ordered
+
+    _RADIAL_LINK_PX = 220.0  # pins this close share one cluster and fan out from its middle
+    _RADIAL_FAN_DEG = (0, 10, -10, 20, -20, 30, -30, 40, -40, 50, -50, 60, -60, 70, -70)
+
+    def _layout_radial_cards(
+        self, popups: List[Dict], w: int, h: int, reserved_boxes=None, route_obstacles=None,
+    ) -> List[Dict]:
+        """Cards fanned out like a starburst: each one sits on the ray from its cluster's middle through its own pin,
+        just beyond the cluster, so every leader is a short straight spoke and none cross (rays from one point
+        cannot). A lone stop fans out from the middle of all the stops. A card that finds its ray blocked slides a few
+        degrees round, then out; all cards share one size, the largest at which every one fits (as _layout_ring_cards).
+        Stamps beside_box, card_scale and recap_line_color, and returns the cards placed."""
+        if not popups:
+            return []
+        pins = [(p.get("pin_x", p["x"]), p.get("pin_y", p["y"])) for p in popups]
+        gx, gy = np.mean(pins, axis=0)
+        origin, extent, angle = {}, {}, {}
+        for idxs in _cluster_points_by_distance(pins, self._RADIAL_LINK_PX):
+            solo = len(idxs) < 2
+            ox, oy = pins[idxs[0]] if solo else tuple(np.mean([pins[i] for i in idxs], axis=0))
+            for i in idxs:
+                origin[i], extent[i] = (ox, oy), 0.0 if solo else math.hypot(pins[i][0] - ox, pins[i][1] - oy)
+                fx, fy = (pins[i][0] - gx, pins[i][1] - gy) if solo else (pins[i][0] - ox, pins[i][1] - oy)
+                angle[i] = math.atan2(fy, fx) if math.hypot(fx, fy) > 1 else -math.pi / 2
+        order = sorted(range(len(popups)), key=lambda i: -sum(
+            1 for j, q in enumerate(pins) if j != i and math.hypot(q[0] - pins[i][0], q[1] - pins[i][1]) < 220))
+        fixed, route_layer = self._ring_grids(w, h, reserved_boxes, route_obstacles)
+        r = float(self.graphics.marker_radius)
+        for px, py in pins:  # no card on any pin's head
+            self._ring_stamp(fixed, px - r - 4, py - 2.4 * r, px + r + 4, py + 6)
+
+        cell, margin, half_gap = self._RING_CELL_PX, self._RECAP_CARD_MARGIN, self._RECAP_CARD_GAP / 2
+
+        def attempt(scale: float, must_place_all: bool):
+            blocked = fixed.copy()
+            cw, ch = self.graphics.beside_card_footprint(scale)
+
+            def free(x0: float, y0: float, with_route: bool) -> bool:
+                if x0 < margin or y0 < margin or x0 + cw > w - margin or y0 + ch > h - margin:
+                    return False
+                c0, r0 = int(x0 // cell), int(y0 // cell)
+                c1, r1 = int((x0 + cw) // cell) + 1, int((y0 + ch) // cell) + 1
+                return not (blocked[r0:r1, c0:c1].any() or (with_route and route_layer[r0:r1, c0:c1].any()))
+
+            out = []
+            for i in order:
+                spot = None
+                for with_route in (True, False):
+                    for step in range(self._RING_STEPS + 2):
+                        for da in self._RADIAL_FAN_DEG:
+                            a = angle[i] + math.radians(da)
+                            ca, sa = math.cos(a), math.sin(a)
+                            reach = abs(ca) * cw / 2 + abs(sa) * ch / 2
+                            d = extent[i] + r + self._RING_PIN_GAP + reach + step * self._RING_STEP_PX
+                            x0, y0 = origin[i][0] + ca * d - cw / 2, origin[i][1] + sa * d - ch / 2
+                            cost = step * self._RING_STEP_PX + abs(da) * 1.5
+                            if (spot is None or cost < spot[0]) and free(x0, y0, with_route):
+                                spot = (cost, x0, y0)
+                    if spot is not None:
+                        break
+                if spot is None:
+                    if must_place_all:
+                        return None
+                    continue
+                out.append((i, spot[1], spot[2]))
+                self._ring_stamp(blocked, spot[1] - half_gap, spot[2] - half_gap, spot[1] + cw + half_gap, spot[2] + ch + half_gap)
+            return out
+
+        chosen, scale = None, self._RING_CARD_SCALES[-1]
+        for size in self._RING_CARD_SCALES:
+            chosen = attempt(size, True)
+            if chosen is not None:
+                scale = size
+                break
+        if chosen is None:
+            chosen = attempt(scale, False)
+            logger.warning("Radial layout: only %d of %d cards fit at the smallest size.", len(chosen), len(popups))
+        placed = []
+        for i, x0, y0 in chosen:
+            popups[i]["beside_box"] = (int(x0), int(y0))
+            popups[i]["card_scale"] = scale
+            placed.append(popups[i])
+        palette = tuning.RECAP_LINE_COLOR_PALETTE
+        for j, popup in enumerate(sorted(placed, key=lambda p: p.get("index", 0))):
+            popup["recap_line_color"] = palette[j % len(palette)]
+        return placed
+
+    def _recap_cards_clustered(
+        self, popups: List[Dict], w: int, h: int, reserved_boxes, route_obstacles, leaders: bool,
+        total_points: Optional[int],
+    ) -> List[Dict]:
+        """The "pop_up_card" recap: each photo card rests against its OWN pin (the ring layout), so the cards gather
+        in clusters where the stops do, not on a frame-wide grid, which read as machine-made (2026-11-25)."""
+        layout = self._layout_radial_cards if leaders else self._layout_ring_cards
+        placed = layout(popups, w, h, reserved_boxes=reserved_boxes, route_obstacles=route_obstacles)
+        ordered = self._recap_cards_reveal_order(placed, [_recap_cards_pin_of(p) for p in placed]) if placed else []
+        for p in ordered:
+            p.pop("leader_via", None)
+            p.pop("leader_from", None)
+            p.pop("is_pill_badge", None)
+            p["badge_far"] = False
+            p["leader_straight"] = leaders
+            if leaders:
+                p.pop("suppress_leader_line", None)
+            else:
+                p["suppress_leader_line"] = True
         self._recap_cards_match_pin_colors(ordered, total_points)
         return ordered
 

@@ -927,8 +927,8 @@ msgid "At {stopName}"
 msgstr "At {stopName}"
 
 #: src/components/ui/VideoLookSettings.tsx:160
-msgid "At a stop with no attraction script"
-msgstr "At a stop with no attraction script"
+#~ msgid "At a stop with no attraction script"
+#~ msgstr "At a stop with no attraction script"
 
 #: src/features/assistant/AssistantChat.tsx:162
 #~ msgid "Attach a file"
@@ -1082,6 +1082,10 @@ msgstr "Based on your earlier renders on this PC. Unchanged clips are reused, so
 #: src/components/ui/VoiceSettings.tsx:615
 msgid "Best"
 msgstr "Best"
+
+#: src/components/ui/VideoLookSettings.tsx:160
+msgid "Between walking legs"
+msgstr "Between walking legs"
 
 #: src/components/ui/ColorSwatches.tsx:17
 msgid "Black"
@@ -5609,8 +5613,12 @@ msgid "Slide"
 msgstr "Slide"
 
 #: src/components/ui/VideoLookSettings.tsx:161
-msgid "Slide: the camera slides on into the next leg with the stop's photo still up. Zoom: the next leg opens zoomed out and zooms in."
-msgstr "Slide: the camera slides on into the next leg with the stop's photo still up. Zoom: the next leg opens zoomed out and zooms in."
+#~ msgid "Slide: the camera slides on into the next leg with the stop's photo still up. Zoom: the next leg opens zoomed out and zooms in."
+#~ msgstr "Slide: the camera slides on into the next leg with the stop's photo still up. Zoom: the next leg opens zoomed out and zooms in."
+
+#: src/components/ui/VideoLookSettings.tsx:161
+msgid "Slide: the camera slides on into the next leg. Zoom: the next leg opens zoomed out and zooms in."
+msgstr "Slide: the camera slides on into the next leg. Zoom: the next leg opens zoomed out and zooms in."
 
 #: src/features/map/components/OverviewPanel.tsx:40
 msgid "Slideshow"

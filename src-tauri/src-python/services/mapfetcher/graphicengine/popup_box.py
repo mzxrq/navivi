@@ -85,6 +85,16 @@ class _PopupBoxMixin:
         caption_gap = 10 if has_label else 0
         return target_img_w, target_img_h + caption_gap + text_block_h
 
+    @staticmethod
+    def _is_latin(name: str) -> bool:
+        return all(ord(c) < 0x2E80 for c in name)
+
+    # Off: a letter per line. A one-off render turns it on for an all-Latin project, where a 30-letter name
+    # would otherwise be taller than the frame; the badge then budgets half a line per letter.
+    latin_names_along = False
+    latin_lines_per_char = 0.5  # name lines budgeted per letter when turned along the badge
+    latin_font_scale = 1.0  # their font size against a CJK name's
+
     def pill_badge_footprint(
         self, name_chars: Optional[int] = None, scale: float = 1.0
     ) -> Tuple[int, int]:
@@ -100,6 +110,8 @@ class _PopupBoxMixin:
         photo_h = self._PILL_BADGE_PHOTO_H * scale
         bd = w - round(8 * scale)
         chars = self._PILL_BADGE_NAME_CHARS if name_chars is None else max(1, name_chars)
+        if self.latin_names_along:
+            chars = math.ceil(chars * self.latin_lines_per_char)
         h = round(5 * scale + bd + 6 * scale + chars * line_h + photo_h)
         return w, h
 
@@ -376,10 +388,23 @@ class _PopupBoxMixin:
         line_h = self._PILL_BADGE_LINE_H * pill_scale
         ty = cby + bd + 6
         cx = bx + total_w / 2.0
-        for ch in name:
-            cw = draw.textlength(ch, font=name_font)
-            draw.text((cx - cw / 2, ty), ch, font=name_font, fill=self.ui["card_text"])
-            ty += line_h
+        if self.latin_names_along and name and self._is_latin(name):
+            budget = math.ceil(len(name) * self.latin_lines_per_char) * line_h
+            font = self._card_font(self.FONT_CANDIDATES_REGULAR, max(8, round(name_font.size * self.latin_font_scale)))
+            tw = math.ceil(draw.textlength(name, font=font))
+            if tw > budget:  # a wide name: shrink to its budget rather than run into the photo
+                font = self._card_font(self.FONT_CANDIDATES_REGULAR, max(8, int(font.size * budget / tw)))
+                tw = math.ceil(draw.textlength(name, font=font))
+            strip = Image.new("RGBA", (tw + 2, font.size + 8), (0, 0, 0, 0))
+            ImageDraw.Draw(strip).text((1, 2), name, font=font, fill=self.ui["card_text"])
+            strip = strip.rotate(-90, expand=True)  # reads top to bottom
+            canvas.alpha_composite(strip, (int(cx - strip.width / 2), int(ty)))
+            ty += budget
+        else:
+            for ch in name:
+                cw = draw.textlength(ch, font=name_font)
+                draw.text((cx - cw / 2, ty), ch, font=name_font, fill=self.ui["card_text"])
+                ty += line_h
 
         # 3. photo, bleeding edge-to-edge at the bottom.
         if pop_img is not None:
@@ -435,7 +460,19 @@ class _PopupBoxMixin:
         # stretch still reads as "coming from the cluster's
         # edge", not from the pin itself.
         via = popup_info.get("leader_via")
-        if via is not None:
+        if popup_info.get("leader_straight"):
+            # Radial: pin straight to where the line toward the card's centre meets its edge.
+            cx, cy = box_x + total_w / 2.0, box_y + total_h / 2.0
+            dx, dy = cx - point_x, cy - point_y
+            t = 0.0
+            for p, d, lo, hi in ((point_x, dx, box_x, box_x + total_w), (point_y, dy, box_y, box_y + total_h)):
+                if d and not lo <= p <= hi:
+                    t = max(t, (lo - p) / d if d > 0 else (hi - p) / d)
+            cv2.line(
+                working_frame, (point_x, point_y), (int(point_x + dx * t), int(point_y + dy * t)),
+                line_color, line_width, cv2.LINE_AA,
+            )
+        elif via is not None:
             via_x, via_y = int(via[0]), int(via[1])
             anchor_x = min(max(via_x, box_x), box_x + total_w)
             anchor_y = min(max(via_y, box_y), box_y + total_h)
