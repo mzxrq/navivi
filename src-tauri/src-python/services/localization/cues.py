@@ -52,7 +52,8 @@ CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|nex
 @dataclass(frozen=True)
 class Cue:
     # "start" | "arrive" | "end" | "1", "2", ... | "go1", "go2", ...; the "course"
-    # overview also has "route" (the trace starts) and "extras" (the stop-bys appear); both styles have
+    # overview also has "extras" (the stop-bys appear; "route" is an old tag, still matched so it is never spoken);
+    # both styles have
     # "closed" (the places that can't be visited appear, after the stop-bys); each {scene}
     # in the opening becomes "scene2", "scene3", ...: the text-led intro cuts to its next scene there
     tag: str

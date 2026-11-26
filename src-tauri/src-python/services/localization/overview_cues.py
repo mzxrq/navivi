@@ -10,9 +10,9 @@ never changing a word of the script:
     {go}  before the first later sentence of that stop's passage that sets
           off for somewhere else ("次は…", "ここから…"): the stop is described
           until there, then the walker heads on
-    {start} before "これが全体のルートです。" (the map appears; the opening
-          before it plays over the intro, and its names are not stops), and
-          {route} before the next sentence (the route is traced from there)
+    {start} before "これが全体のルートです。" (the map appears and the route is
+          traced; the opening before it plays over the intro, and its names are
+          not stops)
     {extras} before "黒色で示した地点は…" (the stop-bys appear; not stops either)
     {closed} before "赤色で示した地点は…" (the closed places appear, after the stop-bys)
 
@@ -145,14 +145,11 @@ def _go_positions(sentences: List[str], starts: dict) -> set:
     return go_before
 
 
-def _sentence_marks(sentences: List[str], tags: List[str], pivot: Optional[int], extras: Optional[int],
-                    closed: Optional[int]) -> dict:
-    """Sentence index -> the {start} / {route} / {extras} / {closed} tags that go before it."""
+def _sentence_marks(pivot: Optional[int], extras: Optional[int], closed: Optional[int]) -> dict:
+    """Sentence index -> the {start} / {extras} / {closed} tags that go before it."""
     marks: dict = {}
     if pivot is not None:
         marks.setdefault(pivot, []).append("{start}")
-        if pivot + 1 < len(sentences) and "route" not in tags:
-            marks.setdefault(pivot + 1, []).append("{route}")
     if extras is not None:
         marks.setdefault(extras, []).append("{extras}")
     if closed is not None:
@@ -170,12 +167,12 @@ def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[
     has_go = "{go}" in script
     sentences = _sentences(script)
     # "これが全体のルートです。": the map appears there, so the opening before it plays
-    # over the intro ({start}); the route is traced from the next sentence ({route}).
+    # over the intro, and the route is traced from there ({start}).
     # "黒色で示した地点は…": the stop-bys appear ({extras}); their names are not stops.
     pivot = None if "start" in tags else _first_sentence_matching(sentences, _ROUTE_PIVOT)
     extras = None if "extras" in tags else _first_sentence_matching(sentences, _EXTRAS)
     closed = None if "closed" in tags else _first_sentence_matching(sentences, _CLOSED)
-    marks = _sentence_marks(sentences, tags, pivot, extras, closed)
+    marks = _sentence_marks(pivot, extras, closed)
     limit = min(i for i in (extras, closed, len(sentences)) if i is not None)
     if has_numbers and has_go:
         return _with_marks(sentences, marks)

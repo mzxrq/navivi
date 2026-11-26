@@ -1028,8 +1028,7 @@ def build_course_script(
     opening = _course_opening(project, brief, places, _chars_for(budget["intro"], cps), generate, intro_text)
     report.append(opening)
 
-    # {route}: the trace starts once the whole route has been shown.
-    parts = [opening["text"], "{start}", ROUTE_PIVOT_TEXT, "{route}"]
+    parts = [opening["text"], "{start}", ROUTE_PIVOT_TEXT]
     parts += _course_route_parts(brief, budget["trips"], [_chars_for(s, cps) for s in budget["ways"]], report)
 
     closing_chars = _chars_for(budget["closing"], cps)

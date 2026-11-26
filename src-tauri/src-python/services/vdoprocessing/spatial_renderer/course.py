@@ -1,7 +1,7 @@
 """The "course" overview (settings.overview_style "course"): the whole route is
 shown at once, then traced from the start while each stop's photo card pops in
 beside it and stays, a stats card slides in with the totals, and the stop-bys
-appear last. Timed by the course script's cues: {route} (the trace starts),
+appear last. Timed by the course script's cues: {start} (the trace starts),
 {n} (stop n reached; with {go} cues, only {go} stops are timed, at their {go}),
 {end} (trace done, stats card) and {extras} (stop-bys).
 """
@@ -508,10 +508,8 @@ def _arrive_cue(ap: Dict, cues: Dict, any_go: bool) -> Tuple:
 def _course_timing(
     cues: Dict, audio_seconds: float, numbered: List[Dict], extras: List[Dict], total: float,
 ) -> _Timing:
-    start_at = float(cues.get("start", 0.0))
-    route_at = float(cues["route"]) if "route" in cues else start_at + (
-        tuning.COURSE_PIVOT_HOLD_SECONDS if cues else 1.5
-    )
+    # The trace sets off at {start}, but never before the map has finished opening.
+    route_at = max(float(cues.get("start", 0.0)), _TIMINGS["open_zoom_seconds"])
     any_go = any(str(k).startswith("go") for k in cues)
     anchors = trace_anchors(
         [_arrive_cue(ap, cues, any_go) for ap in numbered],
