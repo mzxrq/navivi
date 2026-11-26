@@ -157,8 +157,8 @@ export function VideoLookSettings({ options, onChange }: Props) {
           <Fader value={num("res_follow_pitch")} min={0} max={60} step={5} unit="°" label={t`Camera tilt`} onChange={set("res_follow_pitch")} />
         </Row>
         <Row
-          title={t`At a stop with no attraction script`}
-          description={t`Slide: the camera slides on into the next leg with the stop's photo still up. Zoom: the next leg opens zoomed out and zooms in.`}
+          title={t`Between walking legs`}
+          description={t`Slide: the camera slides on into the next leg. Zoom: the next leg opens zoomed out and zooms in.`}
         >
           <Segmented<"slide" | "zoom">
             compact

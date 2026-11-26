@@ -78,11 +78,10 @@ def _stop_colors(badge: str, settings: dict) -> Tuple[int, int, int]:
     return tuple(int(c) for c in reversed(bgr))
 
 
-def _map_frame(frame_bgr, extent, route, stops, line_bgr, line_px, drawn: float) -> Image.Image:
+def _map_frame(engine, frame_bgr, extent, route, stops, line_bgr, line_px, drawn: float) -> Image.Image:
     """One map frame of the pull-back, overlaid the way the overview's recap
     screen is: the route in the project's own colour under a white halo, and
-    each stop marked by a plain colour dot — no numbered pin, since the
-    number lives in that stop's badge. `drawn` (0-1) is how much of the
+    each stop marked by its numbered pin (it stays on under the badges). `drawn` (0-1) is how much of the
     route is on yet: it unspools BACKWARDS, from the last stop the camera
     opens on toward the start, so the walk replays out of the close-up
     instead of creeping in from off-screen. Each stop's dot lands as the
@@ -99,16 +98,14 @@ def _map_frame(frame_bgr, extent, route, stops, line_bgr, line_px, drawn: float)
     pts = np.clip(pts, -3 * w, 4 * w).astype(np.int32)
     cv2.polylines(frame, [pts], False, (255, 255, 255), line_px + 4, cv2.LINE_AA)
     cv2.polylines(frame, [pts], False, line_bgr, line_px, cv2.LINE_AA)
-    img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-
-    d = ImageDraw.Draw(img)
     r = max(4, int(h // 150))
     for stop in stops:
         if stop["at"] < first:
             continue
         x, y = G.project_latlon_to_pixel(stop["lat"], stop["lon"], extent, w, h)
         if -r <= x <= w + r and -r <= y <= h + r:
-            d.ellipse([x - r, y - r, x + r, y + r], fill=stop["color"], outline="white", width=max(2, r // 2))
+            engine.draw_marker(frame, int(x), int(y), number=stop["badge"], color=tuple(reversed(stop["color"])))
+    img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
     return img
 
 
@@ -326,10 +323,11 @@ def _pull_back_maps(settings: dict, route, stops: list, size, fps: int, lat, lon
 
     line_bgr = _project_color(settings, "line_color", tuning.MODE_LINE_COLORS["walking"])
     line_px = int(settings.get("line_thickness") or 6)
+    engine = _graphics(settings)
     # The route traces itself over the first part of the pull-back, then stays whole for the rest of it.
     maps = [
         _map_frame(
-            f, ext, route, stops, line_bgr, line_px,
+            engine, f, ext, route, stops, line_bgr, line_px,
             drawn=_ease((i + 1) / max(1, len(frames) * _ROUTE_DRAW_FRACTION)),
         )
         for i, (f, ext) in enumerate(frames)

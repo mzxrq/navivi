@@ -58,7 +58,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # v7: leg card numbers are the overview card's own per-leg numbers;
 # v8: stop-bys are framed too, and the summary card sits lower;
 # v9: the 3D leg HUD card sits as low as the 2D one).
-LEG_RENDER_VERSION = 39  # v39: the card's second column reads 残り (what is left), no empty banner bar at the start; v38: the direction/turn-by-turn HUD card is removed entirely -- didn't work out; v36: the direction arrow moves to bottom-left (above the elevation card's own spot), not bottom-right; v35: the badge's digit goes heavier still (900 + a thin matching text-stroke) since 700 still read thin at this small size; v34: that card sits a bit closer to the label again (108px, not 140); v31: a leg's opening/arrival photo card keeps clear of the pin's name label too, not just the pin itself; v30: the chain pill's circle badge is bigger and vertically centered against the place text; v29: the chain pill drops its 出発/到着 text prefix for a start/end circle badge (the pin's own S/E/number glyph); v28: a stop-by's photo card keeps further off its marker so it doesn't land on the marker's own name pill; v27: the carried-over photo card's leader line stops short of the marker like the others, instead of crossing its label; v26: the chain, progress and destination banners merge into one top bar, with a "stop N of total" progress segment; v25: place names keep off each other, stacking a row further out when every spot beside their point is taken; v24: at a stop with no attraction script the photo card rides along the slide (setting quiet_stop_transition); v23: photo cards keep off the route before keeping the leader short; v22: {view wait} times count from the {start} cue; v21: name tags placed with the real camera scale; v20: cards keep off the kept walked line; v19: a leg continuing the walk slides at the zoom of the leg before; v18: quicker opening/closing zoom (LEG_ZOOM_SECONDS); v17: a leg after a stop with no narration continues the walk; v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
+LEG_RENDER_VERSION = 40  # v40: every leg slides on from the leg before, zooming only when needed; v39: the card's second column reads 残り (what is left), no empty banner bar at the start; v38: the direction/turn-by-turn HUD card is removed entirely -- didn't work out; v36: the direction arrow moves to bottom-left (above the elevation card's own spot), not bottom-right; v35: the badge's digit goes heavier still (900 + a thin matching text-stroke) since 700 still read thin at this small size; v34: that card sits a bit closer to the label again (108px, not 140); v31: a leg's opening/arrival photo card keeps clear of the pin's name label too, not just the pin itself; v30: the chain pill's circle badge is bigger and vertically centered against the place text; v29: the chain pill drops its 出発/到着 text prefix for a start/end circle badge (the pin's own S/E/number glyph); v28: a stop-by's photo card keeps further off its marker so it doesn't land on the marker's own name pill; v27: the carried-over photo card's leader line stops short of the marker like the others, instead of crossing its label; v26: the chain, progress and destination banners merge into one top bar, with a "stop N of total" progress segment; v25: place names keep off each other, stacking a row further out when every spot beside their point is taken; v24: at a stop with no attraction script the photo card rides along the slide (setting quiet_stop_transition); v23: photo cards keep off the route before keeping the leader short; v22: {view wait} times count from the {start} cue; v21: name tags placed with the real camera scale; v20: cards keep off the kept walked line; v19: a leg continuing the walk slides at the zoom of the leg before; v18: quicker opening/closing zoom (LEG_ZOOM_SECONDS); v17: a leg after a stop with no narration continues the walk; v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
 # Bumped when the heatmap legs' elevation profile card changes (only those legs re-render; v1: the card).
 LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
@@ -69,7 +69,7 @@ LEG_FAR_STOPBY_VERSION = 2
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
-_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text", "kw.leg_elevations", "return_stop", "closed", "quiet_stopby", "stopby_reopen", "pops_after")
+_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text", "kw.leg_elevations", "return_stop", "closed", "quiet_stopby", "stopby_reopen", "pops_after", "join")
 # The stops' names on the leg's banner and its narration timing (fix.md #9). Compared only when the leg's
 # record has them, so a leg rendered before these were checked is not re-rendered for it.
 _LEG_RECORDED_PARTS = ("kw.route_chain", "kw.target_duration_seconds", "kw.start_cue_seconds", "kw.arrival_wait_seconds")
@@ -93,6 +93,23 @@ def _split_stopby_chain(res_data: Dict[str, Any]) -> Tuple[List[str], List[List[
         else:
             chain.append(l)
     return chain, stopbys
+
+
+def _legs_join(prev: Dict[str, Any], nxt: Dict[str, Any]) -> bool:
+    """Whether `nxt` can carry on from `prev`'s last frame: both are drawn by the street-level renderer and `nxt`
+    starts where `prev` ended."""
+    from services.vdoprocessing.pydeckrecorder.geomath import haversine_km
+
+    ends = []
+    for leg, at in ((prev, -1), (nxt, 0)):
+        lats, lons = leg.get("lats"), leg.get("lons")
+        mode = str(leg.get("mode") or "walking").lower()
+        if lats is None or lons is None or min(len(lats), len(lons)) < 2:
+            return False
+        if tuning.MODE_ALIASES.get(mode, mode) in tuning.RESIDENTIAL_2D_FALLBACK_MODES:
+            return False
+        ends.append((float(lons[at]), float(lats[at])))
+    return haversine_km(*ends[0], *ends[1]) * 1000.0 <= tuning.LEG_JOIN_MAX_GAP_METERS
 
 
 def _reported_speed_kmh(mode_speed_kmh: Dict[str, float], mode: str) -> float:
@@ -191,19 +208,22 @@ def _leg_fingerprint_parts(
             [leg_kwargs.get(k) for k in ("start_pin", "dest_pin", "dest_image_display", "opening_photo", "opening_view")]
             + [bool(leg_kwargs.get("end_view_path"))]
         )
+    if leg_kwargs.get("opening_view") or leg_kwargs.get("end_view_path"):
+        # Joined legs share a frame: re-rendered when either side of the join changes, or the join comes or goes.
+        parts["join"] = h([leg_kwargs.get("opening_view"), bool(leg_kwargs.get("end_view_path"))])
     closed = [lm.get("label") for lm in leg_kwargs.get("landmarks") or [] if lm.get("inaccessible")]
     if closed:
         parts["closed"] = h([closed, 3])  # a place turned Closed re-renders the legs that pass it (v3: fullscreen photo)
     quiet = [lm.get("label") for lm in leg_kwargs.get("landmarks") or [] if lm.get("quiet")]
     if quiet:
         parts["quiet_stopby"] = h(quiet)  # a stop-by whose narration was emptied re-renders only the legs passing it
-    # A connected stop-by cuts the leg and the next piece opens on its photo and a camera hop; only those legs
-    # re-render when that opening changes (v3: a brief re-open and a shorter hop, which delayed the narration;
-    # v4: the camera hops only when the next stretch doesn't fit the frame).
+    # A connected or walked-past stop-by cuts the leg and the next piece opens on its photo and a camera move; only
+    # those legs re-render when that opening changes (v3: a brief re-open and a shorter hop, which delayed the
+    # narration; v4: the camera moves only when the next stretch doesn't fit the frame; v5: a glide, no zoom-out hop).
     reopen = [lm.get("label") for lm in leg_kwargs.get("landmarks") or []
-              if lm.get("connect_to_route") and lm.get("popup_image")]
+              if (lm.get("connect_to_route") and lm.get("popup_image")) or lm.get("walk_seconds") is not None]
     if reopen:
-        parts["stopby_reopen"] = h([reopen, 4])
+        parts["stopby_reopen"] = h([reopen, 5])
     if "leg_elevations" in leg_kwargs:
         # Heatmap legs also draw the elevation profile card: re-render only them when it changes.
         parts["kw.leg_elevations"] = h([leg_kwargs["leg_elevations"], LEG_ELEVATION_CARD_VERSION])
@@ -883,7 +903,8 @@ class RouteAnimator:
         self, leg_kwargs: Dict[str, Any], ctx: "_ResContext", i: int, res_data: Dict[str, Any],
         res_sequence: List[Dict], photos: "_LegPhotos", prev_end_view: Optional[str], leg_glob_prefix: str,
     ) -> None:
-        """How this leg opens and closes against its neighbours (return stops, stops with nothing to tell)."""
+        """How this leg opens and closes against its neighbours: it carries on from the leg before's last camera
+        (setting quiet_stop_transition "zoom" turns that off, except at return stops)."""
         from services.vdoprocessing.videopipeline.audio_step import no_narration_stop
 
         # A return stop's photo never opens a leg fullscreen.
@@ -892,26 +913,35 @@ class RouteAnimator:
         if (res_data.get("start_is_return") or (res_data.get("dest_is_return") and not photos.start_image)
                 or start_quiet):
             leg_kwargs["opening_photo"] = False
-        # Legs joined at a return stop, or at a stop with nothing to tell: this leg's last frame is the next one's first.
+        # Joined legs: this leg's last frame is the next one's first.
         next_leg = res_sequence[i + 1] if i + 1 < len(res_sequence) else {}
-        # "zoom": legs at such a stop open and close like any other (no slide, no carried card).
+        # "zoom": legs open and close on their own (no slide, no carried card).
         slide = self.config.get("quiet_stop_transition", "slide") != "zoom"
-        if (res_data.get("dest_is_return") and next_leg.get("start_is_return")) or (photos.dest_quiet and slide):
+        # Return stops keep their own joins: the pair, or a stop with nothing to tell.
+        return_pair = bool(res_data.get("dest_is_return") and next_leg.get("start_is_return"))
+        slides_on = slide and _legs_join(res_data, next_leg) and (
+            photos.dest_quiet or not next_leg.get("start_is_return"))
+        if return_pair or slides_on:
             leg_kwargs["end_view_path"] = str(self.out_dir / f"{leg_glob_prefix}endview.json")
+        # Marks a join the timeline cuts (the same frame on both sides, and between this leg's own pieces): only a
+        # return pair dissolves, to swap the route lines.
+        no_fade = self.out_dir / f"{leg_glob_prefix}nofade"
+        if slide and (photos.dest_quiet or (slides_on and not return_pair)):
+            no_fade.touch()
+        else:
+            no_fade.unlink(missing_ok=True)
         if photos.dest_quiet and slide and photos.dest_image:
             leg_kwargs["hold_end_card"] = True
-        if (res_data.get("start_is_return") or (start_quiet and slide)) and prev_end_view:
+        prev = res_sequence[i - 1] if i > 0 else {}
+        joined = slide and _legs_join(prev, res_data) and (start_quiet or not res_data.get("start_is_return"))
+        if (res_data.get("start_is_return") or joined) and prev_end_view:
             try:
                 leg_kwargs["opening_view"] = json.loads(Path(prev_end_view).read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 pass
-        if start_quiet and slide and i > 0:
-            # The walk goes on through a stop with nothing to tell: the leg before stays drawn as walked and the
-            # camera glides into this leg's framing quickly.
-            prev = res_sequence[i - 1]
-            if prev.get("lats") is not None and prev.get("lons") is not None:
-                leg_kwargs["prior_trail"] = [[float(a), float(b)] for a, b in zip(prev["lats"], prev["lons"])]
-            leg_kwargs["topdown_transition_seconds"] = tuning.LEG_CONTINUE_GLIDE_SECONDS
+        if joined and "opening_view" in leg_kwargs:
+            # The walk goes on: the leg before stays drawn as walked while the camera moves into this leg's framing.
+            leg_kwargs["prior_trail"] = [[float(a), float(b)] for a, b in zip(prev["lats"], prev["lons"])]
 
     def _plan_leg(
         self, ctx: "_ResContext", i: int, res_data: Dict[str, Any], res_sequence: List[Dict],
@@ -937,12 +967,6 @@ class RouteAnimator:
         leg_kwargs = self._leg_base_kwargs(ctx, res_data, leg_mode, landmarks, photos)
         self._add_optional_leg_kwargs(leg_kwargs, res_data)
         self._add_leg_joins(leg_kwargs, ctx, i, res_data, res_sequence, photos, prev_end_view, leg_glob_prefix)
-        # Marks a join at a stop with nothing to tell: the timeline cuts there (same frame), no dissolve.
-        no_fade = self.out_dir / f"{leg_glob_prefix}nofade"
-        if photos.dest_quiet and self.config.get("quiet_stop_transition", "slide") != "zoom":
-            no_fade.touch()
-        else:
-            no_fade.unlink(missing_ok=True)
         return _LegPlan(
             kwargs=leg_kwargs, num=leg_file_num, prefix=leg_glob_prefix,
             output_path=str(self.out_dir / f"{leg_glob_prefix}{safe_suffix}.mp4"),
@@ -1056,6 +1080,9 @@ class RouteAnimator:
             for old in stale_leg_files:
                 if old.resolve() not in keep:
                     old.unlink(missing_ok=True)
+            if not leg_kwargs.get("end_view_path"):
+                # The timeline dissolves into the next leg wherever an end view is left.
+                (self.out_dir / f"{plan.prefix}endview.json").unlink(missing_ok=True)
             write_json_atomic(fingerprint_path, {"fingerprint": leg_fingerprint, "parts": reuse.parts}, indent=None)
         self._write_piece_plan(plan, leg_paths)
         return leg_paths

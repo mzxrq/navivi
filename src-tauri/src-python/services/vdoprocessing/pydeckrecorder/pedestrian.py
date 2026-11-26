@@ -185,7 +185,32 @@ def _paced_plan(leg_dist_km, plan, spans, start_cue_seconds=None, slow=0.5, fast
     return out, stops, held
 
 
-def _at_points_plan(df_raw, leg_dist_km, plan, at_cues, start_cue_seconds=None):
+def _joined_zoom(fit: float, prev: float) -> float:
+    """The zoom of a leg that carries on from the one before: `prev` (a pure slide) while the leg fits at it and is
+    not too small (within tuning.LEG_KEEP_ZOOM_SLACK of `fit`), else the leg's own `fit`."""
+    return prev if fit - tuning.LEG_KEEP_ZOOM_SLACK <= prev <= fit else fit
+
+
+def _piece_glide(start, fit, frames: int) -> list:
+    """The camera's (lon, lat, zoom) per frame from `start` into the next stop-by piece's `fit` framing: a straight
+    eased glide, zooming only as far as _joined_zoom needs."""
+    end = (fit[0], fit[1], _joined_zoom(fit[2], start[2]))
+    steps = (_ease_in_out_cubic((i + 1) / frames) for i in range(frames))
+    return [tuple(a + (b - a) * t for a, b in zip(start, end)) for t in steps]
+
+
+def _opening_marker_px(start_lonlat, opening_view: Optional[Dict], output_size):
+    """Where the opening photo card's leader points: the start pin under the leg before's last camera, or None (the
+    frame's centre) for a leg that opens centred on its start."""
+    if not opening_view:
+        return None
+    return _project_lonlat_to_px(
+        *start_lonlat, opening_view["lon"], opening_view["lat"], opening_view["zoom"], output_size,
+        pitch=opening_view["pitch"],
+    )
+
+
+def _at_points_plan(df_raw, leg_dist_km, plan, at_cues, start_cue_seconds=None, stands=()):
     """{at N} cues ([(piece, voice seconds, turn number N)], see narration_step.at_spans) applied to `plan`
     ([(last raw index, seconds)], one entry per narration piece): splits the piece so the walker is at the leg's
     Nth turn (services.localization.leg_script.leg_turns, 1-indexed) exactly when the voice reaches that cue,
@@ -208,13 +233,19 @@ def _at_points_plan(df_raw, leg_dist_km, plan, at_cues, start_cue_seconds=None):
         bounds.setdefault(_piece_of(i, entry), [prev, entry[0]])[1] = entry[0]
         prev = entry[0]
     out, start_idx = [], 0
+    walked, piece_from = 0.0, {}  # walk seconds so far; where each piece's walk began
     for i, entry in enumerate(plan):
         end_idx, seconds = entry[0], entry[1]
         piece = _piece_of(i, entry)
         lead = _piece_lead(start_cue_seconds, piece)
         idx, used = start_idx, 0.0
+        # Cue times count from the piece's voice, but an earlier {slow}/{fast}/{stop} split the piece into several entries
+        # and a {stop} hold is voice time outside `plan`: take both off, or the cue lands late / "doesn't fit".
+        origin = piece_from.setdefault(piece, walked)
+        elapsed = walked - origin + sum(h for w, _, h in stands if origin - 1e-6 <= w <= walked + 1e-6)
+        walked += seconds
         for cue_seconds, n in sorted(by_piece.get(piece, []), key=lambda c: c[0]):
-            target_t = cue_seconds - lead
+            target_t = cue_seconds - lead - elapsed
             percent = float(n[:-1]) if isinstance(n, str) else None
             valid = 0 < percent < 100 if percent is not None else 1 <= n <= len(turns)
             if not valid or not (used < target_t < seconds):
@@ -501,7 +532,7 @@ def render_residential_leg_pydeck(
             leg_duration -= held
         if at_cues:  # {at N}: composes with either branch above, or neither
             segment_plan = _at_points_plan(
-                df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], at_cues, starts,
+                df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], at_cues, starts, stands,
             )
     total_frames = max(10, int(leg_duration * fps))
 
@@ -567,8 +598,8 @@ def render_residential_leg_pydeck(
     # Capped so a very short leg doesn't zoom to an abstract block-level crop.
     locked_zoom = min(locked_zoom, tuning.LEG_FRAME_MAX_ZOOM)
     if prior_trail and opening_view:
-        # The walk goes on from the leg before: keep its zoom where this leg still fits, so the camera only slides.
-        locked_zoom = min(locked_zoom, float(opening_view["zoom"]))
+        # The walk goes on from the leg before: keep its zoom where that still suits this leg, so the camera only slides.
+        locked_zoom = _joined_zoom(locked_zoom, float(opening_view["zoom"]))
 
     # The real map scale in this framing (deck.gl: 512 px tiles), so name tags are placed off the line as drawn.
     label_mpp = 40075016.686 * math.cos(math.radians(locked_lat)) / (512 * 2 ** locked_zoom)
@@ -626,6 +657,12 @@ def render_residential_leg_pydeck(
         hw, hh = output_size[0] / 2, output_size[1] / 2
         for box in ((-hw, -hh, hw, -hh + 100), (hw - 140, -hh, hw, -hh + 270), (hw - 760, hh - 200, hw, hh)):
             label_space.add(box)
+        # Slabs just outside the frame: a spot that leaves it counts as taken, so a pill beside an edge stop moves
+        # to another side (it still wins if every spot is out, rather than vanishing).
+        big = 4000
+        for box in ((-hw - big, -hh - big, -hw, hh + big), (hw, -hh - big, hw + big, hh + big),
+                    (-hw - big, -hh - big, hw + big, -hh), (-hw - big, hh, hw + big, hh + big)):
+            label_space.add(box, gap=0)
     base_layers.extend(_landmark_layers(landmarks or [], id_prefix="leg-landmark", white_dot=True, avoid=route_pts,
                                         mpp=label_mpp, space=label_space))
     # The start pin is static (this leg's starting point never moves) so it
@@ -1512,7 +1549,10 @@ async def _record_leg(
                 # the walker starts moving. Unlike the old chase-cam, the
                 # camera then STAYS at this locked view for the entire main
                 # loop below -- it never re-centers on the walker.
-                intro_frames = max(0, int(topdown_transition_seconds * fps))
+                intro_seconds = (
+                    tuning.LEG_CONTINUE_GLIDE_SECONDS if prior_trail and opening_view else topdown_transition_seconds
+                )
+                intro_frames = max(0, int(intro_seconds * fps))
                 # Floored well above a country/region-scale zoom -- locked_zoom
                 # is now a per-leg fit-to-path zoom (often much lower than the
                 # old fixed follow_zoom=19 baseline this delta was originally
@@ -1638,18 +1678,21 @@ async def _record_leg(
                             [x1 - x0, y1 - y0, carried["box"][:2], carried["anchor"], carried["marker"]],
                         )
 
+                    opening_marker_px = _opening_marker_px(
+                        (smooth_df.iloc[0]["lon"], smooth_df.iloc[0]["lat"]), opening_view, output_size,
+                    )
                     if not opening_photo or (not dest_popup_image and not start_popup_image):
                         # From the previous leg's own last frame: one frame, no establishing hold.
                         for _ in range(1 if opening_view else max(1, int(0.3 * fps))):
                             await _write_frame(warm_png)
                     elif start_popup_image:
                         await _play_leg_photo_card(
-                            start_popup_image, start_popup_freeze_seconds, "start",
+                            start_popup_image, start_popup_freeze_seconds, "start", marker_px=opening_marker_px,
                             view=(from_view["lon"], from_view["lat"], from_view["zoom"], from_view["pitch"]),
                         )
                     elif dest_popup_image:
                         await _play_leg_photo_card(
-                            dest_popup_image, dest_popup_freeze_seconds, "dest_opening",
+                            dest_popup_image, dest_popup_freeze_seconds, "dest_opening", marker_px=opening_marker_px,
                             view=(from_view["lon"], from_view["lat"], from_view["zoom"], from_view["pitch"]),
                         )
 
@@ -2097,7 +2140,7 @@ async def _record_leg(
                                 await _open_piece()
                             await _play_followers(stopby_lm.get("waypoint_id"), index)
 
-                        # Dynamic hop to the NEXT segment's framing for the new clip!
+                        # Glide to the NEXT segment's framing for the new clip.
                         # (the piece's opening - photo beat and hop - is measured
                         # below, once the hop is done, as this piece's voice delay)
                         future_indices = [k for k in stopby_triggers if k > index]
@@ -2115,7 +2158,7 @@ async def _record_leg(
                             next_df_idx = int(sq_dist_next.idxmin())
                             
                             next_fit_lons, next_fit_lats = _framed_points(df_raw, curr_df_idx, next_df_idx + 2, landmarks)
-                            # Only hop when the next stretch doesn't already fit the current frame.
+                            # Only move when the next stretch doesn't already fit the current frame.
                             if next_fit_lons and any(_off_screen_at(lo, la) for lo, la in zip(next_fit_lons, next_fit_lats)):
                                 new_lon, new_lat, new_zoom = _fit_view_for_path(
                                     next_fit_lons, next_fit_lats, output_size,
@@ -2127,14 +2170,10 @@ async def _record_leg(
                                 new_zoom = min(new_zoom, tuning.LEG_FRAME_MAX_ZOOM)
                                 
                                 hop_frames = max(1, int(tuning.STOPBY_PIECE_HOP_SECONDS * fps))
-                                for i in range(hop_frames):
-                                    t = _ease_in_out_cubic((i + 1) / hop_frames)
-                                    pan_lon = locked_lon + (new_lon - locked_lon) * t
-                                    pan_lat = locked_lat + (new_lat - locked_lat) * t
-                                    dip = math.sin(t * math.pi) * 1.5
-                                    base_zoom = locked_zoom + (new_zoom - locked_zoom) * t
-                                    pan_zoom = base_zoom - dip
-                                    
+                                views = _piece_glide(
+                                    (locked_lon, locked_lat, locked_zoom), (new_lon, new_lat, new_zoom), hop_frames,
+                                )
+                                for pan_lon, pan_lat, pan_zoom in views:
                                     js_hop = f"""
                                     if (window.deckgl) {{
                                         window.deckgl.setProps({{
@@ -2150,7 +2189,7 @@ async def _record_leg(
                                     png_bytes = await page.screenshot(**_FRAME_SHOT)
                                     await _write_frame(png_bytes)
                                 
-                                locked_lon, locked_lat, locked_zoom = new_lon, new_lat, new_zoom
+                                locked_lon, locked_lat, locked_zoom = views[-1]
 
                         if frame_state["cuts"] > cuts_before:
                             await _open_piece()
@@ -2360,7 +2399,10 @@ async def _record_leg(
                     # Skipped entirely when the arrival photo just cut the
                     # clip -- there's nothing left to ease back out FROM,
                     # the fullscreen photo was already the last frame.
-                    outro_frames = 0 if cut_on_arrival else max(0, int(topdown_transition_seconds * fps))
+                    # None either when the next leg carries on from this camera (end_view_path).
+                    outro_frames = (
+                        0 if cut_on_arrival or end_view_path else max(0, int(topdown_transition_seconds * fps))
+                    )
                     if outro_frames > 0:
                         last_row = smooth_df.iloc[-1]
                         for i in range(outro_frames):
