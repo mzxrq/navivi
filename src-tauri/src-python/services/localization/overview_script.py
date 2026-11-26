@@ -1079,11 +1079,6 @@ def _via_batch_lines(trip: dict, told: str) -> str:
             for name, fact in zip(names, facts or [""] * len(names))
         ]
         line = f"{host}のあたりでは、{'や'.join(phrases)}が見えてきます。"
-        # The map holds on this batch's cards until this line is spoken
-        # (see cues.py's {goPreN}) - every via_batches host, not just
-        # the one before stop 1.
-        if trip.get("to_number") is not None:
-            line += "{goPre%d}" % trip["to_number"]
         # Always inserted, even past the way segment's own character
         # budget (unlike before) - a name silently dropped for staying
         # under budget defeats guaranteeing every waypoint gets named;

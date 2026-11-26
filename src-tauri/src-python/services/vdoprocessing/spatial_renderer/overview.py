@@ -192,9 +192,6 @@ _SUMMARY_CARD_MARGIN_PX = 20  # gap between the summary card and the frame's bot
 # [NOTE] The walk never waits past this for the narration's {start} cue: a long opening line would otherwise hold
 # the walker on the clean map well past the intro card's own freeze; the voice finishes it over the moving map.
 _MAX_INTRO_WALK_START_SECONDS = 3.0
-# Longest a stop-by batch's cards hold for their own {goPreN} cue (matches overview_animation.py's
-# _MAX_CUE_WAIT_SECONDS) — unlike the intro cap above this may run long: real content is still being named.
-_MAX_STOPBY_BATCH_WAIT_SECONDS = 20.0
 
 
 class _PathScale(NamedTuple):
@@ -421,16 +418,6 @@ def _number_popups(active_popups: List[Dict], points: List) -> None:
         ap["order"] = order
 
 
-def _link_next_numbered_order(active_popups: List[Dict]) -> None:
-    """A stop-by batch has no {n}/{go} cue of its own (cues.py's {goPreN}): this says which numbered stop's "goPre"
-    cue governs when ITS narration mention ends."""
-    next_numbered_order = None
-    for ap in reversed(active_popups):
-        ap["next_numbered_order"] = next_numbered_order
-        if not ap["data"].get("is_stopby") and ap["index"] != 0 and not ap.get("is_return"):
-            next_numbered_order = ap["order"]
-
-
 def _apply_job_overrides(active_popups: List[Dict], job_waypoints: List[Dict]) -> None:
     """[NOTE] job_config's "waypoints" lines up 1:1, in order, with active_popups (both include start and end), so
     they are zipped by enumerate() position — NOT by popup["index"], which is a position in the animated path."""
@@ -511,28 +498,14 @@ def _hold_frames(ap: Dict, fps: int, post_arrival_hold_seconds: float) -> int:
     ))
 
 
-def _start_batch_frames(start_popup: Optional[Dict], audio_cues: Dict, walk_start_frames: int, fps: int) -> int:
-    """Frames the start popup's stop-by batch holds before the walk. With its own {goPreN} cue the cards hold until
-    that line is spoken (capped at _MAX_STOPBY_BATCH_WAIT_SECONDS), stashed on the popup so _play_stopby_batch
-    (overview_animation.py) draws for the same duration this retiming assumes."""
+def _start_batch_frames(start_popup: Optional[Dict], fps: int) -> int:
+    """Frames the start popup's stop-by batch holds before the walk."""
     if not start_popup:
         return 0
-    start_batch = int(
+    return int(
         fps * min(len(start_popup.get("stopby_group") or []), tuning.STOPBY_BATCH_MAX_HELD)
         * tuning.STOPBY_BATCH_SECONDS
     )
-    if not start_popup.get("stopby_group"):
-        return start_batch
-    next_n = start_popup.get("next_numbered_order")
-    go_pre = audio_cues.get(f"goPre{next_n}") if next_n is not None else None
-    if go_pre is not None:
-        needed_frames = int(round(go_pre * fps)) - walk_start_frames
-        min_frames = int(tuning.POPUP_MIN_DISPLAY_SECONDS * fps)
-        start_batch = max(min_frames, min(
-            needed_frames, int(_MAX_STOPBY_BATCH_WAIT_SECONDS * fps)
-        ))
-        start_popup["batch_display_seconds"] = start_batch / fps
-    return start_batch
 
 
 def _warped_total_frames(
@@ -575,7 +548,7 @@ def _retime_to_cues(
         and ap.get("stopby_host") is None
     ]
     hold_before = {n: sum(h for f, h in hosts if f < frame) for n, frame in natural_frames.items()}
-    start_batch = _start_batch_frames(start_popup, audio_cues, walk_start_frames, fps)
+    start_batch = _start_batch_frames(start_popup, fps)
     # The leg cap shortened the natural path, but each cued stop still has its own time (and is itself no more
     # than one cap after the last): the walk may be stretched back out to the length the cues need.
     room = max(len(walk.arr), num_frames)
@@ -669,13 +642,6 @@ def _set_cue_frames(active_popups: List[Dict], stop_popup: Optional[Dict], audio
             int(round(depart * fps)) if ap["cue_frame"] is not None and depart is not None
             and depart > seconds else None
         )
-        # A stop-by batch host has no {n}/{go} of its own: its {goPreN} (the next numbered stop's cue) holds the
-        # freeze until the batch's own narration mention finishes.
-        if ap["depart_frame"] is None and ap is not active_popups[0] and ap.get("stopby_group"):
-            next_n = ap.get("next_numbered_order")
-            go_pre = audio_cues.get(f"goPre{next_n}") if next_n is not None else None
-            if go_pre is not None:
-                ap["depart_frame"] = int(round(go_pre * fps))
         if ap.get("no_pause") and not ap.get("stopby_group"):
             ap["depart_frame"] = None  # "Pause at Location" off: no hold until {go}
 
@@ -769,7 +735,6 @@ class _OverviewRenderMixin:
         if extent is not None:
             _reproject_popups(active_popups, extent, w, h)
         _number_popups(active_popups, points)
-        _link_next_numbered_order(active_popups)
         self._ov_attach_groups(active_popups, fps)
         self._declutter_pins(active_popups, route=points)
         self._ov_style_badges(active_popups, len(points))

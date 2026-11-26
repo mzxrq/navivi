@@ -354,10 +354,7 @@ class TestHighlights:
         # post-arrival + card + one stop-by
         assert budget["describe"][1] == 1.0 + 2.0 + tuning.STOPBY_BATCH_SECONDS
 
-    def test_a_stopby_batch_gets_its_own_cue_wherever_it_is(self):
-        # {goPreN} must not be special-cased to the very first leg - a batch
-        # hosted anywhere along the route needs the same "hold until this
-        # line is spoken" cue (see overview_script.py's via_batches loop).
+    def test_a_stopby_batch_is_told_without_a_cue(self):
         project = _long_route(10)
         # A connected host between stop 3 and stop 4, with one unconnected
         # stop-by riding behind it - mid-route, nowhere near the start.
@@ -366,8 +363,11 @@ class TestHighlights:
         project["waypoints"].insert(5, _wp("隠れ観音", 35.0, 139.0 + 0.004 * 3 + 0.0022,
                                             isStopBy=True, connectToRoute=False))
         script, _ = build_tour_script(project, {}, generate=None)
-        assert "隠れ観音が見えてきます。{goPre4}" in script
-        assert cue_tags(script).index("goPre4") == cue_tags(script).index("4") - 1
+        assert "隠れ観音が見えてきます。" in script
+        assert "goPre" not in script
+
+    def test_an_old_scripts_gopre_tag_is_never_spoken(self):
+        assert clean_text("見えてきます。{goPre4}") == "見えてきます。"
 
     def test_the_waypoint_flag_forces_or_skips_a_stop(self):
         from services.localization.overview_script import plan_budget
