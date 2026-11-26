@@ -533,18 +533,11 @@ async def generate_overview_audio(
     if result is None:
         return None
     result["intro"] = await voice(opening, INTRO_NARRATION_FILENAME, "intro") if opening else None
-    # The overview is sized first (60-120s) and its script to it: say when
-    # the real voice misses that by more than the 3s the video can absorb.
-    from services.localization.overview_script import (
-        in_overview_range, overview_target_seconds, visible_waypoints,
-    )
+    from services.localization.overview_script import overview_target_seconds, visible_waypoints
 
     target = overview_target_seconds(project_config, len(visible_waypoints(project_config)))
     spoken = result["duration_seconds"] + (result["intro"] or {}).get("duration_seconds", 0.0)
-    (logger.info if in_overview_range(spoken) else logger.warning)(
-        "Overview narration is %.1fs (aimed at %.0fs; the overview must be 60-120s).",
-        spoken, target,
-    )
+    logger.info("Overview narration is %.1fs (aimed at %.0fs).", spoken, target)
     return result
 
 

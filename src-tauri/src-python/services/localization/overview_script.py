@@ -153,11 +153,9 @@ def _looks_ok(text: str, limit: int, min_chars: int = _MIN_PASSAGE_CHARS, over: 
 
 TRANSITION_CHARS = 50
 
-# The overview's length comes first; the script is sized to it. Default: 20s
-# plus 7s per stop, kept within 60-120s (settings.overview_target_seconds
-# overrides). The voice is then within AUDIO_MATCH_TOLERANCE_SECONDS of it.
-TARGET_MIN_SECONDS = 60.0
-TARGET_MAX_SECONDS = 120.0
+# The script is sized to a target: 20s plus 7s per stop, no floor or ceiling
+# (settings.overview_target_seconds overrides). The voice then decides the
+# video's length, within AUDIO_MATCH_TOLERANCE_SECONDS of it.
 TARGET_BASE_SECONDS = 20.0
 TARGET_SECONDS_PER_STOP = 7.0
 # Shares of the target: the intro plays over the intro card; a way line is
@@ -173,7 +171,7 @@ DESCRIBE_MAX_SECONDS = 15.0
 # stops is at least this long per leg.
 WAY_SECONDS_PER_LEG = 2.0
 # A highlight's description: one short sentence/clause, not two or three -
-# every numbered stop needs a share of the 60-90s target (see plan_budget),
+# every numbered stop needs a share of the target (see plan_budget),
 # so a long per-stop description was crowding several stops out of the
 # budget entirely (unable to fit their own {n} cue's trip+description
 # within target at all - see plan's greedy stops.add loop). Short keeps
@@ -410,20 +408,13 @@ def _intro_fallback(start: str, end: str, area: str, places: int, km, limit: int
     return next((t for t in texts if len(t) <= limit * 1.3), texts[-1])
 
 
-def in_overview_range(seconds: float, tolerance: float = 3.0) -> bool:
-    """Whether an overview of `seconds` is within TARGET_MIN..TARGET_MAX_SECONDS
-    (give or take the tolerance the video absorbs)."""
-    return TARGET_MIN_SECONDS - tolerance <= seconds <= TARGET_MAX_SECONDS + tolerance
-
-
 def overview_target_seconds(project: dict, stops: int) -> float:
     """How long the overview should be: settings.overview_target_seconds, else
-    TARGET_BASE_SECONDS + TARGET_SECONDS_PER_STOP per numbered stop, kept
-    within TARGET_MIN_SECONDS..TARGET_MAX_SECONDS."""
+    TARGET_BASE_SECONDS + TARGET_SECONDS_PER_STOP per numbered stop."""
     chosen = project.get("settings", {}).get("overview_target_seconds")
     if chosen:
         return float(chosen)
-    return min(TARGET_MAX_SECONDS, max(TARGET_MIN_SECONDS, TARGET_BASE_SECONDS + TARGET_SECONDS_PER_STOP * stops))
+    return TARGET_BASE_SECONDS + TARGET_SECONDS_PER_STOP * stops
 
 
 def closing_seconds(project: dict) -> float:
@@ -507,7 +498,7 @@ def _course_budget(
     return {
         "target": target, "cps": cps, "intro": opening, "pivot": pivot, "closing": closing,
         "stops": sorted(stops), "trips": trips, "ways": ways, "describe": describe,
-        "estimated": estimated, "fits": in_overview_range(estimated),
+        "estimated": estimated,
     }
 
 
@@ -529,8 +520,8 @@ def _spend_spare_time(
             ways = [w + (use * r / total_room if r > 0 else 0.0) for w, r in zip(ways, room)]
             spare -= use
     if spare > 0:
-        # Still short of 60-120s (few stops, little to say): the overview's
-        # length is the rule, so the descriptions (else the way lines) take it.
+        # Still short of the target (few stops, little to say): the
+        # descriptions (else the way lines) take it.
         if flexible:
             for n in flexible:
                 describe[n] += spare / len(flexible)
@@ -552,7 +543,7 @@ def plan_budget(project: dict, brief: dict) -> dict:
     the descriptions, then the way lines - `target` no longer decides which
     stops are described, only how their shared time is spent.
     {"target", "cps", "intro", "closing", "stops", "trips", "ways",
-    "describe": {n: s}, "estimated", "fits"}."""
+    "describe": {n: s}, "estimated"}."""
     cps = _chars_per_second(project)
     places = {n: w for n, w in enumerate(visible_waypoints(project), start=1)}
     target = overview_target_seconds(project, len(places))
@@ -569,8 +560,8 @@ def plan_budget(project: dict, brief: dict) -> dict:
     # Every numbered stop gets described (an explicit overviewHighlight:false
     # still opts a place out) - previously only as many as fit within `target`
     # were picked, ranked by _highlight_score, and the rest were only ever
-    # named in passing on the way; a route with more stops than the 60-120s
-    # budget could fit simply never described most of them at all. `target`
+    # named in passing on the way; a route with more stops than the target
+    # could fit simply never described most of them at all. `target`
     # still drives how spare time is spent below (longer descriptions/ways),
     # it just no longer decides WHICH stops are described.
     stops = (set(places) | set(hosts) | forced) - banned
@@ -583,9 +574,6 @@ def plan_budget(project: dict, brief: dict) -> dict:
     return {
         "target": target, "cps": cps, "intro": INTRO_SECONDS, "closing": closing, "stops": sorted(stops),
         "trips": trips, "ways": ways, "describe": describe, "estimated": estimated,
-        # the overview stays within 60-120s (the video then follows the
-        # voice to within AUDIO_MATCH_TOLERANCE_SECONDS)
-        "fits": in_overview_range(estimated),
     }
 
 

@@ -6,7 +6,7 @@ import { InfoTip } from "../../../components/ui/SettingsParts";
 import { useUI } from "../../../hooks/useUI";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { callSidecar, callSidecarShared } from "../../../services/sidecar";
-import { cueNameMismatches, estimateSeconds, joinOpening, lengthVerdict, numberedStops, splitOpening, type OverviewLength } from "../../../utils/overviewScript";
+import { cueNameMismatches, estimateSeconds, joinOpening, numberedStops, splitOpening, type OverviewLength } from "../../../utils/overviewScript";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 
@@ -48,7 +48,6 @@ export function OverviewNarration() {
   const autoIntro = hasText && isAuto && !intro.trim() && opening.trim().length > 0;
 
   const seconds = useMemo(() => (limits ? estimateSeconds(text, limits.chars_per_second) : 0), [text, limits]);
-  const verdict = limits ? lengthVerdict(seconds, limits) : "empty";
   const wrongCues = useMemo(() => cueNameMismatches(text, numberedStops(waypoints, course).map((w) => w.name)), [text, waypoints, course]);
 
   // The voice speed and the aimed length come from the project's files; a hand edit is re-timed here without another call.
@@ -142,10 +141,7 @@ export function OverviewNarration() {
   const readout = (() => {
     if (!hasText) return null;
     if (!limits) return voiceSeconds !== null ? t`Voice: ${voiceSeconds} s` : null;
-    const range = `${limits.min_seconds}-${limits.max_seconds}`;
-    const base = t`About ${seconds} s spoken (aim ${limits.target_seconds} s, allowed ${range} s)`;
-    const tail = verdict === "long" ? t`Too long` : verdict === "short" ? t`Too short` : t`In range`;
-    return `${base} · ${tail}`;
+    return t`About ${seconds} s spoken (aim ${limits.target_seconds} s)`;
   })();
 
   return (
@@ -212,12 +208,7 @@ export function OverviewNarration() {
           />
 
           {readout && (
-            <p
-              className={`text-[11px] tabular-nums ${
-                verdict === "ok" || !limits ? "text-zinc-500" : "text-amber-600 dark:text-amber-400"
-              }`}
-              role="status"
-            >
+            <p className="text-[11px] tabular-nums text-zinc-500" role="status">
               {readout}
               {voiceSeconds !== null && limits ? ` · ${t`Voice: ${voiceSeconds} s`}` : ""}
             </p>

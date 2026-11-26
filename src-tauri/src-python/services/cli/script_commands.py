@@ -14,9 +14,7 @@ def _length_report(project: Dict[str, Any], cache: Dict[str, Any], script: str) 
     """How long `script` is when spoken, against what the overview aims at.
     The voice's speed is the project's own (plan_budget), so the editor can
     re-time a hand edit from `chars_per_second` without another call."""
-    from services.localization.overview_script import (
-        TARGET_MAX_SECONDS, TARGET_MIN_SECONDS, in_overview_range, plan_budget,
-    )
+    from services.localization.overview_script import plan_budget
     from services.localization.route_brief import build_brief
 
     budget = plan_budget(project, build_brief(project, cache))
@@ -25,14 +23,9 @@ def _length_report(project: Dict[str, Any], cache: Dict[str, Any], script: str) 
     return {
         "spoken_chars": spoken,
         "chars_per_second": round(budget["cps"], 3),
-        # The overview aims at target_seconds and should stay within 60-120s
-        # (overview_script.TARGET_MIN/MAX_SECONDS, give or take the 3s the
-        # video absorbs); checked again on the real audio after TTS.
+        # What the script is sized to; no limit, the voice decides the length.
         "target_seconds": round(budget["target"], 1),
         "estimated_seconds": round(estimated, 1),
-        "within_60_90s": in_overview_range(estimated),
-        "min_seconds": TARGET_MIN_SECONDS,
-        "max_seconds": TARGET_MAX_SECONDS,
         # the numbered stops the walker stops at; the others are passed
         "stopped_at": budget["stops"],
     }
@@ -90,6 +83,6 @@ def leg_scripts(job_config_path: str) -> Dict[str, Any]:
 
 def overview_length(job_config_path: str, text: str) -> Dict[str, Any]:
     """The length report for a script the user typed (no model, no files
-    written): lets the editor show "about 74 s of 60-120 s" for a hand edit."""
+    written): lets the editor show "about 74 s (aim 90 s)" for a hand edit."""
     _config_path, project, cache = _load_project(job_config_path)
     return {"success": True, **_length_report(project, cache, text)}
