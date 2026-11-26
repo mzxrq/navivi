@@ -19,6 +19,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from services.localization.spoken_style import SPOKEN_STYLE_JA
 from services.logger.logger import setup_logger
+from services.vdoprocessing.storyboard import of as storyboard_of
 
 logger = setup_logger("OverviewScript")
 
@@ -562,7 +563,7 @@ def plan_budget(project: dict, brief: dict) -> dict:
     forced = {n for n, w in places.items() if w.get("overviewHighlight") is True}
     banned = {n for n, w in places.items() if w.get("overviewHighlight") is False} - set(hosts)
 
-    if overview_style(project) == "course":
+    if storyboard_of(overview_style(project)).traced_route:
         return _course_budget(project, brief, cps, target, closing, forced, banned)
 
     # Every numbered stop gets described (an explicit overviewHighlight:false
@@ -1207,7 +1208,7 @@ class _TourWriter:
         """(the piece to add to the script, the new `previous`) for the stop numbered `n`."""
         label = trip["to"]
         # Route map: the voice reads the leg's numbers while its card shows them (the walker holds until {go}).
-        facts_line = leg_facts_line(trip) if overview_style(self.project) == "map" else ""
+        facts_line = leg_facts_line(trip) if storyboard_of(overview_style(self.project)).leg_cards else ""
         if not describes_stops(self.project):
             # A stop that hosts stop-by cards freezes the map: say what is
             # around it (never the stop's own description or name again).
@@ -1284,7 +1285,7 @@ def build_tour_script(
 
     brief = build_brief(project, routing_cache)
     budget = plan_budget(project, brief)
-    if overview_style(project) == "course":
+    if storyboard_of(overview_style(project)).traced_route:
         return build_course_script(project, brief, budget, generate, intro_text, closing_text)
 
     writer = _TourWriter(project, brief, budget, generate)

@@ -147,6 +147,7 @@ def _overview_source_ids(project: dict) -> str:
     import hashlib
 
     from services.localization.overview_script import overview_style, visible_waypoints
+    from services.vdoprocessing.storyboard import of as storyboard_of
 
     waypoints = [wp for wp in project.get("waypoints", []) if isinstance(wp, dict)]
     numbered = {id(wp) for wp in visible_waypoints(project)}
@@ -160,7 +161,7 @@ def _overview_source_ids(project: dict) -> str:
         return "+" if wp.get("isStopBy") else ""
 
     ids = ",".join(str(wp.get("id", "")) + mark(i, wp) for i, wp in enumerate(waypoints))
-    if overview_style(project) != "course":
+    if not storyboard_of(overview_style(project)).script_intro_in_key:
         return ids
     intro = ((project.get("settings") or {}).get("overview_intro") or "").strip()
     return f"{ids}|course|{hashlib.md5(intro.encode('utf-8')).hexdigest()[:8]}"

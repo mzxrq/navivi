@@ -18,6 +18,7 @@ import numpy as np
 from services import tuning, video_text
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.route_inputs import photo_inputs_hash, returns_to, route_inputs_hash
+from services.vdoprocessing.storyboard import for_config as storyboard_for
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
@@ -773,12 +774,12 @@ class _OverviewRenderMixin:
     def _ov_attach_groups(self, active_popups: List[Dict], fps: int) -> None:
         """Which stop-bys ride along with which stop (see _attach_stopby_groups). Closed places (red ×) never stop
         the walk: they pop up as it passes, then all come in together at {closed} at the end."""
-        is_course = self.config.get("overview_style") == "course"
+        sb = storyboard_for(self.config)
         self._closed_popups = []
-        if not is_course:
+        if sb.passby_closed:
             self._closed_popups = [ap for ap in active_popups if ap["data"].get("inaccessible")]
-        self._attach_stopby_groups(active_popups, pass_by=not is_course)
-        if self.config.get("overview_style") == "map":
+        self._attach_stopby_groups(active_popups, pass_by=sb.passby_stopbys)
+        if sb.leg_cards:
             from .map_style import attach_leg_cards
 
             attach_leg_cards(active_popups, self.config.get("res_route_path"), self.graphics, fps)
@@ -1147,7 +1148,7 @@ class _OverviewRenderMixin:
             audio_cues, walk_start_frames, num_frames, mode_breakpoints, smooth_path, cum_smooth_dist,
             total_smooth_dist,
         )
-        if self.config.get("overview_style") == "course":
+        if storyboard_for(self.config).traced_route:
             result = self._render_course_overview(
                 current_bg, w, h, fps, points, smooth_path, mode_breakpoints, cum_smooth_dist,
                 total_smooth_dist, active_popups, route_obstacle_arr, summary, overview_path,

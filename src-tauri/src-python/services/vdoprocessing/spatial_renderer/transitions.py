@@ -9,6 +9,7 @@ import numpy as np
 
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.route_inputs import stop_is_numbered
+from services.vdoprocessing.storyboard import for_config as storyboard_for
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
@@ -113,7 +114,7 @@ class _TransitionMixin:
     def _ending_zoom_follows(self, stop_popup) -> bool:
         """The summary is followed by the zoom to the start point and its photo (not the course style)."""
         return bool(
-            stop_popup and self.config.get("enable_ending_highlight", True) and self.config.get("overview_style") != "course"
+            stop_popup and self.config.get("enable_ending_highlight", True) and storyboard_for(self.config).ending_zoom_after_summary
         )
 
     def _render_recap_and_summary(

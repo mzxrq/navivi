@@ -1,0 +1,17 @@
+{
+  "name": "map",
+  "passby_stopbys": true,
+  "passby_closed": true,
+  "cards_stay": false,
+  "big_stop_card": true,
+  "one_card_at_a_time": true,
+  "leg_cards": true,
+  "ending_zoom_after_summary": true,
+  "pydeck_allowed": true,
+  "traced_route": false,
+  "course_brief_legs": false,
+  "arrival_slow_seconds": null,
+  "course_frame": false,
+  "script_intro_in_key": false,
+  "visit_all_stopbys": false
+}

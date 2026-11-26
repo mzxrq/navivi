@@ -335,8 +335,9 @@ def _arrivals(project: dict, waypoints: List[dict], route: List[dict], cache: di
     there (stopby_visits: the course style, with a photo), the next stop is
     told from the stop-by, as after a connected one."""
     from services.localization.overview_script import overview_style
+    from services.vdoprocessing.storyboard import of as storyboard_of
 
-    course = overview_style(project) == "course"
+    course =storyboard_of(overview_style(project)).visit_all_stopbys
     style = (project.get("settings") or {}).get("leg_directions", tuning.DEFAULT_LEG_DIRECTIONS)
     brief = style != "turns"
     order = {id(w): i for i, w in enumerate(waypoints)}

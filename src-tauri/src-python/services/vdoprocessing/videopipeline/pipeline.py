@@ -16,6 +16,7 @@ from services.logger.progress import tracker
 from services.render_estimate import StageRecorder
 from services.localization.overview_script import overview_style
 from services.vdoprocessing.stopby_visits import set_visit_all_stopbys
+from services.vdoprocessing.storyboard import of as storyboard_of
 from services.vdoprocessing.vdoexporter import VideoExporter, sweep_stale_temp_files
 
 from .attraction_step import render_attraction_videos
@@ -110,7 +111,7 @@ def _generate_voice(run: _Run, cleaned_route: dict, waypoints: list) -> dict:
     set_route_only_legs(run.attractions_on)
     # "Whole route first" (overview_style "course"): every stop-by with a photo
     # is visited - narrated, a fullscreen photo in its leg, its own clip.
-    set_visit_all_stopbys(overview_style(run.job_config.to_dict()) == "course")
+    set_visit_all_stopbys(storyboard_of(overview_style(run.job_config.to_dict())).visit_all_stopbys)
     if run.fast_render:
         logger.info("Step 2: settings.skip_rich_media is on — skipping TTS.")
         return _silent_audio_data()

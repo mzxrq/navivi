@@ -10,6 +10,7 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial import ConvexHull, QhullError
 
 from services import tuning
+from services.vdoprocessing.storyboard import for_config as storyboard_for
 
 from .base import logger
 
@@ -2850,7 +2851,7 @@ A connected stop-by is loose as well: the walker passes every
 
     def _cards_stay(self) -> bool:
         """Walk the route (settings.overview_cards_stay, on by default): each stop's card stays up once shown."""
-        return (self.config.get("overview_style") or "walk") == "walk" and bool(self.config.get("overview_cards_stay", True))
+        return storyboard_for(self.config).cards_stay and bool(self.config.get("overview_cards_stay", True))
 
     # Corners of its badge spot a full card can hang from: the card is
     # several times that spot's size, so it has to spill somewhere.

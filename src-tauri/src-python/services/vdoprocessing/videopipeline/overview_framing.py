@@ -11,6 +11,7 @@ import pandas as pd
 from services.localization.overview_script import course_summary, course_taglines, overview_style
 from services.localization.route_brief import load_brief
 from services.gpsparser.gpscalculator import GPSMath
+from services.vdoprocessing.storyboard import of as storyboard_of
 from services import tuning
 
 from .helpers import logger
@@ -139,7 +140,7 @@ def overview_bounding_box(fetcher, route_df: pd.DataFrame, project_config: dict)
     bbox = fetcher.get_bounding_box(
         route_df, padding_factor=_adaptive_overview_padding(route_df, stops)
     )
-    if overview_style(project_config) == "course":
+    if storyboard_of(overview_style(project_config)).course_frame:
         bbox = _reserve_overview_bands(
             bbox, OVERVIEW_FRAME_SIZE,
             OVERVIEW_FRAME_SIZE[1] * tuning.COURSE_TOP_BAND_FRACTION,

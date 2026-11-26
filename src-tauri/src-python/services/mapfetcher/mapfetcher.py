@@ -23,6 +23,7 @@ from services import tuning
 from services.mapbox_token import resolve_mapbox_token
 from services.mapfetcher.maplanguage import needs_gl_labels, resolve_map_style, streets_lang
 from services.vdoprocessing.stopby_visits import visits_stopby
+from services.vdoprocessing.storyboard import for_config as storyboard_for
 
 # Logging configuration
 logger = setup_logger("MapFetcher")
@@ -382,7 +383,7 @@ class MapFetcher:
             logger.info("Map language %s: drawing the overview map through the GL page so its labels follow it.", lang)
         # The course overview zooms in on the GL map (course._course_gl_frames): its whole-map frame must be that
         # same map, or each zoom would switch map style.
-        if settings.get("overview_style") == "course" and resolve_mapbox_token(settings):
+        if storyboard_for(settings).traced_route and resolve_mapbox_token(settings):
             background = "pydeck"
         if background == "pydeck":
             from services.mapfetcher.pydeck_overview import fetch_overview_image_pydeck

@@ -1,0 +1,17 @@
+{
+  "name": "walk",
+  "passby_stopbys": true,
+  "passby_closed": true,
+  "cards_stay": true,
+  "big_stop_card": false,
+  "one_card_at_a_time": false,
+  "leg_cards": false,
+  "ending_zoom_after_summary": true,
+  "pydeck_allowed": true,
+  "traced_route": false,
+  "course_brief_legs": false,
+  "arrival_slow_seconds": null,
+  "course_frame": false,
+  "script_intro_in_key": false,
+  "visit_all_stopbys": false
+}
