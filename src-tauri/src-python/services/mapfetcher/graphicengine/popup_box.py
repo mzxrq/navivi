@@ -366,7 +366,7 @@ class _PopupBoxMixin:
         bd = total_w - 8
         cbx, cby = bx + 4, by + 5
         draw.ellipse([cbx, cby, cbx + bd, cby + bd], fill=circle_rgba)
-        # "badge_label" is the glyph its own pin shows — "S"/"E"/"・"/the
+        # "badge_label" is the glyph its own pin shows — "S"/"E"/"+1"/the
         # visit number (see overview.py) — so the badge and the pin agree;
         # "order" is the fallback for a caller that sets no label.
         order_text = str(popup_info.get("badge_label") or popup_info.get("order") or "")

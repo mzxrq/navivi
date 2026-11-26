@@ -202,6 +202,7 @@ def test_leg_pin_carries_the_image_but_not_for_a_stopby():
     assert "image" not in _leg_pin("2", {}, arrived=False)
     assert _leg_pin("2", {}, arrived=False, image="/x.png")["image"] == "/x.png"
     assert "image" not in _leg_pin("・", {}, arrived=False, image="/x.png")
+    assert "image" not in _leg_pin("+1", {}, arrived=False, image="/x.png")
 
 
 def test_checkpoint_part_only_exists_with_a_marker(icon, tmp_path):

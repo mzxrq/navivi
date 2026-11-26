@@ -99,6 +99,7 @@ def _stopby_marker(wp: Dict, row_idx: int) -> Dict:
         "image_display": wp.get("image_display", "cover"),
         # Its own narration TTS length, so a connected stop-by's pause outlasts its narration.
         "narration_audio_seconds": wp.get("_narration_audio_seconds"),
+        "stopby_label": wp.get("_stopby_label"),  # its pin's "+N" (route_inputs.stopby_labels)
     }
 
 
@@ -307,6 +308,7 @@ def _mid_markers(job: Dict, chunk_points: List) -> List[Dict]:
             "popup_image": m.get("popup_image"),
             "freeze_seconds": _capped_freeze(m.get("freeze_seconds")),
             "image_display": m.get("image_display", "cover"),
+            "stopby_label": m.get("stopby_label"),
         }
         for m in job["chunk_markers"]
     ]

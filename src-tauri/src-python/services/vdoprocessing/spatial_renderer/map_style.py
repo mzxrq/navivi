@@ -34,7 +34,8 @@ def attach_leg_cards(active_popups: List[Dict], job_config_path: Optional[str], 
     ]
     # The overview's own pin numbers (its "order"), so a card never disagrees with its pin.
     badges = [
-        "S" if n == 0 else "E" if n == len(route) - 1 else "・" if ap["data"].get("is_stopby") else str(ap.get("order"))
+        "S" if n == 0 else "E" if n == len(route) - 1
+        else (ap["data"].get("stopby_label") or "・") if ap["data"].get("is_stopby") else str(ap.get("order"))
         for n, ap in enumerate(route)
     ]
     marker_rgb = tuple(int(v) for v in reversed(graphics.marker_color[:3]))

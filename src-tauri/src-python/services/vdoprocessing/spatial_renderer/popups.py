@@ -10,6 +10,7 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial import ConvexHull, QhullError
 
 from services import tuning
+from services.vdoprocessing.route_inputs import is_stopby_label
 from services.vdoprocessing.storyboard import for_config as storyboard_for
 
 from .base import logger
@@ -2597,7 +2598,7 @@ A connected stop-by is loose as well: the walker passes every
                 continue  # the caller coloured this one itself (the finale: its dot and badge already match)
             label, color, _ = self._pin_label_and_color(
                 {**p, "data": p.get("data") or {}, "index": p.get("index", -1)}, total)
-            if label in ("S", "E", "×", "・"):
+            if label in ("S", "E", "×") or is_stopby_label(label):
                 p["recap_line_color"] = tuple(color)
             else:
                 p["pin_color"] = p["recap_line_color"]

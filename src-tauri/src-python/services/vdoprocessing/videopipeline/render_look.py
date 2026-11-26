@@ -4,6 +4,7 @@ and the look options handed to the renderer."""
 from typing import Optional
 
 from services import tuning
+from services.vdoprocessing.route_inputs import is_stopby_label
 from services.vdoprocessing.storyboard import of as storyboard_of
 
 from .helpers import logger
@@ -51,19 +52,21 @@ _ARRIVED_COLOR_DARKEN = 0.78
 
 def overview_pin_glyphs(waypoints: list) -> dict:
     """{waypoint position: the glyph its pin shows on the overview}: "S" for
-    the first, "E" for the last, "・" for a stop-by, and 1, 2, 3... for the
-    rest in visit order - the same numbering as spatial_renderer's
-    _pin_label_and_color (S, stop-bys and return stops don't take a number),
-    so a leg's map can show "pin 1 -> pin 2" exactly as the overview does."""
-    from services.vdoprocessing.route_inputs import returns_to
+    the first, "E" for the last, "+1", "+2"... for a stop-by (route_inputs.
+    stopby_labels; "・" for one with no number), and 1, 2, 3... for the rest in
+    visit order - the same numbering as spatial_renderer's _pin_label_and_color
+    (S, stop-bys and return stops don't take a number), so a leg's map can show
+    "pin 1 -> pin 2" exactly as the overview does."""
+    from services.vdoprocessing.route_inputs import returns_to, stopby_labels
 
     glyphs = {}
     order = 0
     last = len(waypoints) - 1
+    stopbys = stopby_labels(waypoints)
     for pos, wp in enumerate(waypoints):
         # A waypoint skipped in video export is drawn like a stop-by too.
-        if wp.get("isStopBy") or (wp.get("skipAssetGeneration") and 0 < pos < last):
-            glyphs[pos] = "・"
+        if pos in stopbys or wp.get("isStopBy") or (wp.get("skipAssetGeneration") and 0 < pos < last):
+            glyphs[pos] = stopbys.get(pos, "・")
             continue
         if pos == 0:
             glyphs[pos] = "S"
@@ -99,13 +102,13 @@ def _leg_pin(glyph, settings: dict, arrived: bool, image: Optional[str] = None) 
         color = _project_color(settings, "start_pin_color", tuning.START_PIN_COLOR)
     elif glyph == "E":
         color = _project_color(settings, "end_pin_color", tuning.END_PIN_COLOR)
-    elif glyph == "・":
+    elif is_stopby_label(glyph):
         color = _project_color(settings, "stopby_pin_color", tuning.STOPBY_PIN_COLOR)
     else:
         marker = _project_color(settings, "marker_color", (235, 150, 60))
         color = _arrived_marker_color(settings, marker) if arrived else marker
     pin = {"glyph": glyph, "color": tuple(int(c) for c in color)}
-    if image and glyph != "・":  # a stop-by stays a dot
+    if image and not is_stopby_label(glyph):  # a stop-by keeps the teardrop
         pin["image"] = image
     return pin
 

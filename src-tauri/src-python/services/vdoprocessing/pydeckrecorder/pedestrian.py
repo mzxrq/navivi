@@ -29,6 +29,7 @@ from services import tuning, video_text
 from services.logger.progress import tracker
 from services.projectfiles import write_json_atomic
 from services.vdoprocessing.cliptiming import write_audio_offset
+from services.vdoprocessing.route_inputs import is_stopby_label
 
 from .common import MAPBOX_API_KEY, logger
 from .geomath import cumulative_distance_km, haversine_km
@@ -286,6 +287,21 @@ def _insert_stands(smooth_df, stands, fps):
         held_rows = smooth_df.iloc[[k] * int(round(hold_s * fps))]
         smooth_df = pd.concat([smooth_df.iloc[: k + 1], held_rows, smooth_df.iloc[k + 1 :]], ignore_index=True)
     return smooth_df
+
+
+def _pin_stop_number(pin: Optional[Dict], total_stops: Optional[int]) -> Optional[int]:
+    """A leg pin's place in "Stop N of total": S is stop 1, E the last, a numbered glyph its own number."""
+    glyph = (pin or {}).get("glyph")
+    if glyph == "S":
+        return 1
+    if glyph == "E":
+        return total_stops
+    if is_stopby_label(glyph):  # int("+2") is 2, but a stop-by is no stop of the count
+        return None
+    try:
+        return int(glyph)
+    except (TypeError, ValueError):
+        return None
 
 
 def render_residential_leg_pydeck(
@@ -742,20 +758,9 @@ def render_residential_leg_pydeck(
         deck.to_html(html_path)
         patch_pydeck_html(html_path)
 
-        # The merged top bar's progress segment: "Stop N of total" -- S is stop 1, E is the last, a numbered
-        # glyph is already that stop's own number. None (no segment at all) when either end is unknown.
-        def _stop_number(pin: Optional[Dict]) -> Optional[int]:
-            glyph = (pin or {}).get("glyph")
-            if glyph == "S":
-                return 1
-            if glyph == "E":
-                return total_stops
-            try:
-                return int(glyph)
-            except (TypeError, ValueError):
-                return None
-
-        current_stop = stop_number or _stop_number(dest_pin)
+        # The merged top bar's progress segment: "Stop N of total". None (no segment at all) when either end
+        # is unknown.
+        current_stop = stop_number or _pin_stop_number(dest_pin, total_stops)
         progress = (current_stop, total_stops) if current_stop and total_stops else None
         # The chain pill's own start/end circle badges -- the same S/E/number glyph already on that
         # waypoint's map pin (pin_icons' numbered teardrop), not a fresh number of our own.

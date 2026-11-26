@@ -314,7 +314,7 @@ class _CardMixin:
         for bg in (0, 255):
             plate = np.full((y1 - y0, x1 - x0, 3), bg, np.uint8)
             self.draw_marker(plate, int(cx) - x0, int(cy + icon_d / 2 - 2 * s) - y0,
-                             number="×" if kind == "closed" else "・",
+                             number="×" if kind == "closed" else "+",  # the stop-by pins' "+N", for all of them
                              color=tuning.CLOSED_PIN_COLOR if kind == "closed" else marker_color,
                              is_circle=False, scale=s * 0.7)
             marks.append(plate.astype(np.float32))

@@ -399,7 +399,7 @@ def _reproject_popups(active_popups: List[Dict], extent, w: int, h: int) -> None
 
 
 def _number_popups(active_popups: List[Dict], points: List) -> None:
-    """1-based visit order for each pin; the start (index 0) and stop-bys take no number (they show "S" / "・"), and
+    """1-based visit order for each pin; the start (index 0) and stop-bys take no number (they show "S" / "+1"), and
     a return stop shows the number of the stop it comes back to — so it also has no {n} cue (is_return).
     Matches the map editor's own MapArea.tsx normalIndex."""
     order = 0
@@ -755,7 +755,7 @@ class _OverviewRenderMixin:
             attach_leg_cards(active_popups, self.config.get("res_route_path"), self.graphics, fps)
 
     def _ov_style_badges(self, active_popups: List[Dict], total_points: int) -> None:
-        """Card border = the waypoint's own pin color, and its badge shows the glyph its pin does ("S", "E", "・" or
+        """Card border = the waypoint's own pin color, and its badge shows the glyph its pin does ("S", "E", "+1" or
         its visit number). Set once here: nearly every card downstream starts from a .copy() of these entries."""
         for ap in active_popups:
             pin_label, pin_color_for_border, _ = self._pin_label_and_color(ap, total_points)
