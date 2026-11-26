@@ -162,7 +162,7 @@ def route_segments(cum: Sequence[float], modes: Sequence[str], stops: Sequence[S
 
     merged: List[List] = []
     carry: Optional[float] = None  # a dropped first run: the next one starts where it did
-    for i, run in enumerate(runs):
+    for run in runs:
         if len(runs) > 1 and run[0] == "walking" and not on(run) and run[2] - run[1] < total * _MIN_WALK_SHARE:
             if merged:
                 merged[-1][2] = run[2]
