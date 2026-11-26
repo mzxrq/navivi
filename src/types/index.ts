@@ -231,6 +231,13 @@ export interface ProjectSettings {
   pronunciation_dictionary?: Array<{ word: string; reading: string; auto?: boolean; pitch?: string }>;
   tts?: { engine?: "irodori" | "qwen3" | "kokoro"; voice?: string; kokoro_voice?: string; speed?: number; quality?: "fast" | "balanced" | "best"; caption?: string };
   auto_overview_cues?: boolean;
+  // One switch per cue auto_overview_cues places (on when unset).
+  auto_cue_n?: boolean;
+  auto_cue_go?: boolean;
+  auto_cue_start?: boolean;
+  auto_cue_extras?: boolean;
+  auto_cue_closed?: boolean;
+  auto_cue_scene?: boolean;
   auto_narration_cues?: boolean;
   global_pronunciation_dictionary?: Array<{ word: string; reading: string }>;
   auto_dictionary?: boolean; // false: no auto words (useAutoFurigana); on when unset
