@@ -185,11 +185,22 @@ export function CaptionStyleFields({
         <div className="flex items-center gap-2 w-full">
           <ColorPicker label={t`Shadow color`} value={style.shadow_color} onChange={(shadow_color) => onChange({ shadow_color })} className="flex-1 min-w-0" />
           <div className="w-20 shrink-0">
-            <IntInput value={style.shadow} min={0} max={20} onCommit={(v) => onChange({ shadow: v })} />
+            <IntInput value={style.shadow} min={0} max={caption ? 20 : 60} onCommit={(v) => onChange({ shadow: v })} />
           </div>
         </div>,
-        t`Color, and distance in pixels (0 = none)`,
+        caption ? t`Color, and distance in pixels (0 = none)` : t`Color, and glow size in pixels (0 = none)`,
       )}
+      {!caption &&
+        !style.background &&
+        style.shadow > 1 &&
+        row(
+          "shadow-feather",
+          t`Glow softness`,
+          <div className="w-24">
+            <IntInput value={style.shadow_feather} min={0} max={100} onCommit={(v) => onChange({ shadow_feather: v })} />
+          </div>,
+          t`Percent; higher gives a softer, feathered edge`,
+        )}
       {row(
         "spacing",
         t`Letter spacing`,

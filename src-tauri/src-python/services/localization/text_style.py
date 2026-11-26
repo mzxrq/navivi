@@ -151,6 +151,15 @@ def wrap_text(text: str, max_chars: int) -> str:
     return "\n".join(part for line in text.split("\n") for part in wrap_line(line, max_chars))
 
 
+def glow_shape(feather: float) -> Tuple[float, float]:
+    """(border, blur) as fractions of the glow size for a feather percent; mirrors glowShape in textStyle.ts."""
+    k = max(0.0, min(1.0, feather / 100))
+    if k <= 0.5:
+        return 1 - k, k / 2
+    k -= 0.5
+    return 0.5 - k / 3, 0.25 + k * 7 / 6
+
+
 @dataclass(frozen=True)
 class TextStyle:
     font_family: str
@@ -164,6 +173,7 @@ class TextStyle:
     outline_color: RGB = (0, 0, 0)
     shadow: float = 1.0
     shadow_color: RGB = (0, 0, 0)
+    shadow_feather: float = 50.0  # glow only: % of the halo that is blurred rather than solid (50 = the old look)
     letter_spacing: float = 0.0
     # Captions only: a box behind the text instead of an outline.
     background: bool = False
@@ -204,7 +214,8 @@ class TextStyle:
             ("background_opacity", 0.0, 1.0),
             ("background_radius", 0.0, 100.0),
             ("outline_width", 0.0, 20.0),
-            ("shadow", 0.0, 20.0),
+            ("shadow", 0.0, 60.0),
+            ("shadow_feather", 0.0, 100.0),
             ("letter_spacing", -20.0, 50.0),
             ("margin_v", 0.0, 400.0),
         ):
@@ -245,13 +256,17 @@ class TextStyle:
 
     def to_glow_tags(self) -> str:
         """Override tags for the glow event drawn just under the text: the same line in the shadow colour, its
-        border grown by half the shadow width and blurred by a quarter of it, so the halo reaches `shadow` px
-        from the glyph edge like the editor's preview."""
+        border grown and blurred. `shadow_feather` 0 / 50 / 100 % gives (border, blur) = (r, 0) / (r/2, r/4, the
+        old fixed look) / (r/3, 5r/6), straight lines between. The border never goes to 0: with no border libass
+        blurs the glyph fill instead, which hides under the text and leaves almost no halo."""
         glow = f"&H{_bgr(self.shadow_color)}&"
+        border_k, blur_k = glow_shape(self.shadow_feather)
+        border = self.outline_width + self.shadow * border_k
+        blur = self.shadow * blur_k
         return (
             f"{self._font_tags()}\\c{glow}\\3c{glow}"
             f"\\alpha&H{255 - int(round(self.opacity * 255)):02X}&"
-            f"\\bord{self.outline_width + self.shadow / 2:g}\\shad0\\blur{self.shadow / 4:g}\\fsp{self.letter_spacing:g}"
+            f"\\bord{round(border, 2):g}\\shad0\\blur{round(blur, 2):g}\\fsp{self.letter_spacing:g}"
         )
 
     def with_installed_font(self, fallback: str) -> "TextStyle":

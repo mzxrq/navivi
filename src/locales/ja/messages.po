@@ -326,7 +326,7 @@ msgstr "レンダリング約{0}"
 msgid "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 msgstr "💡 <0>クイックエクスポートに関する注意:</0> 個別の動画クリップのカスタマイズや、音声の発音修正を行いたい場合は、生成設定の「クイックエクスポート」のチェックを外して再実行してください。"
 
-#: src/components/ui/CaptionStyleFields.tsx:243
+#: src/components/ui/CaptionStyleFields.tsx:254
 msgid "0 = no limit"
 msgstr "0 = 制限なし"
 
@@ -1112,7 +1112,7 @@ msgstr "地点マップの枠線"
 msgid "Border Width"
 msgstr "境界線の幅"
 
-#: src/components/ui/CaptionStyleFields.tsx:222
+#: src/components/ui/CaptionStyleFields.tsx:233
 #: src/features/editor/Inspector.tsx:439
 msgid "Bottom"
 msgstr "下"
@@ -1512,6 +1512,10 @@ msgstr "GPX の標高または3D地形をもとに、勾配に応じてルート
 #: src/components/ui/CaptionStyleFields.tsx:191
 msgid "Color, and distance in pixels (0 = none)"
 msgstr "色と距離(ピクセル単位、0 = なし)"
+
+#: src/components/ui/CaptionStyleFields.tsx:191
+msgid "Color, and glow size in pixels (0 = none)"
+msgstr "色と光彩のサイズ(ピクセル単位、0 = なし)"
 
 #: src/features/editor/Inspector.tsx:356
 #~ msgid "Colour"
@@ -2006,7 +2010,7 @@ msgstr "閉じる"
 msgid "Distance along the path: {0} km"
 msgstr "道のり: {0} km"
 
-#: src/components/ui/CaptionStyleFields.tsx:230
+#: src/components/ui/CaptionStyleFields.tsx:241
 #: src/features/editor/Inspector.tsx:444
 msgid "Distance from bottom"
 msgstr "下端からの距離"
@@ -2019,7 +2023,7 @@ msgstr "左端からの距離"
 msgid "Distance from right"
 msgstr "右端からの距離"
 
-#: src/components/ui/CaptionStyleFields.tsx:230
+#: src/components/ui/CaptionStyleFields.tsx:241
 #: src/features/editor/Inspector.tsx:444
 msgid "Distance from top"
 msgstr "上端からの距離"
@@ -2800,6 +2804,10 @@ msgstr "Ollama を入手"
 msgid "Glass"
 msgstr "ガラス"
 
+#: src/components/ui/CaptionStyleFields.tsx:198
+msgid "Glow softness"
+msgstr "光彩のぼかし"
+
 #: src/features/map/components/GenerateDialog.tsx:239
 msgid "Goes with the voice"
 msgstr "音声と一緒に作り直し"
@@ -3303,7 +3311,7 @@ msgstr "長さ"
 msgid "Lets the model see a stop's photos (up to 4, shrunk first) when it writes the script."
 msgstr "スクリプトを書くときに、モデルが地点の写真（最大4枚、縮小して送信）を見られるようにします。"
 
-#: src/components/ui/CaptionStyleFields.tsx:195
+#: src/components/ui/CaptionStyleFields.tsx:206
 msgid "Letter spacing"
 msgstr "文字間隔"
 
@@ -3642,7 +3650,7 @@ msgstr "再生成のマークが付けられました: 画像、ナレーショ�
 msgid "Marker"
 msgstr "マーカー"
 
-#: src/components/ui/CaptionStyleFields.tsx:239
+#: src/components/ui/CaptionStyleFields.tsx:250
 msgid "Max characters per line"
 msgstr "1行の最大文字数"
 
@@ -3659,7 +3667,7 @@ msgstr "メニュー"
 msgid "Microsoft Visual C++ runtime"
 msgstr "Microsoft Visual C++ ランタイム"
 
-#: src/components/ui/CaptionStyleFields.tsx:221
+#: src/components/ui/CaptionStyleFields.tsx:232
 #: src/features/editor/Inspector.tsx:438
 msgid "Middle"
 msgstr "中央"
@@ -4388,9 +4396,13 @@ msgid "Pause on the stop map"
 msgstr "地点マップで一時停止"
 
 #: src/components/ui/CaptionStyleFields.tsx:143
-#: src/components/ui/CaptionStyleFields.tsx:207
+#: src/components/ui/CaptionStyleFields.tsx:218
 msgid "Percent"
 msgstr "パーセント"
+
+#: src/components/ui/CaptionStyleFields.tsx:202
+msgid "Percent; higher gives a softer, feathered edge"
+msgstr "パーセント。大きいほど縁が柔らかくぼけます"
 
 #: src/components/ui/VideoLookSettings.tsx:218
 #: src/components/ui/VideoLookSettings.tsx:219
@@ -4490,8 +4502,8 @@ msgstr "ピンと線"
 msgid "Pipeline Log"
 msgstr "パイプラインログ"
 
-#: src/components/ui/CaptionStyleFields.tsx:199
-#: src/components/ui/CaptionStyleFields.tsx:234
+#: src/components/ui/CaptionStyleFields.tsx:210
+#: src/components/ui/CaptionStyleFields.tsx:245
 msgid "Pixels on a 1080p frame"
 msgstr "1080p フレーム上のピクセル"
 
@@ -4544,7 +4556,7 @@ msgstr "ポップイン"
 msgid "Pop-up card"
 msgstr ""
 
-#: src/components/ui/CaptionStyleFields.tsx:212
+#: src/components/ui/CaptionStyleFields.tsx:223
 #: src/features/editor/Inspector.tsx:429
 msgid "Position"
 msgstr "位置"
@@ -5972,7 +5984,7 @@ msgstr "テキスト"
 msgid "Text colour"
 msgstr "文字の色"
 
-#: src/components/ui/CaptionStyleFields.tsx:203
+#: src/components/ui/CaptionStyleFields.tsx:214
 msgid "Text opacity"
 msgstr "文字の不透明度"
 
@@ -6359,7 +6371,7 @@ msgstr "長すぎます"
 msgid "Too short"
 msgstr "短すぎます"
 
-#: src/components/ui/CaptionStyleFields.tsx:220
+#: src/components/ui/CaptionStyleFields.tsx:231
 #: src/features/editor/Inspector.tsx:437
 msgid "Top"
 msgstr "上"

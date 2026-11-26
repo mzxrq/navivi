@@ -326,7 +326,7 @@ msgstr "~{0} to render"
 msgid "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 msgstr "💡 <0>Quick Export Notice:</0> To customize individual video clips or fix TTS pronunciation, uncheck \"Quick Export\" in generation settings and re-run."
 
-#: src/components/ui/CaptionStyleFields.tsx:243
+#: src/components/ui/CaptionStyleFields.tsx:254
 msgid "0 = no limit"
 msgstr "0 = no limit"
 
@@ -1112,7 +1112,7 @@ msgstr "Border around stop maps"
 msgid "Border Width"
 msgstr "Border Width"
 
-#: src/components/ui/CaptionStyleFields.tsx:222
+#: src/components/ui/CaptionStyleFields.tsx:233
 #: src/features/editor/Inspector.tsx:439
 msgid "Bottom"
 msgstr "Bottom"
@@ -1512,6 +1512,10 @@ msgstr "Color the route by steepness, using the GPX elevation or 3D terrain"
 #: src/components/ui/CaptionStyleFields.tsx:191
 msgid "Color, and distance in pixels (0 = none)"
 msgstr "Color, and distance in pixels (0 = none)"
+
+#: src/components/ui/CaptionStyleFields.tsx:191
+msgid "Color, and glow size in pixels (0 = none)"
+msgstr "Color, and glow size in pixels (0 = none)"
 
 #: src/features/editor/Inspector.tsx:356
 #~ msgid "Colour"
@@ -2006,7 +2010,7 @@ msgstr "Dismiss"
 msgid "Distance along the path: {0} km"
 msgstr "Distance along the path: {0} km"
 
-#: src/components/ui/CaptionStyleFields.tsx:230
+#: src/components/ui/CaptionStyleFields.tsx:241
 #: src/features/editor/Inspector.tsx:444
 msgid "Distance from bottom"
 msgstr "Distance from bottom"
@@ -2019,7 +2023,7 @@ msgstr "Distance from left"
 msgid "Distance from right"
 msgstr "Distance from right"
 
-#: src/components/ui/CaptionStyleFields.tsx:230
+#: src/components/ui/CaptionStyleFields.tsx:241
 #: src/features/editor/Inspector.tsx:444
 msgid "Distance from top"
 msgstr "Distance from top"
@@ -2800,6 +2804,10 @@ msgstr "Get Ollama"
 msgid "Glass"
 msgstr "Glass"
 
+#: src/components/ui/CaptionStyleFields.tsx:198
+msgid "Glow softness"
+msgstr "Glow softness"
+
 #: src/features/map/components/GenerateDialog.tsx:239
 msgid "Goes with the voice"
 msgstr "Goes with the voice"
@@ -3303,7 +3311,7 @@ msgstr "Length"
 msgid "Lets the model see a stop's photos (up to 4, shrunk first) when it writes the script."
 msgstr "Lets the model see a stop's photos (up to 4, shrunk first) when it writes the script."
 
-#: src/components/ui/CaptionStyleFields.tsx:195
+#: src/components/ui/CaptionStyleFields.tsx:206
 msgid "Letter spacing"
 msgstr "Letter spacing"
 
@@ -3646,7 +3654,7 @@ msgstr "Marked for Regeneration: Edit image, narration, or route mode, then clic
 msgid "Marker"
 msgstr "Marker"
 
-#: src/components/ui/CaptionStyleFields.tsx:239
+#: src/components/ui/CaptionStyleFields.tsx:250
 msgid "Max characters per line"
 msgstr "Max characters per line"
 
@@ -3663,7 +3671,7 @@ msgstr "Menu"
 msgid "Microsoft Visual C++ runtime"
 msgstr "Microsoft Visual C++ runtime"
 
-#: src/components/ui/CaptionStyleFields.tsx:221
+#: src/components/ui/CaptionStyleFields.tsx:232
 #: src/features/editor/Inspector.tsx:438
 msgid "Middle"
 msgstr "Middle"
@@ -4392,9 +4400,13 @@ msgid "Pause on the stop map"
 msgstr "Pause on the stop map"
 
 #: src/components/ui/CaptionStyleFields.tsx:143
-#: src/components/ui/CaptionStyleFields.tsx:207
+#: src/components/ui/CaptionStyleFields.tsx:218
 msgid "Percent"
 msgstr "Percent"
+
+#: src/components/ui/CaptionStyleFields.tsx:202
+msgid "Percent; higher gives a softer, feathered edge"
+msgstr "Percent; higher gives a softer, feathered edge"
 
 #: src/components/ui/VideoLookSettings.tsx:218
 #: src/components/ui/VideoLookSettings.tsx:219
@@ -4494,8 +4506,8 @@ msgstr "Pins and lines"
 msgid "Pipeline Log"
 msgstr "Pipeline Log"
 
-#: src/components/ui/CaptionStyleFields.tsx:199
-#: src/components/ui/CaptionStyleFields.tsx:234
+#: src/components/ui/CaptionStyleFields.tsx:210
+#: src/components/ui/CaptionStyleFields.tsx:245
 msgid "Pixels on a 1080p frame"
 msgstr "Pixels on a 1080p frame"
 
@@ -4548,7 +4560,7 @@ msgstr "Pop in"
 msgid "Pop-up card"
 msgstr "Pop-up card"
 
-#: src/components/ui/CaptionStyleFields.tsx:212
+#: src/components/ui/CaptionStyleFields.tsx:223
 #: src/features/editor/Inspector.tsx:429
 msgid "Position"
 msgstr "Position"
@@ -5976,7 +5988,7 @@ msgstr "Text"
 msgid "Text colour"
 msgstr "Text colour"
 
-#: src/components/ui/CaptionStyleFields.tsx:203
+#: src/components/ui/CaptionStyleFields.tsx:214
 msgid "Text opacity"
 msgstr "Text opacity"
 
@@ -6367,7 +6379,7 @@ msgstr "Too long"
 msgid "Too short"
 msgstr "Too short"
 
-#: src/components/ui/CaptionStyleFields.tsx:220
+#: src/components/ui/CaptionStyleFields.tsx:231
 #: src/features/editor/Inspector.tsx:437
 msgid "Top"
 msgstr "Top"
