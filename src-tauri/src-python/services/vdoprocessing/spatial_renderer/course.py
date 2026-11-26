@@ -186,6 +186,7 @@ class _Timing(NamedTuple):
     end_at: float
     stopbys: List[Dict]
     closed: List[Dict]
+    sub_at: Optional[float] = None  # when the sub course takes over the picture
 
 
 class _Panels(NamedTuple):
@@ -445,8 +446,9 @@ def _arrive_cue(ap: Dict, cues: Dict, any_go: bool) -> Tuple:
 
 def _course_timing(
     cues: Dict, audio_seconds: float, numbered: List[Dict], extras: List[Dict], total: float,
-    recap_hold: float = tuning.OVERVIEW_RECAP_HOLD_SECONDS,
+    recap_hold: float = tuning.OVERVIEW_RECAP_HOLD_SECONDS, sub_seconds: float = 0.0,
 ) -> _Timing:
+    """`sub_seconds`: how long the sub course plays (0: there is none)."""
     # The trace sets off at {start}, but never before the map has finished opening.
     route_at = max(float(cues.get("start", 0.0)), _TIMINGS["open_zoom_seconds"])
     any_go = any(str(k).startswith("go") for k in cues)
@@ -462,13 +464,22 @@ def _course_timing(
     closed_at = float(cues["closed"]) if "closed" in cues else None
     stopbys = [ap for ap in extras if extras_at is not None and not ap["data"].get("inaccessible")]
     closed = [ap for ap in extras if closed_at is not None and ap["data"].get("inaccessible")]
+    sub_at, sub_end = None, 0.0
+    if sub_seconds > 0:  # after the totals card; stop-bys and closed places wait until it is over
+        sub_at = stats_at + recap_hold
+        sub_end = sub_at + sub_seconds
+        first = min((at for at in (extras_at, closed_at) if at is not None), default=sub_end)
+        wait = max(0.0, sub_end - first)
+        extras_at = None if extras_at is None else extras_at + wait
+        closed_at = None if closed_at is None else closed_at + wait
     end_at = max(
+        sub_end,
         audio_seconds + 0.3 if audio_seconds else trace_end + 6.0,
         stats_at + (max(2.0, recap_hold) if "distance" in cues else 2.0),
         (extras_at + 3.0) if extras_at is not None else 0.0,
         (closed_at + 3.0) if closed_at is not None else 0.0,
     )
-    return _Timing(anchors, route_at, trace_end, stats_at, extras_at, closed_at, end_at, stopbys, closed)
+    return _Timing(anchors, route_at, trace_end, stats_at, extras_at, closed_at, end_at, stopbys, closed, sub_at)
 
 
 def _reveal_time(anchors: List[Tuple], dist: float) -> float:
@@ -556,7 +567,8 @@ class _CourseOverviewMixin:
         returns = _return_stops(numbered, on_route, stop_popup, self._is_loop_route)
         timing = _course_timing(
             cues, audio_seconds, numbered, extras, total,
-            float(self.config.get("overview_recap_hold_seconds", tuning.OVERVIEW_RECAP_HOLD_SECONDS)))
+            float(self.config.get("overview_recap_hold_seconds", tuning.OVERVIEW_RECAP_HOLD_SECONDS)),
+            self._sub_course_frames(fps) / fps)
         extras = sorted(timing.stopbys + timing.closed, key=lambda ap: ap["index"])  # only those with a cue
         panels = self._course_panels(
             summary, w, h, on_route, timing, total_points, total_smooth_dist)
@@ -1082,8 +1094,16 @@ class _CourseOverviewMixin:
         heading = _Heading(self._initial_heading(trace.path))
         ripples = self._course_ripples(scene, timing)
         gl_last = (None, None)  # (path, image) of the GL map view last read
+        sub_frame = None if timing.sub_at is None else int(round(timing.sub_at * fps))
 
-        for i in range(total_frames):
+        i = -1
+        while i + 1 < total_frames:
+            i += 1
+            if sub_frame is not None and i >= sub_frame:
+                before, sub_frame = video.frames_written, None
+                self._render_sub_course_part(video, fps, base_map, frame)  # in place of that many course frames
+                i += video.frames_written - before - 1
+                continue
             t = i / fps
             new_state = self._course_plate_state(scene, t, timing.extras_at, timing.trace_end)
             if new_state != state:

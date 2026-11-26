@@ -15,6 +15,7 @@
   "script_intro_in_key": false,
   "visit_all_stopbys": false,
   "ending_pin_shape": "dot",
+  "sub_course_slot": "after_totals",
   "timings": {
     "sub_course_seconds": 8.0,
     "cue_wait_seconds": 2.0,

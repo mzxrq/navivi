@@ -76,7 +76,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # stops are plain colour dots; v56: top HUD panels 1.5x bigger; v55: the recap sits on a plain plate and arranges its
 # badges on one lattice in walked order (see CLAUDE.md "overview recap's pill badges"); v54: a return stop takes no
 # number of its own. Older history: git log.
-OVERVIEW_RENDER_VERSION = 81  # v81: one bottom bar in every style; v80: totals card at {distance}
+OVERVIEW_RENDER_VERSION = 82  # v82: course sub course before the stop-bys; v81: one bottom bar
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -667,6 +667,13 @@ def _intro_freeze_seconds(start_popup: Dict) -> float:
 
 
 class _OverviewRenderMixin:
+    def _sub_course_frames(self, fps: int) -> int:
+        """How many frames _render_sub_course_part writes: 0 with no sub course."""
+        if len((self.config.get("sub_course_overview") or {}).get("points") or []) < 2:
+            return 0
+        walk = max(2, int(storyboard_for(self.config).timings["sub_course_seconds"] * fps))
+        return walk + max(1, int(tuning.POPUP_FADE_SECONDS * fps))
+
     def _render_sub_course_part(self, video, fps: int, clean_bg: np.ndarray, route_frame: np.ndarray) -> None:
         """After the main course's summary: the main route stays, faded, the marker sets off again from the branch
         stop along the sub course (config "sub_course_overview", render_step._sub_overview_frame), then its own
