@@ -9,7 +9,7 @@ import math
 import re
 import string
 from html import escape
-from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
+from typing import Dict, NamedTuple, Sequence, Tuple
 
 from services import video_text
 from services.hudtheme import model
