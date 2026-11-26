@@ -1,6 +1,6 @@
 # Walking leg videos: how they work today (audit)
 
-Branch `chore/pipeline-audit` (commit `2661bcc` plus the restore listed in [OVERVIEW_RULES.md](OVERVIEW_RULES.md), not committed yet), 2026-11-26.
+Branch `chore/pipeline-recap` (`main` plus the walking-leg changes in `c14ef49`), 2026-11-26. Overview rules: [OVERVIEW_RULES.md](OVERVIEW_RULES.md).
 Read from the code. Only the timing rules were tried, as small calculations. **No leg was rendered** (that uses Chromium and the GPU).
 
 A *leg* is the video of the way from one stop to the next. This covers the default renderer (`pydeckrecorder/pedestrian.py`). The 2D renderer is used for airplane legs, or for all legs with `use_pydeck_pedestrian: false`; its rules are not covered here.
