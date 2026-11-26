@@ -42,7 +42,6 @@ def _run_options(
             and float(settings.get("attraction_fade_seconds", 0.8)) > 0
         ),
         "use_pydeck_pedestrian": use_pydeck_pedestrian,
-        "use_pydeck_overview": bool(settings.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW)),
         "mapbox_style_id": settings.get("mapbox_style_id"),
         # Where the narration's cues fall: the overview reaches each cued stop
         # then (spatial_renderer/overview.py).

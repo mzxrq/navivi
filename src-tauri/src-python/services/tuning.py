@@ -287,10 +287,6 @@ RESIDENTIAL_COMPASS_HEADING_WINDOW_M = 20.0
 # A stop-by merges into the leg around it (its pin shown in passing) instead of getting its own leg.
 # settings.merge_stopby_waypoints overrides.
 DEFAULT_MERGE_STOPBY_WAYPOINTS = True
-# 3D pydeck overview (GPU, Chromium) instead of the 2D one. Off (the user's choice): the 2D overview has the
-# photo pop-ups and follows the cues, and still ends on the 3D zoom (settings.enable_gl_ending_zoom).
-# settings.use_pydeck_overview overrides.
-DEFAULT_USE_PYDECK_OVERVIEW = False
 # {n}/{go} cue tags placed automatically in a hand-written overview narration (tags only, the user's own win).
 # settings.auto_overview_cues overrides.
 DEFAULT_AUTO_OVERVIEW_CUES = True
@@ -376,14 +372,13 @@ COURSE_BOTTOM_BAND_FRACTION = 0.17
 # The course map is fetched this much wider than the route's own framing, for the badges' room; the
 # video opens on the route's framing and eases out to the whole map (open_zoom_seconds, storyboards/course.json).
 COURSE_OPEN_ZOOM = 1.12
-# While the trace runs through a tight group of stops (at least _MIN_STOPS whose stretch of route, with their
-# photo cards, is _MIN times smaller than the whole route), the map eases in on it (at most _MAX: it is one
-# image, softer past ~1.5x) and back out once the trace leaves, each ease taking _EASE_SECONDS.
-COURSE_DENSE_ZOOM_MIN = 1.8
+# Every overview style: while the trace or the walker passes a cluster of stops (the storyboard's cluster_min_stops
+# or more, each within one pin's width of the next on screen), the map eases in on it (at most _MAX on a cropped
+# still, softer past ~1.5x) and back out once it has left, each ease taking _EASE_SECONDS.
+CLUSTER_PIN_WIDTH_RADII = 2.4  # a pin's width on screen, in marker radii (its teardrop head)
 COURSE_DENSE_ZOOM_MAX = 1.5
 COURSE_DENSE_ZOOM_MAX_GL = 2.0  # on the GL map the zoom is real (sharp), so it may go closer
-COURSE_DENSE_MIN_STOPS = 3
-COURSE_DENSE_EASE_SECONDS = 0.8
+COURSE_DENSE_EASE_SECONDS = 1.0
 # The "walk" overview keeps the same bottom band clear for its captions (no headline above).
 OVERVIEW_BOTTOM_BAND_FRACTION = 0.17
 # Walk / Route map overviews: the route also keeps clear of this top share (the "next stop" banner).

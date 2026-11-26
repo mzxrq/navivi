@@ -22,7 +22,7 @@ The walking videos are in [LEG_RULES.md](LEG_RULES.md).
 | Pins | `S` start, `1, 2, 3 …` stops, `E` end, `・` stop-by or stop skipped in export (planned: `+1, +2 …`, see 8.7), `×` closed. A return stop shows the first visit's number. |
 | One badge per place | Return stops and a loop's end get no second badge. |
 | Which places get a card | Any place with a photo. Stop-bys and closed places get a badge even without one. |
-| Renderer | 2D, on the CPU. The optional 3D overview (`use_pydeck_overview`) ignores all cues and is never used for Whole route first. |
+| Renderer | The map is the 3D (deck.gl) map seen straight down (GPU); pins, trace, cards and panels are drawn over it on the CPU. |
 | Reuse | The finished clip is kept until its own inputs change. |
 
 ## 2. Cues
@@ -50,7 +50,7 @@ The walking videos are in [LEG_RULES.md](LEG_RULES.md).
 | Top of frame (not in the ending) | Title (left); remaining over whole-route distance and time (right), see 8.14 | Same | Same |
 | Bottom of frame | Stop-by / closed notice | Same | Progress strip and notices (planned: same as Walk, see 8.15) |
 | Totals card | Bottom right, at the end | Same | Top right, at `{end}` |
-| Camera | Still | Still | Eases out at the start; zooms into groups of 3+ close stops |
+| Camera | Zooms into clusters of 2+ stops (8.9) | Same | Eases out at the start; same zoom |
 | Sub course | Shown after the totals (planned: at its own storyboard slot, see 8.17) | Same (planned: same slot) | **Not shown** (planned: at its own storyboard slot, see 8.17) |
 
 ## 4. Storyboards
@@ -86,7 +86,7 @@ Same as Walk the route, except:
 | 1 | Map opens slightly zoomed in, eases out. Route and route-stop pins visible | 1.2 s |
 | 2 | Line traces the route with a travel-mode icon. Headline and "A → B" change. Progress strip fills | from `{start}` (planned; today from `{route}`) |
 | 3 | Each stop: big photo card beside the pin, then it shrinks into a badge | about 2.5 s (at least 1.8 s) |
-| 4 | Camera zooms into close groups of stops | while the line is there |
+| 4 | Camera zooms into clusters of 2+ stops within a pin width of each other | while the line is there |
 | 5 | Totals card slides in | `{end}` |
 | 6 | Stop-bys pop one by one, notice shows, earlier badges dim | `{extras}` |
 | 7 | Closed places pop, closed notice shows | `{closed}` |
@@ -127,7 +127,6 @@ Preview one frame without a full render: `.agents/scratch/recap-layout/shoot.py`
 | `overview_cards_stay` | on (every style) |
 | `enable_ending_highlight` | on |
 | `enable_gl_ending_zoom` | on |
-| `use_pydeck_overview` | off (planned: on for all styles, see 8.8) |
 | `course_trace_color` | orange |
 
 ## 6. Rules that do not match each other
@@ -156,9 +155,9 @@ The merge joined the newer overview work (`aa82b9f`) with GitHub `main` (`04597c
 
 All of it is restored from `aa82b9f` (`1dc61fe`). The overview render version is now 74, so overviews made with the merged code render again. A second crash, on an ending map with no room for any badge, is fixed in `e8310d2`.
 
-## 8. Planned changes (not yet coded)
+## 8. Changes (the plan as written; status in section 9)
 
-Planning only. Nothing below is in the code yet. Code starts after the decisions in 8.0 and 8.4 are confirmed.
+Coded: section 9's checkboxes say what is done. Sections 8.1–8.18 below are the plan as it was written.
 
 ### 8.0 Decisions from the reviewer (2026-11-26)
 
@@ -553,7 +552,7 @@ Already done and passing: `services/vdoprocessing/storyboard.py`, `storyboards/{
 
 **Interfaces (produces):** `storyboard.of(style: Optional[str]) -> Storyboard`, `storyboard.for_config(config: dict) -> Storyboard`.
 
-- [ ] Write `tests/test_storyboard.py`:
+- [x] Write `tests/test_storyboard.py`:
 
 ```python
 def test_each_style_reads_its_own_file():
@@ -566,9 +565,9 @@ def test_unset_or_unknown_style_is_walk():
     assert of(None) is not None and of(None).name == of("nope").name == "walk"
 ```
 
-- [ ] Replace each remaining style comparison with the field: `course_brief_legs`, `arrival_slow_seconds`, `pydeck_allowed`, `course_frame`, `script_intro_in_key`, `visit_all_stopbys`; in `overview_script.py`, `traced_route` for the course budget and `leg_cards` for the leg facts line.
-- [ ] Check no comparison is left: search `services` for `== "course"`, `!= "course"`, `== "map"`. Only `overview_framing._course_config`'s data check and `overview_style()` itself may remain.
-- [ ] Run pytest and ruff. Expected: all pass, with no change to any existing test. No version bump.
+- [x] Replace each remaining style comparison with the field: `course_brief_legs`, `arrival_slow_seconds`, `pydeck_allowed`, `course_frame`, `script_intro_in_key`, `visit_all_stopbys`; in `overview_script.py`, `traced_route` for the course budget and `leg_cards` for the leg facts line.
+- [x] Check no comparison is left: search `services` for `== "course"`, `!= "course"`, `== "map"`. Only `overview_framing._course_config`'s data check and `overview_style()` itself may remain.
+- [x] Run pytest and ruff. Expected: all pass, with no change to any existing test. No version bump.
 
 #### Task 2: Beat timings in the storyboard files (8.4)
 
@@ -581,25 +580,25 @@ def test_unset_or_unknown_style_is_walk():
 | `map_photo_seconds`, `map_slide_seconds`, `map_min_stop_seconds` | `OVERVIEW_MAP_PHOTO_SECONDS`, `_SLIDE_`, `_MIN_STOP_` | no | 0.8, 0.5, 3.5 | no |
 | `open_zoom_seconds`, `pass_card_seconds`, `pass_card_min_seconds`, `stats_slide_seconds` | `COURSE_OPEN_ZOOM_SECONDS`, `COURSE_PASS_CARD_SECONDS`, `COURSE_PASS_CARD_MIN_SECONDS`, `COURSE_STATS_SLIDE_SECONDS` | no | no | 1.2, 2.5, 1.8, 0.6 |
 
-- [ ] Test: `of("course").timings["open_zoom_seconds"] == 1.2`; `of("map").timings["map_min_stop_seconds"] == 3.5`.
-- [ ] Move the values, delete the replaced constants, and update every use (search each name, tests included). Store `arrival_slow_seconds` as the number 3.0 and remove the constant-name lookup in `_load`.
-- [ ] pytest and ruff pass. No version bump.
+- [x] Test: `of("course").timings["open_zoom_seconds"] == 1.2`; `of("map").timings["map_min_stop_seconds"] == 3.5`.
+- [x] Move the values, delete the replaced constants, and update every use (search each name, tests included). Store `arrival_slow_seconds` as the number 3.0 and remove the constant-name lookup in `_load`.
+- [x] pytest and ruff pass. No version bump.
 
 #### Task 3: Remove `{route}`; the trace starts at `{start}` (8.5)
 
 **Files:** `spatial_renderer/course.py` (`_course_timing`, module docstring), `localization/overview_cues.py` (`_sentence_marks`, docstring), `localization/overview_script.py` (`build_course_script`, near line 1031), `tuning.py` (delete `COURSE_PIVOT_HOLD_SECONDS`), `tests/test_course_script.py:159`.
 
-- [ ] Tests: `_course_timing({"start": 0.0}, ...).route_at == 1.2`; `_course_timing({"start": 4.0, "route": 9.0}, ...).route_at == 4.0`; with no cues, `route_at == 1.2`; the tagged script reads `{start}これが全体のルートです。加太駅から`.
-- [ ] `route_at = max(cues.get("start", 0.0), open_zoom_seconds)`. A `route` cue is ignored. The script writer and auto-tagger no longer add it.
-- [ ] pytest passes. Version bump.
+- [x] Tests: `_course_timing({"start": 0.0}, ...).route_at == 1.2`; `_course_timing({"start": 4.0, "route": 9.0}, ...).route_at == 4.0`; with no cues, `route_at == 1.2`; the tagged script reads `{start}これが全体のルートです。加太駅から`.
+- [x] `route_at = max(cues.get("start", 0.0), open_zoom_seconds)`. A `route` cue is ignored. The script writer and auto-tagger no longer add it.
+- [x] pytest passes. Version bump.
 
 #### Task 4: Delete `{goPreN}` (section 6, rule 3)
 
 **Files:** `localization/overview_script.py` (`_via_batch_lines`), `localization/cues.py` (docstring only), `spatial_renderer/overview.py` (the `goPre` reads near lines 195, 420, 510–522, 667–671), `overview_animation.py` (near line 499), `tests/test_route_brief.py:358-370`.
 
-- [ ] Tests: the built script contains the "見えてきます" line and no `goPre`; `strip_cues("見えてきます。{goPre4}")` leaves no tag in the text.
-- [ ] Remove the tag writer and the renderer's `goPre` reads. A stop-by batch uses the same hold it uses today when the cue is missing.
-- [ ] pytest passes. Version bump.
+- [x] Tests: the built script contains the "見えてきます" line and no `goPre`; `strip_cues("見えてきます。{goPre4}")` leaves no tag in the text.
+- [x] Remove the tag writer and the renderer's `goPre` reads. A stop-by batch uses the same hold it uses today when the cue is missing.
+- [x] pytest passes. Version bump.
 
 #### Task 5: No length limit (8.2)
 
@@ -607,9 +606,9 @@ def test_unset_or_unknown_style_is_walk():
 
 **Interfaces (produces):** `overview_target_seconds(project, stops)` returns the setting, else `20 + 7 * stops`. The length command no longer returns `within_60_90s`, `min_seconds`, `max_seconds`. `OverviewLength` is `{ chars_per_second, target_seconds }`.
 
-- [ ] Tests: target for 1 stop is 27.0, for 30 stops 230.0, with `overview_target_seconds: 45` it is 45.0; `plan_budget` has no `fits` key.
-- [ ] Delete `TARGET_MIN_SECONDS`, `TARGET_MAX_SECONDS`, `in_overview_range`, `fits` and `lengthVerdict`. The editor readout becomes `About {seconds} s spoken (aim {target} s)`.
-- [ ] Keep the 3 s audio/video tolerance. pytest, tsc and `npm test` pass; Lingui extract and compile.
+- [x] Tests: target for 1 stop is 27.0, for 30 stops 230.0, with `overview_target_seconds: 45` it is 45.0; `plan_budget` has no `fits` key.
+- [x] Delete `TARGET_MIN_SECONDS`, `TARGET_MAX_SECONDS`, `in_overview_range`, `fits` and `lengthVerdict`. The editor readout becomes `About {seconds} s spoken (aim {target} s)`.
+- [x] Keep the 3 s audio/video tolerance. pytest, tsc and `npm test` pass; Lingui extract and compile.
 
 #### Task 6: A switch for each automatic cue (8.6)
 
@@ -619,9 +618,9 @@ def test_unset_or_unknown_style_is_walk():
 
 **Interfaces (produces):** `auto_tag_overview(script, labels, skip: frozenset[str] = frozenset())`, with kinds `"n" "go" "start" "extras" "closed"`. `CueStore.put_text` / `cued_text` also store and compare the skip set, because a stored tagged script is reused today.
 
-- [ ] Tests: each kind in `skip` leaves no such tag; a tag the user typed stays; run with `auto_cue_go` off, then on again, and `{go}` is back; with the master off nothing is added.
-- [ ] UI: six switches under the master, disabled when it is off.
-- [ ] pytest, tsc, `npm test`, Lingui.
+- [x] Tests: each kind in `skip` leaves no such tag; a tag the user typed stays; run with `auto_cue_go` off, then on again, and `{go}` is back; with the master off nothing is added.
+- [x] UI: six switches under the master, disabled when it is off.
+- [x] pytest, tsc, `npm test`, Lingui.
 
 #### Task 7: Stop-by pins show `+N` (8.7)
 
@@ -629,10 +628,10 @@ def test_unset_or_unknown_style_is_walk():
 
 **Interfaces (produces):** `stopby_labels(waypoints: list) -> dict[int, str]` (waypoint index to `"+1"`, counted in route order over stop-bys and skipped stops; start, end and closed places excluded; a return stop reuses the first visit's label) and `is_stopby_label(label: str) -> bool`.
 
-- [ ] Tests: the existing badge list becomes `["S", "1", "+1", "+2", "×", "3", "E"]`; the leg glyphs become `["S", "+1", "+2", "1", "2", "+3", "E"]`; a 12-stop-by route ends at `+12`.
-- [ ] First change the three text checks (`popups.py:2599`, `render_look.py:101,107`, `finale_step.py:72,134`) to `is_stopby_label`, then change the glyph sources. `video_text.py` and Japanese text separators keep `・`.
-- [ ] Render one pin and one badge with `+12` in a test and assert the text box is inside the badge.
-- [ ] `src/utils/stopLabel.ts` is not changed. pytest passes. Bump both render versions.
+- [x] Tests: the existing badge list becomes `["S", "1", "+1", "+2", "×", "3", "E"]`; the leg glyphs become `["S", "+1", "+2", "1", "2", "+3", "E"]`; a 12-stop-by route ends at `+12`.
+- [x] First change the three text checks (`popups.py:2599`, `render_look.py:101,107`, `finale_step.py:72,134`) to `is_stopby_label`, then change the glyph sources. `video_text.py` and Japanese text separators keep `・`.
+- [x] Render one pin and one badge with `+12` in a test and assert the text box is inside the badge.
+- [x] `src/utils/stopLabel.ts` is not changed. pytest passes. Bump both render versions.
 
 ### Before Phase 2
 
@@ -721,28 +720,28 @@ Every browser capture uses the GPU: ask first, and use a copy of a project. Auto
 
 **Files:** `services/mapfetcher/mapfetcher.py` (`fetch_image`), `tests/test_mapfetcher_overview_background.py` (create, or extend the existing `fetch_image` test if one exists).
 
-- [ ] The overview background is the deck.gl capture for every style. A missing Mapbox key or a failed capture raises an error that says which; no silent raster fallback.
-- [ ] Check every other caller of `fetch_image` (`popups.py:3173`, `services/cli/gps_commands.py:132`) still wants this, and keep the raster path only for a caller that is not the video.
-- [ ] Tests: each style calls `fetch_overview_image_pydeck`; no key raises; a capture error raises.
+- [x] The overview background is the deck.gl capture for every style. A missing Mapbox key or a failed capture raises an error that says which; no silent raster fallback.
+- [x] Check every other caller of `fetch_image` (`popups.py:3173`, `services/cli/gps_commands.py:132`) still wants this, and keep the raster path only for a caller that is not the video.
+- [x] Tests: each style calls `fetch_overview_image_pydeck`; no key raises; a capture error raises.
 
 #### Task 17: Cluster zoom, Whole route first (8.9)
 
 **Files:** `spatial_renderer/course.py` (`dense_zooms`), course storyboard (`"cluster_min_stops": 2`), `storyboard.py`, `tuning.py` (replace `COURSE_DENSE_MIN_STOPS`).
 
-- [ ] A run of 2 or more stops within one pin width zooms in, easing in and out over about 1 s, for stops the trace reaches. Cue timing is unchanged.
-- [ ] Tests: 2-stop and 3-stop clusters zoom; spread stops do not; the view returns to the whole map. Version bump.
+- [x] A run of 2 or more stops within one pin width zooms in, easing in and out over about 1 s, for stops the trace reaches. Cue timing is unchanged.
+- [x] Tests: 2-stop and 3-stop clusters zoom; spread stops do not; the view returns to the whole map. Version bump.
 
 #### Task 18: Cluster zoom, Walk and Route map (8.9)
 
 **Files:** `spatial_renderer/overview_animation.py`, walk and map storyboards (`"cluster_min_stops": 2`).
 
-- [ ] Reuse `zoom_view`, `dense_zooms` and the GL view capture from `course.py`; move any shared function out of the course module rather than copying it. Cards that stay up follow 8.18's zoom rule (`popups.zoom_card_alphas`): cross-fade, no sliding, off-view cards hidden, recap spots once the view is whole.
-- [ ] Same tests as Task 17, for walk and map. Version bump.
+- [x] Reuse `zoom_view`, `dense_zooms` and the GL view capture from `course.py`; move any shared function out of the course module rather than copying it. Cards that stay up follow 8.18's zoom rule (`popups.zoom_card_alphas`): cross-fade, no sliding, off-view cards hidden, recap spots once the view is whole.
+- [x] Same tests as Task 17, for walk and map. Version bump.
 
 #### Task 19: Remove the old flat overview
 
 **Files:** `route2vdo.py` (pydeck branch near line 1096), delete `pydeckrecorder/overview_pydeck.py`, `tuning.DEFAULT_USE_PYDECK_OVERVIEW`, `animator_config.py`, storyboard `pydeck_allowed`, and every `use_pydeck_overview` use.
 
-- [ ] That path ignores all cues; remove it and its setting. Old projects that carry the setting render normally.
-- [ ] pytest, ruff, `npx tsc --noEmit` and `npm test` pass. Bump `OVERVIEW_RENDER_VERSION`.
+- [x] That path ignores all cues; remove it and its setting. Old projects that carry the setting render normally.
+- [x] pytest, ruff, `npx tsc --noEmit` and `npm test` pass. Bump `OVERVIEW_RENDER_VERSION`.
 - [ ] Approved GPU run of all three styles on a copy of a project; check the frames at every cue.

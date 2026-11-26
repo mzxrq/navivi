@@ -9,6 +9,7 @@ import functools
 import hashlib
 import json
 import re
+import tempfile
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
@@ -23,6 +24,7 @@ from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
 from .card_circles import densify
+from .cluster_zoom import WalkCamera, cluster_views, pin_width
 from .overview_timing import (
     AUDIO_MATCH_TOLERANCE_SECONDS,
     MAX_WALK_SPEEDUP,
@@ -76,7 +78,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # stops are plain colour dots; v56: top HUD panels 1.5x bigger; v55: the recap sits on a plain plate and arranges its
 # badges on one lattice in walked order (see CLAUDE.md "overview recap's pill badges"); v54: a return stop takes no
 # number of its own. Older history: git log.
-OVERVIEW_RENDER_VERSION = 82  # v82: course sub course before the stop-bys; v81: one bottom bar
+OVERVIEW_RENDER_VERSION = 83  # v83: 3D map background, cluster zoom in every style; v82: course sub course
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -1005,6 +1007,32 @@ class _OverviewRenderMixin:
             if "stay_box" not in ap:
                 ap["no_card"] = True
 
+    def _ov_walk_camera(
+        self, job: "_OverviewJob", walk: _Walk, active_popups: List[Dict], reserved_boxes: List,
+    ) -> Optional[WalkCamera]:
+        """The camera that zooms in on the clusters of stops the walker passes, or None when there are none."""
+        cum = walk.scale.cum_smooth_dist
+        if cum is None:  # shortcut: no travel modes, no distances along the path, no zoom; the pipeline always has them
+            return None
+        within = pin_width(self.graphics)
+        stops = []
+        for ap in active_popups:
+            at = ap.get("expected_frame")
+            if at is None or ap.get("is_return"):
+                continue
+            if np.hypot(walk.arr[:, 0] - ap["x"], walk.arr[:, 1] - ap["y"]).min() <= within:  # the walk reaches it
+                stops.append((float(cum[min(int(at), len(cum) - 1)]), ap["x"], ap["y"]))
+        from services.mapbox_token import resolve_mapbox_token
+
+        gl = job.bounding_box is not None and bool(
+            resolve_mapbox_token((self._get_job_config() or {}).get("settings")))
+        clusters = cluster_views(
+            stops, walk.arr, cum, job.w, job.h, within, storyboard_for(self.config).cluster_min_stops,
+            tuning.COURSE_DENSE_ZOOM_MAX_GL if gl else tuning.COURSE_DENSE_ZOOM_MAX)
+        if not clusters:
+            return None
+        return WalkCamera(clusters, job.fps, within, densify(walk.path), reserved_boxes)
+
     def _ov_recap_preview_plate(self, current_bg, walk: _Walk, mode_breakpoints):
         """The plate the walk stashes at its last frame, built straight from the background since no walk ran, with
         each point's own travel mode so ferry and car legs are colored as in the real render."""
@@ -1303,13 +1331,18 @@ class _OverviewRenderMixin:
             return self._ov_write_recap_preview(
                 pre_popup_frame, active_popups, stop_popup, w, h, reserved_boxes, recap_obstacle_arr
             )
-        # [NOTE] Background video is not supported here: no capture, is_video False.
-        pre_popup_frame = self._animate_overview_frames(
-            video, job.current_bg, None, False, w, h, fps,
-            walk.path, job.mode_breakpoints, walk.scale.cum_smooth_dist, job.total_smooth_dist,
-            active_popups, stop_popup, job.points, route_avoid_points, route_obstacle_arr,
-            standing_cards=_standing_cards(start_popup, stop_popup) if self._cards_stay() else (),
-        )
+        camera = self._ov_walk_camera(job, walk, active_popups, reserved_boxes)
+        with tempfile.TemporaryDirectory(prefix="navivi_walk_zoom_") as gl_dir:
+            if camera:
+                camera.frames = self._gl_view_frames(camera.views(), job.bounding_box, w, h, gl_dir)
+            # [NOTE] Background video is not supported here: no capture, is_video False.
+            pre_popup_frame = self._animate_overview_frames(
+                video, job.current_bg, None, False, w, h, fps,
+                walk.path, job.mode_breakpoints, walk.scale.cum_smooth_dist, job.total_smooth_dist,
+                active_popups, stop_popup, job.points, route_avoid_points, route_obstacle_arr,
+                standing_cards=_standing_cards(start_popup, stop_popup) if self._cards_stay() else (),
+                camera=camera,
+            )
         return self._ov_write_ending(
             job, video, active_popups, start_popup, stop_popup, summary_card, reserved_boxes,
             recap_obstacle_arr, pre_popup_frame,

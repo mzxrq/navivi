@@ -18,8 +18,10 @@ from services.vdoprocessing.vdoexporter import VideoExporter
 from services.logger.progress import tracker
 from services import tuning
 from .base import logger
+from .cluster_zoom import (
+    WalkCamera, _ClusterZoomMixin, crop_zoom, moved_to, pin_head_box, pin_in_view, view_key, zoomed_pin)
 from .overview_timing import warp_path
-from .popups import CARD_STAYS_SECONDS
+from .popups import CARD_STAYS_SECONDS, zoom_card_alphas
 
 # Animation-loop tuning constants (not read from self.config/tuning).
 _MIN_TRIGGER_GAP_FLOOR_SECONDS = 0.15  # floor effective_gap_frames shrinks to for a deep backlog
@@ -32,8 +34,8 @@ _MIN_RETIME_DELTA_FRAMES = 2  # a re-time (and a stretch worth re-timing) is at 
 
 
 class _NoticeWriter:
-    """Passes frames to `video`, drawing the stop-by notice over them while
-    it is active, so every write path (walk, holds, batches) shows it."""
+    """Passes frames to `video` through the cluster zoom, then draws the stop-by notice over them while
+    it is active, so every write path (walk, holds, batches) shows both."""
 
     def __init__(self, video: VideoExporter, renderer):
         self._video = video
@@ -43,7 +45,8 @@ class _NoticeWriter:
         return getattr(self._video, name)
 
     def write(self, frame: np.ndarray) -> None:
-        frame = self._renderer._apply_stopby_notice(frame)  # first: the rail starts right of what is up
+        frame = self._renderer._apply_walk_zoom(frame)
+        frame = self._renderer._apply_stopby_notice(frame)  # before the HUD: the rail starts right of what is up
         self._video.write(self._renderer._apply_hud(frame))
 
 
@@ -123,6 +126,8 @@ class _WalkState:
     # Stays None if the walk has no frames at all (the card-hold tail checks it).
     frame_before_popups: Optional[np.ndarray] = None
     last_beat: Optional[_Beat] = None
+    # The cards of earlier stops while the map is frozen on one (_arrive_frozen), for a zoomed frame.
+    frozen_cards: List[Dict] = field(default_factory=list)
 
 
 def _retime_walk(
@@ -170,7 +175,124 @@ def _retime_walk(
     )
 
 
-class _OverviewAnimationMixin:
+class _OverviewAnimationMixin(_ClusterZoomMixin):
+    def _apply_walk_zoom(self, frame: np.ndarray) -> np.ndarray:
+        """`frame`, or while the walk's camera is on a cluster of stops the same moment drawn zoomed in."""
+        camera, s = getattr(self, "_walk_zoom", None) or (None, None)
+        if camera is None or s.last_beat is None:
+            return frame
+        now = camera.step(s.cum, s.last_beat.index)
+        return frame if now is None else self._walk_zoomed_frame(s, camera, *now)
+
+    def _walk_zoomed_frame(
+        self, s: "_WalkState", camera: WalkCamera, zoom: Tuple, view: Tuple[float, float, float], ease: float,
+    ) -> np.ndarray:
+        """The walk redrawn on the map at `view`: route, pins and walker at their zoomed places but their own size, and
+        the cards fading from their spots to clear ones by their zoomed pins (8.18, zoom_card_alphas); a card whose pin
+        is out of the zoomed view is gone meanwhile. The Route map's arriving card does the same at its own size."""
+        h, w = s.current_bg.shape[:2]
+        path = camera.frames.get(view_key(view))
+        if path and path != camera.image[0]:  # frames holding one view share its image
+            camera.image = (path, cv2.imread(path))
+        frame = camera.image[1].copy() if path else crop_zoom(s.current_bg, *view)
+        at_spot, by_pin = zoom_card_alphas(ease)
+        # The Route map's card counts the frames it is drawn to time its slide (slide_to_card): this is the same frame.
+        drawn_before = dict(getattr(self.graphics, "_slide_frames", {}))
+        cards = []  # (hud, alpha) per card to draw
+        for bp in s.frozen_cards + s.baked_popups:
+            popup = bp["popup"]
+            alpha = self._popup_fade_alpha(bp)
+            if popup.get("stay_box") and not popup.get("big") and not popup["data"].get("freeze_frame"):
+                box, fade = popup["stay_box"], at_spot
+                if by_pin > 0:
+                    if not pin_in_view(popup, zoom[2:], w, h):
+                        continue
+                    box, fade = self._walk_zoom_spot(s, camera, zoom, popup, w, h), by_pin
+                hud = self.walk_card_hud(moved_to(popup, view), w, h, None, None)
+                hud["beside_box"], alpha = box, alpha * fade
+            else:
+                hud = self._composite_hud_popup(bp, s.baked_popups, w, h, s.route_obstacles)
+                if hud is None:
+                    continue
+                hud = moved_to(hud, view)
+                if popup.get("big") and hud.get("beside_box"):  # left where it was, the pins would move under it
+                    if by_pin > 0:
+                        if not pin_in_view(popup, zoom[2:], w, h):
+                            continue
+                        hud["beside_box"] = self._walk_zoom_big_spot(s, camera, zoom, popup, w, h) or hud["beside_box"]
+                    alpha *= by_pin if by_pin > 0 else at_spot
+            cards.append((hud, alpha))
+
+        for hud, alpha in cards:  # the leader lines go under the route
+            frame = self.graphics.render_popup_box(frame, hud, alpha=alpha, line_only=True)
+        scale, x0, y0 = view
+        history = ((np.asarray(s.path_history, dtype=float) - (x0, y0)) * scale).round().astype(int)
+        self.graphics.draw_path(frame, [(int(x), int(y)) for x, y in history], s.mode_history)
+        for wp in s.active_popups:
+            if wp["data"].get("arrived") or wp["index"] == 0 or wp.get("standing"):
+                self._draw_pin(frame, moved_to(wp, view), s.n_points,
+                               scale=self._pin_pop_scale(wp, getattr(self, "_pop_now", 0), s.fps))
+        for hud, alpha in cards:
+            frame = self.graphics.render_popup_box(frame, hud, alpha=alpha, skip_line=True)
+        if drawn_before:
+            self.graphics._slide_frames.update(drawn_before)
+        beat = s.last_beat
+        cx, cy = int(round((beat.cx - x0) * scale)), int(round((beat.cy - y0) * scale))
+        self.graphics.draw_transport_icon(frame, cx, cy, beat.index, s.smoothed_angle, mode=beat.mode)
+        return frame
+
+    def _walk_zoom_spot(
+        self, s: "_WalkState", camera: WalkCamera, zoom: Tuple, popup: Dict, w: int, h: int,
+    ) -> Tuple[int, int]:
+        """Where `popup`'s card goes while zoomed on `zoom`, at its closest view. Every card up during that zoom whose
+        pin is in view is placed together, so each keeps one spot for the whole zoom."""
+        key = (zoom, popup["index"])
+        if key not in camera.spots:
+            hold = zoom[2:]
+
+            def reached(ap: Dict) -> float:
+                return float(s.cum[min(int(ap.get("expected_frame") or 0), len(s.cum) - 1)])
+
+            # The cards still show zoomed for a moment after the walker leaves: count what it reaches by then too.
+            left = int(np.searchsorted(s.cum, zoom[1] + camera.within, side="right"))
+            last = float(s.cum[min(left + camera.steps, len(s.cum) - 1)])
+            shown = [ap for ap in s.active_popups
+                     if (ap.get("standing") or reached(ap) <= last) and pin_in_view(ap, hold, w, h)]
+            group = [ap for ap in shown if ap.get("stay_box")]
+            if not any(ap["index"] == popup["index"] for ap in group):
+                group.append(popup)
+            order = sorted(range(len(group)), key=lambda i: reached(group[i]))
+            spots = self._place_zoom_cards(group, order, shown, hold, camera.route, camera.reserved, w, h)
+            camera.spots.update({(zoom, index): spot for index, spot in spots.items()})
+        return camera.spots[key][:2]
+
+    def _walk_zoom_big_spot(
+        self, s: "_WalkState", camera: WalkCamera, zoom: Tuple, popup: Dict, w: int, h: int,
+    ) -> Optional[Tuple[int, int]]:
+        """Where the Route map's arriving card goes while zoomed on `zoom`: clear of the zoomed pins, the route and
+        the spots of the zoom's other cards. None when there is no room."""
+        key = (zoom, "big", popup["index"])
+        if key not in camera.spots:
+            self._walk_zoom_spot(s, camera, zoom, popup, w, h)  # places the zoom's standing cards first
+            hold = zoom[2:]
+            taken = list(camera.reserved)
+            for other, spot in camera.spots.items():
+                if len(other) == 2 and other[0] == zoom and other[1] != popup["index"]:
+                    cw, ch = self.graphics.beside_card_footprint(spot[2])
+                    taken.append((spot[0], spot[1], spot[0] + cw, spot[1] + ch))
+            taken += [pin_head_box(self.graphics, *zoomed_pin(ap, hold))
+                      for ap in s.active_popups if pin_in_view(ap, hold, w, h)]
+            route = camera.route
+            if route is not None:
+                route = (route - np.array(hold[1:])) * hold[0]
+            probe = moved_to(popup, hold)
+            probe.pop("beside_box", None)
+            cw, ch = self.graphics.beside_card_footprint(probe.get("card_scale", 1.0))
+            self._layout_recap_popups([{"popup": probe, "frames_left": 1}], w, h, card_w=cw, card_h=ch,
+                                      reserved_boxes=taken, route_obstacles=route)
+            camera.spots[key] = probe.get("beside_box")
+        return camera.spots[key]
+
     def _apply_hud(self, frame: np.ndarray) -> np.ndarray:
         """Persistent overview top bar: the project's title, and what is left
         of the route over the whole route (once the walk has an actual
@@ -450,6 +572,7 @@ class _OverviewAnimationMixin:
         route_avoid_points: List,
         route_obstacle_arr: np.ndarray,
         standing_cards: Sequence[Dict] = (),
+        camera: Optional[WalkCamera] = None,
     ) -> Optional[np.ndarray]:
         """Drives the traveler along `smooth_path`, triggering pins/popups
         (`standing_cards`: the intro's cards, up from the first frame) as it goes, and writes every frame to `video`. Mutates `self.last_frame`
@@ -494,6 +617,7 @@ class _OverviewAnimationMixin:
             card["frames_left"] -= card["fade_frames"]  # already faded in, over the intro
             s.baked_popups.append(card)
         tracker.begin_substeps(s.total_stops)
+        self._walk_zoom = (camera, s) if camera else None
         self._play_start_batch(s)
 
         clock = _WalkClock(smooth_path, cum_smooth_dist)
@@ -508,7 +632,12 @@ class _OverviewAnimationMixin:
                 last_index = current_frame
             self._walk_one_frame(s, clock, current_frame, path_point)
 
+        if camera:
+            camera.released = True  # the walk is over: ease back out over the final hold
         self._hold_final_cards(s)
+        while camera and camera.k:
+            s.video.write(self.last_frame)
+        self._walk_zoom = None
         return s.pre_popup_frame
 
     def _play_start_batch(self, s: _WalkState) -> None:
@@ -989,7 +1118,7 @@ class _OverviewAnimationMixin:
         stop-by batch). Cards of the stops just passed still inside their display
         time (`carried`) stay up over the whole freeze and fade on their own clock;
         popup_base_frame is a clean plate, so they used to vanish when the map stopped."""
-        carried = s.baked_popups
+        carried = s.frozen_cards = s.baked_popups
         s.baked_popups = []
         if not s.is_video and self.post_arrival_hold_seconds > 0:
             self._arrival_pause(s, beat, popup, popup_base_frame, carried)
@@ -1023,7 +1152,7 @@ class _OverviewAnimationMixin:
                 animate_host=host_is_stopby,
                 total_display_seconds=display_seconds if host_is_stopby else None,
             )
-        s.baked_popups = carried + s.baked_popups
+        s.baked_popups, s.frozen_cards = carried + s.baked_popups, []
 
     def _arrival_pause(
         self, s: _WalkState, beat: _Beat, popup: Dict, popup_base_frame: np.ndarray,
@@ -1084,6 +1213,7 @@ class _OverviewAnimationMixin:
             temp_frame = self._draw_carried(
                 temp_frame, carried, s.w, s.h, s.route_obstacles, s.n_points, s.fps
             )
+            lingering_bp["frames_left"] = max(total_hold_frames - i - 1, fade_in_frames)  # for a zoomed frame
             s.video.write(temp_frame)
 
         self.last_frame = temp_frame

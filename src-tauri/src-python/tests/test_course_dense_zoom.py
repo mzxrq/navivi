@@ -7,49 +7,69 @@ import pytest
 
 from services import tuning
 from services.mapfetcher.graphicengine import GraphicsEngine
+from services.vdoprocessing.storyboard import of
 from services.vdoprocessing.spatial_renderer.course import (
-    _CourseOverviewMixin, _drawn_path, _pin_head_box, _Trace, dense_zooms, gl_view_state, zoom_view)
+    _CourseOverviewMixin, _drawn_path, _Trace, dense_zooms, zoom_view)
+from services.vdoprocessing.spatial_renderer.cluster_zoom import gl_view_state, pin_head_box as _pin_head_box
 from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
 
 W, H = 1920, 1080
 
 
+PIN = 45.0  # a pin's width on screen
+
+
 def _route():
-    """A long straight run, then four stops packed into a small loop at its far end."""
-    pts = [(100, 540), (1400, 540), (1500, 500), (1560, 560), (1500, 620), (1440, 560)]
+    """A long straight run, three stops packed together, another run, then two stops packed together."""
+    pts = [(100, 540), (800, 540), (830, 545), (860, 540), (1500, 540), (1535, 540), (1800, 540)]
     path, cum, total = _drawn_path(pts)
-    anchors = [(2.0, 0.0), (20.0, total)]  # the trace runs the whole route from 2 s to 20 s
+    anchors = [(2.0, 0.0), (22.0, total)]  # the trace runs the whole route from 2 s to 22 s
     return path, cum, anchors
 
 
-def _stops(cum, idx):
-    return [float(cum[i]) for i in idx]
+def _stops(path, cum, idx):
+    return [(float(cum[i]), float(path[i][0]), float(path[i][1])) for i in idx]
 
 
-def test_the_trace_zooms_in_on_a_tight_group_of_stops_only():
+def _zooms(idx, **kwargs):
     path, cum, anchors = _route()
-    (t_in, t_out, s, x0, y0), = dense_zooms(_stops(cum, [0, 1, 2, 3, 4]), path, cum, anchors, W, H)
-    assert s == tuning.COURSE_DENSE_ZOOM_MAX
-    assert 2.0 < t_in < t_out < 20.0
-    w, h = W / s, H / s  # the crop shows every stop of the group and stays inside the frame
-    assert 0 <= x0 and x0 + w <= W and 0 <= y0 and y0 + h <= H
-    assert all(x0 <= x <= x0 + w and y0 <= y <= y0 + h for x, y in path[1:])
+    return dense_zooms(_stops(path, cum, idx), path, cum, anchors, W, H, PIN, **kwargs)
 
 
-def test_a_small_route_in_a_roomy_frame_is_not_one_big_group():
-    """The course map leaves room around the route for the badges: a route filling only the middle of the
-    frame would fit at 1.5x as a whole. Only a group much smaller than the ROUTE zooms."""
-    pts = [(700, 400), (900, 450), (1100, 500), (1200, 600)]  # evenly spread, small in the frame
-    path, cum, _ = _drawn_path(pts)
-    assert dense_zooms(_stops(cum, range(4)), path, cum, [(2.0, 0.0), (20.0, float(cum[-1]))], W, H) == []
+def test_runs_of_two_and_of_three_stops_within_a_pin_width_each_zoom_in():
+    path, cum, _ = _route()
+    zooms = _zooms(range(7))
+    assert [z[2] for z in zooms] == [tuning.COURSE_DENSE_ZOOM_MAX] * 2
+    for (t_in, t_out, s, x0, y0), members in zip(zooms, ((1, 2, 3), (4, 5))):
+        assert 2.0 < t_in < t_out < 22.0
+        w, h = W / s, H / s  # the crop shows every stop of the cluster and stays inside the frame
+        assert 0 <= x0 and x0 + w <= W and 0 <= y0 and y0 + h <= H
+        assert all(x0 <= path[i][0] <= x0 + w and y0 <= path[i][1] <= y0 + h for i in members)
+
+
+def test_stops_further_apart_than_a_pin_do_not_zoom():
+    assert _zooms([0, 1, 4, 6]) == []
+
+
+def test_the_storyboard_says_how_many_stops_make_a_cluster():
+    assert [of(s).cluster_min_stops for s in ("walk", "map", "course")] == [2, 2, 2]
+    assert len(_zooms(range(7), min_stops=3)) == 1
+
+
+def test_the_camera_stays_in_while_the_trace_waits_at_the_last_stop_of_a_cluster():
+    path, cum, _ = _route()
+    waits = [(2.0, 0.0), (10.0, float(cum[3]), True, 15.0), (15.0, float(cum[3])), (25.0, float(cum[-1]))]
+    (t_in, t_out, *_), = dense_zooms(_stops(path, cum, [1, 2, 3]), path, cum, waits, W, H, PIN)
+    assert t_in < 10.0 and t_out == pytest.approx(15.0, abs=0.1)
 
 
 def test_the_map_is_back_to_whole_once_the_trace_has_left():
-    path, cum, anchors = _route()
-    zooms = dense_zooms(_stops(cum, [1, 2, 3, 4]), path, cum, anchors, W, H)
-    t_out = zooms[0][1]
-    assert zoom_view(t_out, zooms, W, H) == zooms[0][2:]
-    assert zoom_view(t_out + tuning.COURSE_DENSE_EASE_SECONDS + 0.01, zooms, W, H) is None
+    zooms = _zooms(range(7))
+    for _, t_out, *view in zooms:
+        assert zoom_view(t_out, zooms, W, H) == tuple(view)
+        half = zoom_view(t_out + tuning.COURSE_DENSE_EASE_SECONDS / 2, zooms, W, H)
+        assert 1.0 < half[0] < view[0]
+        assert zoom_view(t_out + tuning.COURSE_DENSE_EASE_SECONDS + 0.01, zooms, W, H) is None
 
 
 def test_the_gl_camera_shows_the_same_crop_the_frame_would():
