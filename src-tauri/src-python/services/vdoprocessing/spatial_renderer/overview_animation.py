@@ -18,13 +18,13 @@ from services.logger.progress import tracker
 from services import tuning
 from .base import logger
 from .overview_timing import warp_path
+from .popups import CARD_STAYS_SECONDS
 
 # Animation-loop tuning constants (not read from self.config/tuning).
 _MIN_TRIGGER_GAP_FLOOR_SECONDS = 0.15  # floor effective_gap_frames shrinks to for a deep backlog
 _DEFAULT_FREEZE_SECONDS = 4.0
 # Longest the overview walker waits at a stop for the voice to reach its cue.
 _MAX_CUE_WAIT_SECONDS = 20.0
-_CARD_STAYS_SECONDS = 3600.0  # "until the end" for a card that stays (walk style)
 # A walk re-timed to meet its cue runs at most this much slower / faster than planned.
 _CATCH_UP_RANGE = (0.6, 2.5)  # matches overview_timing.MAX_WALK_SPEEDUP's raised cap
 _MIN_RETIME_DELTA_FRAMES = 2  # a re-time (and a stretch worth re-timing) is at least this many frames
@@ -477,7 +477,7 @@ class _OverviewAnimationMixin:
         )
         for popup in standing_cards:
             popup.update(standing=True, hud_corner=None, beside_box=popup["stay_box"])
-            card = self._make_baked_popup(popup, _CARD_STAYS_SECONDS, fps)
+            card = self._make_baked_popup(popup, CARD_STAYS_SECONDS, fps)
             card["frames_left"] -= card["fade_frames"]  # already faded in, over the intro
             s.baked_popups.append(card)
         tracker.begin_substeps(s.total_stops)
@@ -766,7 +766,9 @@ class _OverviewAnimationMixin:
         # [NOTE] [Animation] Laid out once and kept on the popup so the arrival pause, the hold
         # and the lingering HUD all reuse the identical spot; every card already on screen is
         # reserved or this lone popup could land on a still-visible neighbour.
-        if not (popup.get("stay_box") or popup.get("no_card")):  # its spot is already decided
+        if storyboard_for(self.config).big_stop_card and popup.get("card_scale") and not popup.get("no_card"):
+            popup["big"] = True  # the Route map's arriving card: laid out here, stands at its spot once closed
+        if popup.get("big") or not (popup.get("stay_box") or popup.get("no_card")):  # else its spot is decided
             self._layout_recap_popups(
                 [{"popup": popup, "frames_left": 1}], s.w, s.h,
                 route_obstacles=s.route_obstacles,
@@ -843,9 +845,10 @@ class _OverviewAnimationMixin:
         ) + clock.wait / s.fps
         if map_stop:
             display_seconds = clock.wait / s.fps + self._POPUP_FADE_SECONDS  # closes as the walker leaves
-        if self._cards_stay():
-            # Walk the route: every stop's card stays up to the end (at its summary spot and size).
-            display_seconds = _CARD_STAYS_SECONDS
+        if self._cards_stay() and not map_stop:
+            # Every stop's card stays up to the end, at its one spot and size (a map stop's big card closes
+            # first, then stands there: _composite_baked_popups).
+            display_seconds = CARD_STAYS_SECONDS
         return display_seconds
 
     def _wrap_up_earlier_cards(self, s: _WalkState, popup: Dict) -> None:
@@ -860,7 +863,8 @@ class _OverviewAnimationMixin:
         fps = s.fps
         new_order = popup.get("order", 0)
         min_display_frames = max(1, int(tuning.POPUP_MIN_DISPLAY_SECONDS * fps))
-        for bp in ([] if self._cards_stay() else s.baked_popups):
+        # Where cards stay, only a big (Route map) card is closed by the next stop.
+        for bp in [b for b in s.baked_popups if b["popup"].get("big") or not self._cards_stay()]:
             if bp["popup"]["data"].get("freeze_frame", False):
                 continue
             if bp["popup"].get("order", 0) >= new_order:
@@ -922,6 +926,7 @@ class _OverviewAnimationMixin:
             other_hud = self.walk_card_hud(
                 other_popup, s.w, s.h, s.route_obstacles,
                 lambda popup: self._active_card_boxes(s.baked_popups, exclude=popup),
+                big=bool(other_popup.get("big")),
             )
             other_alpha = self._popup_fade_alpha(other_bp)
             frame = self.graphics.render_popup_box(
@@ -942,7 +947,7 @@ class _OverviewAnimationMixin:
         self._walk_turn(s, beat)
         # A card that stays already has its badge's spot (_layout_recap_cards); looking for
         # another would show it there for one frame and jump back on the next.
-        stays = popup.get("stay_box")
+        stays = popup.get("stay_box") and not popup.get("big")
         if not stays:
             self._layout_recap_popups(
                 [new_bp], s.w, s.h, route_obstacles=s.route_obstacles,
@@ -953,6 +958,7 @@ class _OverviewAnimationMixin:
         hud_new = self.walk_card_hud(
             popup, s.w, s.h, s.route_obstacles,
             lambda other: self._active_card_boxes(s.baked_popups, exclude=other),
+            big=bool(popup.get("big")),
         )
         # Slide-up entrance (see _popup_slide_offset_y); a staying card doesn't slide.
         if hud_new.get("beside_box") and not stays:
@@ -1043,7 +1049,7 @@ class _OverviewAnimationMixin:
         no_card = bool(popup.get("no_card"))
         if not (stopby_group or no_card):
             s.baked_popups.append(lingering_bp)
-        stays = bool(popup.get("stay_box"))
+        stays = bool(popup.get("stay_box")) and not popup.get("big")
         hud_triggered = self.walk_card_hud(popup, s.w, s.h, s.route_obstacles, None) if stays else popup.copy()
 
         total_hold_frames = lingering_bp["total_frames"]
