@@ -301,6 +301,9 @@ OVERVIEW_STYLES = ("walk", "course", "map")
 # fits, from MAX (times the frame height over 1080) down in SHRINK_STEP steps, with no minimum.
 OVERVIEW_CARD_MAX_SCALE = 1.8
 OVERVIEW_CARD_SHRINK_STEP = 0.9
+# The cards shrink further so no leader passes under another card, but never below this share of the largest size
+# at which they all fit; past that, the size with the fewest such leaders wins.
+OVERVIEW_CARD_CLEAR_LINES_MIN_SHARE = 0.6  # Tomogashima, 20 cards: all clear at 0.56; 0.70 kept one line under a card
 # Shares of the frame's width and height the cards keep off in each top corner, for the HUD's title and remaining panels.
 OVERVIEW_HUD_KEEP_OUT_WIDTH = 0.30
 OVERVIEW_HUD_KEEP_OUT_HEIGHT = 0.11

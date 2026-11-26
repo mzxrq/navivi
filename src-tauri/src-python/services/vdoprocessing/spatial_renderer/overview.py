@@ -75,7 +75,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # stops are plain colour dots; v56: top HUD panels 1.5x bigger; v55: the recap sits on a plain plate and arranges its
 # badges on one lattice in walked order (see CLAUDE.md "overview recap's pill badges"); v54: a return stop takes no
 # number of its own. Older history: git log.
-OVERVIEW_RENDER_VERSION = 76  # v76: one spot and size per card; v75: course trace from {start}, no {goPreN}, +N pins
+OVERVIEW_RENDER_VERSION = 77  # v77: straight clear leaders, zoom cross-fade; v76: one spot and size per card
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -773,6 +773,7 @@ class _OverviewRenderMixin:
             # None for a plain numbered pin not yet "arrived" (see _pin_color): fall back to the base color.
             ap["border_color"] = pin_color_for_border or self.graphics.marker_color
             ap["badge_label"] = pin_label
+            ap["leader_straight"] = True  # every style's overview cards (popup_box._draw_leader_line)
 
     def _ov_obstacle_arrays(self, points: List, active_popups: List[Dict]):
         """(route_avoid_points, route_obstacle_arr, recap_obstacle_arr): the static footprint (full route line + every

@@ -5,11 +5,11 @@ import numpy as np
 import pytest
 
 from services import tuning
+from services.mapfetcher.graphicengine.popup_box import _PopupBoxMixin, fill_card_shape
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
-from services.vdoprocessing.spatial_renderer.course import zoomed_card_box
 from services.vdoprocessing.spatial_renderer.overview import _standing_cards
 from services.vdoprocessing.spatial_renderer.pins import _PinMixin
-from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
+from services.vdoprocessing.spatial_renderer.popups import _PopupMixin, zoom_card_alphas
 
 
 class _Layout(_PopupMixin, _PinMixin):
@@ -169,9 +169,83 @@ def test_a_tight_cluster_still_gets_every_card(count):
     assert len(cards) == count and len({c["card_scale"] for c in cards}) == 1 and not _overlapping(cards)
 
 
-@pytest.mark.parametrize("ease, box", [(0.0, (100, 200)), (0.5, (200, 300)), (1.0, (300, 400))])
-def test_a_zoomed_card_moves_between_its_spot_and_its_zoomed_place(ease, box):
-    assert zoomed_card_box((100, 200), (300, 400), ease) == box
+@pytest.mark.parametrize("ease, alphas", [(0.0, (1.0, 0.0)), (0.25, (0.5, 0.0)), (0.5, (0.0, 0.0)),
+                                          (0.75, (0.0, 0.5)), (1.0, (0.0, 1.0))])
+def test_cards_cross_fade_between_their_whole_map_and_zoomed_spots(ease, alphas):
+    assert zoom_card_alphas(ease) == alphas  # never both layouts at once
+
+
+def test_a_leader_is_a_straight_line_to_the_nearest_point_of_its_card():
+    frame = np.zeros((400, 400, 3), np.uint8)
+    _PopupBoxMixin._draw_leader_line(
+        frame, {"x": 50, "y": 50, "leader_straight": True, "leader_line_color": (255, 255, 255)}, 250, 150, 100, 100)
+    assert frame[95:112, 150].any()  # on the way from the pin to the card's near corner
+    assert not frame[50, 150].any()  # no right-angle bend
+
+
+@pytest.mark.parametrize("pin", [(50, 50), (450, 50), (50, 350), (450, 350)])
+def test_a_leader_reaches_the_rounded_corner_of_its_card(pin):
+    frame = np.zeros((400, 500, 3), np.uint8)
+    _PopupBoxMixin._draw_leader_line(
+        frame, {"x": pin[0], "y": pin[1], "leader_straight": True, "leader_line_color": (255, 255, 255)},
+        200, 150, 100, 100)
+    corner = (200 if pin[0] < 200 else 299, 150 if pin[1] < 150 else 249)
+    inward = (6 if pin[0] < 200 else -6, 6 if pin[1] < 150 else -6)
+    # 6 px in from both sides of the square corner is already on the rounded card: the line must get there.
+    x, y = corner[0] + inward[0], corner[1] + inward[1]
+    assert frame[y - 3:y + 4, x - 3:x + 4].any()
+
+
+def test_the_course_cuts_leader_lines_only_under_the_rounded_card():
+    cut = np.zeros((200, 300), np.uint8)
+    fill_card_shape(cut, 50, 50, 100, 80)
+    assert cut[90, 100] and cut[51, 100] and cut[90, 51]
+    assert not cut[51, 51] and not cut[128, 148] and not cut[90, 151]  # the corners stay open, nothing outside
+
+
+@pytest.mark.parametrize("style", ["walk", "map", "course"])
+def test_every_overview_card_has_a_straight_leader(style):
+    renderer, popups = _renderer({"overview_style": style}), _stops()
+    renderer._pin_label_and_color = lambda wp, total: ("1", (0, 0, 0), None)
+    renderer.graphics.marker_color = (0, 0, 0)
+    renderer._ov_style_badges(popups, len(popups))
+    assert all(p["leader_straight"] for p in popups)
+
+
+def _under_another_card(cards):
+    """(i, j) where the leader of card i passes under card j."""
+    out = []
+    for i, c in enumerate(cards):
+        (x0, y0), (cw, ch), (px, py) = c["beside_box"], _size(c["card_scale"]), (c["x"], c["y"])
+        ax, ay = min(max(px, x0), x0 + cw), min(max(py, y0), y0 + ch)
+        for t in np.linspace(0.05, 0.95, 60):
+            x, y = px + (ax - px) * t, py + (ay - py) * t
+            for j, other in enumerate(cards):
+                (ox, oy), (ow, oh) = other["beside_box"], _size(other["card_scale"])
+                if j != i and ox < x < ox + ow and oy < y < oy + oh and (i, j) not in out:
+                    out.append((i, j))
+    return out
+
+
+_ISLAND = [(444, 515), (382, 510), (403, 537), (405, 553), (426, 570), (525, 550), (533, 480), (485, 490), (440, 505),
+           (377, 500)]  # the Tomogashima island stops, 2026-11-26
+_HARBOUR = [(1331, 693), (1377, 690), (1390, 660), (1547, 668), (1478, 656), (1474, 645), (1454, 666), (1453, 670),
+            (650, 360), (712, 382)]
+
+
+@pytest.mark.parametrize("pins", [_ISLAND, _ISLAND + _HARBOUR])
+def test_no_leader_passes_under_another_card(pins):
+    popups = [{"x": x, "y": y, "index": i, "data": {}} for i, (x, y) in enumerate(pins)]
+    cards = _layout()._layout_ring_cards(popups, 1920, 1080)
+    assert len(cards) == len(pins) and not _overlapping(cards)
+    assert _under_another_card(cards) == []
+
+
+def test_clearing_the_leaders_never_shrinks_the_cards_to_stamps():
+    pins = [(900 + 37 * (i % 5), 500 + 29 * (i // 5)) for i in range(15)]  # crossing-free only at 0.41
+    popups = [{"x": x, "y": y, "index": i, "data": {}} for i, (x, y) in enumerate(pins)]
+    cards = _layout()._layout_ring_cards(popups, 1920, 1080)
+    assert len(cards) == 15 and not _overlapping(cards) and cards[0]["card_scale"] > 0.7
 
 
 def test_whole_route_first_gives_each_place_with_a_photo_one_card():
