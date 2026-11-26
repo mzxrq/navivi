@@ -4,6 +4,8 @@ changed in its file. An unset or unknown style uses walk.
 
 ending_pin_shape: the pins in the ending zoom into the start (or end) point - "dot", or "teardrop" (with the
 overview's S / 1 / +1 labels). Any other value is a dot.
+sub_course_slot: where the sub course plays - "after_totals", or "before_stopbys" (Whole route first, whose
+stop-bys then wait for it). Both come after the totals card.
 
 timings, in seconds (a project setting of the same overview_* name, where there is one, wins):
   all     sub_course_seconds (the sub course's walk), cue_wait_seconds (wait at a stop whose cue starts a
@@ -41,6 +43,7 @@ class Storyboard:
     visit_all_stopbys: bool
     timings: Mapping[str, float]
     ending_pin_shape: str
+    sub_course_slot: str
 
 
 def _load(style: str) -> Storyboard:

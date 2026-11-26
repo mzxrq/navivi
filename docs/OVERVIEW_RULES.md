@@ -707,9 +707,9 @@ These draw in screen space, over whatever map is underneath, so Phase 3 does not
 
 **Files:** the storyboard files (`"sub_course_slot"`: `"after_totals"` in walk and map, `"before_stopbys"` in course), `storyboard.py`, `spatial_renderer/overview.py` (`_render_sub_course_part`), `course.py`.
 
-- [ ] Course, `before_stopbys`: the sub course draws between the totals card (after the recap hold) and `{extras}`, for `sub_course_seconds`. If the voice leaves less time, the stop-by pops wait until it finishes. No new cue.
-- [ ] Course with no `{extras}` cue, or `after_totals`: it draws after the totals card.
-- [ ] Tests: course draws it before the first stop-by pop; a short gap delays the stop-bys; no sub course changes no frame count; walk and map are unchanged. Version bump.
+- [x] Course, `before_stopbys`: the sub course draws between the totals card (after the recap hold) and `{extras}`, for `sub_course_seconds`. If the voice leaves less time, the stop-by pops wait until it finishes. No new cue.
+- [x] Course with no `{extras}` cue, or `after_totals`: it draws after the totals card.
+- [x] Tests: course draws it before the first stop-by pop; a short gap delays the stop-bys; no sub course changes no frame count; walk and map are unchanged. Version bump.
 
 ### Phase 3: the 3D map, straight down (8.8, 8.9, D1, D6). Required before release
 
