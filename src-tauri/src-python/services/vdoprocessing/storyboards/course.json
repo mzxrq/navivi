@@ -14,6 +14,7 @@
   "course_frame": true,
   "script_intro_in_key": true,
   "visit_all_stopbys": true,
+  "ending_pin_shape": "dot",
   "timings": {
     "sub_course_seconds": 8.0,
     "cue_wait_seconds": 2.0,

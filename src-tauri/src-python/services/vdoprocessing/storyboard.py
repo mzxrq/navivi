@@ -2,6 +2,9 @@
 The renderers read these flags and beat timings instead of comparing the style name, so a style's storyboard is
 changed in its file. An unset or unknown style uses walk.
 
+ending_pin_shape: the pins in the ending zoom into the start (or end) point - "dot", or "teardrop" (with the
+overview's S / 1 / +1 labels). Any other value is a dot.
+
 timings, in seconds (a project setting of the same overview_* name, where there is one, wins):
   all     sub_course_seconds (the sub course's walk), cue_wait_seconds (wait at a stop whose cue starts a
           sentence), max_leg_seconds (longest leg on screen), intro_clean_hold_seconds (clean map before the card)
@@ -39,6 +42,7 @@ class Storyboard:
     script_intro_in_key: bool
     visit_all_stopbys: bool
     timings: Mapping[str, float]
+    ending_pin_shape: str
 
 
 def _load(style: str) -> Storyboard:
