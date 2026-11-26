@@ -663,8 +663,8 @@ These draw in screen space, over whatever map is underneath, so Phase 3 does not
 
 **Files:** `course.py` (`_course_timing`; delete `_EXTRAS_AFTER_SECONDS`).
 
-- [ ] Tests: each group starts at its cue; with no `extras` cue `extras_at is None`, no stop-by pin, card or notice is drawn, and `end_at` is not extended for it; the same for `closed`.
-- [ ] Remove both fallbacks. pytest passes. Version bump.
+- [x] Tests: each group starts at its cue; with no `extras` cue `extras_at is None`, no stop-by pin, card or notice is drawn, and `end_at` is not extended for it; the same for `closed`.
+- [x] Remove both fallbacks. pytest passes. Version bump.
 
 #### Task 10: Top of frame (8.14)
 
