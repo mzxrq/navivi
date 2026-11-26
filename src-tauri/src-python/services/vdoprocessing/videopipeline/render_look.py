@@ -173,10 +173,6 @@ _LOOK_OPTION_DEFAULTS = (
     ("overview_title", None),
     # overview_script.py reads the same key off the raw settings (default on): both now agree.
     ("enable_ending_highlight", True),
-    # Recap screen marker style: "pill_badge" (slim vertical capsule, every
-    # stop always gets a slot) or "pop_up_card" (old wide photo card, can
-    # run out of room on a large route — see popups.py's _layout_recap_cards).
-    ("overview_recap_style", "pill_badge"),
 )
 
 

@@ -638,12 +638,12 @@ def test_unset_or_unknown_style_is_walk():
 
 **Files:** `spatial_renderer/popups.py` (`_layout_ring_cards`, `_hud_card` / `_card_box_beside_badge`, the pill badge recap), `spatial_renderer/overview.py` (`_ov_layout_stay_cards`, `_ov_write_recap_preview`), `overview_animation.py`, `course.py` (`_course_pass_cards`), `tuning.py` (`OVERVIEW_CARD_MAX_SCALE`), `videopipeline/render_look.py`, `src/components/ui/VideoLookSettings.tsx`, `src/types/index.ts`.
 
-- [ ] One layout pass before the first frame returns each covered place's box and the shared scale; the walk and the recap both read it.
-- [ ] Tests: every covered card has the same size; each card's box on the frame it appears equals its box on the recap frame; 24 places do not overlap; 5 places come out larger than 24; the scale never passes the maximum.
-- [ ] Tests: 60 places all get a card (no minimum size, none dropped); a place without a photo gets no card and no badge.
-- [ ] Tests: stop-bys that appear last have their spots reserved from the start; Route map's big photo and the ending zoom keep their size.
-- [ ] Remove the overview's pill badge recap and `overview_recap_style`. The ending clip's badges (`finale_step`) stay.
-- [ ] Walk first; Route map and Whole route first take the same layout when their cards stay up (Task 12). Whole route first: cards stay during a zoom and are exactly at their recap spots once the view is whole again. Version bump.
+- [x] One layout pass before the first frame returns each covered place's box and the shared scale; the walk and the recap both read it.
+- [x] Tests: every covered card has the same size; each card's box on the frame it appears equals its box on the recap frame; 24 places do not overlap; 5 places come out larger than 24; the scale never passes the maximum.
+- [x] Tests: 60 places all get a card (no minimum size, none dropped); a place without a photo gets no card and no badge.
+- [x] Tests: stop-bys that appear last have their spots reserved from the start; Route map's big photo and the ending zoom keep their size.
+- [x] Remove the overview's pill badge recap and `overview_recap_style`. The ending clip's badges (`finale_step`) stay. (The badge recap code remains only for a storyboard with `cards_stay` off; none ships that way.)
+- [x] Walk first; Route map and Whole route first take the same layout when their cards stay up (Task 12). Whole route first: cards stay during a zoom and are exactly at their recap spots once the view is whole again. Version bump.
 
 ### Phase 2: drawing changes
 

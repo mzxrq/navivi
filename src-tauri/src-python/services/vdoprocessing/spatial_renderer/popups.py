@@ -1289,11 +1289,7 @@ A connected stop-by is loose as well: the walker passes every
             popup["beside_box"] = (int(box_x), int(box_y))
             space.reserve(popup, via)
 
-    # --- End-of-video recap: card layout --------------------------------
-    # Card scales tried largest-first for the "pop_up_card" recap style
-    # (settings.overview_recap_style) — floored at the last entry, below
-    # which a card's photo and label stop being legible.
-    _RECAP_CARD_SCALES: Tuple[float, ...] = (0.85, 0.75, 0.65, 0.55, 0.46, 0.38)
+    # --- Pill badge layout (the finale's, and a recap whose storyboard keeps no cards up) ---
     _RECAP_CARD_MARGIN = 16
     # Breathing room between neighbouring cards. Generous on purpose: at a
     # tight 10px, cards placed near each other read as one solid slab and
@@ -1591,10 +1587,7 @@ A connected stop-by is loose as well: the walker passes every
         top = float(scores.max()) if len(scores) else 0.0
         return scores / top if top > 0 else scores
 
-    # --- Cards that stay up through the walk: a ring around each pin -----
-    # Tried largest-first: the whole set is placed at one size, and the first size that
-    # fits them all is the one used (see _layout_ring_cards).
-    _RING_CARD_SCALES: Tuple[float, ...] = (1.0, 0.85, 0.7, 0.58, 0.48, 0.4, 0.33)
+    # --- Cards that stay up: a ring around each pin ----------------------
     _RING_ANGLE_STEPS = 24  # directions tried around a pin, 15 degrees apart
     _RING_STEP_PX = 26  # how far each ring sits beyond the one inside it
     _RING_STEPS = 10
@@ -1795,62 +1788,32 @@ A connected stop-by is loose as well: the walker passes every
                 break
         return slots
 
-    def _recap_cards_card_slots(
-        self, w, h, reserved_boxes, obstacles, all_pins, wanted, card_scale, card_w, card_h, slots,
-    ):
-        """One pass of the "pop_up_card" lattice, tried largest-first (_RECAP_CARD_SCALES)
-        until the frame has a slot for every popup. Returns (scale, card_w, card_h, slots)."""
-        for scale in self._RECAP_CARD_SCALES:
-            cw, ch = self.graphics.beside_card_footprint(scale)
-            candidate = self._recap_card_slots(
-                w, h, cw, ch, reserved_boxes, obstacles, centers=all_pins
-            )
-            if len(candidate) > len(slots):
-                card_scale, card_w, card_h, slots = scale, cw, ch, candidate
-            if len(candidate) >= wanted:
-                break
-        return card_scale, card_w, card_h, slots
-
-    def _recap_cards_pick_slots(
-        self, popups, w, h, reserved_boxes, route_obstacles, card_room, pill_badge, leaders, all_pins,
-    ):
-        """The lattice for this layout: (lattice_pill, card_scale, card_w, card_h, slots)."""
-        card_scale = self._RECAP_CARD_SCALES[-1]
+    def _recap_cards_pick_slots(self, popups, w, h, reserved_boxes, route_obstacles, leaders, all_pins):
+        """The lattice for this layout: (card_w, card_h, slots)."""
         # Names are shown in full, never truncated — so a pill badge's lattice must be pitched
         # for the biggest badge among these popups (every cell has to fit the tallest and the
         # widest that could land in it); a popup with a shorter name just draws a smaller (not
         # stretched) badge inside its cell, see card_hs in _layout_recap_cards.
-        lattice_pill = pill_badge and not card_room
-        if lattice_pill:
-            foots = [
-                self.graphics.beside_card_footprint(
-                    is_pill_badge=True, pill_name_chars=len(str(p.get("label") or "")),
-                )
-                for p in popups
-            ]
-            card_w = max(fw for fw, _ in foots)
-            card_h = max(fh for _, fh in foots)
-        else:
-            card_w, card_h = self.graphics.beside_card_footprint(card_scale)
+        foots = [
+            self.graphics.beside_card_footprint(
+                is_pill_badge=True, pill_name_chars=len(str(p.get("label") or "")),
+            )
+            for p in popups
+        ]
+        card_w = max(fw for fw, _ in foots)
+        card_h = max(fh for _, fh in foots)
         slots: List[Tuple[int, int]] = []
         # Second pass drops the keep-off-the-route rule: a map whose route
         # sprawls across most of the frame would otherwise leave too few
         # free slots to show every stop, and drawing them over the line
         # beats silently dropping some.
         for obstacles in (route_obstacles, None):
-            if lattice_pill:
-                slots = self._recap_cards_badge_slots(
-                    w, h, card_w, card_h, reserved_boxes, obstacles, all_pins, leaders,
-                    len(popups), slots,
-                )
-            else:
-                card_scale, card_w, card_h, slots = self._recap_cards_card_slots(
-                    w, h, reserved_boxes, obstacles, all_pins, len(popups),
-                    card_scale, card_w, card_h, slots,
-                )
+            slots = self._recap_cards_badge_slots(
+                w, h, card_w, card_h, reserved_boxes, obstacles, all_pins, leaders, len(popups), slots,
+            )
             if len(slots) >= len(popups):
                 break
-        return lattice_pill, card_scale, card_w, card_h, slots
+        return card_w, card_h, slots
 
     @staticmethod
     def _recap_cards_reveal_order(popups, all_pins) -> List[Dict]:
@@ -1866,25 +1829,20 @@ A connected stop-by is loose as well: the walker passes every
             ),
         )
 
-    def _recap_cards_geom(self, slots, card_w, card_h, leaders, route_obstacles, ordered, pill_badge):
+    def _recap_cards_geom(self, slots, card_w, card_h, leaders, route_obstacles, ordered):
         geom = _RecapCardsGeom(
             slots, card_w, card_h, leaders, route_obstacles, self.graphics.marker_radius
         )
-        # Each card's OWN height — for a pill badge, its real untruncated
-        # name may be shorter than the lattice's worst-case pitch, and
-        # anchoring against the inflated lattice card_h here would aim
-        # some leaders at empty space below its actual bottom edge. A
-        # pop-up card is all one fixed size at the chosen scale.
-        geom.card_hs = (
-            [
-                self.graphics.beside_card_footprint(
-                    is_pill_badge=True, pill_name_chars=len(str(p.get("label") or "")),
-                )[1]
-                for p in ordered
-            ]
-            if pill_badge
-            else [card_h] * len(ordered)
-        )
+        # Each badge's OWN height: its real untruncated name may be shorter
+        # than the lattice's worst-case pitch, and anchoring against the
+        # inflated lattice card_h here would aim some leaders at empty
+        # space below its actual bottom edge.
+        geom.card_hs = [
+            self.graphics.beside_card_footprint(
+                is_pill_badge=True, pill_name_chars=len(str(p.get("label") or "")),
+            )[1]
+            for p in ordered
+        ]
         return geom
 
     def _recap_cards_cost(self, geom, pins_xy, background, clutter_pull, kinds=None):
@@ -2332,19 +2290,15 @@ A connected stop-by is loose as well: the walker passes every
 
     def _recap_cards_stamp(
         self, ordered, geom, slot_for, pins_xy, cluster_anchor, suppressed, route_obstacles,
-        pill_badge, lattice_pill, card_scale,
     ) -> None:
-        """Writes each card's box, scale, line color and leader onto its popup."""
+        """Writes each badge's box, line color and leader onto its popup."""
         route_x = route_obstacles[:, 0] if route_obstacles is not None else None
         route_y = route_obstacles[:, 1] if route_obstacles is not None else None
         palette = tuning.RECAP_LINE_COLOR_PALETTE
         for j, popup in enumerate(ordered):
             sx, sy = geom.slots[slot_for[j]]
             popup["beside_box"] = (int(sx), int(sy))
-            if pill_badge:
-                popup["is_pill_badge"] = True  # what the recap draws
-            if not lattice_pill:
-                popup["card_scale"] = card_scale  # the size its slot was cut for
+            popup["is_pill_badge"] = True  # what the recap draws
             popup["recap_line_color"] = palette[j % len(palette)]
             if j in suppressed:
                 popup["suppress_leader_line"] = True
@@ -2373,23 +2327,16 @@ A connected stop-by is loose as well: the walker passes every
         h: int,
         reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
         route_obstacles: Optional[np.ndarray] = None,
-        card_room: bool = False,
         background: Optional[np.ndarray] = None,
         leaders: bool = True,
         clutter_pull: Optional[float] = None,
         total_points: Optional[int] = None,
     ) -> List[Dict]:
-        """Places EVERY recap card at once and returns them in the order
+        """Places EVERY pill badge at once and returns them in the order
         they should be revealed. `total_points` (the route's) lets each pin wear its badge's color
         (_recap_cards_match_pin_colors).
 
-        `card_room` (cards that stay up for the whole walk): the lattice is
-        pitched for the real PHOTO card, not the slim badge, and the card
-        scale is shrunk until every stop has a slot of its own — otherwise
-        the walk draws full cards into badge-sized slots and a dense route
-        buries half of them. The recap still turns them into badges.
-
-        Used for the recap instead of _layout_recap_popups' spiral/masonry
+        Used instead of _layout_recap_popups' spiral/masonry
         search, which packs each card in beside its own pin. That reads
         well for a handful of cards but cannot show a real route's full set
         together: with nothing like enough free space beside a dense
@@ -2403,22 +2350,18 @@ A connected stop-by is loose as well: the walker passes every
         inequality), so a minimum-total matching cannot hold a crossing in
         the first place.
 
-        Each card's "card_scale" and "recap_line_color" are stamped onto
-        the popup here too, so the per-frame draw never re-derives either —
-        a card must not move, resize or change color as later cards join it
-        on screen (see _render_recap_frame).
+        Each badge's "recap_line_color" is stamped onto the popup here
+        too, so the per-frame draw never re-derives it — a badge must not
+        move or change color as later ones join it on screen (see
+        _render_recap_frame).
 
-        Style picked by settings.overview_recap_style (see render_look.py):
-        "pill_badge" (default) uses the slim vertical badge footprint (see
+        The badge is the slim vertical footprint (see
         popup_box.pill_badge_footprint) at a FIXED text size — fixed-width
         and far narrower than a photo card, so a dense/large route (20+
         waypoints) still gets every stop its own slot instead of hitting
         the lattice's capacity wall; a longer name only makes its own
         badge taller (more name lines), never changes the text size, so
-        every badge in a recap reads at the same size. "pop_up_card" uses
-        the old wide photo-card footprint, tried at shrinking scales
-        (_RECAP_CARD_SCALES) until enough slots fit — it can still run out
-        of room on a large route.
+        every badge in a recap reads at the same size.
 
         `leaders` False (the recap): no leader line is drawn back to the pin at all — the badge
         carries its stop's number and the pin on the map carries the same one, so the line only
@@ -2427,31 +2370,25 @@ A connected stop-by is loose as well: the walker passes every
         if not popups:
             return []
 
-        pill_badge = self.config.get("overview_recap_style", "pill_badge") != "pop_up_card"
-        if not pill_badge:
-            return self._recap_cards_clustered(popups, w, h, reserved_boxes, route_obstacles, leaders, total_points)
-
         all_pins = [_recap_cards_pin_of(p) for p in popups]
-        lattice_pill, card_scale, card_w, card_h, slots = self._recap_cards_pick_slots(
-            popups, w, h, reserved_boxes, route_obstacles, card_room, pill_badge, leaders, all_pins,
+        card_w, card_h, slots = self._recap_cards_pick_slots(
+            popups, w, h, reserved_boxes, route_obstacles, leaders, all_pins,
         )
 
         ordered = self._recap_cards_reveal_order(popups, all_pins)
 
         if len(slots) < len(ordered):
             logger.warning(
-                "Recap layout: only %d free %s slots for %d popup cards — "
+                "Recap layout: only %d free pill-badge slots for %d popup cards — "
                 "showing %d of them.",
-                len(slots), "pill-badge" if pill_badge else "card", len(ordered), len(slots),
+                len(slots), len(ordered), len(slots),
             )
             ordered = ordered[: len(slots)]
         if not ordered:
             return []
 
         pins_xy = [_recap_cards_pin_of(p) for p in ordered]
-        geom = self._recap_cards_geom(
-            slots, card_w, card_h, leaders, route_obstacles, ordered, pill_badge
-        )
+        geom = self._recap_cards_geom(slots, card_w, card_h, leaders, route_obstacles, ordered)
         cost, clutter_pen = self._recap_cards_cost(
             geom, pins_xy, background, clutter_pull, [self._recap_cards_kind(p) for p in ordered])
         self._recap_cards_route_penalty(geom, cost, pins_xy)
@@ -2473,122 +2410,11 @@ A connected stop-by is loose as well: the walker passes every
         cluster_anchor, suppressed = self._recap_cards_shared_leaders(
             geom, clusters, pins_xy, slot_for, leaders
         )
-        self._recap_cards_stamp(
-            ordered, geom, slot_for, pins_xy, cluster_anchor, suppressed, route_obstacles,
-            pill_badge, lattice_pill, card_scale,
-        )
+        self._recap_cards_stamp(ordered, geom, slot_for, pins_xy, cluster_anchor, suppressed, route_obstacles)
         for p, (px_, py_), bh in zip(ordered, pins_xy, geom.card_hs):
             bx, by = p.get("beside_box") or (px_, py_)
             gap = math.hypot(max(bx - px_, 0, px_ - bx - geom.card_w), max(by - py_, 0, py_ - by - bh))
             p["badge_far"] = gap > self._BADGE_FAR_PX
-        self._recap_cards_match_pin_colors(ordered, total_points)
-        return ordered
-
-    _RADIAL_LINK_PX = 220.0  # pins this close share one cluster and fan out from its middle
-    _RADIAL_FAN_DEG = (0, 10, -10, 20, -20, 30, -30, 40, -40, 50, -50, 60, -60, 70, -70)
-
-    def _layout_radial_cards(
-        self, popups: List[Dict], w: int, h: int, reserved_boxes=None, route_obstacles=None,
-    ) -> List[Dict]:
-        """Cards fanned out like a starburst: each one sits on the ray from its cluster's middle through its own pin,
-        just beyond the cluster, so every leader is a short straight spoke and none cross (rays from one point
-        cannot). A lone stop fans out from the middle of all the stops. A card that finds its ray blocked slides a few
-        degrees round, then out; all cards share one size, the largest at which every one fits (as _layout_ring_cards).
-        Stamps beside_box, card_scale and recap_line_color, and returns the cards placed."""
-        if not popups:
-            return []
-        pins = [(p.get("pin_x", p["x"]), p.get("pin_y", p["y"])) for p in popups]
-        gx, gy = np.mean(pins, axis=0)
-        origin, extent, angle = {}, {}, {}
-        for idxs in _cluster_points_by_distance(pins, self._RADIAL_LINK_PX):
-            solo = len(idxs) < 2
-            ox, oy = pins[idxs[0]] if solo else tuple(np.mean([pins[i] for i in idxs], axis=0))
-            for i in idxs:
-                origin[i], extent[i] = (ox, oy), 0.0 if solo else math.hypot(pins[i][0] - ox, pins[i][1] - oy)
-                fx, fy = (pins[i][0] - gx, pins[i][1] - gy) if solo else (pins[i][0] - ox, pins[i][1] - oy)
-                angle[i] = math.atan2(fy, fx) if math.hypot(fx, fy) > 1 else -math.pi / 2
-        order = sorted(range(len(popups)), key=lambda i: -sum(
-            1 for j, q in enumerate(pins) if j != i and math.hypot(q[0] - pins[i][0], q[1] - pins[i][1]) < 220))
-        fixed, route_layer = self._ring_grids(w, h, reserved_boxes, route_obstacles)
-        r = float(self.graphics.marker_radius)
-        for px, py in pins:  # no card on any pin's head
-            self._ring_stamp(fixed, px - r - 4, py - 2.4 * r, px + r + 4, py + 6)
-
-        cell, margin, half_gap = self._RING_CELL_PX, self._RECAP_CARD_MARGIN, self._RECAP_CARD_GAP / 2
-
-        def attempt(scale: float, must_place_all: bool):
-            blocked = fixed.copy()
-            cw, ch = self.graphics.beside_card_footprint(scale)
-
-            def free(x0: float, y0: float, with_route: bool) -> bool:
-                if x0 < margin or y0 < margin or x0 + cw > w - margin or y0 + ch > h - margin:
-                    return False
-                c0, r0 = int(x0 // cell), int(y0 // cell)
-                c1, r1 = int((x0 + cw) // cell) + 1, int((y0 + ch) // cell) + 1
-                return not (blocked[r0:r1, c0:c1].any() or (with_route and route_layer[r0:r1, c0:c1].any()))
-
-            out = []
-            for i in order:
-                spot = None
-                for with_route in (True, False):
-                    for step in range(self._RING_STEPS + 2):
-                        for da in self._RADIAL_FAN_DEG:
-                            a = angle[i] + math.radians(da)
-                            ca, sa = math.cos(a), math.sin(a)
-                            reach = abs(ca) * cw / 2 + abs(sa) * ch / 2
-                            d = extent[i] + r + self._RING_PIN_GAP + reach + step * self._RING_STEP_PX
-                            x0, y0 = origin[i][0] + ca * d - cw / 2, origin[i][1] + sa * d - ch / 2
-                            cost = step * self._RING_STEP_PX + abs(da) * 1.5
-                            if (spot is None or cost < spot[0]) and free(x0, y0, with_route):
-                                spot = (cost, x0, y0)
-                    if spot is not None:
-                        break
-                if spot is None:
-                    if must_place_all:
-                        return None
-                    continue
-                out.append((i, spot[1], spot[2]))
-                self._ring_stamp(blocked, spot[1] - half_gap, spot[2] - half_gap, spot[1] + cw + half_gap, spot[2] + ch + half_gap)
-            return out
-
-        chosen, scale = None, self._RING_CARD_SCALES[-1]
-        for size in self._RING_CARD_SCALES:
-            chosen = attempt(size, True)
-            if chosen is not None:
-                scale = size
-                break
-        if chosen is None:
-            chosen = attempt(scale, False)
-            logger.warning("Radial layout: only %d of %d cards fit at the smallest size.", len(chosen), len(popups))
-        placed = []
-        for i, x0, y0 in chosen:
-            popups[i]["beside_box"] = (int(x0), int(y0))
-            popups[i]["card_scale"] = scale
-            placed.append(popups[i])
-        palette = tuning.RECAP_LINE_COLOR_PALETTE
-        for j, popup in enumerate(sorted(placed, key=lambda p: p.get("index", 0))):
-            popup["recap_line_color"] = palette[j % len(palette)]
-        return placed
-
-    def _recap_cards_clustered(
-        self, popups: List[Dict], w: int, h: int, reserved_boxes, route_obstacles, leaders: bool,
-        total_points: Optional[int],
-    ) -> List[Dict]:
-        """The "pop_up_card" recap: each photo card rests against its OWN pin (the ring layout), so the cards gather
-        in clusters where the stops do, not on a frame-wide grid, which read as machine-made (2026-11-25)."""
-        layout = self._layout_radial_cards if leaders else self._layout_ring_cards
-        placed = layout(popups, w, h, reserved_boxes=reserved_boxes, route_obstacles=route_obstacles)
-        ordered = self._recap_cards_reveal_order(placed, [_recap_cards_pin_of(p) for p in placed]) if placed else []
-        for p in ordered:
-            p.pop("leader_via", None)
-            p.pop("leader_from", None)
-            p.pop("is_pill_badge", None)
-            p["badge_far"] = False
-            p["leader_straight"] = leaders
-            if leaders:
-                p.pop("suppress_leader_line", None)
-            else:
-                p["suppress_leader_line"] = True
         self._recap_cards_match_pin_colors(ordered, total_points)
         return ordered
 
@@ -2697,12 +2523,11 @@ A connected stop-by is loose as well: the walker passes every
             recap_frame = self.graphics.render_popup_box(
                 recap_frame, hud_popup, line_only=True
             )
-        plain_dot = not fixed and self.config.get("overview_recap_style", "pill_badge") != "pop_up_card"
         for ap in active_popups:
-            if plain_dot:
-                self._draw_recap_dot(recap_frame, ap, total_points)
-            else:
+            if fixed:
                 self._draw_pin(recap_frame, ap, total_points)
+            else:  # badges name their stops: a plain dot marks each
+                self._draw_recap_dot(recap_frame, ap, total_points)
         for hud_popup in hud_popups:
             recap_frame = self.graphics.render_popup_box(
                 recap_frame, hud_popup, skip_line=True
