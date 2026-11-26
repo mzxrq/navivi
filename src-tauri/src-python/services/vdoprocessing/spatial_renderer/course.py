@@ -29,7 +29,6 @@ from .popups import zoom_card_alphas
 _TIMINGS = storyboard_of("course").timings  # this module renders the course storyboard
 _MIN_ANCHOR_GAP_SECONDS = 0.4
 _LAST_LEG_MAX_SECONDS = 4.0  # the walk to the last stop never takes longer than this
-_EXTRAS_AFTER_SECONDS = 4.0  # the stop-bys come this long after the stats, the closed places after them
 _TRACE_TAIL_SECONDS = 0.6  # the transport icon fades out over this once the trace is done
 _NOTICE_FADE_SECONDS = 0.5
 _LABEL_GAP_PX = 6  # between a stop-by's pin and the name beside it
@@ -455,12 +454,11 @@ def _course_timing(
     )
     trace_end = anchors[-1][0]
     stats_at = float(cues["end"]) if "end" in cues else trace_end + 0.5
-    # Closed places (red ×) come after the stop-bys, at {closed}; drawn like them otherwise.
-    stopbys = [ap for ap in extras if not ap["data"].get("inaccessible")]
-    closed = [ap for ap in extras if ap["data"].get("inaccessible")]
-    extras_at = float(cues["extras"]) if "extras" in cues else (stats_at + _EXTRAS_AFTER_SECONDS if stopbys else None)
-    closed_at = (float(cues["closed"]) if "closed" in cues
-                 else ((extras_at if extras_at is not None else stats_at) + _EXTRAS_AFTER_SECONDS if closed else None))
+    # Stop-bys come at {extras}, closed places (red ×) at {closed}. A group whose cue the script lacks is not shown.
+    extras_at = float(cues["extras"]) if "extras" in cues else None
+    closed_at = float(cues["closed"]) if "closed" in cues else None
+    stopbys = [ap for ap in extras if extras_at is not None and not ap["data"].get("inaccessible")]
+    closed = [ap for ap in extras if closed_at is not None and ap["data"].get("inaccessible")]
     end_at = max(
         audio_seconds + 0.3 if audio_seconds else trace_end + 6.0,
         stats_at + 2.0,
@@ -554,6 +552,7 @@ class _CourseOverviewMixin:
         numbered = [ap for ap in on_route if ap["index"] != 0 and ap is not stop_popup]
         returns = _return_stops(numbered, on_route, stop_popup, self._is_loop_route)
         timing = _course_timing(cues, audio_seconds, numbered, extras, total)
+        extras = sorted(timing.stopbys + timing.closed, key=lambda ap: ap["index"])  # only those with a cue
         panels = self._course_panels(
             summary, w, h, on_route, timing, total_points, total_smooth_dist)
         # The drawn path resampled every few px: a ferry leg is one long segment whose raw points are
