@@ -350,6 +350,10 @@ COURSE_CARD_POP_SECONDS = 0.45  # a stop's card fades in as the trace reaches it
 # The totals card comes in at the script's {distance} cue and the video holds on it at least this long
 # (project setting overview_recap_hold_seconds).
 OVERVIEW_RECAP_HOLD_SECONDS = 3.0
+# The progress rail starts NOTICE_RAIL_GAP frame px right of the last notice up; with less room than
+# RAIL_MIN_WIDTH_PX (on a 1080p frame) for its markers it is not drawn.
+NOTICE_RAIL_GAP = 24
+RAIL_MIN_WIDTH_PX = 240
 # With "Cards stay up" off, a card closes when the next one pops, though never before it was up this long.
 COURSE_CARD_MIN_SECONDS = 1.8
 # Stop-bys (then closed places) come one at a time across their sentence: at least _STAGGER apart,
