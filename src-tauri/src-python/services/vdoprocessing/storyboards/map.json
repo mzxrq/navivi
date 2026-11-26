@@ -2,7 +2,7 @@
   "name": "map",
   "passby_stopbys": true,
   "passby_closed": true,
-  "cards_stay": false,
+  "cards_stay": true,
   "big_stop_card": true,
   "one_card_at_a_time": true,
   "leg_cards": true,

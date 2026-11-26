@@ -794,7 +794,7 @@ class _PopupBoxMixin:
         """The leader line and/or card of one popup drawn onto `working_frame`; unchanged when its photo can't be read."""
         h, w = working_frame.shape[:2]
         pop_img = None if line_only else self.read_image_safe(image_path, copy=False)  # only resized below
-        if pop_img is not None and "recap_line_color" not in popup_info:
+        if pop_img is not None and "recap_line_color" not in popup_info and popup_info.get("leg_card", True):
             pop_img = self.slide_to_card(popup_info["data"], pop_img)
         if not (line_only or pop_img is not None):
             return working_frame

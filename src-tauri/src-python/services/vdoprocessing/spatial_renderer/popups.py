@@ -20,6 +20,7 @@ from .base import logger
 # iteration while probing outward for a free card spot.
 _SPIRAL_RADIUS_STEP_PX = 5.0
 _SPIRAL_ANGLE_STEP_RAD = 0.45
+CARD_STAYS_SECONDS = 3600.0  # "until the end" for a card that stays
 
 
 def _anchor_point(
@@ -2854,11 +2855,12 @@ A connected stop-by is loose as well: the walker passes every
             popup = bp["popup"]
             if exclude is not None and popup is exclude:
                 continue
-            box = popup.get("stay_box") or popup.get("beside_box")
+            fixed = popup.get("stay_box") and not popup.get("big")
+            box = popup["stay_box"] if fixed else popup.get("beside_box")
             if not box:
                 continue
             card_w, card_h = self.graphics.beside_card_footprint(
-                popup.get("stay_scale") or popup.get("card_scale", 1.0))
+                popup["stay_scale"] if fixed else popup.get("card_scale", 1.0))
             boxes.append((box[0], box[1], box[0] + card_w, box[1] + card_h))
         return boxes
 
@@ -2899,16 +2901,19 @@ A connected stop-by is loose as well: the walker passes every
         h: int,
         route_obstacles: Optional[np.ndarray],
         taken_boxes,
+        big: bool = False,
     ) -> Dict:
         """A copy of `popup` as the walk draws it: the full pop up card, at its one spot and size ("stay_box" /
-        "stay_scale", see _ov_layout_stay_cards) when it has them, with no badge styling."""
+        "stay_scale", see _ov_layout_stay_cards) when it has them, with no badge styling. `big`: the Route map's
+        arriving card, which keeps its own size and spot (and slides to the leg card) until it closes."""
         hud = popup.copy()
         for phase_key in ("is_pill_badge", "suppress_leader_line", "leader_from", "leader_via"):
             hud.pop(phase_key, None)
         hud["hud_corner"] = None
         hud["draw_leader_line"] = True
-        if popup.get("stay_box"):
+        if popup.get("stay_box") and not big:
             hud["beside_box"], hud["card_scale"] = popup["stay_box"], popup["stay_scale"]
+            hud["leg_card"] = False  # a card that stays shows its photo
         return hud
 
     def _composite_baked_popups(
@@ -2990,6 +2995,9 @@ A connected stop-by is loose as well: the walker passes every
             # decrements while drawn, so a still-waiting popup can't run out).
             if bp["frames_left"] > 0:
                 survivors.append(bp)
+            elif bp["popup"].pop("big", False) and self._cards_stay():  # now it stands at its own spot
+                bp["popup"]["beside_box"] = bp["popup"]["stay_box"]
+                survivors.append(self._make_baked_popup(bp["popup"], CARD_STAYS_SECONDS, fps or 30))
 
         return frame, survivors
 
@@ -3006,9 +3014,10 @@ A connected stop-by is loose as well: the walker passes every
             bp["popup"].pop("beside_box", None)
         for bp in flowing_visible:
             # A card with a fixed spot (_ov_layout_stay_cards) is never laid out again.
-            if bp["popup"].get("stay_box"):
+            if bp["popup"].get("stay_box") and not bp["popup"].get("big"):
                 bp["popup"]["beside_box"] = bp["popup"]["stay_box"]
-        flowing_visible = [bp for bp in flowing_visible if not bp["popup"].get("stay_box")]
+        flowing_visible = [
+            bp for bp in flowing_visible if bp["popup"].get("big") or not bp["popup"].get("stay_box")]
         if not flowing_visible:
             return
         # Room for the biggest card drawn (a "map" overview's stop card is OVERVIEW_MAP_CARD_SCALE), not the
@@ -3031,6 +3040,7 @@ A connected stop-by is loose as well: the walker passes every
             hud_popup = self.walk_card_hud(
                 bp["popup"], w, h, route_obstacles,
                 lambda popup: self._active_card_boxes(baked_popups, exclude=popup),
+                big=bool(bp["popup"].get("big")),
             )
         else:
             return None
@@ -3046,7 +3056,7 @@ A connected stop-by is loose as well: the walker passes every
         # still. Those cards simply fade in where they belong.
         if not hud_popup.get("beside_box"):
             return hud_popup
-        settled = bool(bp["popup"].get("stay_box"))
+        settled = bool(bp["popup"].get("stay_box")) and not bp["popup"].get("big")
         bx, by = hud_popup["beside_box"]
         if not settled:
             by = int(by + self._popup_slide_offset_y(bp))
