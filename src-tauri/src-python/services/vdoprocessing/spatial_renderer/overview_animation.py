@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import cv2
 import numpy as np
 
+from services.mapfetcher.graphicengine.cards import rail_left
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.storyboard import for_config as storyboard_for
 from services.vdoprocessing.vdoexporter import VideoExporter
@@ -42,8 +43,8 @@ class _NoticeWriter:
         return getattr(self._video, name)
 
     def write(self, frame: np.ndarray) -> None:
-        frame = self._renderer._apply_hud(frame)
-        self._video.write(self._renderer._apply_stopby_notice(frame))
+        frame = self._renderer._apply_stopby_notice(frame)  # first: the rail starts right of what is up
+        self._video.write(self._renderer._apply_hud(frame))
 
 
 @dataclass
@@ -184,8 +185,9 @@ class _OverviewAnimationMixin:
         if total_km is not None and total_s is not None and frac is not None:
             remaining = max(0.0, 1.0 - frac)
             live = {"remaining_km": total_km * remaining, "remaining_seconds": total_s * remaining}
-        return self.graphics.render_overview_hud(
+        frame = self.graphics.render_overview_hud(
             frame, title=getattr(self, "_hud_title", None), total_km=total_km, total_seconds=total_s, **live)
+        return self._apply_rail(frame)
 
     def _start_stopby_notice(self, fps: int, seconds: float, kind: str = "stopby") -> None:
         """Shows the stop-by notice (or, kind "closed", the closed-place one) once per video, from the next frame."""
@@ -197,29 +199,51 @@ class _OverviewAnimationMixin:
             self._stopby_notice_shown = True
         fade = max(1, int(tuning.STOPBY_NOTICE_FADE_SECONDS * fps))
         min_total = math.ceil(tuning.STOPBY_NOTICE_MIN_READ_SECONDS * fps) + 2 * fade
-        self._stopby_notice = {
+        self.__dict__.setdefault("_stopby_notices", {})[kind] = {
             "i": 0,
             "total": max(min_total, int(seconds * fps)),
             "fade": fade,
-            "kind": kind,
         }
 
+    def _active_notices(self, w: int, h: int):
+        """(kind, notice, x offset, box) of the notices up now, side by side from the bottom left."""
+        x = 0
+        notices = getattr(self, "_stopby_notices", None) or {}
+        for kind in ("stopby", "closed"):
+            if kind in notices:
+                box = self.graphics.stopby_notice_box(w, h, kind, x)
+                yield kind, notices[kind], x, box
+                x += box[2] - box[0] + int(tuning.NOTICE_RAIL_GAP * h / 1080)
+
     def _stopby_notice_reserved(self, w: int, h: int) -> List[Tuple[int, int, int, int]]:
-        notice = getattr(self, "_stopby_notice", None)
-        return [self.graphics.stopby_notice_box(w, h, notice.get("kind", "stopby"))] if notice else []
+        return [box for _, _, _, box in self._active_notices(w, h)]
 
     def _apply_stopby_notice(self, frame: np.ndarray) -> np.ndarray:
-        notice = getattr(self, "_stopby_notice", None)
-        if not notice:
+        """Draws the notices up now and notes their right edges and opacity for the rail (`_notice_edges`)."""
+        h, w = frame.shape[:2]
+        self._notice_edges = []
+        for kind, notice, x, box in list(self._active_notices(w, h)):
+            i, total, fade = notice["i"], notice["total"], notice["fade"]
+            alpha = max(0.0, min(1.0, (i + 1) / fade, (total - i) / fade))
+            notice["i"] += 1
+            if notice["i"] >= total:
+                del self._stopby_notices[kind]
+            frame = self.graphics.render_stopby_notice(
+                frame, alpha=alpha, marker_color=self._STOPBY_PIN_COLOR, kind=kind, x_offset=x)
+            self._notice_edges.append((box[2], alpha))
+        return frame
+
+    def _apply_rail(self, frame: np.ndarray) -> np.ndarray:
+        """The progress rail across the foot (the same as the course's), right of any notice."""
+        marks = getattr(self, "_rail_marks", None)
+        if not marks:
             return frame
-        i, total, fade = notice["i"], notice["total"], notice["fade"]
-        alpha = max(0.0, min(1.0, (i + 1) / fade, (total - i) / fade))
-        notice["i"] += 1
-        if notice["i"] >= total:
-            self._stopby_notice = None
-        return self.graphics.render_stopby_notice(
-            frame, alpha=alpha, marker_color=self._STOPBY_PIN_COLOR, kind=notice.get("kind", "stopby"),
-        )
+        margin = int(frame.shape[0] * 0.03)
+        self._rail_frame = getattr(self, "_rail_frame", 0) + 1  # the traveler icon's animation frame
+        return self.graphics.render_route_progress_rail(
+            frame, getattr(self, "_hud_progress_frac", None) or 0.0, marks, margin=margin,
+            mode=getattr(self, "_rail_mode", None), frame_count=self._rail_frame,
+            left=rail_left(margin, getattr(self, "_notice_edges", ())))
 
     def _play_stopby_batch(
         self,
@@ -589,6 +613,7 @@ class _OverviewAnimationMixin:
             self._hud_progress_frac = frac
         else:
             mode = "walking"
+        self._rail_mode = mode
         s.mode_history.append((mode, leg_color) if leg_color else mode)
         return mode
 

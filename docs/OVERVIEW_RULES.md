@@ -680,9 +680,9 @@ These draw in screen space, over whatever map is underneath, so Phase 3 does not
 
 **Files:** `cards.py` (`render_stopby_notice`, `render_route_progress_rail`), `course.py` (`_course_rail_left`, `_reserve_notices`), `overview_animation.py` (notice writer), `tuning.py` (`NOTICE_RAIL_GAP`, frame pixels).
 
-- [ ] Walk and map draw the same rail as course. Each notice is as wide as its text. Two notices sit side by side at bottom left (course does this today).
-- [ ] Rail left edge = right edge of the last visible notice + `NOTICE_RAIL_GAP`; its right edge stays put; the change eases with the notice fade. With too little room for its markers the rail is not drawn.
-- [ ] Tests: no notice gives the margin; one and two notices put the rail after them; very long notices never give a negative length; the badge layout still keeps clear of the notices. Version bump.
+- [x] Walk and map draw the same rail as course. Each notice is as wide as its text. Two notices sit side by side at bottom left (course does this today). (Walk and map: on the intro and the walk; their recap and ending frames, where the totals card sits bottom right, have no rail.)
+- [x] Rail left edge = right edge of the last visible notice + `NOTICE_RAIL_GAP`; its right edge stays put; the change eases with the notice fade. With too little room for its markers the rail is not drawn.
+- [x] Tests: no notice gives the margin; one and two notices put the rail after them; very long notices never give a negative length; the badge layout still keeps clear of the notices. Version bump.
 
 #### Task 12: A passed stop's card stays up (8.13, D2)
 

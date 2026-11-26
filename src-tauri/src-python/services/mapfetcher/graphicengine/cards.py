@@ -67,6 +67,18 @@ def _blend_card(out: np.ndarray, card_bgra: np.ndarray, x0: int, y0: int, alpha:
     ).astype(np.uint8)
 
 
+def rail_left(margin: int, notices: Sequence[Tuple[int, float]]) -> Optional[int]:
+    """Where the progress rail starts: None (the margin) with no notice up, else NOTICE_RAIL_GAP right of the last
+    one. `notices` is (right edge, opacity) left to right; the rail eases over as each fades in or out."""
+    left = None
+    for right, alpha in notices:
+        if alpha <= 0:
+            continue
+        base = margin if left is None else left
+        left = base + (right + tuning.NOTICE_RAIL_GAP - base) * min(1.0, alpha)
+    return None if left is None else int(round(left))
+
+
 class _CardMixin:
     @staticmethod
     def _draw_clock_icon(draw: ImageDraw.ImageDraw, cx: float, cy: float, size: float, color: Tuple):
@@ -199,7 +211,8 @@ class _CardMixin:
             (probe.textlength(p, font=body_font) for p in notice_body.split(chr(10))),
             default=0,
         )
-        body_w = int(min(0.45 * w, max(360 * s, text_x0 + longest + 24 * s)))
+        title_w = int(probe.textlength(notice_title, font=title_font))
+        body_w = int(min(0.45 * w, max(title_w + 44 * s, text_x0 + longest + 24 * s)))
         text_w = body_w - text_x0 - int(20 * s)
         lines: List[str] = []
         for paragraph in notice_body.split(chr(10)):
@@ -218,7 +231,6 @@ class _CardMixin:
         body_x0 = margin
         body_y1 = h - margin
         body_y0 = body_y1 - body_h
-        title_w = int(probe.textlength(notice_title, font=title_font))
         ribbon_h = int(50 * s)
         ribbon_x0 = body_x0 - int(10 * s)
         ribbon_y1 = body_y0 + int(12 * s)  # overlaps the body card's top edge
@@ -1375,6 +1387,8 @@ class _CardMixin:
         if alpha <= 0 or not marks:
             return frame
         h, w = frame.shape[:2]
+        if left is not None and w - margin - left < tuning.RAIL_MIN_WIDTH_PX * h / 1080:
+            return frame  # no room right of the notices for its markers
         rail_h, _, bar_y, bar_h, x0, x1 = self._rail_geometry(w, h, margin, left)
         top = h - margin - rail_h
         y = top + bar_y

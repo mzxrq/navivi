@@ -76,7 +76,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # stops are plain colour dots; v56: top HUD panels 1.5x bigger; v55: the recap sits on a plain plate and arranges its
 # badges on one lattice in walked order (see CLAUDE.md "overview recap's pill badges"); v54: a return stop takes no
 # number of its own. Older history: git log.
-OVERVIEW_RENDER_VERSION = 80  # v80: totals card at {distance}; v79: course stop-bys only with their cue
+OVERVIEW_RENDER_VERSION = 81  # v81: one bottom bar in every style; v80: totals card at {distance}
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -945,6 +945,11 @@ class _OverviewRenderMixin:
             tuple(float(v) for v in self.graphics.stopby_notice_box(w, h, kind))
             for kind in ("stopby", "closed")
         ]
+        first = reserved_boxes[-2]  # ...and the closed one beside the stop-by one
+        beside = int(first[2] - first[0] + tuning.NOTICE_RAIL_GAP * h / 1080)
+        reserved_boxes.append(tuple(float(v) for v in self.graphics.stopby_notice_box(w, h, "closed", beside)))
+        rail = self.graphics.route_progress_rail_height(h) + int(h * 0.03)  # the progress rail's band
+        reserved_boxes.append((0.0, float(h - rail), float(w), float(h)))
         # The top bar's two panels, at their widest (nothing of the route walked yet).
         km, seconds = (summary or {}).get("total_distance_km"), (summary or {}).get("total_duration_seconds")
         left, right = self.graphics.overview_hud_panels(
@@ -955,6 +960,20 @@ class _OverviewRenderMixin:
             reserved_boxes.append(
                 (float(w - _HUD_SIDE - right.size[0] - 12), 0.0, float(w), float(_HUD_TOP + right.size[1] + 12)))
         return summary_card, reserved_boxes
+
+    def _walk_rail_marks(self, active_popups: List[Dict], walk: _Walk, n_points: int) -> List[Tuple]:
+        """The progress rail's ticks for the walk: the course's, one per stop on the route, at the share of the walk
+        where the walker reaches it. Stop-bys it only passes get none."""
+        cum = walk.scale.cum_smooth_dist
+        if cum is None:
+            return []
+        stops = []
+        for ap in active_popups:
+            at = 0 if ap["index"] == 0 else len(cum) - 1 if ap["index"] == n_points - 1 else ap.get("expected_frame")
+            if at is not None and not ap["data"].get("is_stopby") and not ap["data"].get("inaccessible"):
+                stops.append({**ap, "course_dist": float(cum[min(int(at), len(cum) - 1)])})
+        stops.sort(key=lambda ap: ap["course_dist"])
+        return self._course_rail_marks(stops, n_points, walk.scale.total_smooth_dist)
 
     def _ov_layout_stay_cards(
         self, active_popups: List[Dict], stop_popup: Optional[Dict], w: int, h: int,
@@ -1200,7 +1219,8 @@ class _OverviewRenderMixin:
         # the stop-by notice plays at the first stop-by of each video
         self._stopby_notice_shown = False
         self._notice_kinds_shown = set()
-        self._stopby_notice = None
+        self._stopby_notices, self._notice_edges = {}, []
+        self._rail_marks, self._rail_mode = None, None
         audio_cues = dict(self.config.get("overview_cue_seconds") or {})
         walk_start_frames = 0
         if audio_cues:
@@ -1258,6 +1278,7 @@ class _OverviewRenderMixin:
         summary_card, reserved_boxes = self._ov_reserved_boxes(job.summary, w, h)
         self._ov_layout_stay_cards(
             active_popups, stop_popup, w, h, reserved_boxes, route_obstacle_arr, route_path=walk.path)
+        self._rail_marks = self._walk_rail_marks(active_popups, walk, len(job.points))
 
         if start_popup:
             waiting_frame = self._ov_play_intro(

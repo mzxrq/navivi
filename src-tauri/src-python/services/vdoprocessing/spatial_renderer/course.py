@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw
 
 from services import tuning
 from services.vdoprocessing.route_inputs import same_place
+from services.mapfetcher.graphicengine.cards import rail_left
 from services.mapfetcher.graphicengine.glyphs import drawable
 from services.mapfetcher.graphicengine.popup_box import fill_card_shape
 from services.logger.progress import tracker
@@ -198,7 +199,7 @@ class _Panels(NamedTuple):
     rail_marks: List[Tuple[float, str, Tuple]]
     closed_offset: int
     reserved: List[Tuple[float, float, float, float]]
-    rail_recap_left: Optional[int]  # where the rail starts once the notices are up (None: no notices)
+    rail_notices: List[Tuple[float, int]]  # (up from, right edge) of each notice, left to right
 
 
 class _Trace(NamedTuple):
@@ -686,10 +687,10 @@ class _CourseOverviewMixin:
             reserved.append((0.0, float(h - margin - rail_h), float(w), float(h)))
         before = len(reserved)
         closed_offset = self._reserve_notices(reserved, timing, w, h)
-        notices = reserved[before:]
-        rail_recap_left = int(max(b[2] for b in notices) + 24 * h / 1080) if notices else None
+        shown = [at for at, group in ((timing.extras_at, timing.stopbys), (timing.closed_at, timing.closed)) if group]
+        rail_notices = [(at, int(box[2])) for at, box in zip(shown, reserved[before:])]  # (up from, right edge)
         return _Panels(summary_card, title, total_km, total_seconds, margin, stats_y,
-                       rail_marks, closed_offset, reserved, rail_recap_left)
+                       rail_marks, closed_offset, reserved, rail_notices)
 
     def _course_rail_marks(
         self, on_route: List[Dict], total_points: int, total_smooth_dist: float,
@@ -1187,7 +1188,7 @@ class _CourseOverviewMixin:
             frame = self.graphics.composite_card_on_frame(
                 frame, panels.summary_card, alpha=u, margin=margin, corner="top_right",
                 margin_y=panels.stats_y, slide_offset_y=-(1 - u) * 80)
-        if timing.extras_at is not None and t >= timing.extras_at:
+        if timing.extras_at is not None and timing.stopbys and t >= timing.extras_at:
             frame = self.graphics.render_stopby_notice(
                 frame, alpha=_smoothstep((t - timing.extras_at) / _NOTICE_FADE_SECONDS))
         if timing.closed and timing.closed_at is not None and t >= timing.closed_at:
@@ -1199,14 +1200,9 @@ class _CourseOverviewMixin:
     @staticmethod
     def _course_rail_left(t: float, timing: _Timing, panels: _Panels) -> Optional[int]:
         """Where the rail starts at `t`: the margin, until the stop-by / closed notices come up at the
-        bottom left; then it shrinks, as they fade in, to the room right of them."""
-        if panels.rail_recap_left is None:
-            return None
-        starts = [at for at in (timing.extras_at, timing.closed_at if timing.closed else None) if at is not None]
-        if not starts or t < min(starts):
-            return None
-        u = _smoothstep((t - min(starts)) / _NOTICE_FADE_SECONDS)
-        return int(round(panels.margin + (panels.rail_recap_left - panels.margin) * u))
+        bottom left; then it shrinks, as each fades in, to the room right of the last one."""
+        return rail_left(panels.margin, [
+            (right, _smoothstep((t - at) / _NOTICE_FADE_SECONDS)) for at, right in panels.rail_notices if t >= at])
 
     def _course_ending(
         self, video: VideoExporter, w: int, h: int, fps: int, route_bg: np.ndarray, trace: _Trace,

@@ -59,6 +59,7 @@ def _renderer(config):
     renderer.graphics = SimpleNamespace(
         marker_radius=20, beside_card_footprint=_size,
         stopby_notice_box=lambda w, h, kind="stopby", offset_x=0: (20, h - 120, 320, h - 20),
+        route_progress_rail_height=lambda h: 73,
     )
     renderer._get_job_config = lambda: {}
     return renderer
