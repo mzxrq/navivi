@@ -471,13 +471,14 @@ Decided (option A). Done before Phase 2 (section 9, Task 20).
 |---|---|
 | One spot | A card appears where it stays: the same spot while the video runs and on the recap frame. It does not move, resize or turn into a badge. |
 | One size | Every covered card in a video has the same width and the same photo height. |
-| Scale | The size is the largest at which every covered card fits, up to a maximum (a constant in `tuning.py`). There is no minimum: cards shrink until all of them fit. |
+| Scale | The size is the largest at which every covered card fits, up to a maximum (a constant in `tuning.py`). There is no minimum: cards shrink until all of them fit. They shrink further so no leader line passes under another card, down to `OVERVIEW_CARD_CLEAR_LINES_MIN_SHARE` of that fitting size. |
 | No photo | A place without a photo shows its pin only, with no card and no badge. |
 | Planned up front | One layout is worked out before the first frame, counting every card that will ever appear, including later stop-bys and closed places. |
 | Clear of | Other cards, the route, pin heads, the top and bottom panels, notices and the totals card. |
 | Tie to the pin | A card sits beside its pin where there is room; otherwise a leader line joins them. |
+| Leader line | One straight line from the pin to the nearest point of its card, in every style. It passes under no other card where the layout allows. |
 | Recap look | The recap shows the same photo cards. The pill badge recap and the `overview_recap_style` setting are removed. The ending clip's own badges are not part of the overview and stay. |
-| Zoom (Whole route first) | Cards stay on screen while zoomed. They may move to fit the zoomed view, and keep their size. Once the view is back on the whole map, every card is exactly at its recap spot. |
+| Zoom (every style that zooms) | Cards never slide: while the camera moves in, each fades out at its spot, then fades in beside its zoomed pin (same size). A card whose pin is out of the zoomed view is gone until the camera is back. Once the view is whole, every card is exactly at its recap spot (`popups.zoom_card_alphas`). |
 
 **Approaches**
 
@@ -734,7 +735,7 @@ Every browser capture uses the GPU: ask first, and use a copy of a project. Auto
 
 **Files:** `spatial_renderer/overview_animation.py`, walk and map storyboards (`"cluster_min_stops": 2`).
 
-- [ ] Reuse `zoom_view`, `dense_zooms` and the GL view capture from `course.py`; move any shared function out of the course module rather than copying it. Cards that stay up move with their pins and keep their size, and are exactly at their recap spots once the view is whole again (8.18).
+- [ ] Reuse `zoom_view`, `dense_zooms` and the GL view capture from `course.py`; move any shared function out of the course module rather than copying it. Cards that stay up follow 8.18's zoom rule (`popups.zoom_card_alphas`): cross-fade, no sliding, off-view cards hidden, recap spots once the view is whole.
 - [ ] Same tests as Task 17, for walk and map. Version bump.
 
 #### Task 19: Remove the old flat overview

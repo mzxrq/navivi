@@ -1,10 +1,12 @@
 import math
 from types import SimpleNamespace
 
+import cv2
 import numpy as np
 import pytest
 
 from services import tuning
+from services.mapfetcher.graphicengine import GraphicsEngine
 from services.vdoprocessing.spatial_renderer.course import (
     _CourseOverviewMixin, _drawn_path, _pin_head_box, _Trace, dense_zooms, gl_view_state, zoom_view)
 from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
@@ -115,30 +117,46 @@ def _overlap(a, b):
 VIEW = (2.0, 480.0, 270.0)  # shows base x 480..1440, y 270..810
 
 
-def test_zoomed_cards_keep_their_size_and_stay_in_the_frame_then_return_to_their_spots():
+def test_a_zoomed_card_has_its_size_and_a_place_in_the_frame_and_the_whole_map_has_every_card_at_its_spot():
     inside, outside = _card(0, 900, 540, (100, 100)), _card(1, 100, 100, (300, 800))  # the second pin is off view
     course, scene = _course([inside, outside], [(4.0, 9.0, *VIEW)])
-    places = [course._zoom_card_place(c, scene, 6.0, VIEW, [], W, H) for c in (inside, outside)]
-    assert [p[2] for p in places] == [1.4, 1.4]
-    assert all(0 <= x0 and x1 <= W and 0 <= y0 and y1 <= H for x0, y0, x1, y1 in _boxes(places))
-    assert not _overlap(*_boxes(places))
+    x, y, sc = course._zoom_card_place(inside, scene, 6.0, VIEW, [], W, H)
+    assert sc == 1.4 and 0 <= x <= W - int(210 * sc) and 0 <= y <= H - int(170 * sc)
     drawn = []
     course.graphics.render_popup_box = lambda frame, info, **k: drawn.append((info["index"], info["beside_box"])) or frame
     course._course_layer(scene, course._course_plate_state(scene, 12.0), np.zeros((H, W, 3), np.uint8))
     assert set(drawn) == {(0, (100, 100)), (1, (300, 800))}
 
 
-def test_the_zoomed_map_moves_every_card_up_to_its_zoomed_place():
-    cards = [_card(0, 900, 540, (100, 100)), _card(1, 100, 100, (300, 800))]
+def _zoomed_draws(t):
+    """(course, scene, the (index, box, alpha) of every visible card draw in the zoomed frame at `t`)."""
+    cards = [_card(0, 900, 540, (100, 100), course_at=1.0), _card(1, 100, 100, (300, 800), course_at=1.0)]
     course, scene = _course(cards, [(4.0, 9.0, *VIEW)])
     drawn = []
-    course.graphics.render_popup_box = lambda frame, info, **k: drawn.append((info["index"], info["beside_box"])) or frame
+
+    def box(frame, info, alpha=1.0, **k):
+        drawn.append((info["index"], info["beside_box"], alpha))
+        return frame
+
+    course.graphics.render_popup_box = box
     trace = _Trace(np.array([[0.0, 0.0], [10.0, 10.0]]), np.array([0.0, 14.0]), [(0, 0), (10, 10)],
                    ["walking", "walking"], (0, 0, 0), 4, 0)
     timing = SimpleNamespace(route_at=100.0, trace_end=200.0)
-    course._course_zoomed_map(180, 6.0, VIEW, np.zeros((H, W, 3), np.uint8), scene,
-                              course._course_plate_state(scene, 6.0), trace, timing, None, 0, np.array([0.0, 0.0]))
-    assert set(drawn) == {(c["index"], course._zoom_card_place(c, scene, 6.0, VIEW, [], W, H)[:2]) for c in cards}
+    course._course_zoomed_map(int(t * 30), t, VIEW, np.zeros((H, W, 3), np.uint8), scene,
+                              course._course_plate_state(scene, t), trace, timing, None, 0, np.array([0.0, 0.0]))
+    return course, scene, [d for d in drawn if d[2] > 0]
+
+
+def test_fully_zoomed_only_a_card_whose_pin_is_in_view_shows_by_its_pin():
+    course, scene, drawn = _zoomed_draws(6.0)
+    x, y, _ = course._zoom_card_place(scene.cards[0], scene, 6.0, VIEW, [], W, H)
+    assert {(i, b) for i, b, _ in drawn} == {(0, (x, y))}
+
+
+def test_while_the_camera_starts_in_every_card_fades_out_at_its_own_spot():
+    _, _, drawn = _zoomed_draws(3.4)  # a quarter of the way into the ease
+    assert {(i, b) for i, b, _ in drawn} == {(0, (100, 100)), (1, (300, 800))}
+    assert all(a < 1 for _, _, a in drawn)
 
 
 def test_cards_up_together_while_zoomed_cover_no_card_and_no_pin():
@@ -173,6 +191,33 @@ def test_a_closing_course_card_is_up_long_enough_to_be_seen():
     course.config = {"overview_style": "course", "overview_cards_stay": False}
     assert course._course_plate_state(scene, 5.0 + tuning.COURSE_CARD_MIN_SECONDS - 0.5, None, 20.0)[0] == (0, 1)
     assert course._course_plate_state(scene, 5.0 + tuning.COURSE_CARD_MIN_SECONDS + 0.1, None, 20.0)[0] == (1,)
+
+
+@pytest.mark.parametrize("pin", [(505, 600), (900, 400), (150, 420), (505, 20)])
+def test_a_course_leader_is_unbroken_from_its_pin_to_the_card_as_drawn(tmp_path, pin):
+    """The lines were cut under the card's LAYOUT box (room for a two-line name), so one coming from below stopped
+    about 17 px short of a one-line card (2026-11-26)."""
+    photo = tmp_path / "p.png"
+    cv2.imwrite(str(photo), np.full((90, 160, 3), 60, np.uint8))
+    card = {"index": 0, "x": pin[0], "y": pin[1], "course_at": 1.0, "stay_box": (400, 100), "stay_scale": 1.0,
+            "label": "神島", "leader_straight": True, "border_color": (0, 0, 255), "data": {"popup_image": str(photo)}}
+    course = _Course()
+    course.config = {"overview_style": "course"}
+    course.graphics = GraphicsEngine()
+    scene = SimpleNamespace(on_route=[], cards={0: card}, laid_out=[card], extras=[], returns=set(), labels={},
+                            label_at={}, total_points=1, fps=30, draw_marker=lambda *a, **k: None)
+    background = np.full((H, W, 3), 230, np.uint8)
+    keep, layer = course._course_overlay(scene, course._course_plate_state(scene, 5.0), background)
+    frame = np.clip(background * keep + layer, 0, 255)
+    x, y, cw, ch = course.graphics.popup_card_geometry(course._recap_cards([card])[0], W, H)
+    end = (min(max(pin[0], x + 18), x + cw - 18), min(max(pin[1], y + 18), y + ch - 18))  # toward the rounded card
+    length = math.dist(pin, end)
+    for step in range(8, int(length)):
+        px, py = (pin[i] + (end[i] - pin[i]) * step / length for i in (0, 1))
+        if math.dist((px, py), end) <= 19:  # from here on it is the card itself
+            break
+        b, g, r = frame[int(round(py)), int(round(px))]
+        assert r > 150 and g < 170, (round(px), round(py), (b, g, r))  # still the red line
 
 
 def test_a_zoomed_card_keeps_off_the_route_beside_its_pin():

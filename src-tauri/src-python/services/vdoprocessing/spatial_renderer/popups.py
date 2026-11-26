@@ -2,6 +2,7 @@
 and the end-of-video highlight's higher-zoom image fetch."""
 
 import math
+from functools import partial
 from typing import Dict, List, Optional, Tuple
 
 import cv2
@@ -21,6 +22,13 @@ from .base import logger
 _SPIRAL_RADIUS_STEP_PX = 5.0
 _SPIRAL_ANGLE_STEP_RAD = 0.45
 CARD_STAYS_SECONDS = 3600.0  # "until the end" for a card that stays
+
+
+def zoom_card_alphas(ease: float) -> Tuple[float, float]:
+    """(opacity at its whole-map spot, opacity at its zoomed spot) of a standing card while a camera zoom is `ease`
+    (0..1) of the way in: it fades out at one and in at the other, so cards never slide across each other. A card
+    whose pin is out of the zoomed view has no zoomed spot: it is gone until the camera is back."""
+    return max(0.0, 1.0 - 2.0 * ease), max(0.0, 2.0 * ease - 1.0)
 
 
 def _anchor_point(
@@ -1635,18 +1643,27 @@ A connected stop-by is loose as well: the walker passes every
         )
         fixed, route_layer = self._ring_grids(w, h, reserved_boxes, route_obstacles)
 
-        # A card may sit anywhere in the frame (a leader line joins it to its pin): size comes first.
+        # A card may sit anywhere in the frame (a leader line joins it to its pin): size comes first, then
+        # leaders that pass under no other card (down to OVERVIEW_CARD_CLEAR_LINES_MIN_SHARE of that size).
         steps = int(math.hypot(w, h) // self._RING_STEP_PX)
         scale = tuning.OVERVIEW_CARD_MAX_SCALE * h / 1080
-        while True:
+        best, floor = None, 0.0  # best: (leaders under a card, scale, spots)
+        while scale >= floor:
             chosen = self._ring_attempt(scale, True, w, h, pins, order, fixed, route_layer, steps)
             if chosen is not None:
-                break
-            if self.graphics.beside_card_footprint(scale)[0] < self._RING_CELL_PX:  # the frame has no room at all
-                chosen = self._ring_attempt(scale, False, w, h, pins, order, fixed, route_layer, steps)
-                logger.warning("Ring layout: only %d of %d cards fit anywhere.", len(chosen), len(popups))
+                chosen, under = self._ring_untangle(pins, chosen, *self.graphics.beside_card_footprint(scale))
+                floor = floor or scale * tuning.OVERVIEW_CARD_CLEAR_LINES_MIN_SHARE
+                if best is None or under < best[0]:
+                    best = (under, scale, chosen)
+                if not under:
+                    break
+            elif self.graphics.beside_card_footprint(scale)[0] < self._RING_CELL_PX:  # the frame has no room at all
+                best = (0, scale, self._ring_attempt(scale, False, w, h, pins, order, fixed, route_layer, steps))
+                logger.warning("Ring layout: only %d of %d cards fit anywhere.", len(best[2]), len(popups))
                 break
             scale *= tuning.OVERVIEW_CARD_SHRINK_STEP
+        under, scale, chosen = best
+        logger.info("Ring layout: %d card(s) at scale %.2f, %d leader(s) under a card.", len(chosen), scale, under)
 
         placed = []
         for i, x0, y0 in chosen:
@@ -1692,17 +1709,18 @@ A connected stop-by is loose as well: the walker passes every
         return fixed, route_layer
 
     def _ring_find_spot(
-        self, px: float, py: float, cw: int, ch: int, free, steps: int
+        self, px: float, py: float, cw: int, ch: int, free, steps: int, rules: Tuple = (True, False)
     ) -> Optional[Tuple[float, float, float]]:
-        """The nearest (r, x0, y0) around a pin where `free` accepts a cw x ch card."""
+        """The nearest (r, x0, y0) around a pin where `free` accepts a cw x ch card. `rules` are handed to
+        `free` strictest first: a looser one is tried only once nothing anywhere satisfies the one before."""
         pin_r = float(self.graphics.marker_radius)
         angles = [
             2 * math.pi * i / self._RING_ANGLE_STEPS for i in range(self._RING_ANGLE_STEPS)
         ]
         spot = None
-        # A card over the route beats no card at all, so the keep-off-the-route rule
-        # is dropped only once nothing anywhere around the pin fits with it.
-        for with_route in (True, False):
+        # A card over the route beats no card at all, so each rule is dropped only once
+        # nothing anywhere around the pin fits with it.
+        for rule in rules:
             for step in range(steps):
                 if spot is not None and step * self._RING_STEP_PX > spot[0]:
                     break  # every farther ring scores worse than the spot in hand
@@ -1716,11 +1734,38 @@ A connected stop-by is loose as well: the walker passes every
                     # A card above its pin costs _RING_UP_PX more than one below: a crowded harbour then
                     # spreads its cards down the frame instead of piling them up over the route.
                     r += max(0.0, -sa) * self._RING_UP_PX
-                    if free(x0, y0, with_route) and (spot is None or r < spot[0]):
+                    if (spot is None or r < spot[0]) and free(x0, y0, rule):
                         spot = (r, x0, y0)
             if spot is not None:
                 return spot  # every ring compared, so a spot below can beat a nearer one above
         return None
+
+    @staticmethod
+    def _ring_untangle(
+        pins: List[Tuple[float, float]], chosen: List[Tuple[int, float, float]], cw: int, ch: int,
+    ) -> Tuple[List[Tuple[int, float, float]], int]:
+        """The same card spots dealt out to the pins again (every card is one size, so any card can take any spot):
+        fewest leaders passing under another card first, then the shortest leaders. Returns (spots, how many
+        leader-under-card crossings are left)."""
+        if not chosen:
+            return chosen, 0
+        corners = np.array([(x, y) for _, x, y in chosen], dtype=float)
+        ends = corners + (cw, ch)
+        at = np.array([pins[i] for i, _, _ in chosen], dtype=float)
+        t = np.linspace(0.02, 0.98, 60)[:, None]
+        under = np.zeros((len(at), len(corners)))
+        length = np.zeros_like(under)
+        for i, pin in enumerate(at):
+            for b in range(len(corners)):
+                nearest = np.clip(pin, corners[b], ends[b])
+                points = pin + (nearest - pin) * t
+                inside = ((points[:, None, :] > corners) & (points[:, None, :] < ends)).all(axis=2).any(axis=0)
+                inside[b] = False
+                under[i, b], length[i, b] = inside.sum(), math.dist(pin, nearest)
+        # Squared lengths: the cheapest deal then avoids crossed leaders as well as long ones.
+        rows, spots = linear_sum_assignment(under * 1e9 + length ** 2)
+        out = [(chosen[i][0], chosen[b][1], chosen[b][2]) for i, b in zip(rows, spots)]
+        return out, int(under[rows, spots].sum())
 
     def _ring_attempt(
         self,
@@ -1734,25 +1779,41 @@ A connected stop-by is loose as well: the walker passes every
         route_layer: np.ndarray,
         steps: int,
     ) -> Optional[List[Tuple[int, float, float]]]:
-        """Every card at this one size, or None if one of them has nowhere to go within `steps` rings."""
+        """Every card at this one size, or None if one of them has nowhere to go within `steps` rings.
+        A card's leader (straight, pin to its nearest point) passes under no other card, and a card covers no
+        earlier leader, unless nowhere in the frame allows it."""
         cell = self._RING_CELL_PX
         margin = self._RECAP_CARD_MARGIN
         half_gap = self._RECAP_CARD_GAP / 2
         blocked = fixed.copy()
+        cards, leaders = np.zeros_like(fixed), np.zeros_like(fixed)  # the placed cards; their leader lines
+        reach = float(self.graphics.marker_radius) / 2
+        for px, py in pins:  # a covered pin's leader would start under that card: count each pin as a line already
+            self._ring_stamp(leaders, px - reach, py - reach, px + reach, py + reach)
+        gh, gw = fixed.shape
         cw, ch = self.graphics.beside_card_footprint(scale)
 
-        def free(x0: float, y0: float, with_route: bool) -> bool:
+        def leader(px: float, py: float, x0: float, y0: float) -> Tuple[np.ndarray, np.ndarray]:
+            ax, ay = min(max(px, x0), x0 + cw), min(max(py, y0), y0 + ch)
+            t = np.linspace(0.0, 1.0, int(max(abs(ax - px), abs(ay - py)) * 2 // cell) + 2)
+            return (np.clip(((py + (ay - py) * t) // cell).astype(int), 0, gh - 1),
+                    np.clip(((px + (ax - px) * t) // cell).astype(int), 0, gw - 1))
+
+        def free(px: float, py: float, x0: float, y0: float, rule: Tuple[bool, bool]) -> bool:
+            with_route, clear_leaders = rule
             if x0 < margin or y0 < margin or x0 + cw > w - margin or y0 + ch > h - margin:
                 return False
             c0, r0 = int(x0 // cell), int(y0 // cell)
             c1, r1 = int((x0 + cw) // cell) + 1, int((y0 + ch) // cell) + 1
-            if blocked[r0:r1, c0:c1].any():
+            if blocked[r0:r1, c0:c1].any() or (with_route and route_layer[r0:r1, c0:c1].any()):
                 return False
-            return not (with_route and route_layer[r0:r1, c0:c1].any())
+            return not (clear_leaders and (leaders[r0:r1, c0:c1].any() or cards[leader(px, py, x0, y0)].any()))
 
+        # Clear leaders matter more than a clear route.
+        rules = ((True, True), (False, True), (True, False), (False, False))
         out: List[Tuple[int, float, float]] = []
         for i in order:
-            spot = self._ring_find_spot(*pins[i], cw, ch, free, steps)
+            spot = self._ring_find_spot(*pins[i], cw, ch, partial(free, *pins[i]), steps, rules)
             if spot is None:
                 if must_place_all:
                     return None
@@ -1762,6 +1823,8 @@ A connected stop-by is loose as well: the walker passes every
             self._ring_stamp(
                 blocked, x0 - half_gap, y0 - half_gap, x0 + cw + half_gap, y0 + ch + half_gap
             )
+            self._ring_stamp(cards, x0, y0, x0 + cw, y0 + ch)
+            leaders[leader(*pins[i], x0, y0)] = True
         return out
 
     def _recap_cards_badge_slots(

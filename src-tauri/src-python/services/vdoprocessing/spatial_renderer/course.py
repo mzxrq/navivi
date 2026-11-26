@@ -17,11 +17,13 @@ from PIL import Image, ImageDraw
 from services import tuning
 from services.vdoprocessing.route_inputs import same_place
 from services.mapfetcher.graphicengine.glyphs import drawable
+from services.mapfetcher.graphicengine.popup_box import fill_card_shape
 from services.logger.progress import tracker
 from services.vdoprocessing.storyboard import of as storyboard_of
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
+from .popups import zoom_card_alphas
 
 _TIMINGS = storyboard_of("course").timings  # this module renders the course storyboard
 _MIN_ANCHOR_GAP_SECONDS = 0.4
@@ -381,9 +383,15 @@ def release_zooms_before_exit(
             for (t_in, t_out, s, x0, y0), limit in zip(zooms, limits)]
 
 
-def zoomed_card_box(stay_box: Tuple[int, int], zoom_box: Tuple[int, int], ease: float) -> Tuple[int, int]:
-    """A standing card's spot while the camera zooms: from its whole-map spot (ease 0) to its zoomed one (ease 1)."""
-    return tuple(int(round(a + (b - a) * ease)) for a, b in zip(stay_box, zoom_box))
+def _zoomed_pin(ap: Dict, view: Tuple[float, float, float]) -> Tuple[float, float]:
+    """Where a stop's pin is in the zoomed frame of `view` (zoom, crop x, crop y)."""
+    s, x0, y0 = view
+    return (ap.get("pin_x", ap["x"]) - x0) * s, (ap.get("pin_y", ap["y"]) - y0) * s
+
+
+def _pin_in_view(ap: Dict, view: Tuple[float, float, float], w: int, h: int) -> bool:
+    x, y = _zoomed_pin(ap, view)
+    return 0 <= x <= w and 0 <= y <= h
 
 
 def _view_key(view: Tuple[float, float, float]) -> Tuple[float, float, float]:
@@ -914,11 +922,12 @@ class _CourseOverviewMixin:
         if route is not None and route.shape == a_lines.shape[:2]:
             keep_line = (~route)[..., None]
             lines, a_lines = lines * keep_line, a_lines * keep_line
-        cut = np.zeros(a_lines.shape[:2], dtype=bool)  # no line shows through a photo (a dimmed one is see-through)
+        cut = np.zeros(a_lines.shape[:2], dtype=np.uint8)  # no line shows through a photo (a dimmed one is see-through)
         for hud in self._recap_cards([scene.cards[i] for i in state[0]]):
-            (bx, by), (cw, ch) = hud["beside_box"], self.graphics.beside_card_footprint(hud["card_scale"])
-            cut[max(0, int(by)):max(0, int(by + ch)), max(0, int(bx)):max(0, int(bx + cw))] = True
-        lines, a_lines = lines * (~cut)[..., None], a_lines * (~cut)[..., None]
+            # The card AS DRAWN: the layout's footprint leaves room for a two-line name, and cut the lines short.
+            fill_card_shape(cut, *self.graphics.popup_card_geometry(hud, a_lines.shape[1], a_lines.shape[0]))
+        keep = (cut == 0)[..., None]
+        lines, a_lines = lines * keep, a_lines * keep
         rest, a_rest = layer("rest")
         on_black, opacity = rest + lines * (1.0 - a_rest), a_rest + a_lines * (1.0 - a_rest)
         # 3 channels and the rounding folded in, for the per-frame cv2 blend (3.5x numpy's).
@@ -997,32 +1006,30 @@ class _CourseOverviewMixin:
         self, card: Dict, scene: _Scene, t: float, view: Tuple[float, float, float], reserved, w: int, h: int,
     ) -> Tuple[int, int, float]:
         """(x, y, scale) of a card's spot while zoomed, at the zoom's closest view (kept for the whole zoom, so the card
-        follows its pin without jumping). Every card up during one zoom is placed together (_zoom_place_group)."""
+        follows its pin without jumping). Every card in view during one zoom is placed together (_zoom_place_group)."""
         zoom = self._zoom_at(t)
         hold = tuple(zoom[2:]) if zoom else view
         cache = self.__dict__.setdefault("_zoom_card_sides", {})
         key = (card["index"], hold)
         if key not in cache:
             end = zoom[1] + tuning.COURSE_DENSE_EASE_SECONDS if zoom else t
-            group = [c for c in scene.cards.values() if c["course_at"] <= end]
+            group = [c for c in scene.cards.values() if c["course_at"] <= end and _pin_in_view(c, hold, w, h)]
             if not any(c is card for c in group):
                 group.append(card)
             self._zoom_place_group(group, hold, scene, reserved, w, h, cache)
         return cache[key]
 
     def _zoom_place_group(self, group: List[Dict], hold, scene: _Scene, reserved, w: int, h: int, cache: Dict) -> None:
-        """Places a zoom's cards at their own size, each at the nearest clear spot to its pin in the zoomed view (the
-        ring search of the whole-map layout): clear of the panels, every pin and each other, and of the route where
-        it can. A pin outside the view counts at the frame's edge, so its card stays in sight; the cards whose pin is
-        in view pick first."""
+        """Places a zoom's cards at their own size, in the order they pop, each at the nearest clear spot to its pin
+        in the zoomed view (the ring search of the whole-map layout): clear of the panels, every pin, each other and
+        each other's leaders, and of the route where it can."""
         s, x0, y0 = hold
 
         def at(p: Dict) -> Tuple[float, float]:
-            return (p.get("pin_x", p["x"]) - x0) * s, (p.get("pin_y", p["y"]) - y0) * s
+            return _zoomed_pin(p, hold)
 
         pins = [at(c) for c in group]
-        order = sorted(range(len(group)), key=lambda i: (
-            not (0 <= pins[i][0] <= w and 0 <= pins[i][1] <= h), group[i]["course_at"]))
+        order = sorted(range(len(group)), key=lambda i: group[i]["course_at"])
         route = getattr(self, "_course_route_px", None)
         if route is not None:
             route = (route - np.array([x0, y0])) * s
@@ -1030,9 +1037,9 @@ class _CourseOverviewMixin:
         fixed, route_layer = self._ring_grids(
             w, h, list(reserved) + [_pin_head_box(self.graphics, *at(p)) for p in scene.on_route], route)
         scale = group[0]["stay_scale"]  # every card has the video's one size
-        near = [(min(max(x, 0.0), float(w)), min(max(y, 0.0), float(h))) for x, y in pins]
         steps = int(math.hypot(w, h) // self._RING_STEP_PX)
-        for i, x, y in self._ring_attempt(scale, False, w, h, near, order, fixed, route_layer, steps):
+        spots = self._ring_attempt(scale, False, w, h, pins, order, fixed, route_layer, steps)
+        for i, x, y in self._ring_untangle(pins, spots, *self.graphics.beside_card_footprint(scale))[0]:
             cache[(group[i]["index"], hold)] = (int(x), int(y), scale)
         for c in group:  # no room anywhere: it keeps its whole-map spot
             cache.setdefault((c["index"], hold), (*c["stay_box"], scale))
@@ -1042,8 +1049,9 @@ class _CourseOverviewMixin:
         trace: _Trace, timing: _Timing, heading: _Heading, k: int, head, reserved=(),
     ) -> np.ndarray:
         """The map layer of a zoomed frame, drawn on the map at `view` instead of cropped from the base frame: the
-        route, trace, pins and walker at their zoomed places but their own size, and every card up at its own size,
-        moving from its spot to a clear one by its zoomed pin and back (zoomed_card_box)."""
+        route, trace, pins and walker at their zoomed places but their own size, and the cards at their own size,
+        fading from their spots to clear ones by their zoomed pins and back; a card whose pin is out of the zoomed
+        view is gone meanwhile (zoom_card_alphas)."""
         s, x0, y0 = view
         h, w = gl_bg.shape[:2]
 
@@ -1062,15 +1070,17 @@ class _CourseOverviewMixin:
         shown, anim, bumps, arrived, extra_on, dim = state
         alpha, walked = dict(anim), {ap["index"] for ap in scene.on_route}
         zoom = self._zoom_at(t)
-        cards = []  # (hud, alpha) per card up
+        at_spot, by_pin = zoom_card_alphas(_zoom_ease(t, zoom[0], zoom[1]) if zoom is not None else 0.0)
+        cards = []  # (hud, alpha) per card to draw
         for index in shown:
             card = scene.cards[index]
-            box = card["stay_box"]
-            if zoom is not None:
-                sx, sy, _ = self._zoom_card_place(card, scene, t, view, reserved, w, h)
-                box = zoomed_card_box(box, (sx, sy), _zoom_ease(t, zoom[0], zoom[1]))
+            box, fade = card["stay_box"], at_spot
+            if by_pin > 0:
+                if not _pin_in_view(card, tuple(zoom[2:]), w, h):
+                    continue
+                box, fade = self._zoom_card_place(card, scene, t, view, reserved, w, h)[:2], by_pin
             hud = dict(self.walk_card_hud(moved(card), 0, 0, None, None), beside_box=box)
-            cards.append((hud, _smoothstep(alpha.get(index, 1.0)) * (dim if index in walked else 1.0)))
+            cards.append((hud, fade * _smoothstep(alpha.get(index, 1.0)) * (dim if index in walked else 1.0)))
 
         frame = gl_bg.copy()
         for hud, a in cards:  # the leader lines go under the route

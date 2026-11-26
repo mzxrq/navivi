@@ -157,6 +157,9 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
   minimum), clustered at their pins off the route, pins and panels; walk/map stamp `stay_box` / `stay_scale`
   (`overview._ov_layout_stay_cards`), course in `course._course_cards`. A place without a photo shows its pin only
   (`no_card`). Route map's big arriving photo (`popup["big"]`) becomes the standing card when it closes.
+  Leaders are straight, pin to the card's nearest point (`leader_straight`, set in `_ov_style_badges`). The ring
+  search keeps cards off earlier leaders, `_ring_untangle` re-deals the spots among the pins, and the size shrinks
+  until no leader passes under a card, floored at `OVERVIEW_CARD_CLEAR_LINES_MIN_SHARE` of the fitting size.
   `settings.overview_cards_stay` off closes cards during the walk (course: when the next one pops, up at least
   `tuning.COURSE_CARD_MIN_SECONDS`); the recap / last map shows them at the same spots.
   There is no pill badge recap setting any more (`overview_recap_style` removed).
@@ -183,9 +186,9 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
   runs of 3+ stops whose stretch is `COURSE_DENSE_ZOOM_MIN`x smaller than the whole ROUTE, not the frame), the GL map
   is captured once per distinct view (`_course_gl_frames`, `gl_view_state`, frames saved to a temp dir as they come),
   and `_course_zoomed_map` redraws route, trace, pins, walker and cards on it at their zoomed places but normal size.
-  A card up during a zoom keeps its size and moves from its spot to the nearest clear one by its zoomed pin
-  (`_zoom_card_place` → `_zoom_place_group`, the ring search; all of a zoom's cards at once and kept for the whole
-  zoom; a pin outside the view counts at the frame's edge), easing there and back (`zoomed_card_box`). With a Mapbox
+  A card up during a zoom keeps its size: it fades out at its spot and in at the nearest clear one by its zoomed pin,
+  and back (`popups.zoom_card_alphas`; never sliding). A card whose pin is out of view is hidden meanwhile
+  (`_zoom_card_place` → `_zoom_place_group`, the ring search, all in-view cards at once, kept for the zoom). With a Mapbox
   key the course background is always the GL map (`mapfetcher.fetch_image`) so the styles match; without one, or if
   the capture fails, the base map is cropped and the cards redrawn on it. The ending reads job_config.json from the
   folders ABOVE the output dir, so a test render outside the project silently has no ending.

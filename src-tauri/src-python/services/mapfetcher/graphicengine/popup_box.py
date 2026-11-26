@@ -15,6 +15,18 @@ from services.vdoprocessing.storyboard import of as storyboard_of
 
 from .glyphs import drawable
 
+CARD_CORNER_RADIUS = 18  # the photo card's corners, in frame pixels (whatever the card's scale)
+
+
+def fill_card_shape(mask: np.ndarray, x: int, y: int, w: int, h: int) -> None:
+    """Marks the pixels a card at (x, y) of w x h really covers - its corners are rounded - in a uint8 `mask`."""
+    r = int(min(CARD_CORNER_RADIUS, w // 2, h // 2))
+    cv2.rectangle(mask, (x + r, y), (x + w - 1 - r, y + h - 1), 255, -1)
+    cv2.rectangle(mask, (x, y + r), (x + w - 1, y + h - 1 - r), 255, -1)
+    for cx in (x + r, x + w - 1 - r):
+        for cy in (y + r, y + h - 1 - r):
+            cv2.circle(mask, (cx, cy), r, 255, -1)
+
 
 class _PopupBoxMixin:
     # Base (card_scale=1.0) pixel width of a "beside the pin" popup card —
@@ -462,7 +474,18 @@ class _PopupBoxMixin:
         # stretch still reads as "coming from the cluster's
         # edge", not from the pin itself.
         via = popup_info.get("leader_via")
-        if via is not None:
+        if popup_info.get("leader_straight"):
+            # The overview's cards: one straight line from the pin to the nearest point of the card, which is
+            # what the layout keeps clear of every other card (popups._ring_attempt).
+            # On the ROUNDED card: stopping at the square corner left a gap there. Ends 2 px inside, under it.
+            r = min(CARD_CORNER_RADIUS, total_w // 2, total_h // 2)
+            cx = min(max(point_x, box_x + r), box_x + total_w - r)  # the nearest point of the card shrunk by r
+            cy = min(max(point_y, box_y + r), box_y + total_h - r)
+            away = math.hypot(point_x - cx, point_y - cy)
+            reach = (r - 2) / away if away > r else 0.0
+            end = (int(round(cx + (point_x - cx) * reach)), int(round(cy + (point_y - cy) * reach)))
+            cv2.line(working_frame, (point_x, point_y), end, line_color, line_width, cv2.LINE_AA)
+        elif via is not None:
             via_x, via_y = int(via[0]), int(via[1])
             anchor_x = min(max(via_x, box_x), box_x + total_w)
             anchor_y = min(max(via_y, box_y), box_y + total_h)
@@ -635,7 +658,7 @@ class _PopupBoxMixin:
         card_box = [box_x, box_y, box_x + total_w - 1, box_y + total_h - 1]
         draw.rounded_rectangle(
             card_box,
-            radius=18,
+            radius=CARD_CORNER_RADIUS,
             fill=self.ui["card_bg"][:3] + (250,),
         )
         return pil_canvas
@@ -652,7 +675,7 @@ class _PopupBoxMixin:
         """
         mask = Image.new("L", (pw, ph), 0)
         ImageDraw.Draw(mask).rounded_rectangle(
-            [0, 0, pw - 1, ph - 1], radius=18, fill=255,
+            [0, 0, pw - 1, ph - 1], radius=CARD_CORNER_RADIUS, fill=255,
             corners=(True, True, not caption_below, not caption_below),
         )
         return mask
