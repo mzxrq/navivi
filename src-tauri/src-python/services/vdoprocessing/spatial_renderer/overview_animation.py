@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
+from services.vdoprocessing.storyboard import for_config as storyboard_for
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services.logger.progress import tracker
 from services import tuning
@@ -807,7 +808,7 @@ class _OverviewAnimationMixin:
         if popup.get("no_pause"):
             early = 0
             clock.wait = 0  # "Pause at Location" off: walk straight on
-        map_stop = self.config.get("overview_style") == "map" and popup.get("card_scale")
+        map_stop = storyboard_for(self.config).big_stop_card and popup.get("card_scale")
         depart_frame = popup.get("depart_frame")
         if depart_frame is not None:
             clock.wait = max(
@@ -871,7 +872,7 @@ class _OverviewAnimationMixin:
             target_frames_left = max(
                 wrap_up_frames, remaining_for_min_display, hold_left + wrap_up_frames
             )
-            if self.config.get("overview_style") == "map":
+            if storyboard_for(self.config).one_card_at_a_time:
                 target_frames_left = wrap_up_frames  # one big card at a time: the last one closes now
             bp["frames_left"] = min(bp["frames_left"], target_frames_left)
 

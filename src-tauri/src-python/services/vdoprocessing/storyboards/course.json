@@ -1,0 +1,17 @@
+{
+  "name": "course",
+  "passby_stopbys": false,
+  "passby_closed": false,
+  "cards_stay": false,
+  "big_stop_card": false,
+  "one_card_at_a_time": false,
+  "leg_cards": false,
+  "ending_zoom_after_summary": false,
+  "pydeck_allowed": false,
+  "traced_route": true,
+  "course_brief_legs": true,
+  "arrival_slow_seconds": "COURSE_ARRIVAL_SLOW_SECONDS",
+  "course_frame": true,
+  "script_intro_in_key": true,
+  "visit_all_stopbys": true
+}

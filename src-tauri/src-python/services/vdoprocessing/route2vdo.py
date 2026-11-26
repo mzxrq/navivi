@@ -27,6 +27,7 @@ from services.mapfetcher.street_photos import attach_cue_spans, clear_of, resolv
 from services.projectfiles import meta_dir, write_json_atomic
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.route_inputs import photo_inputs_hash, returns_to
+from services.vdoprocessing.storyboard import for_config as storyboard_for
 
 # Logging configuration
 logger = setup_logger("RouteAnimator")
@@ -740,7 +741,7 @@ class RouteAnimator:
 
     def _course_brief_legs(self) -> List[Dict[str, Any]]:
         """The course overview's card adds up the brief's legs, not the GPS track."""
-        if not (self.config.get("overview_style") == "course" and self.config.get("res_route_path")):
+        if not (storyboard_for(self.config).course_brief_legs and self.config.get("res_route_path")):
             return []
         from services.localization.route_brief import load_brief
         try:
@@ -896,8 +897,9 @@ class RouteAnimator:
             leg_kwargs["map_style"] = resolve_map_style(self.config, "mapbox/outdoors-v12")
         if res_data.get("elevations"):  # the heatmap is on
             leg_kwargs["leg_elevations"] = res_data["elevations"]
-        if self.config.get("overview_style") == "course":  # the walker slows down before each stop
-            leg_kwargs["arrival_slow_seconds"] = tuning.COURSE_ARRIVAL_SLOW_SECONDS
+        slow = storyboard_for(self.config).arrival_slow_seconds
+        if slow is not None:  # the walker slows down before each stop
+            leg_kwargs["arrival_slow_seconds"] = slow
 
     def _add_leg_joins(
         self, leg_kwargs: Dict[str, Any], ctx: "_ResContext", i: int, res_data: Dict[str, Any],
@@ -1097,7 +1099,7 @@ class RouteAnimator:
         overview exists only in the 2D renderer."""
         if (
             self.config.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW)
-            and self.config.get("overview_style") != "course"
+            and storyboard_for(self.config).pydeck_allowed
         ):
             logger.info("Rendering Overview using GeoJsonLayer PyDeck...")
             return self._render_overview_pydeck(
