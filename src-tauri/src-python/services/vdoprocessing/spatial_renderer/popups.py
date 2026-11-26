@@ -2431,6 +2431,8 @@ A connected stop-by is loose as well: the walker passes every
                 len(slots), "pill-badge" if pill_badge else "card", len(ordered), len(slots),
             )
             ordered = ordered[: len(slots)]
+        if not ordered:
+            return []
 
         pins_xy = [_recap_cards_pin_of(p) for p in ordered]
         geom = self._recap_cards_geom(
