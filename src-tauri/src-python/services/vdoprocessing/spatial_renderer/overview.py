@@ -108,6 +108,7 @@ def _fingerprint_hash(obj) -> str:
 def _overview_fingerprint_parts(config: Dict, job_config: Optional[Dict], bg_path, render_args: Dict) -> Dict[str, str]:
     """Short hash per overview input, so a re-render can say what changed."""
     parts: Dict[str, str] = {"render_version": str(OVERVIEW_RENDER_VERSION)}
+    parts["storyboard"] = _fingerprint_hash(repr(storyboard_for(config or {})))[:16]  # an edited file renders again
     try:
         parts["background_image"] = hashlib.sha256(Path(bg_path).read_bytes()).hexdigest()[:16]
     except OSError:
