@@ -13,6 +13,7 @@ def test_each_style_reads_its_own_file():
     assert of("map").leg_cards and not of("walk").leg_cards
     assert of("course").traced_route and not of("course").pydeck_allowed
     assert of("course").arrival_slow_seconds == 3.0
+    assert of("course").cards_stay and not any(k.startswith("pass_card") for k in of("course").timings)
 
 
 def test_each_style_has_its_beat_timings():

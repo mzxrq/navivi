@@ -332,17 +332,7 @@ COURSE_TRACE_MIN_SECONDS = 8.0
 COURSE_TRACE_MAX_SECONDS = 40.0
 COURSE_TAGLINE_SECONDS = 5.0
 COURSE_TAGLINE_FADE_SECONDS = 0.5
-COURSE_CARD_POP_SECONDS = 0.45
-# As the trace passes a stop, its photo card pops up beside it (COURSE_PASS_CARD_SCALE at 1080p) for
-# pass_card_seconds, or until the next stop's card pops (never under pass_card_min_seconds, both in
-# storyboards/course.json), then shrinks into the stop's pill badge over COURSE_PASS_CARD_SHRINK_SECONDS.
-# Cards up together share one size: 1/sqrt(most up at once) of the full one, never under this share of it.
-COURSE_PASS_CARD_CROWD_MIN_SCALE = 0.5
-# While zoomed a crowd's card may shrink further, down to this share of the full size, to fit right beside its own
-# pin: at half size Tomogashima's 5-8 still landed on other pins and the route.
-COURSE_ZOOM_CARD_MIN_SCALE = 0.3
-COURSE_PASS_CARD_SHRINK_SECONDS = 0.45
-COURSE_PASS_CARD_SCALE = 1.8
+COURSE_CARD_POP_SECONDS = 0.45  # a stop's card fades in as the trace reaches it, then stays
 # Stop-bys (then closed places) come one at a time across their sentence: at least _STAGGER apart,
 # at most _MAX_STEP, so a long sentence with few places still shows them early on.
 COURSE_STOPBY_STAGGER_SECONDS = 0.15
