@@ -2,6 +2,8 @@
 
 Synthetic routes in different places: nothing here depends on a real project."""
 
+import pytest
+
 from services.localization.route_brief import (
     _leg_ascent_m,
     build_brief,
@@ -282,20 +284,31 @@ class TestWayWording:
 
 
 class TestBudget:
-    def test_the_target_follows_the_stops_within_60_to_120s(self):
+    def test_the_target_follows_the_stops_with_no_floor_or_ceiling(self):
         from services.localization.overview_script import overview_target_seconds
 
-        assert overview_target_seconds({}, 3) == 60.0
-        assert overview_target_seconds({}, 8) == 76.0
-        assert overview_target_seconds({}, 20) == 120.0
-        assert overview_target_seconds({"settings": {"overview_target_seconds": 45}}, 20) == 45.0
+        assert overview_target_seconds({}, 1) == 27.0
+        assert overview_target_seconds({}, 30) == 230.0
+        assert overview_target_seconds({"settings": {"overview_target_seconds": 45}}, 30) == 45.0
+
+    @pytest.mark.parametrize("stops", [1, 30])
+    @pytest.mark.parametrize("style", ["walk", "course"])
+    def test_a_very_short_or_long_route_is_planned_to_its_own_length(self, stops, style):
+        from services.localization.overview_script import overview_target_seconds, plan_budget
+
+        project = _long_route(stops)
+        project.setdefault("settings", {})["overview_style"] = style
+        budget = plan_budget(project, build_brief(project, {}))
+        assert budget["target"] == overview_target_seconds(project, stops) and "fits" not in budget
+        assert build_tour_script(project, {}, generate=None)[0]
 
     def test_the_pieces_add_up_to_the_target(self):
         from services.localization.overview_script import plan_budget
 
         project, cache = _tour_project()
+        project.setdefault("settings", {})["overview_target_seconds"] = 60
         budget = plan_budget(project, build_brief(project, cache))
-        assert budget["target"] == 60.0 and budget["fits"]
+        assert budget["target"] == 60.0
         assert abs(budget["estimated"] - 60.0) < 0.5
         assert budget["closing"] > 6.0  # the ending can shrink only so far (its zoom and pip hold are tuning values)
 
@@ -411,13 +424,13 @@ class TestOverviewIsSeparateFromStopNarration:
         assert stops["stop1"] == "大きな橋も、この近くにあります。"  # hosts a stop-by card: says what is around
 
     def test_time_goes_to_the_way_lines_and_the_overview_still_fits(self):
-        from services.localization.overview_script import in_overview_range, plan_budget
+        from services.localization.overview_script import plan_budget
 
         project, cache = self._project()
         budget = plan_budget(project, build_brief(project, cache))
         # only the stop that hosts a stop-by batch keeps time (the map freezes there)
         assert [n for n, v in budget["describe"].items() if v] == [1]
-        assert in_overview_range(budget["estimated"])
+        assert abs(budget["estimated"] - budget["target"]) <= 3.0
 
 
 class TestClimb:

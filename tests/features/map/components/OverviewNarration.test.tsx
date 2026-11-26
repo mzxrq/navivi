@@ -26,7 +26,7 @@ import { OverviewNarration } from "../../../../src/features/map/components/Overv
 i18n.load("en", {});
 i18n.activate("en");
 
-const LIMITS = { chars_per_second: 5, target_seconds: 90, min_seconds: 60, max_seconds: 120 };
+const LIMITS = { chars_per_second: 5, target_seconds: 90 };
 const CONFIG = "C:/p/job_config.json";
 
 const show = async () => {
@@ -48,11 +48,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("overview narration section", () => {
-  it("tells how long a script is when spoken and whether that is in range", async () => {
+  it("tells how long a script is when spoken against the aim, with no limit", async () => {
     workspace.metadata = { directory_path: "C:/p", overview_narration: "あ".repeat(1000), overview_narration_is_auto: false };
     await show();
-    expect(await screen.findByText(/About 200 s spoken/)).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toContain("Too long");
+    await screen.findByText(/About 200 s spoken/);
+    expect(screen.getByRole("status").textContent).toBe("About 200 s spoken (aim 90 s)");
   });
 
   it("saves the project, runs overview-script and keeps the draft as an auto script", async () => {
