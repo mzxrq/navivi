@@ -831,49 +831,6 @@ def closed_text(project: dict) -> str:
     return "赤色で示した地点は、現在訪れることができません。" + "".join(lines) if lines else ""
 
 
-def course_taglines(project: dict, brief: dict, limit: int = 6) -> List[str]:
-    """Headline lines the "course" overview cycles through at the top: the
-    title and subtitle, start -> farthest stop, one per travel mode in route
-    order (a ferry is "海をわたり、Xへ"), and the area."""
-    from services import video_text
-    from services.localization.route_brief import _length_km
-
-    settings = project.get("settings", {})
-    lang = video_text.resolve_language(settings.get("video_text_language"), project.get("map_language"))
-    phrase = video_text.labels_for(lang)["course_tagline"]
-
-    def spoken(text: str) -> str:
-        text = (text or "").strip()
-        # A Japanese video doesn't show an English working title ("Untitled Project").
-        return "" if not text or (lang == "ja" and text.isascii()) else text
-
-    legs = brief["legs"]
-    start = brief["start"]
-    title = project.get("video_title") or (project.get("project_name") if lang == "ja" else "")  # not a folder name
-    lines = [spoken(title), spoken(project.get("video_subtitle"))]
-    if legs:
-        origin = legs[0]["from_at"]
-        far = max(legs, key=lambda leg: _length_km([origin, leg["to_at"]]))
-        if far["to"] != start:
-            lines.append(phrase["far"].format(start=start, to=far["to"]))
-    seen = set()
-    for leg in legs:
-        for piece in leg.get("pieces") or [leg]:
-            mode = "ferry" if piece["mode"] in _BOAT_MODES else piece["mode"]
-            if mode in seen:
-                continue
-            seen.add(mode)
-            key = "driving" if mode == "car" else mode
-            if key in phrase:
-                lines.append(phrase[key].format(start=start, to=leg["to"]))
-    lines.append(spoken(settings.get("intro_location")))
-    out: List[str] = []
-    for line in lines:
-        if line and line not in out:
-            out.append(line)
-    return out[:limit]
-
-
 def course_summary(brief: dict) -> dict:
     """The stats card's numbers from the same pieces totals_text speaks (a
     crossing hidden in a walking leg counts as the boat), so card and voice agree."""

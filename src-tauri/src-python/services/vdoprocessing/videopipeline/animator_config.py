@@ -59,8 +59,7 @@ def _run_options(
         "overview_cue_wait_seconds": float(settings.get(
             "overview_cue_wait_seconds", storyboard_of(overview_style(project_config)).timings["cue_wait_seconds"]
         )),
-        # The overview video type (each with its own script); "course" also
-        # cycles headline taglines taken from the route (overview_script.course_taglines).
+        # The overview video type (each with its own script).
         "overview_style": overview_style(project_config),
         "overview_cards_stay": settings.get("overview_cards_stay", True),
     }

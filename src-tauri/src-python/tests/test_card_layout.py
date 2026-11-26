@@ -95,7 +95,10 @@ def test_each_place_with_a_photo_gets_one_spot_and_size(switch):
 
 
 def test_cards_keep_clear_of_the_top_panels():
-    _card, reserved = _renderer({})._ov_reserved_boxes(None, 1920, 1080)
+    renderer = _renderer({})
+    renderer.graphics.overview_hud_panels = lambda *a, **k: (SimpleNamespace(size=(300, 70)),
+                                                            SimpleNamespace(size=(420, 110)))
+    _card, reserved = renderer._ov_reserved_boxes(None, 1920, 1080)
     assert any(top < 40 and left < 400 for left, top, right, bottom in reserved)  # title, top left
     assert any(top < 40 and right > 1500 for left, top, right, bottom in reserved)  # remaining, top right
 

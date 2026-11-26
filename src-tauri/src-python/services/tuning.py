@@ -304,9 +304,8 @@ OVERVIEW_CARD_SHRINK_STEP = 0.9
 # The cards shrink further so no leader passes under another card, but never below this share of the largest size
 # at which they all fit; past that, the size with the fewest such leaders wins.
 OVERVIEW_CARD_CLEAR_LINES_MIN_SHARE = 0.6  # Tomogashima, 20 cards: all clear at 0.56; 0.70 kept one line under a card
-# Shares of the frame's width and height the cards keep off in each top corner, for the HUD's title and remaining panels.
-OVERVIEW_HUD_KEEP_OUT_WIDTH = 0.30
-OVERVIEW_HUD_KEEP_OUT_HEIGHT = 0.11
+# The top bar's title panel never grows past this share of the frame's width: a longer title is cut short.
+OVERVIEW_HUD_TITLE_MAX_WIDTH = 0.34
 # "map" overview: each main stop's photo pops up this much bigger than a walk card, then slides over to its leg
 # card (spatial_renderer/map_style.py, popup_box.slide_to_card). Its timings: storyboards/map.json.
 OVERVIEW_MAP_CARD_SCALE = 2.6
@@ -333,8 +332,6 @@ COURSE_MIN_PACE_SHARE = 0.5
 COURSE_SECONDS_PER_LEG = 3.0
 COURSE_TRACE_MIN_SECONDS = 8.0
 COURSE_TRACE_MAX_SECONDS = 40.0
-COURSE_TAGLINE_SECONDS = 5.0
-COURSE_TAGLINE_FADE_SECONDS = 0.5
 COURSE_CARD_POP_SECONDS = 0.45  # a stop's card fades in as the trace reaches it, then stays
 # With "Cards stay up" off, a card closes when the next one pops, though never before it was up this long.
 COURSE_CARD_MIN_SECONDS = 1.8
