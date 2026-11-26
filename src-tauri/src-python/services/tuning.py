@@ -304,6 +304,20 @@ OVERVIEW_CARD_SHRINK_STEP = 0.9
 # The cards shrink further so no leader passes under another card, but never below this share of the largest size
 # at which they all fit; past that, the size with the fewest such leaders wins.
 OVERVIEW_CARD_CLEAR_LINES_MIN_SHARE = 0.6  # Tomogashima, 20 cards: all clear at 0.56; 0.70 kept one line under a card
+# The circle layout (spatial_renderer/card_circles.py), px on a 1080p frame: pins this close share one circle; the
+# clear space between two cards, between a card and the frame's edge, and either side of the route line.
+OVERVIEW_CARD_GROUP_LINK_PX = 220
+# A circle's farthest card is at most this many times as far from its pins' middle as its nearest: without it a
+# bigger card in a loose shape beat the round one (the approved Tomogashima layout measures 1.29).
+OVERVIEW_CARD_CIRCLE_ROUNDNESS = 1.35
+OVERVIEW_CARD_CIRCLE_MAX_PINS = 18  # more cards than this round one group: no circle (the search took minutes)
+OVERVIEW_CARD_GAP_PX = 4
+OVERVIEW_CARD_EDGE_PX = 16
+OVERVIEW_CARD_ROUTE_PAD_PX = 10
+# The smallest card the circles are tried at (a share of the 210 px card at 1080p); smaller than this, or where no
+# size works, the cards go to the nearest free spots instead (popups._layout_ring_search).
+OVERVIEW_CARD_CIRCLE_MIN_SCALE = 0.45
+OVERVIEW_CARD_CIRCLE_SHRINK_STEP = 0.95  # finer than the ring search's: a whole 0.9 step cost 10 px of card
 # The top bar's title panel never grows past this share of the frame's width: a longer title is cut short.
 OVERVIEW_HUD_TITLE_MAX_WIDTH = 0.34
 # "map" overview: each main stop's photo pops up this much bigger than a walk card, then slides over to its leg

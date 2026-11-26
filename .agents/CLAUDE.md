@@ -151,15 +151,17 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
   `spatial_renderer/overview.py`'s `order`, `waypoints.py`'s `_numbers`, `route2vdo`'s pydeck pins, `outrocard._route_badges`
   and `overview_script.visible_waypoints` — so a change has to go through all of them (`tests/test_stop_numbering.py`).
   The map editor's own `src/utils/stopLabel.ts` still numbers a return stop separately (it also names asset files).
-- Overview cards (all styles, `docs/OVERVIEW_RULES.md` 8.18, `tests/test_card_layout.py`): one card per place with a
-  photo, one spot and one size for the whole video, the recap / last frame included. `popups._layout_ring_cards` lays
-  them all out before the first frame (largest size that fits every card, `tuning.OVERVIEW_CARD_MAX_SCALE`, no
-  minimum), clustered at their pins off the route, pins and panels; walk/map stamp `stay_box` / `stay_scale`
+- Overview cards (all styles, `docs/OVERVIEW_RULES.md` 8.18, `tests/test_card_layout.py`,
+  `tests/test_card_circles.py`): one card per place with a photo, one spot and one size for the whole video, the
+  recap / last frame included. `popups._layout_ring_cards` lays them all out before the first frame: on a circle round
+  each group of pins (`card_circles.circle_layout`, a binary search for the largest size with a round, crossing-free
+  arrangement; counts bound the search, never time), falling back to the nearest-free-spot search
+  (`_layout_ring_search`) for groups too big for a circle. walk/map stamp `stay_box` / `stay_scale`
   (`overview._ov_layout_stay_cards`), course in `course._course_cards`. A place without a photo shows its pin only
   (`no_card`). Route map's big arriving photo (`popup["big"]`) becomes the standing card when it closes.
-  Leaders are straight, pin to the card's nearest point (`leader_straight`, set in `_ov_style_badges`). The ring
-  search keeps cards off earlier leaders, `_ring_untangle` re-deals the spots among the pins, and the size shrinks
-  until no leader passes under a card, floored at `OVERVIEW_CARD_CLEAR_LINES_MIN_SHARE` of the fitting size.
+  Leaders are straight, pin to the nearest point of the rounded card (`leader_straight`, set in `_ov_style_badges`);
+  the course cuts them under the card as DRAWN (`popup_card_geometry`, not the layout footprint). The fallback search
+  keeps cards off earlier leaders and `_ring_untangle` re-deals the spots among the pins.
   `settings.overview_cards_stay` off closes cards during the walk (course: when the next one pops, up at least
   `tuning.COURSE_CARD_MIN_SECONDS`); the recap / last map shows them at the same spots.
   There is no pill badge recap setting any more (`overview_recap_style` removed).

@@ -1585,7 +1585,10 @@ class _CardMixin:
             if km is None or seconds is None:
                 continue
             distance = f"{km * 1000:.0f} m" if km < 1 else f"{km:.1f} km"
-            rows.append((labels[key].format(distance=distance, duration=self._format_duration_ja(seconds)), 20, False))
+            # nothing left is "0 min": _format_duration_ja never says less than 1 second
+            duration = (self._format_duration_ja(seconds) if seconds > 0
+                        else labels["duration_minutes"].format(m=0))
+            rows.append((labels[key].format(distance=distance, duration=duration), 20, False))
         return left, self._hud_panel(tuple(rows))
 
     def render_overview_hud(

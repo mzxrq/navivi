@@ -15,6 +15,7 @@ from services.vdoprocessing.route_inputs import is_stopby_label
 from services.vdoprocessing.storyboard import for_config as storyboard_for
 
 from .base import logger
+from .card_circles import circle_layout
 
 # Archimedean-spiral search step sizes used by _layout_beside_popups's
 # free_spot — how far the radius grows and the angle advances per
@@ -1611,31 +1612,64 @@ A connected stop-by is loose as well: the walker passes every
         reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
         route_obstacles: Optional[np.ndarray] = None,
     ) -> List[Dict]:
-        """Each card clustered around its OWN pin — any direction, 360 degrees — over no route
-        line, no pin, no HUD panel and no card already placed. Stamps "beside_box" and
-        "card_scale" and returns the cards placed.
-
-        This is what the cards that stay up through the whole walk use, instead of the recap's
-        frame-wide lattice: the lattice lines them up in columns at the edges of the frame, and
-        every one of them then needs a long leader line back across the map to its own stop.
-        Here the leader is a stub, because the card is already beside the pin it belongs to.
-
-        Every card is the SAME size, and the size is the largest at which they ALL fit: the
-        whole set is tried at each size in turn, biggest first (OVERVIEW_CARD_MAX_SCALE for the
-        frame's height, then smaller by OVERVIEW_CARD_SHRINK_STEP, with no minimum), and the
-        first size that places every one of them wins. Sizing each card on its own instead would
-        read as a mistake — one stop's photo bigger than its neighbour's for no reason a viewer
-        can see.
-
-        Everything to keep off goes into one occupancy grid (`_RING_CELL_PX` per cell), with
-        each card stamped into it as it is placed, so a candidate box is one array slice."""
+        """The overview's cards, every one the same size: on a circle round each group of pins
+        (card_circles), or - where no size down to OVERVIEW_CARD_CIRCLE_MIN_SCALE makes a clean
+        circle - at the nearest free spots (_layout_ring_search). Stamps "beside_box",
+        "card_scale" and "recap_line_color" and returns the cards placed. Sizing each card on its
+        own would read as a mistake — one stop's photo bigger than its neighbour's for no reason a
+        viewer can see."""
         if not popups:
             return []
         pins = [(p.get("pin_x", p["x"]), p.get("pin_y", p["y"])) for p in popups]
+        scale, chosen = (self._circle_search(pins, w, h, reserved_boxes, route_obstacles)
+                         or self._layout_ring_search(pins, w, h, reserved_boxes, route_obstacles))
+        placed = []
+        for i, x0, y0 in chosen:
+            popups[i]["beside_box"] = (int(x0), int(y0))
+            popups[i]["card_scale"] = scale
+            placed.append(popups[i])
+        palette = tuning.RECAP_LINE_COLOR_PALETTE
+        for j, popup in enumerate(sorted(placed, key=lambda p: p.get("index", 0))):
+            popup["recap_line_color"] = palette[j % len(palette)]
+        return placed
+
+    def _circle_search(
+        self, pins: List[Tuple[float, float]], w: int, h: int, reserved_boxes, route_obstacles,
+    ) -> Optional[Tuple[float, List[Tuple[int, float, float]]]]:
+        """(card scale, [(pin index, x, y)]) of the circle layout at the largest size that has one (a binary search
+        down OVERVIEW_CARD_CIRCLE_SHRINK_STEP's sizes), or None."""
+        scales, scale = [], tuning.OVERVIEW_CARD_MAX_SCALE * h / 1080
+        while scale >= tuning.OVERVIEW_CARD_CIRCLE_MIN_SCALE * h / 1080:
+            scales.append(scale)
+            scale *= tuning.OVERVIEW_CARD_CIRCLE_SHRINK_STEP
+        best, low, high = None, 0, len(scales)  # the largest size with a layout is at an index in low..high
+        mid = 0  # the largest first: with few stops it fits
+        while low < high:
+            boxes = circle_layout(pins, w, h, reserved_boxes, route_obstacles, float(self.graphics.marker_radius),
+                                  *self.graphics.beside_card_footprint(scales[mid]))
+            if boxes is None:
+                low = mid + 1
+            else:
+                best, high = (scales[mid], [(i, b[0], b[1]) for i, b in enumerate(boxes)]), mid
+            mid = (low + high) // 2
+        if best is not None:
+            logger.info("Circle layout: %d card(s) at scale %.2f.", len(pins), best[0])
+        return best
+
+    def _layout_ring_search(
+        self, pins: List[Tuple[float, float]], w: int, h: int, reserved_boxes, route_obstacles,
+    ) -> Tuple[float, List[Tuple[int, float, float]]]:
+        """(card scale, [(pin index, x, y)]): each card at the nearest free spot around its OWN pin — any
+        direction — over no route line, no pin, no HUD panel and no card already placed. The size is the largest at
+        which they ALL fit (from OVERVIEW_CARD_MAX_SCALE down, with no minimum), then smaller while leaders still
+        pass under a card.
+
+        Everything to keep off goes into one occupancy grid (`_RING_CELL_PX` per cell), with
+        each card stamped into it as it is placed, so a candidate box is one array slice."""
         # The most hemmed-in stop picks first: left to last it has nothing but the far side of
         # the frame, while a stop on its own can take a late spot and still hug its pin.
         order = sorted(
-            range(len(popups)),
+            range(len(pins)),
             key=lambda i: -sum(
                 1 for j, q in enumerate(pins)
                 if j != i and math.hypot(q[0] - pins[i][0], q[1] - pins[i][1]) < 220
@@ -1659,21 +1693,12 @@ A connected stop-by is loose as well: the walker passes every
                     break
             elif self.graphics.beside_card_footprint(scale)[0] < self._RING_CELL_PX:  # the frame has no room at all
                 best = (0, scale, self._ring_attempt(scale, False, w, h, pins, order, fixed, route_layer, steps))
-                logger.warning("Ring layout: only %d of %d cards fit anywhere.", len(best[2]), len(popups))
+                logger.warning("Ring layout: only %d of %d cards fit anywhere.", len(best[2]), len(pins))
                 break
             scale *= tuning.OVERVIEW_CARD_SHRINK_STEP
         under, scale, chosen = best
         logger.info("Ring layout: %d card(s) at scale %.2f, %d leader(s) under a card.", len(chosen), scale, under)
-
-        placed = []
-        for i, x0, y0 in chosen:
-            popups[i]["beside_box"] = (int(x0), int(y0))
-            popups[i]["card_scale"] = scale
-            placed.append(popups[i])
-        palette = tuning.RECAP_LINE_COLOR_PALETTE
-        for j, popup in enumerate(sorted(placed, key=lambda p: p.get("index", 0))):
-            popup["recap_line_color"] = palette[j % len(palette)]
-        return placed
+        return scale, chosen
 
     @classmethod
     def _ring_stamp(

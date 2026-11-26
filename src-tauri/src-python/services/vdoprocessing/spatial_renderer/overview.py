@@ -22,6 +22,7 @@ from services.vdoprocessing.storyboard import for_config as storyboard_for
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
+from .card_circles import densify
 from .overview_timing import (
     AUDIO_MATCH_TOLERANCE_SECONDS,
     MAX_WALK_SPEEDUP,
@@ -957,13 +958,17 @@ class _OverviewRenderMixin:
 
     def _ov_layout_stay_cards(
         self, active_popups: List[Dict], stop_popup: Optional[Dict], w: int, h: int,
-        reserved_boxes: List, route_obstacle_arr: np.ndarray,
+        reserved_boxes: List, route_obstacle_arr: np.ndarray, route_path=None,
     ) -> None:
         """One spot and size per place, for the whole video (storyboards with cards_stay): stamps "stay_box" and
-        "stay_scale" on one popup per place that has a photo, clustered around the pins and off the route and the
-        HUD. Every other popup gets "no_card" and shows its pin only. "card_scale" is left alone."""
+        "stay_scale" on one popup per place that has a photo, round the groups of pins and off the route
+        (`route_path`, the drawn line) and the HUD. Every other popup gets "no_card" and shows its pin only.
+        "card_scale" is left alone."""
         if not storyboard_for(self.config).cards_stay:
             return
+        if route_path is not None:
+            line = densify(route_path)
+            route_obstacle_arr = line if route_obstacle_arr is None else np.vstack([line, route_obstacle_arr])
         places = [ap for ap in self._recap_popup_set(active_popups, stop_popup) if ap["data"].get("popup_image")]
         copies = [dict(ap) for ap in places]  # the layout stamps its own keys on what it is given
         originals = {id(copy): ap for copy, ap in zip(copies, places)}
@@ -1243,7 +1248,8 @@ class _OverviewRenderMixin:
 
         # Every card's one spot and size, decided before the first frame: the intro, walk and recap read it.
         summary_card, reserved_boxes = self._ov_reserved_boxes(job.summary, w, h)
-        self._ov_layout_stay_cards(active_popups, stop_popup, w, h, reserved_boxes, route_obstacle_arr)
+        self._ov_layout_stay_cards(
+            active_popups, stop_popup, w, h, reserved_boxes, route_obstacle_arr, route_path=walk.path)
 
         if start_popup:
             waiting_frame = self._ov_play_intro(

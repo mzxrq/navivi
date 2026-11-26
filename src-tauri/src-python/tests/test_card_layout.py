@@ -6,7 +6,7 @@ import pytest
 
 from services import tuning
 from services.mapfetcher.graphicengine.popup_box import _PopupBoxMixin, fill_card_shape
-from services.vdoprocessing.spatial_renderer import SpatialRenderer
+from services.vdoprocessing.spatial_renderer import SpatialRenderer, popups as popups_module
 from services.vdoprocessing.spatial_renderer.overview import _standing_cards
 from services.vdoprocessing.spatial_renderer.pins import _PinMixin
 from services.vdoprocessing.spatial_renderer.popups import _PopupMixin, zoom_card_alphas
@@ -259,6 +259,29 @@ def test_whole_route_first_gives_each_place_with_a_photo_one_card():
     assert all(cards[i] is popups[i] for i in cards)
     assert all(p["stay_box"] == p["beside_box"] and p["stay_scale"] == p["card_scale"] for p in laid)
     assert len({p["stay_scale"] for p in laid}) == 1
+
+
+def test_cards_keep_off_a_route_drawn_between_two_far_apart_points():
+    renderer, popups = _renderer({}), _stops()  # a ferry leg: only its two ends are in the path
+    renderer._ov_layout_stay_cards(popups, popups[-1], 1920, 1080, [], None, route_path=[(0, 420), (1920, 420)])
+    placed = [(p["stay_box"], _size(p["stay_scale"])) for p in popups if p.get("stay_box")]
+    assert placed and not any(y <= 420 <= y + ch for (_, y), (_, ch) in placed)
+
+
+def test_the_cards_ring_their_pins_where_a_circle_works(monkeypatch):
+    seen = []
+    monkeypatch.setattr(popups_module, "circle_layout",
+                        lambda pins, w, h, reserved, route, r, cw, ch: seen.append((cw, ch)) or [
+                            (10.0 + 400 * i, 20.0, 10.0 + 400 * i + cw, 20.0 + ch) for i in range(len(pins))])
+    cards = _layout()._layout_ring_cards(_pins(3), 1920, 1080)
+    assert [c["beside_box"] for c in cards] == [(10, 20), (410, 20), (810, 20)]
+    assert {c["card_scale"] for c in cards} == {tuning.OVERVIEW_CARD_MAX_SCALE}  # the largest size that works
+
+
+def test_when_no_circle_works_every_card_still_gets_a_spot(monkeypatch):
+    monkeypatch.setattr(popups_module, "circle_layout", lambda *a, **k: None)
+    cards = _layout()._layout_ring_cards(_pins(24), 1920, 1080)
+    assert len(cards) == 24 and not _overlapping(cards)
 
 
 def test_the_size_stops_at_the_maximum_and_follows_the_frame_height():
