@@ -26,8 +26,7 @@ from services.mapfetcher.maplanguage import resolve_map_style
 from services.mapfetcher.street_photos import attach_cue_spans, clear_of, resolve_mapillary_token, street_view_landmarks, turn_photos
 from services.projectfiles import meta_dir, write_json_atomic
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
-from services.vdoprocessing.route_inputs import photo_inputs_hash
-from services.vdoprocessing.storyboard import for_config as storyboard_for
+from services.vdoprocessing.route_inputs import photo_inputs_hash, returns_to
 
 # Logging configuration
 logger = setup_logger("RouteAnimator")
@@ -59,7 +58,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # v7: leg card numbers are the overview card's own per-leg numbers;
 # v8: stop-bys are framed too, and the summary card sits lower;
 # v9: the 3D leg HUD card sits as low as the 2D one).
-LEG_RENDER_VERSION = 41  # v41: stop-by pins show +1, +2 …; v40: every leg slides on from the leg before, zooming only when needed; v39: the card's second column reads 残り (what is left), no empty banner bar at the start; v38: the direction/turn-by-turn HUD card is removed entirely -- didn't work out; v36: the direction arrow moves to bottom-left (above the elevation card's own spot), not bottom-right; v35: the badge's digit goes heavier still (900 + a thin matching text-stroke) since 700 still read thin at this small size; v34: that card sits a bit closer to the label again (108px, not 140); v31: a leg's opening/arrival photo card keeps clear of the pin's name label too, not just the pin itself; v30: the chain pill's circle badge is bigger and vertically centered against the place text; v29: the chain pill drops its 出発/到着 text prefix for a start/end circle badge (the pin's own S/E/number glyph); v28: a stop-by's photo card keeps further off its marker so it doesn't land on the marker's own name pill; v27: the carried-over photo card's leader line stops short of the marker like the others, instead of crossing its label; v26: the chain, progress and destination banners merge into one top bar, with a "stop N of total" progress segment; v25: place names keep off each other, stacking a row further out when every spot beside their point is taken; v24: at a stop with no attraction script the photo card rides along the slide (setting quiet_stop_transition); v23: photo cards keep off the route before keeping the leader short; v22: {view wait} times count from the {start} cue; v21: name tags placed with the real camera scale; v20: cards keep off the kept walked line; v19: a leg continuing the walk slides at the zoom of the leg before; v18: quicker opening/closing zoom (LEG_ZOOM_SECONDS); v17: a leg after a stop with no narration continues the walk; v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
+LEG_RENDER_VERSION = 40  # v40: every leg slides on from the leg before, zooming only when needed; v39: the card's second column reads 残り (what is left), no empty banner bar at the start; v38: the direction/turn-by-turn HUD card is removed entirely -- didn't work out; v36: the direction arrow moves to bottom-left (above the elevation card's own spot), not bottom-right; v35: the badge's digit goes heavier still (900 + a thin matching text-stroke) since 700 still read thin at this small size; v34: that card sits a bit closer to the label again (108px, not 140); v31: a leg's opening/arrival photo card keeps clear of the pin's name label too, not just the pin itself; v30: the chain pill's circle badge is bigger and vertically centered against the place text; v29: the chain pill drops its 出発/到着 text prefix for a start/end circle badge (the pin's own S/E/number glyph); v28: a stop-by's photo card keeps further off its marker so it doesn't land on the marker's own name pill; v27: the carried-over photo card's leader line stops short of the marker like the others, instead of crossing its label; v26: the chain, progress and destination banners merge into one top bar, with a "stop N of total" progress segment; v25: place names keep off each other, stacking a row further out when every spot beside their point is taken; v24: at a stop with no attraction script the photo card rides along the slide (setting quiet_stop_transition); v23: photo cards keep off the route before keeping the leader short; v22: {view wait} times count from the {start} cue; v21: name tags placed with the real camera scale; v20: cards keep off the kept walked line; v19: a leg continuing the walk slides at the zoom of the leg before; v18: quicker opening/closing zoom (LEG_ZOOM_SECONDS); v17: a leg after a stop with no narration continues the walk; v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
 # Bumped when the heatmap legs' elevation profile card changes (only those legs re-render; v1: the card).
 LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
@@ -526,6 +525,100 @@ class RouteAnimator:
             settings = None
         return resolve_mapbox_token(settings if isinstance(settings, dict) else None)
 
+    @staticmethod
+    def _overview_waypoints(points: List, labels: List, popups: List, extent, w: int, h: int) -> List[Dict[str, Any]]:
+        from services.mapfetcher.mapgeometry import RouteGeometryProcessor
+
+        waypoints = []
+        order = 0
+        for i, popup in enumerate(popups):
+            if popup is None:
+                continue
+            is_stopby = bool(popup.get("is_stopby"))
+            lat, lon = RouteGeometryProcessor.pixel_to_latlon(points[i][0], points[i][1], extent, w, h)
+            # [NOTE] A stop-by isn't part of the visible 1..N numbering (see _pin_layers/overview.py's own matching
+            # rule) - order still gets set (the pre-increment count) so it's never missing, just not incremented.
+            entry = {"lat": lat, "lon": lon, "order": order, "label": labels[i], "is_stopby": is_stopby}
+            if popup.get("pin_image"):
+                entry["pin_image"] = popup["pin_image"]
+            if not is_stopby:
+                order += 1
+                entry["order"] = order
+            waypoints.append(entry)
+        return waypoints
+
+    def _assign_overview_pins(self, waypoints: List[Dict[str, Any]], popups: List) -> None:
+        """Same glyphs/colors as the 2D overview and the leg clips: S green, E red, numbered stops in the marker
+        color. A return stop shows the pin of the stop it comes back to, and takes no number of its own."""
+        places = [p for p in popups if p is not None]
+        back_of = {j: returns_to(places, j) for j in range(len(waypoints))}
+        numbered = [wp for j, wp in enumerate(waypoints) if not wp["is_stopby"] and back_of[j] is None]
+        for k, wp in enumerate(numbered):
+            if k == 0:
+                wp["pin_glyph"], wp["pin_color"] = "S", tuning.START_PIN_COLOR
+            elif k == len(numbered) - 1 and k != 1:
+                wp["pin_glyph"], wp["pin_color"] = "E", tuning.END_PIN_COLOR
+            else:
+                wp["pin_glyph"], wp["pin_color"] = str(k), self.graphics.marker_color
+        for j, back in back_of.items():
+            if back is not None:
+                waypoints[j]["pin_glyph"] = waypoints[back].get("pin_glyph")
+                waypoints[j]["pin_color"] = waypoints[back].get("pin_color")
+
+    def _render_overview_pydeck(
+        self, img_path: str, points: List, labels: List, popups: List,
+        extent: Optional[Tuple[float, float, float, float]], fps: int,
+    ) -> Optional[str]:
+        """GeoJsonLayer-driven alternative to SpatialRenderer.render_overview
+        — a static overview image (full route + numbered pins) instead of
+        an animated OpenCV line-draw. `points` are still in the PIXEL space
+        of `img_path` (see load_route_data/_project_route_to_pixels
+        upstream); reprojected back to lat/lon via `extent`, same mechanism
+        overview.py's own `_route_latlon_path` already relies on — this
+        module never needed its own fetched background raster to begin
+        with, only real coordinates to hand to a live pydeck/Mapbox basemap.
+        """
+        if extent is None:
+            logger.warning(
+                "use_pydeck_pedestrian overview requested but no extent was "
+                "supplied — cannot reproject pixel points to lat/lon. "
+                "Skipping overview render."
+            )
+            return None
+
+        from services.mapfetcher.mapgeometry import RouteGeometryProcessor
+        from services.vdoprocessing.pydeckrecorder.overview_pydeck import render_overview_video_pydeck
+
+        bg = self.graphics.read_image_safe(str(img_path))
+        if bg is None:
+            raise FileNotFoundError(f"Cannot read background image: {img_path}")
+        h, w = bg.shape[:2]
+
+        route_latlon = [
+            RouteGeometryProcessor.pixel_to_latlon(p[0], p[1], extent, w, h) for p in points
+        ]
+
+        waypoints = self._overview_waypoints(points, labels, popups, extent, w, h)
+        self._assign_overview_pins(waypoints, popups)
+
+        # The reference video's wide section-title caption (e.g.
+        # "友ヶ島・加太をめぐる道") reads as the trip's own name — reusing
+        # job_config.json's project_name is the closest real data source
+        # for that, same file _get_job_config already walks up to find.
+        job_config = self.spatial_renderer._get_job_config() or {}
+        title_text = self.config.get("overview_title") or job_config.get("project_name")
+
+        output_path = str(self.out_dir / "01_overview.mp4")
+        if self.config.get("checkpoint_enabled", False) and _output_is_valid(output_path):
+            logger.info("Overview video already exists — skipping render: %s", output_path)
+            return output_path
+        duration = self.config.get("duration", 30.0)
+        return render_overview_video_pydeck(
+            route_latlon, waypoints, output_path, duration=duration, fps=fps, title_text=title_text,
+            mapbox_key=self._mapbox_token(),
+            map_style=resolve_map_style(self.config, "mapbox/streets-v12"),
+        )
+
     def _leg_hud_card_png(self, mode: str, leg: Tuple[float, float], after: Tuple[float, float]):
         """PNG renderer for the pydeck leg's distance/time card, drawn with
         the same summary card the overview uses. The walker's remaining share
@@ -647,7 +740,7 @@ class RouteAnimator:
 
     def _course_brief_legs(self) -> List[Dict[str, Any]]:
         """The course overview's card adds up the brief's legs, not the GPS track."""
-        if not (storyboard_for(self.config).course_brief_legs and self.config.get("res_route_path")):
+        if not (self.config.get("overview_style") == "course" and self.config.get("res_route_path")):
             return []
         from services.localization.route_brief import load_brief
         try:
@@ -803,9 +896,8 @@ class RouteAnimator:
             leg_kwargs["map_style"] = resolve_map_style(self.config, "mapbox/outdoors-v12")
         if res_data.get("elevations"):  # the heatmap is on
             leg_kwargs["leg_elevations"] = res_data["elevations"]
-        slow = storyboard_for(self.config).arrival_slow_seconds
-        if slow is not None:  # the walker slows down before each stop
-            leg_kwargs["arrival_slow_seconds"] = slow
+        if self.config.get("overview_style") == "course":  # the walker slows down before each stop
+            leg_kwargs["arrival_slow_seconds"] = tuning.COURSE_ARRIVAL_SLOW_SECONDS
 
     def _add_leg_joins(
         self, leg_kwargs: Dict[str, Any], ctx: "_ResContext", i: int, res_data: Dict[str, Any],
@@ -999,6 +1091,19 @@ class RouteAnimator:
         self, img_path: str, points: List, labels: List, popups: List, fps: int, summary: Optional[Dict],
         point_modes: Optional[List[str]], point_colors: Optional[List], kwargs: Dict[str, Any],
     ) -> Optional[str]:
+        """[NOTE] [Core] The GeoJsonLayer pydeck overview (_render_overview_pydeck) renders on the GPU and does not
+        follow the narration's cues (stop holds, stop-by timing, ending fitted to the voice) - the 2D spatial_renderer
+        path does; settings.use_pydeck_overview selects it (tuning.DEFAULT_USE_PYDECK_OVERVIEW). The "course"
+        overview exists only in the 2D renderer."""
+        if (
+            self.config.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW)
+            and self.config.get("overview_style") != "course"
+        ):
+            logger.info("Rendering Overview using GeoJsonLayer PyDeck...")
+            return self._render_overview_pydeck(
+                img_path, points, labels, popups,
+                extent=kwargs.get("overview_extent"), fps=fps,
+            )
         return self.spatial_renderer.render_overview(
             img_path, points, labels, popups, fps, summary=summary, point_modes=point_modes,
             point_colors=point_colors,
