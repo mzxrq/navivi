@@ -54,73 +54,18 @@ def _card_layout():
     return layout
 
 
-def test_the_full_card_hangs_off_its_badge_spot_away_from_the_route():
-    import numpy as np
-
-    route = np.array([[x, 560.0] for x in range(940, 1400, 5)])  # runs right of the spot
-    popup = {"stay_box": (900, 500), "label": "AB", "card_scale": 1.0}
-    x, _ = _card_layout()._card_box_beside_badge(popup, 1920, 1080, route, [])
-    assert x + 210 <= 900 + 34  # spilled left instead, clear of the line
-
-
-def test_the_full_card_keeps_off_a_card_already_on_screen():
-    popup = {"stay_box": (900, 500), "label": "AB", "card_scale": 1.0}
-    taken = [(1000, 500, 1210, 690)]
-    x, y = _card_layout()._card_box_beside_badge(popup, 1920, 1080, None, taken)
-    assert not (x < 1210 and x + 210 > 1000 and y < 690 and y + 190 > 500)
-
-
-def test_cards_up_together_never_cover_each_other():
-    """Every stop's card stays up for the whole walk, so they end up on screen
-    all together — even with their badge spots piled together, no two overlap."""
-    import numpy as np
-
-    layout = _card_layout()
-    layout.graphics.render_popup_box = lambda frame, info, **kw: frame
-    fps, total, gap = 30, 3600 * 30, 18
-    spots = [(300, 300), (340, 320), (380, 340), (900, 400), (930, 420), (960, 300)]
-    pending = [
-        {
-            "popup": {
-                "x": sx, "y": 700, "order": i, "label": f"P{i}",
-                "data": {"popup_image": "p.jpg"},
-                "stay_box": (sx, sy), "beside_box": (sx, sy), "is_pill_badge": True,
-            },
-            "total_frames": total, "frames_left": total, "fade_frames": 12,
-        }
-        for i, (sx, sy) in enumerate(spots)
-    ]
-    frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
-    live, most = [], 0
-    for n in range(200):
-        if n % gap == 0 and pending:
-            live.append(pending.pop(0))
-        _, live = layout._composite_baked_popups(
-            frame, live, 1920, 1080, None, active_popups=[], total_points=8, fps=fps,
-        )
-        boxes = [
-            (lambda x, y: (x, y, x + 210, y + 190))(*(bp["popup"].get("card_box") or bp["popup"]["beside_box"]))
-            for bp in live
-        ]
-        most = max(most, len(boxes))
-        for i, a in enumerate(boxes):
-            for b in boxes[i + 1:]:
-                assert not (a[0] < b[2] and a[2] > b[0] and a[1] < b[3] and a[3] > b[1])
-    assert most == len(spots)  # all of them were up together by the end
-
-
 def test_the_walks_card_never_carries_the_recaps_badge_styling():
     """_layout_recap_cards stamps the badge style onto these dicts before the
     walk even starts, so any frame that builds a card straight from one draws
     a badge — every card on screen blinked into one on each arrival frame."""
     popup = {
         "x": 400, "y": 700, "order": 1, "label": "AB", "data": {"popup_image": "p.jpg"},
-        "stay_box": (500, 300), "beside_box": (500, 300),
+        "stay_box": (500, 300), "stay_scale": 1.0, "beside_box": (500, 300),
         "is_pill_badge": True, "suppress_leader_line": True, "leader_from": (1, 2),
     }
     hud = _card_layout().walk_card_hud(popup, 1920, 1080, None, lambda p: [])
     assert not any(hud.get(k) for k in ("is_pill_badge", "suppress_leader_line", "leader_from"))
-    assert hud["draw_leader_line"] and hud["beside_box"] == popup["card_box"]
+    assert hud["draw_leader_line"] and hud["beside_box"] == popup["stay_box"]
     assert popup["is_pill_badge"]  # the popup itself still carries it, for the recap
 
 
@@ -140,7 +85,7 @@ def test_a_staying_card_fades_in_without_moving():
         "popup": {
             "x": 400, "y": 700, "order": 1, "label": "AB",
             "data": {"popup_image": "p.jpg"},
-            "stay_box": (500, 300), "beside_box": (500, 300), "is_pill_badge": True,
+            "stay_box": (500, 300), "stay_scale": 1.0, "beside_box": (500, 300), "is_pill_badge": True,
         },
         "total_frames": total, "frames_left": total, "fade_frames": 9,
     }
@@ -170,7 +115,7 @@ def test_a_card_stays_a_card_for_the_whole_walk():
             "popup": {
                 "x": 400, "y": 700, "order": i, "label": f"P{i}",
                 "data": {"popup_image": "p.jpg"},
-                "stay_box": (400 + i * 400, 300), "beside_box": (400 + i * 400, 300),
+                "stay_box": (400 + i * 400, 300), "stay_scale": 1.0, "beside_box": (400 + i * 400, 300),
                 "is_pill_badge": True,  # the recap's own layout stamped this up front
             },
             "total_frames": total, "frames_left": total, "fade_frames": 9,

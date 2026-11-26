@@ -2846,12 +2846,11 @@ A connected stop-by is loose as well: the walker passes every
             popup = bp["popup"]
             if exclude is not None and popup is exclude:
                 continue
-            # Where its full card actually hangs, which for a card bound
-            # for a badge spot is not that spot (see _card_box_beside_badge).
-            box = popup.get("card_box") or popup.get("beside_box")
+            box = popup.get("stay_box") or popup.get("beside_box")
             if not box:
                 continue
-            card_w, card_h = self.graphics.beside_card_footprint(popup.get("card_scale", 1.0))
+            card_w, card_h = self.graphics.beside_card_footprint(
+                popup.get("stay_scale") or popup.get("card_scale", 1.0))
             boxes.append((box[0], box[1], box[0] + card_w, box[1] + card_h))
         return boxes
 
@@ -2859,20 +2858,16 @@ A connected stop-by is loose as well: the walker passes every
         """Walk the route (settings.overview_cards_stay, on by default): each stop's card stays up once shown."""
         return storyboard_for(self.config).cards_stay and bool(self.config.get("overview_cards_stay", True))
 
-    # Corners of its badge spot a full card can hang from: the card is
-    # several times that spot's size, so it has to spill somewhere.
+    # Corners of a spot a card can hang from (the course overview's passing cards, course._course_pass_cards)...
     _CARD_SPILL_CORNERS = ((0, 0), (1, 0), (0, 1), (1, 1))
-    # ...and, when every one of those is taken, how far out from the
-    # badge the card may be pushed instead, and in how many steps.
+    # ...and, when every one of those is taken, how far out from it the card may be pushed, and in how many steps.
     _CARD_SPILL_RINGS = 7
     _CARD_SPILL_RING_PX = 70
     _CARD_SPILL_PER_RING = 8
 
     def _card_box_candidates(self, sx, sy, pill_w, pill_h, card_w, card_h, w, h):
-        """Where the full card could go, nearest first: hanging from each
-        corner of its badge spot, then rings of spots further out around
-        it (for when several cards are up at once and the corners are all
-        taken). Every candidate is clamped inside the frame."""
+        """Where a card could go beside the box (sx, sy, pill_w, pill_h), nearest first: hanging from each of its
+        corners, then rings of spots further out. Every candidate is clamped inside the frame."""
         margin = self._RECAP_CARD_MARGIN
         max_x, max_y = max(margin, w - card_w - margin), max(margin, _card_bottom_limit(h, margin) - card_h)
 
@@ -2897,72 +2892,16 @@ A connected stop-by is loose as well: the walker passes every
         route_obstacles: Optional[np.ndarray],
         taken_boxes,
     ) -> Dict:
-        """A copy of `popup` as the WALK draws it: the full pop up card, at
-        the spot it hangs off its badge's (card_box, picked once — see
-        _card_box_beside_badge), with the recap's own badge styling
-        dropped. _layout_recap_cards runs up front, before the walk, and
-        stamps that styling (is_pill_badge, the shared-cluster line) onto
-        these very dicts, so any frame that builds a card straight from one
-        draws a BADGE instead — which is what made every card on screen
-        blink into a badge for the single frame each arrival is drawn on.
-        Every such frame goes through here instead."""
+        """A copy of `popup` as the walk draws it: the full pop up card, at its one spot and size ("stay_box" /
+        "stay_scale", see _ov_layout_stay_cards) when it has them, with no badge styling."""
         hud = popup.copy()
         for phase_key in ("is_pill_badge", "suppress_leader_line", "leader_from", "leader_via"):
             hud.pop(phase_key, None)
         hud["hud_corner"] = None
         hud["draw_leader_line"] = True
         if popup.get("stay_box"):
-            if "card_box" not in popup:
-                popup["card_box"] = self._card_box_beside_badge(
-                    popup, w, h, route_obstacles, taken_boxes(popup)
-                )
-            hud["beside_box"] = popup["card_box"]
+            hud["beside_box"], hud["card_scale"] = popup["stay_box"], popup["stay_scale"]
         return hud
-
-    def _card_box_beside_badge(
-        self,
-        popup: Dict,
-        w: int,
-        h: int,
-        route_obstacles: Optional[np.ndarray],
-        taken: List[Tuple[float, float, float, float]],
-    ) -> Tuple[int, int]:
-        """Where a stop's FULL card hangs while it is showing, given the
-        badge spot ("stay_box") it will collapse into. The badge spot is
-        picked clear of the route and the pins, but the card is several
-        times its size and so always spills past it — so it takes the
-        nearest spot (see _card_box_candidates) that covers no other card
-        already on screen and the least route line and pins. Every stop's
-        card stays up for the rest of the walk, so by the end they are ALL
-        on screen together and none of them may cover another. Decided
-        once, on the card's first frame, and kept (as "card_box") so it
-        can't drift afterwards."""
-        sx, sy = popup["stay_box"]
-        pill_w, pill_h = self.graphics.beside_card_footprint(
-            is_pill_badge=True, pill_name_chars=len(str(popup.get("label") or ""))
-        )
-        card_w, card_h = self.graphics.beside_card_footprint(float(popup.get("card_scale", 1.0)))
-        ox = oy = None
-        if route_obstacles is not None and len(route_obstacles):
-            ox, oy = route_obstacles[:, 0], route_obstacles[:, 1]
-
-        best_score, best_box = None, (int(sx), int(sy))
-        for x, y in self._card_box_candidates(sx, sy, pill_w, pill_h, card_w, card_h, w, h):
-            clashes = sum(
-                1 for tx1, ty1, tx2, ty2 in taken
-                if x < tx2 and x + card_w > tx1 and y < ty2 and y + card_h > ty1
-            )
-            covered = 0
-            if ox is not None:
-                covered = int(np.count_nonzero(
-                    (ox >= x) & (ox <= x + card_w) & (oy >= y) & (oy <= y + card_h)
-                ))
-            score = (clashes, covered)  # keeping off other cards first, then off the map
-            if best_score is None or score < best_score:
-                best_score, best_box = score, (x, y)
-                if score == (0, 0):
-                    break  # nearest spot that's clear of everything
-        return best_box
 
     def _composite_baked_popups(
         self,
@@ -3016,7 +2955,7 @@ A connected stop-by is loose as well: the walker passes every
         # redraw on every other frame.
         if any_leader_line:
             for wp in active_popups or []:
-                if wp["data"].get("arrived") or wp["index"] == 0:
+                if wp["data"].get("arrived") or wp["index"] == 0 or wp.get("standing"):
                     self._draw_pin(frame, wp, total_points, scale=self._pin_pop_scale(
                         wp, getattr(self, "_pop_now", 0), fps or 30))
 
@@ -3058,10 +2997,7 @@ A connected stop-by is loose as well: the walker passes every
         for bp in flowing[max_flow:]:
             bp["popup"].pop("beside_box", None)
         for bp in flowing_visible:
-            # Its spot in the ending summary. The card itself hangs off
-            # this spot rather than on it (see _card_box_beside_badge), but
-            # it's what the badge taking the card's place at the recap sits
-            # on, so the badge never moves once it is there.
+            # A card with a fixed spot (_ov_layout_stay_cards) is never laid out again.
             if bp["popup"].get("stay_box"):
                 bp["popup"]["beside_box"] = bp["popup"]["stay_box"]
         flowing_visible = [bp for bp in flowing_visible if not bp["popup"].get("stay_box")]

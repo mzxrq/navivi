@@ -75,7 +75,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # stops are plain colour dots; v56: top HUD panels 1.5x bigger; v55: the recap sits on a plain plate and arranges its
 # badges on one lattice in walked order (see CLAUDE.md "overview recap's pill badges"); v54: a return stop takes no
 # number of its own. Older history: git log.
-OVERVIEW_RENDER_VERSION = 75  # v75: the course trace starts at {start}; {goPreN} gone; stop-by pins +N
+OVERVIEW_RENDER_VERSION = 76  # v76: one spot and size per card; v75: course trace from {start}, no {goPreN}, +N pins
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -647,6 +647,16 @@ def _set_cue_frames(active_popups: List[Dict], stop_popup: Optional[Dict], audio
             ap["depart_frame"] = None  # "Pause at Location" off: no hold until {go}
 
 
+def _standing_cards(start_popup: Optional[Dict], stop_popup: Optional[Dict]) -> List[Dict]:
+    """The intro's cards that stay on screen when the walk starts: the start's and the end's, at their spots."""
+    return [p for p in (start_popup, stop_popup) if p and p.get("stay_box")]
+
+
+def _spots_decided(popup: Dict) -> bool:
+    """_ov_layout_stay_cards has been over this popup: it has a card spot, or shows its pin only."""
+    return bool(popup.get("stay_box") or popup.get("no_card"))
+
+
 def _intro_freeze_seconds(start_popup: Dict) -> float:
     if "freeze_seconds" not in start_popup["data"]:
         return _DEFAULT_INTRO_FREEZE_SECONDS
@@ -790,6 +800,8 @@ class _OverviewRenderMixin:
     ) -> List[Dict]:
         """The start (and, with a photo, the stop) preview cards, laid out beside their own pins and moved above
         them where there is room."""
+        if _spots_decided(start_popup):  # the cards stand where they stay, at the video's one size
+            return [self.walk_card_hud(p, 0, 0, None, None) for p in _standing_cards(start_popup, stop_popup)]
         intro_card_scale = self.config.get("overview_intro_card_scale", 1.3)
         footprint_w, footprint_h = self.graphics.beside_card_footprint(intro_card_scale)
 
@@ -842,7 +854,7 @@ class _OverviewRenderMixin:
             {"total_frames": bounce_frames, "frames_left": frames_left, "fade_frames": bounce_frames}
         )
         for c, box in zip(intro.cards, intro.base_boxes):
-            if box:
+            if box and not c.get("stay_box"):  # a card with a fixed spot only fades
                 c["beside_box"] = (box[0], int(box[1] + slide))
         video.write(self._apply_hud(self._ov_draw_intro_cards(base, alpha, intro)))
 
@@ -851,9 +863,10 @@ class _OverviewRenderMixin:
         stop_popup: Optional[Dict], n_points: int, route_obstacle_arr: np.ndarray, w: int, h: int, fps: int,
         preview_recap_only: bool,
     ) -> np.ndarray:
-        """The intro beats: the map and every pin alone, the start/stop cards sliding in, held, then sliding out onto
-        the clean frame (returned) the walk picks up from. The intro always shows plain pip cards: "fullscreen" is
-        only honored by the end-of-video zoom (_render_ending_highlight)."""
+        """The intro beats: the map and every pin alone, then the start/stop cards. Returns the frame the walk picks
+        up from: with cards that stay, the cards faded in at their spots; otherwise they slide in, hold and slide
+        out onto the clean map. The intro always shows plain pip cards: "fullscreen" is only honored by the
+        end-of-video zoom (_render_ending_highlight)."""
         intro_freeze_sec = _intro_freeze_seconds(start_popup)
         intro_cards = self._ov_make_intro_cards(start_popup, stop_popup, w, h, route_obstacle_arr)
         start_popup["data"]["triggered"] = True
@@ -891,6 +904,9 @@ class _OverviewRenderMixin:
         )
         for _ in range(remaining_frames):
             video.write(self._apply_hud(intro_frame))
+        if self._cards_stay() and _spots_decided(start_popup):
+            self.last_frame = intro_frame
+            return intro_frame
         # Mirror of the entrance, so the cards don't cut straight to "traveler moving".
         if not preview_recap_only:
             for i in range(bounce_frames):
@@ -929,25 +945,30 @@ class _OverviewRenderMixin:
             tuple(float(v) for v in self.graphics.stopby_notice_box(w, h, kind))
             for kind in ("stopby", "closed")
         ]
+        # The HUD's two top panels (title, remaining).
+        # shortcut: a fixed band, not the panels' own size; measure them when the top bar is redone (Task 10).
+        band_w, band_h = w * tuning.OVERVIEW_HUD_KEEP_OUT_WIDTH, h * tuning.OVERVIEW_HUD_KEEP_OUT_HEIGHT
+        reserved_boxes += [(0.0, 0.0, band_w, band_h), (w - band_w, 0.0, float(w), band_h)]
         return summary_card, reserved_boxes
 
     def _ov_layout_stay_cards(
         self, active_popups: List[Dict], stop_popup: Optional[Dict], w: int, h: int,
         reserved_boxes: List, route_obstacle_arr: np.ndarray,
     ) -> None:
-        """Cards that stay up are clustered around their own pin (off the route, the pins and the HUD), each at the
-        biggest size that fits, so none needs a long leader line. The recap lays its badges out again."""
-        if not self._cards_stay():
+        """One spot and size per place, for the whole video (storyboards with cards_stay): stamps "stay_box" and
+        "stay_scale" on one popup per place that has a photo, clustered around the pins and off the route and the
+        HUD. Every other popup gets "no_card" and shows its pin only. "card_scale" is left alone."""
+        if not storyboard_for(self.config).cards_stay:
             return
-        # Only places with a photo: a card IS the photo, composited into every walk frame. A photo-less stop-by or
-        # closed place still gets its badge in the recap (see _render_recap_and_summary).
-        self._stay_layout = self._layout_ring_cards(
-            [ap for ap in active_popups if ap["data"].get("popup_image")
-             and not (self._is_loop_route and ap is stop_popup)],
-            w, h, reserved_boxes=reserved_boxes, route_obstacles=route_obstacle_arr,
-        )
-        for ap in self._stay_layout:
-            ap["stay_box"] = ap["beside_box"]
+        places = [ap for ap in self._recap_popup_set(active_popups, stop_popup) if ap["data"].get("popup_image")]
+        copies = [dict(ap) for ap in places]  # the layout stamps its own keys on what it is given
+        originals = {id(copy): ap for copy, ap in zip(copies, places)}
+        for copy in self._layout_ring_cards(copies, w, h, reserved_boxes=reserved_boxes,
+                                            route_obstacles=route_obstacle_arr):
+            originals[id(copy)].update(stay_box=copy["beside_box"], stay_scale=copy["card_scale"])
+        for ap in active_popups:
+            if "stay_box" not in ap:
+                ap["no_card"] = True
 
     def _ov_recap_preview_plate(self, current_bg, walk: _Walk, mode_breakpoints):
         """The plate the walk stashes at its last frame, built straight from the background since no walk ran, with
@@ -1213,19 +1234,21 @@ class _OverviewRenderMixin:
         )
         walk = self._ov_time_walk(job, active_popups, start_popup, stop_popup)
 
+        # Every card's one spot and size, decided before the first frame: the intro, walk and recap read it.
+        summary_card, reserved_boxes = self._ov_reserved_boxes(job.summary, w, h)
+        self._ov_layout_stay_cards(active_popups, stop_popup, w, h, reserved_boxes, route_obstacle_arr)
+
         if start_popup:
-            clean_frame = self._ov_play_intro(
+            waiting_frame = self._ov_play_intro(
                 video, intro_frame, active_popups, start_popup, stop_popup, len(job.points), route_obstacle_arr,
                 w, h, fps, job.preview_recap_only,
             )
             if audio_cues:
                 # The voice's {start} (or a short intro) leaves the map waiting until the route sets off.
                 for _ in range(max(0, job.walk_start_frames - video.frames_written)):
-                    video.write(self._apply_hud(clean_frame))
+                    video.write(self._apply_hud(waiting_frame))
 
         _set_cue_frames(active_popups, stop_popup, audio_cues, fps)
-        summary_card, reserved_boxes = self._ov_reserved_boxes(job.summary, w, h)
-        self._ov_layout_stay_cards(active_popups, stop_popup, w, h, reserved_boxes, route_obstacle_arr)
         if job.preview_recap_only:
             pre_popup_frame = self._ov_recap_preview_plate(job.current_bg, walk, job.mode_breakpoints)
             return self._ov_write_recap_preview(
@@ -1236,6 +1259,7 @@ class _OverviewRenderMixin:
             video, job.current_bg, None, False, w, h, fps,
             walk.path, job.mode_breakpoints, walk.scale.cum_smooth_dist, job.total_smooth_dist,
             active_popups, stop_popup, job.points, route_avoid_points, route_obstacle_arr,
+            standing_cards=_standing_cards(start_popup, stop_popup) if self._cards_stay() else (),
         )
         return self._ov_write_ending(
             job, video, active_popups, start_popup, stop_popup, summary_card, reserved_boxes,
