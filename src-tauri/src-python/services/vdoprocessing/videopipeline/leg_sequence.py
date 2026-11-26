@@ -352,6 +352,10 @@ def _leg_narration(*, waypoints: list, leg_item: dict, start_pos: int, end_pos: 
     if piece_plans:
         total_time = sum(v[0] for v in piece_plans.values())
         start_cue_seconds = piece_plans[piece_targets[0]][1]  # the first piece opens the leg
+        # [NOTE] [Cues] A stop-by that only pops up (no walk) is no piece of the walk plan (pedestrian._segment_plan
+        # leaves it out), so cue spans and {start} leads are numbered without it; counting it shifted every later
+        # piece, and the destination's {slow}/{at N}/... then matched no plan entry.
+        piece_targets = [p for p in piece_targets if p not in at_start]
         piece_start_cues = [piece_plans[p][1] for p in piece_targets]
         if not any(s is not None for s in piece_start_cues[1:]):
             piece_start_cues = []

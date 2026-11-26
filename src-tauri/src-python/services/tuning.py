@@ -141,6 +141,7 @@ FERRY_ANIMATION_SPEED_FACTOR = 1.5
 # next to the muted route line/cards instead of clashing with it).
 START_PIN_COLOR: Tuple[int, int, int] = (60, 120, 55)  # muted forest green
 END_PIN_COLOR: Tuple[int, int, int] = (170, 70, 150)  # muted purple/violet
+RAIL_END_COLOR: Tuple[int, int, int] = (50, 50, 200)  # red (BGR): the "E" mark on the course progress rail
 DRAWN_PIN_COLOR: Tuple[int, int, int] = (70, 150, 200)  # muted ochre — drawn-route waypoints
 STOPBY_PIN_COLOR: Tuple[int, int, int] = (28, 38, 51)  # #33261c dark brown — stop-by waypoints
 CLOSED_PIN_COLOR: Tuple[int, int, int] = (55, 60, 185)  # muted red, with a "×" — closed places (editor: Closed)
@@ -375,7 +376,7 @@ COURSE_STATS_DROP_PX = 30
 COURSE_ARRIVAL_SLOW_SECONDS = 3.0
 # Leg script cues {slow} … {/slow} / {fast} … {/fast}: the walker's pace there against the rest of its piece (the
 # rest makes up the time, so arrival stays on the cue). Per project: settings.pace_slow_factor / pace_fast_factor.
-PACE_SLOW_FACTOR = 0.5
+PACE_SLOW_FACTOR = 0.2  # was 0.5: only 2x slower than the rest, which barely showed over a long {slow}
 PACE_FAST_FACTOR = 1.6
 # {stop} … {/stop} shorter than this is ignored (a blink of a stop reads as a stutter).
 PACE_MIN_STOP_SECONDS = 0.8
@@ -528,11 +529,16 @@ FULLSCREEN_GROW_SECONDS = 0.4
 FULLSCREEN_SHRINK_SECONDS = 0.25
 # A leg's photo (fullscreen or card) fading away; was 0.4 s, the user found it slow (2026-11-13).
 LEG_PHOTO_FADE_SECONDS = 0.2
-# A leg after a stop with no narration: the camera glides from the last leg's view into this one's in this long.
-LEG_CONTINUE_GLIDE_SECONDS = 0.5
-# The camera hop into the next piece's framing after a stop-by's photo. It opens that piece, and the piece's
-# narration waits for its whole opening, so a long hop is dead air before the voice (was a hard-coded 1.5 s).
-STOPBY_PIECE_HOP_SECONDS = 0.6
+# A leg that carries on from the one before: the camera moves from its last view into this one's in this long.
+LEG_CONTINUE_GLIDE_SECONDS = 1.0
+# ...and keeps that view's zoom while the leg fits at it and is at most this many levels smaller than it could be.
+LEG_KEEP_ZOOM_SLACK = 1.0
+# A leg starting farther than this from the end of the one before (a sub course) opens on its own instead.
+LEG_JOIN_MAX_GAP_METERS = 100
+# The camera glide into the next piece's framing after a stop-by's photo. It opens that piece, and the piece's
+# narration waits for its whole opening, so a long one is dead air before the voice (was a hard-coded 1.5 s; 0.6 s
+# with a zoom-out "hop", which the user found jumpy).
+STOPBY_PIECE_HOP_SECONDS = 1.0
 # A leg's camera zooming from the wide view into its street-level framing at the start, and back out at the end.
 LEG_ZOOM_SECONDS = 0.6
 # A leg holds on the arrived map this long before the arrival photo pops in.
@@ -540,11 +546,11 @@ RESIDENTIAL_ARRIVAL_FREEZE_SECONDS = 1.0
 # [NOTE] [Transition] Fullscreen photo transition plays as an ordered sequence: confirm (pin selected) -> scale (zoom into photo) -> blur -> fade_out; hold_ratio_of_freeze/min_hold_seconds/min_small_hold_seconds bound how long the fullscreen photo is held relative to its freeze duration before the next stage starts.
 FULLSCREEN_TRANSITION_DEFAULTS: Dict[str, float] = {
     "confirm_seconds": 0.4,
-    "scale_seconds": 0.75,
-    "blur_seconds": 0.5,
+    "scale_seconds": 0.50,
+    "blur_seconds": 0.25,
     "fade_out_seconds": 0.5,
-    "hold_ratio_of_freeze": 0.4,
-    "min_hold_seconds": 0.5,
+    "hold_ratio_of_freeze": 0.38,
+    "min_hold_seconds": 0.4,
     "min_small_hold_seconds": 0.1,
 }
 # [NOTE] [Animation] Extra pixel padding added around a pin's hit/trigger radius (overview vs. per-waypoint map) so popups/highlights fire slightly before the cursor or route point is exactly on the pin.

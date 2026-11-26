@@ -192,7 +192,7 @@ export interface ProjectSettings {
   outro_route_info?: boolean;
   finale_narration?: string; // spoken over the whole-route finale (98_finale_narration.wav)
   enable_finale?: boolean; // before the outro: the last stop's photo shrinks onto its pin and the camera pulls back to the whole route
-  quiet_stop_transition?: "slide" | "zoom"; // a stop with no attraction script: slide on with its photo, or zoom out and in
+  quiet_stop_transition?: "slide" | "zoom"; // between walking legs: slide on from the leg before, or zoom out and in
   outro_content_position?: number; // scrapbook: where the photos sit below the title, 0 = top .. 1 = bottom
   // The outro's title box: height in 1080-line px and fill colour ("#RRGGBB"; unset = the page background),
   // and its text styles (unset = the intro's).

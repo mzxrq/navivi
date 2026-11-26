@@ -28,3 +28,15 @@ def test_out_of_order_or_out_of_range_percent_is_skipped():
     plan = [(100, 10.0)]
     assert _at_points_plan(DF, KM, plan, [(0, 3.0, "60%"), (0, 6.0, "30%")]) == [(60, 3.0, 0.0, 0), (100, 7.0, 0.0, 0)]
     assert _at_points_plan(DF, KM, plan, [(0, 3.0, "100%")]) == [(100, 10.0, 0.0, 0)]
+
+
+def test_at_percent_after_a_stop_counts_the_hold_and_the_earlier_entries():
+    from services.vdoprocessing.pydeckrecorder.pedestrian import _paced_plan
+    from services.vdoprocessing.pydeckrecorder.geomath import cumulative_distance_km
+
+    df = pd.DataFrame({"lat": [35 + i * 0.0003 for i in range(41)], "lon": [135.0] * 41})
+    dist = cumulative_distance_km(df["lon"].tolist(), df["lat"].tolist())
+    plan, stands, _ = _paced_plan(dist, [(40, 14.0)], [(0, "stop", 3.0, 5.0)])
+    # voice 12 s = 3 s walked + 2 s standing + 7 s into the second entry
+    out = _at_points_plan(df, dist, plan, [(0, 12.0, "50%")], None, stands)
+    assert [(e[0], e[1]) for e in out] == [(10, 3.0), (20, 7.0), (40, 2.0)]
