@@ -65,6 +65,12 @@ def _run_options(
     }
 
 
+def summary_card_style(settings: dict) -> str:
+    """The totals card's design: the theme's, else the project's summary_card_style, else the default."""
+    theme = tuning.overview_theme(settings.get("overview_theme"))
+    return theme.get("card_style") or settings.get("summary_card_style") or tuning.DEFAULT_SUMMARY_CARD_STYLE
+
+
 def _color_options(settings: dict, marker_color_bgr) -> dict:
     """Colors: authored RGB in job_config.json, drawn BGR — see _project_color. The defaults passed here are
     already BGR. Pin colors by role: unset keys fall through to the defaults on SpatialRendererBase
@@ -154,9 +160,9 @@ def build_animator_config(
         # Summary-card template ("glass" default, or "taskbar", see cards.py's render_summary_card) and
         # per-project label overrides (cards.py's merge_summary_card_labels). They must be forwarded through
         # THIS dict: self.config in RouteAnimator is this whole dict, not the raw settings.
-        "summary_card_style": settings.get(
-            "summary_card_style", tuning.DEFAULT_SUMMARY_CARD_STYLE
-        ),
+        # shortcut: legs draw their card from this too; give them their own when a second theme exists.
+        "summary_card_style": summary_card_style(settings),
+        "overview_theme": settings.get("overview_theme", "current"),
         "summary_card_labels": settings.get("summary_card_labels"),
         # HUD/card theme: settings.theme or top-level theme ("light"/"dark").
         "theme": tuning.resolve_ui_theme(project_config),

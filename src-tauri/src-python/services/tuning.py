@@ -179,6 +179,15 @@ SUMMARY_CARD_VALUE_FONT_SIZE = 34
 # Summary card template: "glass", "taskbar", "stacked" or "columns" (cards.py create_summary_card_*);
 # settings.summary_card_style overrides.
 DEFAULT_SUMMARY_CARD_STYLE = "columns"  # the user's choice (2026-09-30)
+# The overview's design themes (settings.overview_theme). "current" is today's look; a theme may set "card_style"
+# (the totals card's design, over the project's summary_card_style). An unknown name behaves as "current".
+OVERVIEW_THEMES: dict = {"current": {}}
+
+
+def overview_theme(name) -> dict:
+    return OVERVIEW_THEMES.get(name, OVERVIEW_THEMES["current"])
+
+
 # "columns" card: every column's text area is at least as wide as these
 # sample strings, so the card keeps one width whatever the values are.
 SUMMARY_CARD_FIXED_DISTANCE_SAMPLE = "88.8 km"

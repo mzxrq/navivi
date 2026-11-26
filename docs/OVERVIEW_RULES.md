@@ -701,7 +701,7 @@ These draw in screen space, over whatever map is underneath, so Phase 3 does not
 
 **Setting:** `overview_theme`, default `"current"`. **Interfaces:** `tuning.OVERVIEW_THEMES = {"current": {}}`; a theme may set `card_style`. Card style = theme's `card_style`, else the project's `summary_card_style`, else the default. Course keeps its circles card under `current`.
 
-- [ ] Tests: `current` gives today's card for each `summary_card_style`; an unknown theme behaves as `current`. No selector in the UI until a second theme exists. No version bump.
+- [x] Tests: `current` gives today's card for each `summary_card_style`; an unknown theme behaves as `current`. No selector in the UI until a second theme exists. No version bump.
 
 #### Task 15: Sub course slot (8.17, D4)
 
