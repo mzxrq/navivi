@@ -35,6 +35,6 @@ def test_an_overview_style_renders_a_finished_video(style, tmp_path):
 
 def test_a_project_still_carrying_the_old_3d_setting_renders_the_cue_driven_overview():
     animator = RouteAnimator.__new__(RouteAnimator)
-    animator.config = {"use_pydeck_overview": True, "overview_style": "walk"}
+    animator.config = {"overview_style": "walk"}
     animator.spatial_renderer = SimpleNamespace(render_overview=lambda *a, **k: "01_overview.mp4")
     assert animator._overview_clip("bg.png", [], [], [], 30, None, None, None, {}) == "01_overview.mp4"
