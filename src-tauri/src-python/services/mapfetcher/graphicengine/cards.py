@@ -129,13 +129,8 @@ class _CardMixin:
 
     def _format_duration_ja(self, seconds: float) -> str:
         """Name kept from when the text was Japanese only; the wording is the project's language."""
-        labels = getattr(self, "summary_card_labels", None) or video_text.current_labels()
-        if seconds < 60:
-            return labels["duration_seconds"].format(n=max(1, int(round(seconds))))
-        hrs, mins = divmod(int(round(seconds / 60)), 60)
-        if hrs:
-            return labels["duration_hours_minutes"].format(h=hrs, m=mins)
-        return labels["duration_minutes"].format(m=mins)
+        return video_text.format_duration(
+            getattr(self, "summary_card_labels", None) or video_text.current_labels(), seconds)
 
     def _mode_accent(self, mode: str) -> Tuple:
         """Same color the route line itself uses for this mode
@@ -194,31 +189,36 @@ class _CardMixin:
         # As wide as its longest line (so the given line breaks hold), within
         # a sensible range; anything longer still wraps.
         notice = video_text.current_labels()
-        notice_title, notice_body = notice[f"{kind}_notice_title"], notice[f"{kind}_notice_body"]
+        # equal_stopby_notices (themed videos): both banners take the larger one's size, so they sit level.
+        kinds = ("stopby", "closed") if getattr(self, "equal_stopby_notices", False) else (kind,)
         longest = max(
-            (probe.textlength(p, font=body_font) for p in notice_body.split(chr(10))),
+            (probe.textlength(p, font=body_font)
+             for k in kinds for p in notice[f"{k}_notice_body"].split(chr(10))),
             default=0,
         )
         body_w = int(min(0.45 * w, max(360 * s, text_x0 + longest + 24 * s)))
         text_w = body_w - text_x0 - int(20 * s)
-        lines: List[str] = []
-        for paragraph in notice_body.split(chr(10)):
-            line = ""
-            # Words where the text has spaces, single characters for Japanese.
-            units = [w + " " for w in paragraph.split(" ")] if " " in paragraph else list(paragraph)
-            for ch in units:
-                if line and probe.textlength((line + ch).rstrip(), font=body_font) > text_w:
+        wrapped: Dict[str, List[str]] = {}
+        for k in kinds:
+            lines = wrapped[k] = []
+            for paragraph in notice[f"{k}_notice_body"].split(chr(10)):
+                line = ""
+                # Words where the text has spaces, single characters for Japanese.
+                units = [w + " " for w in paragraph.split(" ")] if " " in paragraph else list(paragraph)
+                for ch in units:
+                    if line and probe.textlength((line + ch).rstrip(), font=body_font) > text_w:
+                        lines.append(line.rstrip())
+                        line = ""
+                    line += ch
+                if line:
                     lines.append(line.rstrip())
-                    line = ""
-                line += ch
-            if line:
-                lines.append(line.rstrip())
+        lines = wrapped[kind]
         line_h = int(body_font.size * 1.45)
-        body_h = int(18 * s) * 2 + line_h * len(lines)
+        body_h = int(18 * s) * 2 + line_h * max(len(found) for found in wrapped.values())
         body_x0 = margin
         body_y1 = h - margin
         body_y0 = body_y1 - body_h
-        title_w = int(probe.textlength(notice_title, font=title_font))
+        title_w = int(max(probe.textlength(notice[f"{k}_notice_title"], font=title_font) for k in kinds))
         ribbon_h = int(50 * s)
         ribbon_x0 = body_x0 - int(10 * s)
         ribbon_y1 = body_y0 + int(12 * s)  # overlaps the body card's top edge
@@ -248,7 +248,8 @@ class _CardMixin:
             return frame
         h, w = frame.shape[:2]
         # The notice is the same on every frame: drawn (with its blurred shadow) once, then only blended.
-        key = (w, h, tuple(marker_color), kind, video_text.current_labels()[f"{kind}_notice_title"])
+        key = (w, h, tuple(marker_color), kind, video_text.current_labels()[f"{kind}_notice_title"],
+               getattr(self, "equal_stopby_notices", False), getattr(self, "stopby_notice_colors", None))
         cache = self.__dict__.setdefault("_stopby_notice_cache", {})
         if key not in cache:
             cache[key] = self._stopby_notice_sprite(w, h, marker_color, kind)
@@ -276,8 +277,9 @@ class _CardMixin:
         layer.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(radius=10 * s)))
         d = ImageDraw.Draw(layer)
 
-        # body card
-        d.rounded_rectangle(body, radius=int(16 * s), fill=(255, 255, 255, 245))
+        # body card (stopby_notice_colors: a dark themed video's surface and text)
+        body_fill, text_fill = getattr(self, "stopby_notice_colors", None) or ((255, 255, 255, 245), (45, 45, 45, 255))
+        d.rounded_rectangle(body, radius=int(16 * s), fill=body_fill)
         icon_d = int(26 * s)
         ix = body[0] + int(22 * s)
         iy = body[1] + int(18 * s) + int(body_font.size * 1.45 - icon_d) // 2 + int(4 * s)
@@ -286,7 +288,7 @@ class _CardMixin:
         tx = ix + icon_d + int(14 * s)
         ty = body[1] + int(18 * s) + int(4 * s)
         for line in lines:
-            d.text((tx, ty), line, font=body_font, fill=(45, 45, 45, 255))
+            d.text((tx, ty), line, font=body_font, fill=text_fill)
             ty += int(body_font.size * 1.45)
 
         # ribbon: a banded title with a folded tail under its left end

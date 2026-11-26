@@ -1,0 +1,70 @@
+{
+  "colors": {
+    "ink": "#1E3A5F",
+    "accent": "#C73E24",
+    "gold": "#FFD77A",
+    "pattern_dark": "#5D8DBB",
+    "pale": "#E3F5FB",
+    "pattern_pale": "#A9D8E8",
+    "muted": "#4E6075",
+    "soft": "#BFD4E8",
+    "primary": "#1E6FC8",
+    "start": "#4F8F5B",
+    "end": "#9646AA",
+    "hill": "#4F8F5B",
+    "water": "#4FA9C4",
+    "sky": "#CBEAF7",
+    "sunset": "#FFE0AE",
+    "paper": "#FFFFFF",
+    "clock": "#F2A93B",
+    "panel": "#1E3A5F",
+    "closed": "#B93C37",
+    "edge": "#FFFFFF",
+    "label": "#FFFFFF",
+    "line": "#1E3A5F",
+    "walker": "#333333",
+    "icon": "#111",
+    "road": "#4E6075"
+  },
+  "mode_colors": {
+    "walking": "#1E6FC8",
+    "ferry": "#C73E24",
+    "driving": "#B25E09",
+    "airplane": "#6A4CB8"
+  },
+  "dark": {
+    "colors": {
+      "panel": "#111111",
+      "ink": "#FFFFFF",
+      "line": "#111111",
+      "accent": "#3D3D3D",
+      "gold": "#E6E6E6",
+      "pattern_dark": "#3A3A3A",
+      "pale": "#161616",
+      "pattern_pale": "#303030",
+      "muted": "#BFBFBF",
+      "soft": "#C8C8C8",
+      "primary": "#FFFFFF",
+      "start": "#5FA86C",
+      "end": "#B56CC9",
+      "hill": "#4A4A4A",
+      "water": "#555555",
+      "sky": "#333333",
+      "sunset": "#333333",
+      "paper": "#1A1A1A",
+      "clock": "#E0962A",
+      "closed": "#D64A44",
+      "edge": "#F2F2F2",
+      "label": "#1A1A1A",
+      "walker": "#FFFFFF",
+      "icon": "#FFFFFF",
+      "road": "#222222"
+    },
+    "mode_colors": {
+      "walking": "#2F7FD6",
+      "ferry": "#C94A36",
+      "driving": "#B56A14",
+      "airplane": "#7E5CC8"
+    }
+  }
+}
