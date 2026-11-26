@@ -171,32 +171,21 @@ def _retime_walk(
 
 class _OverviewAnimationMixin:
     def _apply_hud(self, frame: np.ndarray) -> np.ndarray:
-        """Persistent overview HUD: the trip's name and per-mode times on the
-        left, and on the right what is left of the route, the stop counter,
-        the stop being walked to and a progress bar (once the walk has an
-        actual position to measure progress from). Drawn through
-        _NoticeWriter.write so every frame this loop writes gets it,
-        regardless of which branch (walk, holds, batches) produced it —
-        same reasoning as the stop-by notice it's drawn alongside."""
+        """Persistent overview top bar: the project's title, and what is left
+        of the route over the whole route (once the walk has an actual
+        position to measure from). Drawn through _NoticeWriter.write so every
+        frame this loop writes gets it, regardless of which branch (walk,
+        holds, batches) produced it — same reasoning as the stop-by notice
+        it's drawn alongside."""
         total_km = getattr(self, "_hud_total_distance_km", None)
         total_s = getattr(self, "_hud_total_duration_seconds", None)
         frac = getattr(self, "_hud_progress_frac", None)
         live = {}
         if total_km is not None and total_s is not None and frac is not None:
             remaining = max(0.0, 1.0 - frac)
-            live = {
-                "remaining_km": total_km * remaining,
-                "remaining_seconds": total_s * remaining,
-                "progress": frac,
-            }
+            live = {"remaining_km": total_km * remaining, "remaining_seconds": total_s * remaining}
         return self.graphics.render_overview_hud(
-            frame,
-            title=getattr(self, "_hud_title", None),
-            mode_duration=getattr(self, "_hud_mode_duration", None),
-            stops=getattr(self, "_hud_stops", None),
-            next_stop=getattr(self, "_hud_next_stop", None),
-            **live,
-        )
+            frame, title=getattr(self, "_hud_title", None), total_km=total_km, total_seconds=total_s, **live)
 
     def _start_stopby_notice(self, fps: int, seconds: float, kind: str = "stopby") -> None:
         """Shows the stop-by notice (or, kind "closed", the closed-place one) once per video, from the next frame."""
@@ -546,7 +535,6 @@ class _OverviewAnimationMixin:
 
         for popup in s.active_popups:
             self._queue_if_reached(s, popup, beat)
-        self._update_preview(s)
         triggered_popup = self._pop_trigger(s, clock, current_frame)
 
         # Pins reached in the last tuning.PIN_POP_SECONDS are still popping in.
@@ -664,15 +652,6 @@ class _OverviewAnimationMixin:
         # only flips after the cooldown, seconds later in a cluster, which made the pin pop late.
         popup["data"]["arrived"] = True
         popup["pop_frame"] = s.video.frames_written  # the pin pops in from here
-
-    def _update_preview(self, s: _WalkState) -> None:
-        """The HUD's stop counter and its "next" line (the next real waypoint still ahead). No badge
-        is drawn over the map before arriving: a stop shows its card only once it is reached."""
-        self._hud_stops = (s.seq_ptr, len(s.sequential_popups)) if s.sequential_popups else None
-        self._hud_next_stop = None
-        if s.seq_ptr < len(s.sequential_popups):
-            upcoming = s.sequential_popups[s.seq_ptr]
-            self._hud_next_stop = upcoming.get("label") or None
 
     def _pop_trigger(self, s: _WalkState, clock: _WalkClock, current_frame: int) -> Optional[Dict]:
         """Dequeues the next popup once the trigger cooldown allows. The cooldown

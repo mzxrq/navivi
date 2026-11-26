@@ -3,9 +3,9 @@
 import pytest
 
 from services import tuning
-from services.localization.overview_script import course_summary, course_taglines
+from services.localization.overview_script import course_summary
 from services.vdoprocessing.pydeckrecorder.routedata import arrival_time_fraction
-from services.vdoprocessing.spatial_renderer.course import distance_at, tagline_at, trace_anchors
+from services.vdoprocessing.spatial_renderer.course import distance_at, trace_anchors
 from services.vdoprocessing.stopby_visits import set_visit_all_stopbys, visits_stopby
 
 
@@ -43,21 +43,6 @@ class TestTrace:
         assert [d for _, d in anchors] == [0.0, 100.0, 300.0]
 
 
-def test_taglines_cycle_and_fade():
-    lines = ["A", "B"]
-    assert tagline_at(lines, 2.0) == ("A", 1.0)
-    assert tagline_at(lines, tuning.COURSE_TAGLINE_SECONDS + 2.0)[0] == "B"
-    assert tagline_at(lines, 0.0)[1] == 0.0
-    assert tagline_at([], 3.0) == ("", 0.0)
-
-
-def test_the_tagline_showing_when_the_trace_ends_stays():
-    lines, p = ["A", "B", "C"], tuning.COURSE_TAGLINE_SECONDS
-    assert tagline_at(lines, 10 * p, hold_from=p + 0.01) == ("B", 1.0)  # caught fading in
-    assert tagline_at(lines, 10 * p, hold_from=2 * p - 0.01) == ("C", 1.0)  # caught fading out
-    assert tagline_at(lines, p + 2.0, hold_from=50.0)[0] == "B"  # before the hold it still cycles
-
-
 def _brief():
     walk = {"mode": "walking", "km": 1.0, "minutes": 20}
     boat = {"mode": "ferry", "km": 7.0, "minutes": 20}
@@ -72,15 +57,6 @@ def _brief():
              "to_at": [35.0, 139.0], "is_return": True, "km": 8.0, "minutes": 40},
         ],
     }
-
-
-def test_taglines_come_from_the_route():
-    lines = course_taglines({"video_title": "友ヶ島をめぐる道", "settings": {"intro_location": "和歌山県 和歌山市"}}, _brief())
-    assert lines[0] == "友ヶ島をめぐる道"
-    assert "海をわたり、野奈浦桟橋へ" in lines
-    assert "加太駅から歩いてめぐる道" in lines
-    assert lines[-1] == "和歌山県 和歌山市"
-    assert "Untitled Project" not in course_taglines({"video_title": "Untitled Project"}, _brief())
 
 
 def test_the_stats_card_counts_what_the_script_says():
@@ -234,13 +210,3 @@ def test_a_far_stop_by_still_visible_in_the_legs_frame_is_walked_to():
     lons = [135.0, 135.001, 135.002, 135.003, 135.004] + [135.004] * 4
     inside = {"lat": 35.003, "lng": 135.001, "isStopBy": True}  # ~270 m off the line, in the elbow: on screen
     assert stopbys_near_the_route([{}, inside], [1], lats, lons) == {1: 7}
-
-
-def test_the_headline_names_the_stretch_being_traced():
-    from services.vdoprocessing.spatial_renderer.course import leg_banner
-
-    stops = [(0.0, "S", "寺田橋バス停"), (120.0, "1", "葛木水分神社"), (300.0, "2", "郵便名柄館"), (900.0, "E", "玉手駅")]
-    assert leg_banner(stops, 0.0) == [("S", "寺田橋バス停"), ("1", "葛木水分神社")]
-    assert leg_banner(stops, 200.0) == [("1", "葛木水分神社"), ("2", "郵便名柄館")]
-    assert leg_banner(stops, 300.0) == [("2", "郵便名柄館"), ("E", "玉手駅")]  # arrived: the next stretch
-    assert leg_banner(stops, 900.0) == []  # trace done: the usual headlines again

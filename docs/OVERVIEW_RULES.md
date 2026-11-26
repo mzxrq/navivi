@@ -47,7 +47,7 @@ The walking videos are in [LEG_RULES.md](LEG_RULES.md).
 | Cards stay on screen | Yes (`overview_cards_stay`) | No, one at a time | Badges stay |
 | Stop-bys | Pop up as the walker passes | Same | All together after the route |
 | Closed places | Pop up as the walker passes | Same | After the stop-bys |
-| Top of frame (not in the ending) | Title, mode times, remaining distance and time, stop count, next stop (planned: only title, remaining distance and time, whole-route distance and time, see 8.14) | Same (planned: same as Walk) | Changing headline and "A → B" (left), totals (right) (planned: same as Walk, see 8.14) |
+| Top of frame (not in the ending) | Title (left); remaining over whole-route distance and time (right), see 8.14 | Same | Same |
 | Bottom of frame | Stop-by / closed notice | Same | Progress strip and notices (planned: same as Walk, see 8.15) |
 | Totals card | Bottom right, at the end | Same | Top right, at `{end}` |
 | Camera | Still | Still | Eases out at the start; zooms into groups of 3+ close stops |
@@ -671,9 +671,9 @@ These draw in screen space, over whatever map is underneath, so Phase 3 does not
 
 **Interfaces (produces):** `render_overview_hud(frame, title=None, remaining_km=None, remaining_seconds=None, total_km=None, total_seconds=None, alpha=1.0, top_margin=20, side_margin=32)`.
 
-- [ ] Left: title (`overview_title`, else `project_name`). Right: remaining, then whole route, in one format. No mode times, stop count, next stop, progress bar, headline or "A → B".
-- [ ] Course computes remaining as total × (1 − traced share).
-- [ ] Tests: a 60-character Japanese name stays inside its panel and clear of the right panel; missing totals draw the title only. Version bump.
+- [x] Left: title (`overview_title`, else `project_name`). Right: remaining, then whole route, in one format. No mode times, stop count, next stop, progress bar, headline or "A → B".
+- [x] Course computes remaining as total × (1 − traced share).
+- [x] Tests: a 60-character Japanese name stays inside its panel and clear of the right panel; missing totals draw the title only. Version bump.
 
 #### Task 11: Bottom of frame (8.15, D5)
 

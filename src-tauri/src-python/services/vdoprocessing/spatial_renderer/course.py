@@ -174,35 +174,6 @@ def distance_at(anchors: List[Tuple], t: float) -> float:
     return anchors[-1][1]
 
 
-def leg_banner(stops: List[Tuple[float, str, str]], dist: float) -> List[Tuple[str, str]]:
-    """[(glyph, name), (glyph, name)] for the stretch the trace is drawing at `dist`: the last
-    stop reached and the next one, each behind the glyph its own pin shows. `stops` is
-    (distance along the route, pin glyph, name) per stop in route order, the start first."""
-    reached = [s for s in stops if s[0] <= dist + 1e-6]
-    ahead = [s for s in stops if s[0] > dist + 1e-6]
-    if not reached or not ahead:
-        return []
-    return [(reached[-1][1], reached[-1][2]), (ahead[0][1], ahead[0][2])]
-
-
-def tagline_at(taglines: List[str], t: float, hold_from: Optional[float] = None) -> Tuple[str, float]:
-    """(tagline, opacity) at `t`: each held COURSE_TAGLINE_SECONDS, fading through. From `hold_from`
-    the one then showing stays (once fully in), so the text stops changing over a still map."""
-    if not taglines:
-        return "", 0.0
-    period, fade = tuning.COURSE_TAGLINE_SECONDS, tuning.COURSE_TAGLINE_FADE_SECONDS
-    if hold_from is not None and len(taglines) > 1:
-        k, local = divmod(max(0.0, hold_from), period)
-        if local > period - fade:  # already fading out: hold the next one
-            k, local = k + 1, 0.0
-        t = min(t, k * period + max(local, fade))
-    k, local = divmod(max(0.0, t), period)
-    text = taglines[int(k) % len(taglines)]
-    if len(taglines) == 1:
-        return text, min(1.0, local / fade) if k == 0 else 1.0
-    return text, max(0.0, min(1.0, local / fade, (period - local) / fade))
-
-
 class _Timing(NamedTuple):
     """When things happen, in seconds. extras_at / closed_at are None when there is nothing of that kind."""
     anchors: List[Tuple]
@@ -217,13 +188,12 @@ class _Timing(NamedTuple):
 
 
 class _Panels(NamedTuple):
-    """The fixed furniture of the frame (cards, headline, rail) and the boxes the badges keep clear of."""
+    """The fixed furniture of the frame (stats card, top bar, rail) and the boxes the cards keep clear of."""
     summary_card: Optional[np.ndarray]
-    taglines: List[str]
-    leg_stops: List[Tuple[float, str, str]]
-    headline_font: int
+    title: Optional[str]
+    total_km: Optional[float]
+    total_seconds: Optional[float]
     margin: int
-    totals: Optional[Image.Image]
     stats_y: int
     rail_marks: List[Tuple[float, str, Tuple]]
     closed_offset: int
@@ -552,10 +522,6 @@ def _pin_head_box(graphics, px: float, py: float) -> Tuple[float, float, float, 
     return px - 1.2 * r, py - 3.0 * r, px + 1.2 * r, py + 0.5 * r
 
 
-def _largest(panels: List) -> Optional[object]:
-    return max(panels, key=lambda c: (c.size[0] * c.size[1]) if c is not None else -1, default=None)
-
-
 class _CourseOverviewMixin:
     def _render_course_overview(
         self,
@@ -681,41 +647,32 @@ class _CourseOverviewMixin:
         total_points: int, total_smooth_dist: float,
     ) -> _Panels:
         """Everything fixed on the frame, and `reserved`: the boxes the cards are laid out clear of (the
-        headline, the totals, the stats card, the progress rail and the stop-by notices)."""
+        top bar, the stats card, the progress rail and the stop-by notices)."""
         summary = self.config.get("course_summary") or summary  # the numbers the script speaks
         summary_card = None
         if summary:
-            # Always the discs-and-chips template: the corners already hold the headline and the totals
-            # chip, and a third accent panel there was one too many (summary_card_style is the walk's).
+            # Always the discs-and-chips template: the corners already hold the top bar's panels, and a
+            # third accent panel there was one too many (summary_card_style is the walk's).
             summary_card = self.graphics.create_summary_card_circles(
                 distance_km=summary.get("total_distance_km", 0.0),
                 duration_seconds=summary.get("total_duration_seconds", 0.0),
                 mode_breakdown=summary.get("mode_breakdown"),
                 mode_duration=summary.get("mode_duration"),
             )
-        taglines = [str(x) for x in (self.config.get("overview_taglines") or []) if str(x).strip()]
-        leg_stops = self._course_leg_stops(on_route, total_points)
-        headline_font = max(22, int(h * 0.033))
+        title = getattr(self, "_hud_title", None)
+        total_km, total_seconds = (summary or {}).get("total_distance_km"), (summary or {}).get("total_duration_seconds")
         margin = int(h * 0.03)
         reserved: List[Tuple[float, float, float, float]] = []
 
-        # Reserved at the widest the headline ever gets, so no badge sits where a later stretch's own
-        # (longer) names will be drawn.
-        banners = [leg_banner(leg_stops, d) for d, _, _ in leg_stops]
-        headline = _largest([
-            self.graphics.route_headline_panel(title, steps, headline_font)
-            for title in (taglines or [""]) for steps in (banners or [[]])
-        ])
-        if headline is not None:
-            reserved.append((0.0, 0.0, float(margin * 2 + headline.size[0]),
-                             float(margin * 2 + headline.size[1])))
-        totals = self.graphics.route_totals_panel(
-            (summary or {}).get("total_distance_km"), (summary or {}).get("total_duration_seconds"),
-        ) if summary else None
-        if totals is not None:
-            reserved.append((float(w - margin - totals.size[0]), 0.0, float(w), float(margin * 2 + totals.size[1])))
-        # The stats card hangs under the totals chip, top right: the foot of the frame is the progress rail's.
-        stats_y = margin + ((totals.size[1] + 12) if totals is not None else 0)
+        # The top bar at its widest (nothing of the route traced yet).
+        left, right = self.graphics.overview_hud_panels(
+            w, title, total_km, total_seconds, total_km, total_seconds)
+        if left is not None:
+            reserved.append((0.0, 0.0, float(margin * 2 + left.size[0]), float(margin * 2 + left.size[1])))
+        if right is not None:
+            reserved.append((float(w - margin - right.size[0]), 0.0, float(w), float(margin * 2 + right.size[1])))
+        # The stats card hangs under the right panel: the foot of the frame is the progress rail's.
+        stats_y = margin + ((right.size[1] + 12) if right is not None else 0)
         if summary_card is not None:
             ch, cw = summary_card.shape[:2]
             reserved.append((w - cw - float(margin), float(stats_y), float(w), float(stats_y + ch)))
@@ -727,19 +684,8 @@ class _CourseOverviewMixin:
         closed_offset = self._reserve_notices(reserved, timing, w, h)
         notices = reserved[before:]
         rail_recap_left = int(max(b[2] for b in notices) + 24 * h / 1080) if notices else None
-        return _Panels(summary_card, taglines, leg_stops, headline_font, margin, totals, stats_y,
+        return _Panels(summary_card, title, total_km, total_seconds, margin, stats_y,
                        rail_marks, closed_offset, reserved, rail_recap_left)
-
-    def _course_leg_stops(self, on_route: List[Dict], total_points: int) -> List[Tuple[float, str, str]]:
-        """(distance, glyph, name) per named stop: the headline names the stretch being drawn ("A → B"),
-        in sync with the trace."""
-        leg_stops: List[Tuple[float, str, str]] = []
-        for ap in on_route:
-            name = str(ap.get("label") or "").strip()
-            if name and (not leg_stops or ap["course_dist"] > leg_stops[-1][0]):
-                glyph, _, _ = self._pin_label_and_color(ap, total_points)
-                leg_stops.append((float(ap["course_dist"]), str(glyph or ""), name))
-        return leg_stops
 
     def _course_rail_marks(
         self, on_route: List[Dict], total_points: int, total_smooth_dist: float,
@@ -1176,8 +1122,7 @@ class _CourseOverviewMixin:
             frame = np.clip(blended, 0, 255, out=blended).astype(np.uint8)
             if view is not None:
                 frame = _crop_zoom(frame, *view)
-        return self._composite_course_panels(
-            frame, i, t, dist, k, timing.route_at <= t < timing.trace_end, trace, timing, panels, total_smooth_dist)
+        return self._composite_course_panels(frame, i, t, dist, k, trace, timing, panels, total_smooth_dist)
 
     def _draw_trace_line(self, frame: np.ndarray, trace: _Trace, k: int, head) -> None:
         """The traced part of the route, up to `head`."""
@@ -1208,24 +1153,18 @@ class _CourseOverviewMixin:
         cv2.addWeighted(overlay, fade, frame, 1.0 - fade, 0, dst=frame)
 
     def _composite_course_panels(
-        self, frame: np.ndarray, i: int, t: float, dist: float, k: int, in_trace: bool, trace: _Trace,
+        self, frame: np.ndarray, i: int, t: float, dist: float, k: int, trace: _Trace,
         timing: _Timing, panels: _Panels, total_smooth_dist: float,
     ) -> np.ndarray:
-        """Headline, totals, progress rail, stats card and stop-by notices over the frame."""
+        """The top bar, progress rail, stats card and stop-by notices over the frame."""
         margin = panels.margin
-        steps = leg_banner(panels.leg_stops, dist) if in_trace else []
-        title, title_alpha = tagline_at(panels.taglines, t, hold_from=timing.trace_end)
-        # The strip holds the tagline whole while a stretch is under it (one swaps for the
-        # next rather than dissolving through: the stretch must stay legible), and fades
-        # on its own once the trace is done and the card is the strip alone.
-        panel = self.graphics.route_headline_panel(title, steps, panels.headline_font)
-        if panel is not None:
-            frame = self.graphics._composite_pill(
-                frame, panel, 1.0 if steps else title_alpha,
-                x_from_left=margin, y_from_top=margin)
-        if panels.totals is not None:
-            frame = self.graphics._composite_pill(
-                frame, panels.totals, 1.0, x_from_right=margin, y_from_top=margin)
+        live = {}
+        if panels.total_km is not None and panels.total_seconds is not None:
+            left = max(0.0, 1.0 - dist / max(1e-6, total_smooth_dist))  # of the route, still to be traced
+            live = {"remaining_km": panels.total_km * left, "remaining_seconds": panels.total_seconds * left}
+        frame = self.graphics.render_overview_hud(
+            frame, title=panels.title, total_km=panels.total_km, total_seconds=panels.total_seconds,
+            top_margin=margin, side_margin=margin, **live)
         if panels.rail_marks:
             frame = self.graphics.render_route_progress_rail(
                 frame, dist / max(1e-6, total_smooth_dist), panels.rail_marks, margin=margin,

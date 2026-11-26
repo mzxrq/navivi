@@ -166,7 +166,8 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
 - Course overview extras: its progress rail shrinks to the room right of the stop-by / closed notices as they come up
   (`_course_rail_left`), and its summary is always the discs-and-chips `create_summary_card_circles`, whatever
   `summary_card_style` says. The walk overview draws no preview badge for the stop ahead (removed 2026-11-21); the
-  HUD's "next" line remains. `shoot.py` previews the course last frame for a course project.
+  top bar is the same in every style (`render_overview_hud`: title left; remaining over whole route right; no
+  headline, "A → B", mode times or stop counter, 8.14). `shoot.py` previews the course last frame for a course project.
 - Pill badges (`popups.py::_layout_recap_cards`, `tests/test_recap_pill_layout.py`): used by the ending clip
   (`finale_step._recap_badges`) and by a recap whose storyboard keeps no cards up. **No leader lines**
   (`leaders=False`), so the badges pack at `_RECAP_BADGE_TOUCH_GAP`. Numbered stops are never locked into one cluster
@@ -180,7 +181,7 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
   resampled every 6 px (a ferry leg's raw points are only its ends). The course map is fetched
   `tuning.COURSE_OPEN_ZOOM` wider (`overview_framing._widen`) and the video eases out to it (`course._open_zoom`). After the trace,
   stop-bys and closed places come up one by one across their sentence (`_set_reveal_times`, with a ring `_draw_ripple`),
-  the walked stops' cards fade to `_BADGE_DIM`, and the tagline showing at `trace_end` holds (`tagline_at(hold_from=)`).
+  and the walked stops' cards fade to `_BADGE_DIM`.
   The GL ending stays a hard cut (a crossfade was tried 2026-11-21; the user preferred the cut).
   Camera moves are real map zooms: `course.zoom_view(t)` gives the view (the opening ease-out, then `dense_zooms`:
   runs of 3+ stops whose stretch is `COURSE_DENSE_ZOOM_MIN`x smaller than the whole ROUTE, not the frame), the GL map

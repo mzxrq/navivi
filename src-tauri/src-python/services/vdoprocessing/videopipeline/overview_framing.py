@@ -8,7 +8,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from services.localization.overview_script import course_summary, course_taglines, overview_style
+from services.localization.overview_script import course_summary, overview_style
 from services.localization.route_brief import load_brief
 from services.gpsparser.gpscalculator import GPSMath
 from services.vdoprocessing.storyboard import of as storyboard_of
@@ -158,7 +158,7 @@ def overview_bounding_box(fetcher, route_df: pd.DataFrame, project_config: dict)
 
 def _course_config(project_config: dict, config_path: Path) -> dict:
     """The overview type, plus what the "course" overview needs from the route:
-    headline taglines and the stats card's numbers (the same the script speaks)."""
+    the stats card's numbers (the same the script speaks)."""
     style = overview_style(project_config)
     if style != "course":
         return {"overview_style": style}
@@ -169,6 +169,5 @@ def _course_config(project_config: dict, config_path: Path) -> dict:
         return {"overview_style": style}
     return {
         "overview_style": style,
-        "overview_taglines": course_taglines(project_config, brief),
         "course_summary": course_summary(brief),
     }

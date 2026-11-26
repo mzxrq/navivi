@@ -75,7 +75,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # stops are plain colour dots; v56: top HUD panels 1.5x bigger; v55: the recap sits on a plain plate and arranges its
 # badges on one lattice in walked order (see CLAUDE.md "overview recap's pill badges"); v54: a return stop takes no
 # number of its own. Older history: git log.
-OVERVIEW_RENDER_VERSION = 77  # v77: straight clear leaders, zoom cross-fade; v76: one spot and size per card
+OVERVIEW_RENDER_VERSION = 78  # v78: top bar of title and totals; v77: straight clear leaders, zoom cross-fade
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -190,6 +190,7 @@ _EXPECTED_FRAME_SEARCH_FRACTION = 0.05  # window size as a fraction of the path'
 _DEFAULT_INTRO_FREEZE_SECONDS = 3.0  # used when the start popup sets no freeze_seconds
 _INTRO_CLEAN_HOLD_FRACTION_OF_FREEZE = 0.5  # clean-beat hold, as a fraction of intro_freeze_sec
 _SUMMARY_CARD_MARGIN_PX = 20  # gap between the summary card and the frame's bottom-right corner
+_HUD_TOP, _HUD_SIDE = 20, 32  # where render_overview_hud puts the top bar's panels
 # [NOTE] The walk never waits past this for the narration's {start} cue: a long opening line would otherwise hold
 # the walker on the clean map well past the intro card's own freeze; the voice finishes it over the moving map.
 _MAX_INTRO_WALK_START_SECONDS = 3.0
@@ -726,16 +727,13 @@ class _OverviewRenderMixin:
         return current_bg, w, h
 
     def _ov_reset_hud(self, summary: Optional[Dict]) -> None:
-        """The persistent HUD (title/mode times + live distance, stop counter, progress), drawn per frame by
+        """The persistent top bar (title; what is left over the whole route), drawn per frame by
         overview_animation.py's _NoticeWriter; each piece is skipped when its value is missing."""
         self._hud_total_distance_km = (summary or {}).get("total_distance_km")
         self._hud_total_duration_seconds = (summary or {}).get("total_duration_seconds")
-        self._hud_mode_duration = (summary or {}).get("mode_duration")
         self._hud_title = self.config.get("overview_title") or (
             self._get_job_config() or {}
         ).get("project_name")
-        self._hud_stops = None
-        self._hud_next_stop = None
         self._hud_progress_frac = 0.0  # the intro, before any walking: the whole trip is still ahead
 
     def _ov_prepare_popups(self, points: List, popups: List, labels: List, extent, w: int, h: int, fps: int) -> List[Dict]:
@@ -946,10 +944,15 @@ class _OverviewRenderMixin:
             tuple(float(v) for v in self.graphics.stopby_notice_box(w, h, kind))
             for kind in ("stopby", "closed")
         ]
-        # The HUD's two top panels (title, remaining).
-        # shortcut: a fixed band, not the panels' own size; measure them when the top bar is redone (Task 10).
-        band_w, band_h = w * tuning.OVERVIEW_HUD_KEEP_OUT_WIDTH, h * tuning.OVERVIEW_HUD_KEEP_OUT_HEIGHT
-        reserved_boxes += [(0.0, 0.0, band_w, band_h), (w - band_w, 0.0, float(w), band_h)]
+        # The top bar's two panels, at their widest (nothing of the route walked yet).
+        km, seconds = (summary or {}).get("total_distance_km"), (summary or {}).get("total_duration_seconds")
+        left, right = self.graphics.overview_hud_panels(
+            w, getattr(self, "_hud_title", None), km, seconds, km, seconds)
+        if left is not None:
+            reserved_boxes.append((0.0, 0.0, float(_HUD_SIDE + left.size[0] + 12), float(_HUD_TOP + left.size[1] + 12)))
+        if right is not None:
+            reserved_boxes.append(
+                (float(w - _HUD_SIDE - right.size[0] - 12), 0.0, float(w), float(_HUD_TOP + right.size[1] + 12)))
         return summary_card, reserved_boxes
 
     def _ov_layout_stay_cards(
