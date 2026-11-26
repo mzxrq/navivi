@@ -827,7 +827,7 @@ class _OverviewAnimationMixin:
             )
         if map_stop and not popup.get("no_pause"):
             # Route map: stand here long enough to see the photo and read the leg card.
-            clock.wait = max(clock.wait, int(tuning.OVERVIEW_MAP_MIN_STOP_SECONDS * fps))
+            clock.wait = max(clock.wait, int(storyboard_for(self.config).timings["map_min_stop_seconds"] * fps))
         return map_stop
 
     def _flow_display_seconds(self, s: _WalkState, clock: _WalkClock, popup: Dict, map_stop) -> float:

@@ -3,6 +3,7 @@ import pytest
 
 from services import tuning
 from services.vdoprocessing.spatial_renderer.course import _drawn_path, dense_zooms, gl_view_state, zoom_view
+from services.vdoprocessing.storyboard import of
 
 W, H = 1920, 1080
 
@@ -106,7 +107,7 @@ def test_cards_of_stops_passed_in_quick_succession_shrink_and_do_not_overlap():
     course._course_pass_cards(stops, stops, [], None, W, H)
     scales = {s["pass_scale"] for s in stops}
     assert len(scales) == 1 and scales.pop() < tuning.COURSE_PASS_CARD_SCALE  # one smaller size for the whole crowd
-    assert all(s["pass_until"] - s["course_at"] >= tuning.COURSE_PASS_CARD_MIN_SECONDS - 1e-9 for s in stops)
+    assert all(s["pass_until"] - s["course_at"] >= of("course").timings["pass_card_min_seconds"] - 1e-9 for s in stops)
     boxes = [(*s["pass_box"], s["pass_box"][0] + int(170 * s["pass_scale"]), s["pass_box"][1] + int(130 * s["pass_scale"]))
              for s in stops]
     for i, a in enumerate(boxes):

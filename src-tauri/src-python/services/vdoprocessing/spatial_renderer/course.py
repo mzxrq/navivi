@@ -18,10 +18,12 @@ from services import tuning
 from services.vdoprocessing.route_inputs import same_place
 from services.mapfetcher.graphicengine.glyphs import drawable
 from services.logger.progress import tracker
+from services.vdoprocessing.storyboard import of as storyboard_of
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
 
+_TIMINGS = storyboard_of("course").timings  # this module renders the course storyboard
 _MIN_ANCHOR_GAP_SECONDS = 0.4
 _LAST_LEG_MAX_SECONDS = 4.0  # the walk to the last stop never takes longer than this
 _EXTRAS_AFTER_SECONDS = 4.0  # the stop-bys come this long after the stats, the closed places after them
@@ -275,8 +277,9 @@ def zoom_view(
     eases out from the route's own framing (the middle 1/COURSE_OPEN_ZOOM of the wider map, see
     overview_framing._widen); later it eases in on each group of stops while the trace runs through it
     (dense_zooms). The GL map is captured at this view, or the base frame is cropped to it (_crop_zoom)."""
-    if t < tuning.COURSE_OPEN_ZOOM_SECONDS:
-        s = tuning.COURSE_OPEN_ZOOM + (1.0 - tuning.COURSE_OPEN_ZOOM) * _smoothstep(t / tuning.COURSE_OPEN_ZOOM_SECONDS)
+    open_seconds = _TIMINGS["open_zoom_seconds"]
+    if t < open_seconds:
+        s = tuning.COURSE_OPEN_ZOOM + (1.0 - tuning.COURSE_OPEN_ZOOM) * _smoothstep(t / open_seconds)
         return s, (w - w / s) / 2, (h - h / s) / 2
     ease = tuning.COURSE_DENSE_EASE_SECONDS
     for t_in, t_out, s, x0, y0 in zooms:
@@ -323,7 +326,7 @@ def dense_zooms(
             j += 1
         s, cx, cy = fit(ds[i], ds[j])
         t_in, t_out = _reveal_time(anchors, ds[i]), _reveal_time(anchors, ds[j])
-        clear = t_in - ease >= max(tuning.COURSE_OPEN_ZOOM_SECONDS, out[-1][1] + ease if out else 0.0)
+        clear = t_in - ease >= max(_TIMINGS["open_zoom_seconds"], out[-1][1] + ease if out else 0.0)
         if j - i + 1 >= tuning.COURSE_DENSE_MIN_STOPS and t_out > t_in and clear and s > 1.05:
             out.append((t_in, t_out, min(s, max_zoom), cx, cy))
             i = j + 1
@@ -846,22 +849,22 @@ class _CourseOverviewMixin:
         still showing first, then of every stop's pin, its own included, then as near its pin as it can, then of
         as much route as it can, then of the badges already up - it only covers one for a moment), and shrinks
         into the badge at `pass_until`. A card gives way early to the next stop's, though it stays up at least
-        COURSE_PASS_CARD_MIN_SECONDS; where stops come faster than that, the cards up together are one crowd,
+        pass_card_min_seconds; where stops come faster than that, the cards up together are one crowd,
         all one size (pass_crowd_scales) so they fit side by side."""
         on_route_ids = {id(ap) for ap in on_route}
         passing = sorted((ap for ap in laid_out if id(ap) in on_route_ids), key=lambda ap: ap["course_at"])
         untils = []
         for k, ap in enumerate(passing):
-            until = ap["course_at"] + tuning.COURSE_PASS_CARD_SECONDS
+            until = ap["course_at"] + _TIMINGS["pass_card_seconds"]
             if k + 1 < len(passing):
                 until = min(until, passing[k + 1]["course_at"])
-            until = max(until, ap["course_at"] + tuning.COURSE_PASS_CARD_MIN_SECONDS)
+            until = max(until, ap["course_at"] + _TIMINGS["pass_card_min_seconds"])
             # A card popped while the camera is zoomed in holds until the zoom is done (and a normal hold after the
             # group's last stop), so each photo stays up for the whole group (2026-11-25).
             ease = tuning.COURSE_DENSE_EASE_SECONDS
             zoom_end = next((z[1] for z in zooms if z[0] - ease <= ap["course_at"] <= z[1] + ease), None)
             if zoom_end is not None:
-                until = max(until, zoom_end + tuning.COURSE_PASS_CARD_SECONDS)
+                until = max(until, zoom_end + _TIMINGS["pass_card_seconds"])
             untils.append(until)
         scales = pass_crowd_scales(
             [(ap["course_at"], u + tuning.COURSE_PASS_CARD_SHRINK_SECONDS) for ap, u in zip(passing, untils)],
@@ -1430,7 +1433,7 @@ class _CourseOverviewMixin:
                 mode=trace.modes[min(max(0, k - 1), len(trace.modes) - 1)] if t >= timing.route_at else None,
                 frame_count=i, left=self._course_rail_left(t, timing, panels))
         if panels.summary_card is not None and t >= timing.stats_at:
-            u = _smoothstep((t - timing.stats_at) / tuning.COURSE_STATS_SLIDE_SECONDS)
+            u = _smoothstep((t - timing.stats_at) / _TIMINGS["stats_slide_seconds"])
             frame = self.graphics.composite_card_on_frame(
                 frame, panels.summary_card, alpha=u, margin=margin, corner="top_right",
                 margin_y=panels.stats_y, slide_offset_y=-(1 - u) * 80)

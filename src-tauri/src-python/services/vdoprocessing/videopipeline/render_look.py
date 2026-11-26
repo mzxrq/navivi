@@ -4,6 +4,7 @@ and the look options handed to the renderer."""
 from typing import Optional
 
 from services import tuning
+from services.vdoprocessing.storyboard import of as storyboard_of
 
 from .helpers import logger
 
@@ -163,9 +164,9 @@ _LOOK_OPTION_DEFAULTS = (
     ("show_leg_wide_intro", False),
     ("res_follow_pitch", 0.0),
     ("street_photos_at_turns", tuning.STREET_PHOTOS_AT_TURNS),
-    ("overview_max_leg_seconds", 10.0),
+    ("overview_max_leg_seconds", None),  # None here: look_options takes the style's storyboard timing
     ("overview_intro_card_scale", 1.3),
-    ("overview_intro_clean_hold_seconds", 1.5),
+    ("overview_intro_clean_hold_seconds", None),
     ("overview_title", None),
     # overview_script.py reads the same key off the raw settings (default on): both now agree.
     ("enable_ending_highlight", True),
@@ -177,5 +178,12 @@ _LOOK_OPTION_DEFAULTS = (
 
 
 def look_options(settings: dict) -> dict:
-    """The renderer options of _LOOK_OPTION_DEFAULTS, read off the project's settings."""
-    return {key: settings.get(key, default) for key, default in _LOOK_OPTION_DEFAULTS}
+    """The renderer options of _LOOK_OPTION_DEFAULTS, read off the project's settings; the overview's beat
+    timings default to its storyboard."""
+    timings = storyboard_of(settings.get("overview_style")).timings
+    defaults = {
+        **dict(_LOOK_OPTION_DEFAULTS),
+        "overview_max_leg_seconds": timings["max_leg_seconds"],
+        "overview_intro_clean_hold_seconds": timings["intro_clean_hold_seconds"],
+    }
+    return {key: settings.get(key, default) for key, default in defaults.items()}

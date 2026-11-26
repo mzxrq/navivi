@@ -11,6 +11,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 from services.localization.localization import is_japanese
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services import tuning
+from services.vdoprocessing.storyboard import of as storyboard_of
 
 from .glyphs import drawable
 
@@ -158,7 +159,7 @@ class _PopupBoxMixin:
         return lines, font
 
     def slide_to_card(self, data: Dict, photo: np.ndarray) -> np.ndarray:
-        """The "map" overview's pop-up: the photo for OVERVIEW_MAP_PHOTO_SECONDS of being shown, then it slides
+        """The "map" overview's pop-up: the photo for map_photo_seconds of being shown, then it slides
         left and the stop's leg card (data["leg_card_bgr"], map_style.attach_leg_cards) slides in after it.
         Counts the frames each stop's card has been drawn (one draw per frame)."""
         card = data.get("leg_card_bgr")
@@ -166,7 +167,8 @@ class _PopupBoxMixin:
             return photo
         counts = self.__dict__.setdefault("_slide_frames", {})
         shown = counts[id(data)] = counts.get(id(data), 0) + 1
-        p = (shown / getattr(self, "slide_fps", 30) - tuning.OVERVIEW_MAP_PHOTO_SECONDS) / tuning.OVERVIEW_MAP_SLIDE_SECONDS
+        timings = storyboard_of("map").timings
+        p = (shown / getattr(self, "slide_fps", 30) - timings["map_photo_seconds"]) / timings["map_slide_seconds"]
         if p <= 0:
             return photo
         p = min(1.0, p)

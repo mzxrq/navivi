@@ -297,14 +297,9 @@ DEFAULT_OVERVIEW_DESCRIBE_STOPS = True
 #            last; the course-guide script (overview_script.build_course_script).
 DEFAULT_OVERVIEW_STYLE = "walk"
 OVERVIEW_STYLES = ("walk", "course", "map")
-# "map" overview: each main stop's photo pops up this much bigger than a walk card, shows this long, then
-# slides over to its leg card in this long (spatial_renderer/map_style.py, popup_box.slide_to_card).
+# "map" overview: each main stop's photo pops up this much bigger than a walk card, then slides over to its leg
+# card (spatial_renderer/map_style.py, popup_box.slide_to_card). Its timings: storyboards/map.json.
 OVERVIEW_MAP_CARD_SCALE = 2.6
-OVERVIEW_MAP_PHOTO_SECONDS = 0.8
-OVERVIEW_MAP_SLIDE_SECONDS = 0.5
-# The walker stands at each Route map stop at least this long (photo, slide, then time to read the leg card);
-# the card closes as it walks on.
-OVERVIEW_MAP_MIN_STOP_SECONDS = 3.5
 # The arriving script the course style writes from the route (localization/leg_script.py):
 # "brief" = one sentence, the overall direction only; "turns" = every turn on the way.
 # Overridable per project via job_config.json's settings.leg_directions.
@@ -334,10 +329,8 @@ COURSE_TAGLINE_SECONDS = 5.0
 COURSE_TAGLINE_FADE_SECONDS = 0.5
 COURSE_CARD_POP_SECONDS = 0.45
 # As the trace passes a stop, its photo card pops up beside it (COURSE_PASS_CARD_SCALE at 1080p) for
-# COURSE_PASS_CARD_SECONDS, or until the next stop's card pops (never under _MIN_SECONDS), then shrinks
-# into the stop's pill badge over COURSE_PASS_CARD_SHRINK_SECONDS.
-COURSE_PASS_CARD_SECONDS = 2.5
-COURSE_PASS_CARD_MIN_SECONDS = 1.8  # 0.9 flashed past where the trace passes stops a fraction of a second apart
+# pass_card_seconds, or until the next stop's card pops (never under pass_card_min_seconds, both in
+# storyboards/course.json), then shrinks into the stop's pill badge over COURSE_PASS_CARD_SHRINK_SECONDS.
 # Cards up together share one size: 1/sqrt(most up at once) of the full one, never under this share of it.
 COURSE_PASS_CARD_CROWD_MIN_SCALE = 0.5
 # While zoomed a crowd's card may shrink further, down to this share of the full size, to fit right beside its own
@@ -345,7 +338,6 @@ COURSE_PASS_CARD_CROWD_MIN_SCALE = 0.5
 COURSE_ZOOM_CARD_MIN_SCALE = 0.3
 COURSE_PASS_CARD_SHRINK_SECONDS = 0.45
 COURSE_PASS_CARD_SCALE = 1.8
-COURSE_STATS_SLIDE_SECONDS = 0.6
 # Stop-bys (then closed places) come one at a time across their sentence: at least _STAGGER apart,
 # at most _MAX_STEP, so a long sentence with few places still shows them early on.
 COURSE_STOPBY_STAGGER_SECONDS = 0.15
@@ -355,9 +347,8 @@ COURSE_STOPBY_MAX_STEP_SECONDS = 1.6
 COURSE_TOP_BAND_FRACTION = 0.10
 COURSE_BOTTOM_BAND_FRACTION = 0.17
 # The course map is fetched this much wider than the route's own framing, for the badges' room; the
-# video opens on the route's framing and eases out to the whole map over COURSE_OPEN_ZOOM_SECONDS.
+# video opens on the route's framing and eases out to the whole map (open_zoom_seconds, storyboards/course.json).
 COURSE_OPEN_ZOOM = 1.12
-COURSE_OPEN_ZOOM_SECONDS = 1.2
 # While the trace runs through a tight group of stops (at least _MIN_STOPS whose stretch of route, with their
 # photo cards, is _MIN times smaller than the whole route), the map eases in on it (at most _MAX: it is one
 # image, softer past ~1.5x) and back out once the trace leaves, each ease taking _EASE_SECONDS.
@@ -372,8 +363,6 @@ OVERVIEW_BOTTOM_BAND_FRACTION = 0.17
 OVERVIEW_TOP_BAND_FRACTION = 0.12
 # The stats card sits this much lower than the shared 20 px margin (its image has ~26 px of shadow).
 COURSE_STATS_DROP_PX = 30
-# Course legs: the walker slows (to 40% pace) over this long before each stop; arrival times stay.
-COURSE_ARRIVAL_SLOW_SECONDS = 3.0
 # Leg script cues {slow} … {/slow} / {fast} … {/fast}: the walker's pace there against the rest of its piece (the
 # rest makes up the time, so arrival stays on the cue). Per project: settings.pace_slow_factor / pace_fast_factor.
 PACE_SLOW_FACTOR = 0.2  # was 0.5: only 2x slower than the rest, which barely showed over a long {slow}
@@ -1408,10 +1397,10 @@ SUB_COURSE_TITLE_SECONDS = 3.5
 # The main course drawn faint under a sub course leg (RGBA).
 SUB_COURSE_MAIN_LINE_COLOR = (150, 150, 150, 140)
 # Overview: after the main course's summary the sub course plays (overview._render_sub_course_part): its line in the
-# editor's sub course amber (BGR), the main route faded this much toward the bare map, the walk's length, the card's hold.
+# editor's sub course amber (BGR), the main route faded this much toward the bare map, the card's hold. The walk's
+# length is sub_course_seconds in the storyboard files.
 SUB_COURSE_LINE_BGR = (11, 158, 245)
 SUB_COURSE_MAIN_FADE = 0.5
-SUB_COURSE_OVERVIEW_SECONDS = 8.0
 SUB_COURSE_SUMMARY_HOLD_SECONDS = 4.0
 OUTRO_ROUTE_DISTANCE_FONT_SIZE = 22
 # The route page's title + subtitle use the intro's text and styles at this fraction of its size.
