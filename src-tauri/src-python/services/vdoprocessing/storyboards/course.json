@@ -2,7 +2,7 @@
   "name": "course",
   "passby_stopbys": false,
   "passby_closed": false,
-  "cards_stay": false,
+  "cards_stay": true,
   "big_stop_card": false,
   "one_card_at_a_time": false,
   "leg_cards": false,
@@ -21,8 +21,6 @@
     "max_leg_seconds": 10.0,
     "intro_clean_hold_seconds": 1.5,
     "open_zoom_seconds": 1.2,
-    "pass_card_seconds": 2.5,
-    "pass_card_min_seconds": 1.8,
     "stats_slide_seconds": 0.6
   }
 }

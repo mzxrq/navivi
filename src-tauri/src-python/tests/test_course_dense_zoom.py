@@ -1,9 +1,13 @@
+import math
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
 from services import tuning
-from services.vdoprocessing.spatial_renderer.course import _drawn_path, dense_zooms, gl_view_state, zoom_view
-from services.vdoprocessing.storyboard import of
+from services.vdoprocessing.spatial_renderer.course import (
+    _CourseOverviewMixin, _drawn_path, _pin_head_box, _Trace, dense_zooms, gl_view_state, zoom_view)
+from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
 
 W, H = 1920, 1080
 
@@ -66,103 +70,6 @@ def test_the_gl_camera_shows_the_same_crop_the_frame_would():
     assert (zx, zy) == pytest.approx(((bx - 400) * 1.5, (by - 200) * 1.5), abs=1.0)
 
 
-def test_a_passing_card_hangs_at_its_pin_even_over_the_route():
-    """The start's card went 300 px out over the water because any corner at its pin covered some route line.
-    A corner at the pin wins; covering less route only decides between spots at the same distance."""
-    from types import SimpleNamespace
-
-    from services.vdoprocessing.spatial_renderer.course import _CourseOverviewMixin
-    from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
-
-    class _Course(_CourseOverviewMixin, _PopupMixin):
-        pass
-
-    course = _Course()
-    course.config = {}
-    course.graphics = SimpleNamespace(marker_radius=20, beside_card_footprint=lambda *a, **k: (300, 240))
-    stop = {"x": 960, "y": 540, "index": 0, "course_at": 1.0, "label": "S", "data": {}}
-    # The route crosses the pin both ways, so every corner at the pin covers some of it.
-    route = np.array([(x, 540) for x in range(0, 1920, 6)] + [(960, y) for y in range(0, 1080, 6)], dtype=float)
-    course._course_pass_cards([stop], [stop], [], route, W, H)
-    x, y = stop["pass_box"]
-    cx, cy = x + 150, y + 120  # the card's middle sits within one card of the pin
-    assert abs(cx - 960) <= 300 and abs(cy - 540) <= 240
-
-
-def test_cards_of_stops_passed_in_quick_succession_shrink_and_do_not_overlap():
-    from types import SimpleNamespace
-
-    from services.vdoprocessing.spatial_renderer.course import _CourseOverviewMixin
-    from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
-
-    class _Course(_CourseOverviewMixin, _PopupMixin):
-        pass
-
-    course = _Course()
-    course.config = {}
-    course.graphics = SimpleNamespace(
-        marker_radius=20, beside_card_footprint=lambda scale=1.0, **k: (int(170 * scale), int(130 * scale)))
-    stops = [{"x": 900 + 60 * i, "y": 540, "index": i, "course_at": 5.0 + 0.3 * i, "label": str(i), "data": {}}
-             for i in range(3)]
-    course._course_pass_cards(stops, stops, [], None, W, H)
-    scales = {s["pass_scale"] for s in stops}
-    assert len(scales) == 1 and scales.pop() < tuning.COURSE_PASS_CARD_SCALE  # one smaller size for the whole crowd
-    assert all(s["pass_until"] - s["course_at"] >= of("course").timings["pass_card_min_seconds"] - 1e-9 for s in stops)
-    boxes = [(*s["pass_box"], s["pass_box"][0] + int(170 * s["pass_scale"]), s["pass_box"][1] + int(130 * s["pass_scale"]))
-             for s in stops]
-    for i, a in enumerate(boxes):
-        for b in boxes[i + 1:]:
-            assert not (a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3])
-
-
-def test_cards_up_together_share_one_size_and_a_lone_card_keeps_the_full_one():
-    from services.vdoprocessing.spatial_renderer.course import pass_crowd_scales
-
-    spans = [(1.0, 3.0), (5.0, 7.0), (5.5, 7.5), (6.0, 8.0), (20.0, 22.0)]  # lone, a crowd of three, lone
-    s = pass_crowd_scales(spans, 2.0)
-    assert s[0] == s[4] == 2.0
-    assert s[1] == s[2] == s[3] == pytest.approx(2.0 / 3 ** 0.5)
-    many = pass_crowd_scales([(t, t + 2.0) for t in (0.0, 0.1, 0.2, 0.3, 0.4, 0.5)], 2.0)
-    assert set(many) == {2.0 * tuning.COURSE_PASS_CARD_CROWD_MIN_SCALE}  # never below the floor
-
-
-def test_a_passing_card_covers_no_pin_its_own_or_a_neighbours():
-    from types import SimpleNamespace
-
-    from services.vdoprocessing.spatial_renderer.course import _CourseOverviewMixin, _pin_head_box
-    from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
-
-    class _Course(_CourseOverviewMixin, _PopupMixin):
-        pass
-
-    course = _Course()
-    course.config = {}
-    course.graphics = SimpleNamespace(marker_radius=20, beside_card_footprint=lambda scale=1.0, **k: (300, 240))
-    stop = {"x": 960, "y": 540, "index": 0, "course_at": 1.0, "label": "S", "data": {}}
-    neighbour = {"x": 1010, "y": 560, "index": 1, "course_at": 30.0, "label": "1", "data": {}}  # right beside it
-    course._course_pass_cards([stop], [stop, neighbour], [], None, W, H)
-    x, y = stop["pass_box"]
-    for p in (stop, neighbour):
-        b = _pin_head_box(course.graphics, p["x"], p["y"])
-        assert not (x < b[2] and b[0] < x + 300 and y < b[3] and b[1] < y + 240)
-    assert abs(x + 150 - 960) <= 400 and abs(y + 120 - 540) <= 340  # and still right by its own pin
-
-
-def test_a_zoom_is_held_until_its_last_card_has_been_shown_in_full():
-    from services.vdoprocessing.spatial_renderer.course import hold_zooms_for_cards
-
-    zooms = [(10.0, 20.0, 1.5, 0.0, 0.0), (30.0, 40.0, 1.5, 0.0, 0.0)]
-    # a card popped at 19.5 s shows until 22 s: the first zoom waits for it; a card of the second zoom shows to 45 s,
-    # but is cut at the next zoom's own ease (none here); a card popped between the zooms holds neither
-    held = hold_zooms_for_cards(zooms, [(19.5, 22.0), (35.0, 41.0), (25.0, 27.0)])
-    shrink = tuning.COURSE_PASS_CARD_SHRINK_SECONDS  # held until the card has shrunk away, not just started to
-    assert held[0][1] == pytest.approx(22.0 + shrink) and held[1][1] == pytest.approx(41.0 + shrink)
-    # and never into the next zoom's ease
-    squeezed = hold_zooms_for_cards(zooms, [(19.5, 29.5)])
-    assert squeezed[0][1] <= zooms[1][0] - 2 * 0.8 + 1e-9
-    assert hold_zooms_for_cards(zooms, []) == zooms
-
-
 def test_zoom_lets_go_before_the_trace_head_leaves_the_view():
     import numpy as np
     from services.vdoprocessing.spatial_renderer.course import release_zooms_before_exit
@@ -174,116 +81,85 @@ def test_zoom_lets_go_before_the_trace_head_leaves_the_view():
     assert t_in == 1.0 and t_out < 8.0
 
 
-def test_a_card_hold_never_runs_the_zoom_out_past_the_trace_leaving_the_view():
-    import numpy as np
-    from services.vdoprocessing.spatial_renderer.course import (
-        hold_zooms_for_cards, release_zooms_before_exit, zoom_exit_limits)
-
-    path = np.array([[500.0, 500.0], [500.0, 100.0]])  # leaves the 1.5x view that starts at (400, 300) at about 4 s
-    cum = np.array([0.0, 400.0])
-    anchors = [(0.0, 0.0), (10.0, 400.0)]
-    zooms = [(1.0, 2.0, 1.5, 400.0, 300.0)]
-    limits = zoom_exit_limits(zooms, path, cum, anchors, 1920, 1080)
-    released = release_zooms_before_exit(zooms, path, cum, anchors, 1920, 1080)
-    held = hold_zooms_for_cards(released, [(1.5, 9.0)], limits)  # a card held to 9 s must not hold the zoom past the exit
-    assert held[0][1] <= limits[0] + 1e-9
-    assert held[0][1] < 9.0
+class _Course(_CourseOverviewMixin, _PopupMixin):
+    pass
 
 
-def test_cards_up_together_while_zoomed_never_cover_each_other():
-    """Around a tight cluster the eight spots beside one pin cannot hold several big cards: the later ones take the
-    rings further out instead of the least-bad near spot (第三砲台跡 covered タカノス山, 2026-11-24)."""
-    import math
-    from types import SimpleNamespace
-
-    from services.vdoprocessing.spatial_renderer.course import _CourseOverviewMixin
-    from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
-
-    class _Course(_CourseOverviewMixin, _PopupMixin):
-        pass
-
+def _course(cards, zooms):
+    """A course renderer and scene holding `cards` (each already at its spot), with `zooms`; draws are stubbed."""
     course = _Course()
     course.config = {}
-    full = tuning.COURSE_PASS_CARD_SCALE
     course.graphics = SimpleNamespace(
-        marker_radius=20, beside_card_footprint=lambda scale=1.0, **k: (int(300 * scale / full), int(240 * scale / full)))
-    cards = {}
-    for i in range(4):
-        cards[i] = {"x": 900 + 40 * i, "y": 540 + 15 * i, "index": i, "course_at": 5.0 + 0.3 * i,
-                    "pass_box": (0, 0), "pass_scale": full, "pass_until": 8.0 + 0.3 * i}
-    scene = SimpleNamespace(on_route=list(cards.values()), cards=cards)
-    view = (1.0, 0.0, 0.0)
-    sizes = set()
-    course._course_zooms = [(4.0, 9.0, 1.0, 0.0, 0.0)]
-    boxes = []
-    for card in cards.values():
-        x, y, sc = course._zoom_card_place(card, scene, 6.0, view, [], W, H)
-        cw, ch = course.graphics.beside_card_footprint(sc)
-        boxes.append((x, y, x + cw, y + ch))
-        # right by its own pin (smaller in the crowd), not sent across the map (第三砲台跡 ended up far off once)
-        gap = math.hypot(max(x - card["x"], 0, card["x"] - x - cw), max(y - card["y"], 0, card["y"] - y - ch))
-        assert gap <= 90, gap  # just past the teardrop above or beside it
-        sizes.add(sc)
-    from services.vdoprocessing.spatial_renderer.course import _pin_head_box
-
-    for card in cards.values():  # out around the group, so no card sits on any pin of it
-        p = _pin_head_box(course.graphics, card["x"], card["y"])
-        assert not any(b[0] < p[2] and p[0] < b[2] and b[1] < p[3] and p[1] < b[3] for b in boxes)
-    for i, a in enumerate(boxes):
-        for b in boxes[i + 1:]:
-            assert not (a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3])
-    assert len(sizes) == 1  # one size for the whole zoom (a lone smaller card read as a mistake)
+        marker_radius=20, marker_color=(0, 0, 0), draw_path=lambda *a, **k: None,
+        beside_card_footprint=lambda scale=1.0, **k: (int(210 * scale), int(170 * scale)))
+    course._course_zooms = zooms
+    scene = SimpleNamespace(
+        on_route=cards, cards={c["index"]: c for c in cards}, laid_out=cards, extras=[], returns=set(), labels={},
+        label_at={}, total_points=len(cards), fps=30, draw_marker=lambda *a, **k: None)
+    return course, scene
 
 
-def test_a_card_still_up_at_the_zoom_out_is_gone_from_that_moment():
-    """No card is left on the whole map: one popped in a zoom and still up when the camera zooms out is cut there
-    (no shrink); one done in time, or popped outside any zoom, plays as usual."""
-    from types import SimpleNamespace
+def _card(index, x, y, stay_box, **extra):
+    return {"index": index, "x": x, "y": y, "course_at": 5.0, "stay_box": stay_box, "stay_scale": 1.4, "data": {},
+            **extra}
 
-    from services.vdoprocessing.spatial_renderer.course import _CourseOverviewMixin, cut_cards_at_zoom_out
 
-    zoom = [(2.0, 5.0, 1.5, 0.0, 0.0)]
-    late = {"index": 1, "course_at": 4.5, "pass_until": 7.0}
-    done = {"index": 2, "course_at": 2.5, "pass_until": 3.0}
-    outside = {"index": 3, "course_at": 9.0, "pass_until": 11.0}
-    cut_cards_at_zoom_out([late, done, outside], zoom)
-    assert late["pass_cut"] == 5.0 and "pass_cut" not in done and "pass_cut" not in outside
+def _boxes(places):
+    return [(x, y, x + int(210 * s), y + int(170 * s)) for x, y, s in places]
 
-    scene = SimpleNamespace(laid_out=[late], on_route=[], extras=[], fps=30)
-    state = _CourseOverviewMixin._course_plate_state(SimpleNamespace(), scene, 5.2)
-    shown, passing = state[0], state[5]
-    assert shown == (1,) and passing == ()  # its badge, no card and no shrink
 
-    # popped once the zoom-out has begun: never shown on the whole map either
-    during = {"index": 6, "course_at": 5.2, "pass_until": 7.0}
-    cut_cards_at_zoom_out([during], zoom)
-    assert during["pass_cut"] == 5.2
+def _overlap(a, b):
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+VIEW = (2.0, 480.0, 270.0)  # shows base x 480..1440, y 270..810
+
+
+def test_zoomed_cards_keep_their_size_and_stay_in_the_frame_then_return_to_their_spots():
+    inside, outside = _card(0, 900, 540, (100, 100)), _card(1, 100, 100, (300, 800))  # the second pin is off view
+    course, scene = _course([inside, outside], [(4.0, 9.0, *VIEW)])
+    places = [course._zoom_card_place(c, scene, 6.0, VIEW, [], W, H) for c in (inside, outside)]
+    assert [p[2] for p in places] == [1.4, 1.4]
+    assert all(0 <= x0 and x1 <= W and 0 <= y0 and y1 <= H for x0, y0, x1, y1 in _boxes(places))
+    assert not _overlap(*_boxes(places))
+    drawn = []
+    course.graphics.render_popup_box = lambda frame, info, **k: drawn.append((info["index"], info["beside_box"])) or frame
+    course._course_layer(scene, course._course_plate_state(scene, 12.0), np.zeros((H, W, 3), np.uint8))
+    assert set(drawn) == {(0, (100, 100)), (1, (300, 800))}
+
+
+def test_the_zoomed_map_moves_every_card_up_to_its_zoomed_place():
+    cards = [_card(0, 900, 540, (100, 100)), _card(1, 100, 100, (300, 800))]
+    course, scene = _course(cards, [(4.0, 9.0, *VIEW)])
+    drawn = []
+    course.graphics.render_popup_box = lambda frame, info, **k: drawn.append((info["index"], info["beside_box"])) or frame
+    trace = _Trace(np.array([[0.0, 0.0], [10.0, 10.0]]), np.array([0.0, 14.0]), [(0, 0), (10, 10)],
+                   ["walking", "walking"], (0, 0, 0), 4, 0)
+    timing = SimpleNamespace(route_at=100.0, trace_end=200.0)
+    course._course_zoomed_map(180, 6.0, VIEW, np.zeros((H, W, 3), np.uint8), scene,
+                              course._course_plate_state(scene, 6.0), trace, timing, None, 0, np.array([0.0, 0.0]))
+    assert set(drawn) == {(c["index"], course._zoom_card_place(c, scene, 6.0, VIEW, [], W, H)[:2]) for c in cards}
+
+
+def test_cards_up_together_while_zoomed_cover_no_card_and_no_pin():
+    cards = [_card(i, 900 + 40 * i, 540 + 15 * i, (0, 0), course_at=5.0 + 0.3 * i) for i in range(4)]
+    course, scene = _course(cards, [(4.0, 9.0, 1.0, 0.0, 0.0)])
+    places = [course._zoom_card_place(c, scene, 6.0, (1.0, 0.0, 0.0), [], W, H) for c in cards]
+    boxes = _boxes(places)
+    for card in cards:
+        pin = _pin_head_box(course.graphics, card["x"], card["y"])
+        assert not any(_overlap(b, pin) for b in boxes)
+    assert not any(_overlap(a, b) for i, a in enumerate(boxes) for b in boxes[:i])
+    assert {p[2] for p in places} == {1.4}
 
 
 def test_a_zoomed_card_keeps_off_the_route_beside_its_pin():
     """The route runs through the pin left to right: the card goes above or below it, still right by the pin, instead of
     on the line (第三砲台跡 and 友ヶ島 小展望台 covered the walk, 2026-11-24)."""
-    import math
-    from types import SimpleNamespace
-
-    import numpy as np
-
-    from services.vdoprocessing.spatial_renderer.course import _CourseOverviewMixin
-    from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
-
-    class _Course(_CourseOverviewMixin, _PopupMixin):
-        pass
-
-    course = _Course()
-    course.config = {}
-    full = tuning.COURSE_PASS_CARD_SCALE
-    course.graphics = SimpleNamespace(
-        marker_radius=20, beside_card_footprint=lambda scale=1.0, **k: (int(300 * scale / full), int(240 * scale / full)))
+    card = _card(0, 900, 540, (0, 0))
+    course, scene = _course([card], [(4.0, 9.0, 1.0, 0.0, 0.0)])
     course._course_route_px = np.array([[x, 540.0] for x in range(0, 1920, 6)])
-    card = {"x": 900, "y": 540, "index": 0, "course_at": 5.0, "pass_box": (0, 0), "pass_scale": full, "pass_until": 8.0}
-    scene = SimpleNamespace(on_route=[card], cards={0: card})
-    course._course_zooms = [(4.0, 9.0, 1.0, 0.0, 0.0)]
     x, y, sc = course._zoom_card_place(card, scene, 6.0, (1.0, 0.0, 0.0), [], W, H)
-    assert sc == full  # alone: full size
-    assert not (y <= 540 <= y + 240)  # off the line
-    assert math.hypot(max(x - 900, 0, 900 - x - 300), max(y - 540, 0, 540 - y - 240)) <= 120  # and by its pin
+    cw, ch = course.graphics.beside_card_footprint(sc)
+    assert not (y <= 540 <= y + ch)  # off the line
+    assert math.hypot(max(x - 900, 0, 900 - x - cw), max(y - 540, 0, 540 - y - ch)) <= 120  # and by its pin

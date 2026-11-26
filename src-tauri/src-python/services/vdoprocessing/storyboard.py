@@ -10,9 +10,7 @@ timings, in seconds (a project setting of the same overview_* name, where there 
           sentence), max_leg_seconds (longest leg on screen), intro_clean_hold_seconds (clean map before the card)
   map     map_photo_seconds (the big photo), map_slide_seconds (its slide to the leg card), map_min_stop_seconds
           (shortest stand at a stop: photo, slide, then time to read the card)
-  course  open_zoom_seconds (ease out to the whole map), pass_card_seconds / pass_card_min_seconds (a passed
-          stop's photo card; 0.9 flashed past where stops come a fraction of a second apart),
-          stats_slide_seconds (totals card slides in)"""
+  course  open_zoom_seconds (ease out to the whole map), stats_slide_seconds (totals card slides in)"""
 import json
 from dataclasses import dataclass
 from functools import lru_cache

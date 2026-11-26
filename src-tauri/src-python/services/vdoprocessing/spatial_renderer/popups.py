@@ -2868,32 +2868,6 @@ A connected stop-by is loose as well: the walker passes every
         """Walk the route (settings.overview_cards_stay, on by default): each stop's card stays up once shown."""
         return storyboard_for(self.config).cards_stay and bool(self.config.get("overview_cards_stay", True))
 
-    # Corners of a spot a card can hang from (the course overview's passing cards, course._course_pass_cards)...
-    _CARD_SPILL_CORNERS = ((0, 0), (1, 0), (0, 1), (1, 1))
-    # ...and, when every one of those is taken, how far out from it the card may be pushed, and in how many steps.
-    _CARD_SPILL_RINGS = 7
-    _CARD_SPILL_RING_PX = 70
-    _CARD_SPILL_PER_RING = 8
-
-    def _card_box_candidates(self, sx, sy, pill_w, pill_h, card_w, card_h, w, h):
-        """Where a card could go beside the box (sx, sy, pill_w, pill_h), nearest first: hanging from each of its
-        corners, then rings of spots further out. Every candidate is clamped inside the frame."""
-        margin = self._RECAP_CARD_MARGIN
-        max_x, max_y = max(margin, w - card_w - margin), max(margin, _card_bottom_limit(h, margin) - card_h)
-
-        def clamped(x, y):
-            return int(min(max(x, margin), max_x)), int(min(max(y, margin), max_y))
-
-        for fx, fy in self._CARD_SPILL_CORNERS:
-            yield clamped(sx - (card_w - pill_w) * fx, sy - (card_h - pill_h) * fy)
-        cx, cy = sx + pill_w / 2.0, sy + pill_h / 2.0
-        for ring in range(1, self._CARD_SPILL_RINGS + 1):
-            r = ring * self._CARD_SPILL_RING_PX
-            for step in range(self._CARD_SPILL_PER_RING):
-                a = 2 * math.pi * step / self._CARD_SPILL_PER_RING
-                yield clamped(cx + r * math.cos(a) - card_w / 2.0,
-                              cy + r * math.sin(a) - card_h / 2.0)
-
     def walk_card_hud(
         self,
         popup: Dict,

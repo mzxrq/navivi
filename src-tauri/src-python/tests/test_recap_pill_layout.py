@@ -384,23 +384,6 @@ def test_the_recap_draws_no_leader_lines():
     assert not any(p.get("leader_via") or p.get("leader_from") for p in pops)
 
 
-def test_the_course_style_badge_draws_no_leader_line():
-    """Changing the video style doesn't change how pill badges are arranged: the course
-    style lays its badges out leaderless too, and its per-frame hud honours that."""
-    from services.vdoprocessing.spatial_renderer.course import _CourseOverviewMixin
-
-    class _Course(_CourseOverviewMixin, _Layout):
-        pass
-
-    course = _Course()
-    course.config = {}
-    course.graphics = _layout().graphics
-    course.graphics.marker_color = (0, 0, 0)
-    pops = [_popup(300 + 90 * i, 500, "s%d" % i, i + 1) for i in range(4)]
-    course._layout_recap_cards(pops, 1920, 1080, leaders=False)
-    assert not any(course._course_hud(p)["draw_leader_line"] for p in pops)
-
-
 def test_a_reserved_box_at_the_top_only_shortens_its_columns():
     """A box over the top of the badge band (the course style's headline, as wide as its
     longest line) must not cost its columns every row: that left the whole left half of

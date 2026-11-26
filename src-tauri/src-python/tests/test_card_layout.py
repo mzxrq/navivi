@@ -6,6 +6,7 @@ import pytest
 
 from services import tuning
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
+from services.vdoprocessing.spatial_renderer.course import zoomed_card_box
 from services.vdoprocessing.spatial_renderer.overview import _standing_cards
 from services.vdoprocessing.spatial_renderer.pins import _PinMixin
 from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
@@ -166,6 +167,21 @@ def test_a_tight_cluster_still_gets_every_card(count):
     pins = [{"x": 900 + (i % 8) * 8, "y": 500 + (i // 8) * 8, "index": i, "data": {}} for i in range(count)]
     cards = _layout()._layout_ring_cards(pins, 1920, 1080)
     assert len(cards) == count and len({c["card_scale"] for c in cards}) == 1 and not _overlapping(cards)
+
+
+@pytest.mark.parametrize("ease, box", [(0.0, (100, 200)), (0.5, (200, 300)), (1.0, (300, 400))])
+def test_a_zoomed_card_moves_between_its_spot_and_its_zoomed_place(ease, box):
+    assert zoomed_card_box((100, 200), (300, 400), ease) == box
+
+
+def test_whole_route_first_gives_each_place_with_a_photo_one_card():
+    renderer, popups = _renderer({"overview_style": "course"}), _stops()
+    on_route, extras = [popups[0], popups[1], popups[3], popups[4]], [popups[2]]
+    laid, cards = renderer._course_cards(on_route, extras, {id(popups[3])}, popups[4], [], None, 1920, 1080)
+    assert sorted(cards) == [0, 1, 4] and sorted(p["index"] for p in laid) == [0, 1, 4]
+    assert all(cards[i] is popups[i] for i in cards)
+    assert all(p["stay_box"] == p["beside_box"] and p["stay_scale"] == p["card_scale"] for p in laid)
+    assert len({p["stay_scale"] for p in laid}) == 1
 
 
 def test_the_size_stops_at_the_maximum_and_follows_the_frame_height():
