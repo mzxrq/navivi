@@ -205,6 +205,9 @@ export function VideoLookSettings({ options, onChange }: Props) {
         <Row title={t`Clean map before the card`} description={t`Seconds the overview shows the bare map first.`}>
           <Fader value={num("overview_intro_clean_hold_seconds")} min={0} max={4} step={0.5} unit=" s" label={t`Clean map before the card`} onChange={set("overview_intro_clean_hold_seconds")} />
         </Row>
+        <Row title={t`Time on the totals`} description={t`Seconds the overview holds after the totals card comes in on the voice.`}>
+          <Fader value={num("overview_recap_hold_seconds")} min={0} max={8} step={0.5} unit=" s" label={t`Time on the totals`} onChange={set("overview_recap_hold_seconds")} />
+        </Row>
         <Row title={t`Cards stay up`} description={t`Each stop's card stays on the map once it pops up. Off: cards close as the video moves on, and return to the same spots on the last map.`}>
           <Switch checked={on("overview_cards_stay")} onChange={set("overview_cards_stay")} label={t`Cards stay up`} />
         </Row>

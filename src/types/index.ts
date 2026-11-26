@@ -184,6 +184,7 @@ export interface ProjectSettings {
   overview_max_leg_seconds?: number;
   overview_intro_card_scale?: number;
   overview_intro_clean_hold_seconds?: number;
+  overview_recap_hold_seconds?: number; // the totals card stays at least this long after the {distance} cue
   enable_ending_highlight?: boolean;
   overview_cards_stay?: boolean; // "Walk the route": each stop's card stays up once shown (default on)
   enable_outro?: boolean;

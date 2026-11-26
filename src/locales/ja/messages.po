@@ -561,8 +561,8 @@ msgstr "動画を追加して開始"
 msgid "Add a voice"
 msgstr "ボイスを追加"
 
-#: src/components/ui/VideoLookSettings.tsx:217
-#: src/components/ui/VideoLookSettings.tsx:218
+#: src/components/ui/VideoLookSettings.tsx:220
+#: src/components/ui/VideoLookSettings.tsx:221
 msgid "Add an outro"
 msgstr "アウトロを追加"
 
@@ -1264,8 +1264,8 @@ msgstr "カードの枠線の太さ"
 msgid "Cards and overlays"
 msgstr "カードとオーバーレイ"
 
-#: src/components/ui/VideoLookSettings.tsx:208
-#: src/components/ui/VideoLookSettings.tsx:209
+#: src/components/ui/VideoLookSettings.tsx:211
+#: src/components/ui/VideoLookSettings.tsx:212
 msgid "Cards stay up"
 msgstr "カードを残す"
 
@@ -2049,7 +2049,7 @@ msgstr "隣り合う地点どうしの距離、登り、歩行時間、経由点
 #~ msgid "Distance, mode and via points between neighbouring stops"
 #~ msgstr "隣り合う地点どうしの距離、移動手段、経由点"
 
-#: src/components/ui/VideoLookSettings.tsx:242
+#: src/components/ui/VideoLookSettings.tsx:245
 msgid "Distance, time and mode on each card."
 msgstr "各カードに距離、時間、移動手段を表示します。"
 
@@ -2218,7 +2218,7 @@ msgstr "ここにサブタイトルを入れます..."
 msgid "E.g. Wakayama, Wakayama City"
 msgstr "例：和歌山・和歌山市"
 
-#: src/components/ui/VideoLookSettings.tsx:208
+#: src/components/ui/VideoLookSettings.tsx:211
 msgid "Each stop's card stays on the map once it pops up. Off: cards close as the video moves on, and return to the same spots on the last map."
 msgstr "各地点のカードは一度出たら地図に残ります。オフにすると、動画が進むとカードは閉じ、最後の地図で同じ位置に戻ります。"
 
@@ -2856,7 +2856,7 @@ msgstr "グラデーションヒートマップ"
 msgid "Green"
 msgstr "緑"
 
-#: src/components/ui/VideoLookSettings.tsx:232
+#: src/components/ui/VideoLookSettings.tsx:235
 msgid "Grid"
 msgstr "グリッド"
 
@@ -3773,7 +3773,7 @@ msgstr "写真に動きをつける（ゆっくりズーム・パン）"
 msgid "Move up"
 msgstr "上へ"
 
-#: src/components/ui/VideoLookSettings.tsx:238
+#: src/components/ui/VideoLookSettings.tsx:241
 msgid "Moves the photos up or down below the title: 0% just under it, 100% at the bottom."
 msgstr "タイトルの下で写真を上下に動かします。0%でタイトルのすぐ下、100%で一番下です。"
 
@@ -4333,12 +4333,12 @@ msgstr "縁取りの色"
 msgid "Output"
 msgstr "出力"
 
-#: src/components/ui/VideoLookSettings.tsx:216
+#: src/components/ui/VideoLookSettings.tsx:219
 #: src/features/editor/EditorView.tsx:59
 msgid "Outro"
 msgstr "アウトロ"
 
-#: src/components/ui/VideoLookSettings.tsx:225
+#: src/components/ui/VideoLookSettings.tsx:228
 msgid "Outro style"
 msgstr "アウトロのスタイル"
 
@@ -4478,8 +4478,8 @@ msgstr "地点の写真"
 msgid "Photos grow to fill the frame when the traveler arrives."
 msgstr "旅行者が到着すると、写真が拡大して画面いっぱいになります。"
 
-#: src/components/ui/VideoLookSettings.tsx:238
-#: src/components/ui/VideoLookSettings.tsx:239
+#: src/components/ui/VideoLookSettings.tsx:241
+#: src/components/ui/VideoLookSettings.tsx:242
 msgid "Photos position"
 msgstr "写真の位置"
 
@@ -5123,8 +5123,8 @@ msgstr "ルートの色"
 #~ msgid "Route colour"
 #~ msgstr "ルートの色"
 
-#: src/components/ui/VideoLookSettings.tsx:242
-#: src/components/ui/VideoLookSettings.tsx:243
+#: src/components/ui/VideoLookSettings.tsx:245
+#: src/components/ui/VideoLookSettings.tsx:246
 msgid "Route facts"
 msgstr "ルートの情報"
 
@@ -5304,7 +5304,7 @@ msgstr "スクリプト内にあるすべての漢字をスキャンし辞書に
 msgid "Scans the scripts for place names and adds their readings (marked auto). Turning it off removes the auto words."
 msgstr "台本から地名を探して読みを追加します（autoの印）。オフにすると自動で追加された語を削除します。"
 
-#: src/components/ui/VideoLookSettings.tsx:233
+#: src/components/ui/VideoLookSettings.tsx:236
 msgid "Scrapbook"
 msgstr "スクラップブック"
 
@@ -5316,7 +5316,7 @@ msgstr "スクリプト"
 #~ msgid "Script writer"
 #~ msgstr "スクリプトの作成元"
 
-#: src/components/ui/VideoLookSettings.tsx:231
+#: src/components/ui/VideoLookSettings.tsx:234
 msgid "Scrolling"
 msgstr "スクロール"
 
@@ -5361,6 +5361,10 @@ msgstr "区間が次のクリップへディゾルブする秒数です。0は�
 #: src/features/editor/Inspector.tsx:333
 msgid "Seconds after the title item starts. It leaves the same time before the end."
 msgstr "タイトル項目の開始からの秒数です。終了の同じ秒数前に消えます。"
+
+#: src/components/ui/VideoLookSettings.tsx:208
+msgid "Seconds the overview holds after the totals card comes in on the voice."
+msgstr "音声に合わせて合計カードが表示された後、概要を表示し続ける秒数です。"
 
 #: src/components/ui/VideoLookSettings.tsx:205
 msgid "Seconds the overview shows the bare map first."
@@ -6061,7 +6065,7 @@ msgstr "クリップができました。"
 msgid "The clips are drawn at 1080p, so a larger size enlarges them: the file is bigger, not sharper."
 msgstr "クリップは1080pで描画されるため、サイズを大きくすると拡大されます。ファイルは大きくなりますが、鮮明にはなりません。"
 
-#: src/components/ui/VideoLookSettings.tsx:211
+#: src/components/ui/VideoLookSettings.tsx:214
 msgid "The closing close-up of the first stop."
 msgstr "最初の地点の最後のクローズアップです。"
 
@@ -6098,7 +6102,7 @@ msgstr "朝の光が港に差し込み、街がゆっくりと目を覚ましま
 msgid "The language the AI writes stop scripts in (Auto-Write, imported documents, the assistant). Auto follows the language of the project's own text. English narration is read by an English voice: Kokoro, with its English voices added below."
 msgstr "AIがスポットの台本を書く言語です(自動作成、読み込んだドキュメント、アシスタント)。「自動」はプロジェクト自身のテキストの言語に合わせます。英語のナレーションは英語の音声(Kokoro と、下で追加する英語ボイス)で読み上げます。"
 
-#: src/components/ui/VideoLookSettings.tsx:222
+#: src/components/ui/VideoLookSettings.tsx:225
 msgid "The last stop's photo shrinks onto its pin and the camera pulls back to show the whole route, then the outro starts."
 msgstr "最後の地点の写真がピンへ縮み、カメラが引いてルート全体を見せてからアウトロが始まります。"
 
@@ -6154,7 +6158,7 @@ msgstr "音声が各地点を説明している間、全体表示はその地点
 msgid "The photo clip is ready."
 msgstr "写真クリップができました。"
 
-#: src/components/ui/VideoLookSettings.tsx:217
+#: src/components/ui/VideoLookSettings.tsx:220
 msgid "The places-visited clip at the end of the video."
 msgstr "動画の最後に表示される、訪れた場所のクリップです。"
 
@@ -6350,6 +6354,11 @@ msgstr "この区間は標高を取得できないため、時間に登りは含
 #: src/features/map/components/LegStats.tsx:40
 #~ msgid "Time ignores climb: no elevation recorded for this leg"
 #~ msgstr "この区間は標高が記録されていないため、時間に登りは含まれていません"
+
+#: src/components/ui/VideoLookSettings.tsx:208
+#: src/components/ui/VideoLookSettings.tsx:209
+msgid "Time on the totals"
+msgstr "合計の表示時間"
 
 #: src/features/map/components/GenerateDialog.tsx:158
 msgid "Time unavailable"
@@ -6911,8 +6920,8 @@ msgstr "動画ではどの場所を巡りますか？"
 msgid "White"
 msgstr "白"
 
-#: src/components/ui/VideoLookSettings.tsx:222
-#: src/components/ui/VideoLookSettings.tsx:223
+#: src/components/ui/VideoLookSettings.tsx:225
+#: src/components/ui/VideoLookSettings.tsx:226
 msgid "Whole route before the outro"
 msgstr "アウトロの前にルート全体"
 
@@ -7068,7 +7077,7 @@ msgstr "ズームアウトとイン"
 msgid "Zoom to path"
 msgstr "経路に合わせて拡大"
 
-#: src/components/ui/VideoLookSettings.tsx:211
-#: src/components/ui/VideoLookSettings.tsx:212
+#: src/components/ui/VideoLookSettings.tsx:214
+#: src/components/ui/VideoLookSettings.tsx:215
 msgid "Zoom to the start at the end"
 msgstr "最後に始点へズームする"

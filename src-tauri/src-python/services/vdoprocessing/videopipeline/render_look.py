@@ -173,6 +173,7 @@ _LOOK_OPTION_DEFAULTS = (
     ("overview_title", None),
     # overview_script.py reads the same key off the raw settings (default on): both now agree.
     ("enable_ending_highlight", True),
+    ("overview_recap_hold_seconds", tuning.OVERVIEW_RECAP_HOLD_SECONDS),
 )
 
 

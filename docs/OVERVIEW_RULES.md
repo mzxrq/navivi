@@ -655,9 +655,9 @@ These draw in screen space, over whatever map is underneath, so Phase 3 does not
 
 **Setting:** `overview_recap_hold_seconds`, default 3.0. **Files:** `course.py` (`_course_timing`), `spatial_renderer/overview.py` (`_ov_hold_summary`, `_ov_play_ending_highlight`, `_ov_write_ending`), settings files.
 
-- [ ] Course tests: `stats_at` equals the `distance` cue; without it, the `end` cue; stop-bys may pop on top of the card.
-- [ ] Walk and map tests: with a `distance` cue the totals card appears at it and the ending zoom starts no sooner than cue + hold; without it, behavior is as today; a voice shorter than the hold still gets the full hold.
-- [ ] No thumbnail export. Version bump.
+- [x] Course tests: `stats_at` equals the `distance` cue; without it, the `end` cue; stop-bys may pop on top of the card.
+- [x] Walk and map tests: with a `distance` cue the totals card appears at it and the ending zoom starts no sooner than cue + hold; without it, behavior is as today; a voice shorter than the hold still gets the full hold.
+- [x] No thumbnail export. Version bump.
 
 #### Task 9: `{extras}` and `{closed}` start their own groups (8.11, D3)
 

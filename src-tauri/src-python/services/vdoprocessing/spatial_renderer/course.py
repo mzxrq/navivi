@@ -444,6 +444,7 @@ def _arrive_cue(ap: Dict, cues: Dict, any_go: bool) -> Tuple:
 
 def _course_timing(
     cues: Dict, audio_seconds: float, numbered: List[Dict], extras: List[Dict], total: float,
+    recap_hold: float = tuning.OVERVIEW_RECAP_HOLD_SECONDS,
 ) -> _Timing:
     # The trace sets off at {start}, but never before the map has finished opening.
     route_at = max(float(cues.get("start", 0.0)), _TIMINGS["open_zoom_seconds"])
@@ -453,7 +454,8 @@ def _course_timing(
         total, route_at, cues.get("end"), max(1, len(numbered) + 1),
     )
     trace_end = anchors[-1][0]
-    stats_at = float(cues["end"]) if "end" in cues else trace_end + 0.5
+    # The totals card comes in at {distance} ("…キロの旅でした"), else when the trace ends.
+    stats_at = float(cues.get("distance", cues.get("end", trace_end + 0.5)))
     # Stop-bys come at {extras}, closed places (red ×) at {closed}. A group whose cue the script lacks is not shown.
     extras_at = float(cues["extras"]) if "extras" in cues else None
     closed_at = float(cues["closed"]) if "closed" in cues else None
@@ -461,7 +463,7 @@ def _course_timing(
     closed = [ap for ap in extras if closed_at is not None and ap["data"].get("inaccessible")]
     end_at = max(
         audio_seconds + 0.3 if audio_seconds else trace_end + 6.0,
-        stats_at + 2.0,
+        stats_at + (max(2.0, recap_hold) if "distance" in cues else 2.0),
         (extras_at + 3.0) if extras_at is not None else 0.0,
         (closed_at + 3.0) if closed_at is not None else 0.0,
     )
@@ -551,7 +553,9 @@ class _CourseOverviewMixin:
         modes = self._course_modes(points, on_route, total, cum, mode_breakpoints)
         numbered = [ap for ap in on_route if ap["index"] != 0 and ap is not stop_popup]
         returns = _return_stops(numbered, on_route, stop_popup, self._is_loop_route)
-        timing = _course_timing(cues, audio_seconds, numbered, extras, total)
+        timing = _course_timing(
+            cues, audio_seconds, numbered, extras, total,
+            float(self.config.get("overview_recap_hold_seconds", tuning.OVERVIEW_RECAP_HOLD_SECONDS)))
         extras = sorted(timing.stopbys + timing.closed, key=lambda ap: ap["index"])  # only those with a cue
         panels = self._course_panels(
             summary, w, h, on_route, timing, total_points, total_smooth_dist)

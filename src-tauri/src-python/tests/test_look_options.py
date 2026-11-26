@@ -24,6 +24,7 @@ OLD_READER_DEFAULTS = {
     "overview_intro_clean_hold_seconds": 1.5,
     "overview_title": None,
     "enable_ending_highlight": True,
+    "overview_recap_hold_seconds": 3.0,
 }
 
 
@@ -44,6 +45,7 @@ def test_project_values_are_forwarded():
         "overview_intro_card_scale": 1.0,
         "overview_intro_clean_hold_seconds": 0,
         "overview_title": "My trip",
+        "overview_recap_hold_seconds": 5,
         "enable_ending_highlight": False,
         "unrelated": 1,
     }

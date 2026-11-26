@@ -76,7 +76,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # stops are plain colour dots; v56: top HUD panels 1.5x bigger; v55: the recap sits on a plain plate and arranges its
 # badges on one lattice in walked order (see CLAUDE.md "overview recap's pill badges"); v54: a return stop takes no
 # number of its own. Older history: git log.
-OVERVIEW_RENDER_VERSION = 79  # v79: course stop-bys / closed places only with their cue; v78: new top bar
+OVERVIEW_RENDER_VERSION = 80  # v80: totals card at {distance}; v79: course stop-bys only with their cue
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -1041,19 +1041,27 @@ class _OverviewRenderMixin:
             )
         return _Ending(outro_hold_sec, end_pause_sec, audio_seconds, zoom_follows)
 
+    def _ov_wait_for_distance(self, video, audio_cues: Dict, fps: int) -> None:
+        """Holds the walk's last frame until the {distance} cue, so the totals card comes in on those words."""
+        cue = (audio_cues or {}).get("distance")
+        if cue is not None:
+            for _ in range(int(round(cue * fps)) - video.frames_written):
+                video.write(self.last_frame)
+
     def _ov_hold_summary(
         self, video, summary_card, audio_cues: Dict, outro_hold_sec: float, zoom_follows: bool, fps: int
     ) -> None:
-        """Write the held summary frame, stretched to the {distance} cue ("…キロの旅でした") and the {closed} cue."""
+        """Write the held summary frame, long enough after the {distance} cue to be read, and to the {closed} cue."""
         distance_cue = audio_cues.get("distance") if audio_cues else None
-        if summary_card is not None and distance_cue is not None and not zoom_follows:
-            until_distance = distance_cue - video.frames_written / fps
-            if until_distance > outro_hold_sec:
+        if summary_card is not None and distance_cue is not None:
+            hold = float(self.config.get("overview_recap_hold_seconds", tuning.OVERVIEW_RECAP_HOLD_SECONDS))
+            until = distance_cue + hold - video.frames_written / fps
+            if until > outro_hold_sec:
                 logger.info(
-                    "Summary hold %.1fs -> %.1fs to reach the {distance} cue at %.1fs.",
-                    outro_hold_sec, until_distance, distance_cue,
+                    "Summary hold %.1fs -> %.1fs: the totals stay %.1fs after the {distance} cue at %.1fs.",
+                    outro_hold_sec, until, hold, distance_cue,
                 )
-                outro_hold_sec = until_distance
+                outro_hold_sec = until
         # The {closed} cue holds the summary frame while the voice names the closed places.
         closed_cue = audio_cues.get("closed") if audio_cues and getattr(self, "_closed_popups", None) else None
         if getattr(self, "_closed_popups", None) and (closed_cue is None or zoom_follows):
@@ -1285,6 +1293,8 @@ class _OverviewRenderMixin:
         pre_popup_frame: np.ndarray,
     ) -> str:
         w, h, fps, audio_cues = job.w, job.h, job.fps, job.audio_cues
+        if summary_card is not None:
+            self._ov_wait_for_distance(video, audio_cues, fps)
         outro_hold_sec = self._render_recap_and_summary(
             video, stop_popup, summary_card, active_popups, w, h, fps,
             recap_obstacle_arr, reserved_boxes, pre_popup_frame,

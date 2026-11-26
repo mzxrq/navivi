@@ -347,6 +347,9 @@ COURSE_SECONDS_PER_LEG = 3.0
 COURSE_TRACE_MIN_SECONDS = 8.0
 COURSE_TRACE_MAX_SECONDS = 40.0
 COURSE_CARD_POP_SECONDS = 0.45  # a stop's card fades in as the trace reaches it, then stays
+# The totals card comes in at the script's {distance} cue and the video holds on it at least this long
+# (project setting overview_recap_hold_seconds).
+OVERVIEW_RECAP_HOLD_SECONDS = 3.0
 # With "Cards stay up" off, a card closes when the next one pops, though never before it was up this long.
 COURSE_CARD_MIN_SECONDS = 1.8
 # Stop-bys (then closed places) come one at a time across their sentence: at least _STAGGER apart,

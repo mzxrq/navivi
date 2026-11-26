@@ -561,8 +561,8 @@ msgstr "Add a video to start"
 msgid "Add a voice"
 msgstr "Add a voice"
 
-#: src/components/ui/VideoLookSettings.tsx:217
-#: src/components/ui/VideoLookSettings.tsx:218
+#: src/components/ui/VideoLookSettings.tsx:220
+#: src/components/ui/VideoLookSettings.tsx:221
 msgid "Add an outro"
 msgstr "Add an outro"
 
@@ -1264,8 +1264,8 @@ msgstr "Card border width"
 msgid "Cards and overlays"
 msgstr "Cards and overlays"
 
-#: src/components/ui/VideoLookSettings.tsx:208
-#: src/components/ui/VideoLookSettings.tsx:209
+#: src/components/ui/VideoLookSettings.tsx:211
+#: src/components/ui/VideoLookSettings.tsx:212
 msgid "Cards stay up"
 msgstr "Cards stay up"
 
@@ -2049,7 +2049,7 @@ msgstr "Distance, climb, walking time and via points between neighbouring stops"
 #~ msgid "Distance, mode and via points between neighbouring stops"
 #~ msgstr "Distance, mode and via points between neighbouring stops"
 
-#: src/components/ui/VideoLookSettings.tsx:242
+#: src/components/ui/VideoLookSettings.tsx:245
 msgid "Distance, time and mode on each card."
 msgstr "Distance, time and mode on each card."
 
@@ -2218,7 +2218,7 @@ msgstr "E.g. Tomogashima and Kada area..."
 msgid "E.g. Wakayama, Wakayama City"
 msgstr "E.g. Wakayama, Wakayama City"
 
-#: src/components/ui/VideoLookSettings.tsx:208
+#: src/components/ui/VideoLookSettings.tsx:211
 msgid "Each stop's card stays on the map once it pops up. Off: cards close as the video moves on, and return to the same spots on the last map."
 msgstr "Each stop's card stays on the map once it pops up. Off: cards close as the video moves on, and return to the same spots on the last map."
 
@@ -2856,7 +2856,7 @@ msgstr "Gradient Heatmap"
 msgid "Green"
 msgstr "Green"
 
-#: src/components/ui/VideoLookSettings.tsx:232
+#: src/components/ui/VideoLookSettings.tsx:235
 msgid "Grid"
 msgstr "Grid"
 
@@ -3777,7 +3777,7 @@ msgstr "Move the photos (slow zoom and pan)"
 msgid "Move up"
 msgstr "Move up"
 
-#: src/components/ui/VideoLookSettings.tsx:238
+#: src/components/ui/VideoLookSettings.tsx:241
 msgid "Moves the photos up or down below the title: 0% just under it, 100% at the bottom."
 msgstr "Moves the photos up or down below the title: 0% just under it, 100% at the bottom."
 
@@ -4337,12 +4337,12 @@ msgstr "Outline colour"
 msgid "Output"
 msgstr "Output"
 
-#: src/components/ui/VideoLookSettings.tsx:216
+#: src/components/ui/VideoLookSettings.tsx:219
 #: src/features/editor/EditorView.tsx:59
 msgid "Outro"
 msgstr "Outro"
 
-#: src/components/ui/VideoLookSettings.tsx:225
+#: src/components/ui/VideoLookSettings.tsx:228
 msgid "Outro style"
 msgstr "Outro style"
 
@@ -4482,8 +4482,8 @@ msgstr "Photos at stops"
 msgid "Photos grow to fill the frame when the traveler arrives."
 msgstr "Photos grow to fill the frame when the traveler arrives."
 
-#: src/components/ui/VideoLookSettings.tsx:238
-#: src/components/ui/VideoLookSettings.tsx:239
+#: src/components/ui/VideoLookSettings.tsx:241
+#: src/components/ui/VideoLookSettings.tsx:242
 msgid "Photos position"
 msgstr "Photos position"
 
@@ -5127,8 +5127,8 @@ msgstr "Route color"
 #~ msgid "Route colour"
 #~ msgstr "Route colour"
 
-#: src/components/ui/VideoLookSettings.tsx:242
-#: src/components/ui/VideoLookSettings.tsx:243
+#: src/components/ui/VideoLookSettings.tsx:245
+#: src/components/ui/VideoLookSettings.tsx:246
 msgid "Route facts"
 msgstr "Route facts"
 
@@ -5308,7 +5308,7 @@ msgstr "Scan script for all Kanji and add to Dictionary"
 msgid "Scans the scripts for place names and adds their readings (marked auto). Turning it off removes the auto words."
 msgstr "Scans the scripts for place names and adds their readings (marked auto). Turning it off removes the auto words."
 
-#: src/components/ui/VideoLookSettings.tsx:233
+#: src/components/ui/VideoLookSettings.tsx:236
 msgid "Scrapbook"
 msgstr "Scrapbook"
 
@@ -5320,7 +5320,7 @@ msgstr "Script"
 #~ msgid "Script writer"
 #~ msgstr "Script writer"
 
-#: src/components/ui/VideoLookSettings.tsx:231
+#: src/components/ui/VideoLookSettings.tsx:234
 msgid "Scrolling"
 msgstr "Scrolling"
 
@@ -5365,6 +5365,10 @@ msgstr "Seconds a leg dissolves into the clip that follows it. 0 is a hard cut."
 #: src/features/editor/Inspector.tsx:333
 msgid "Seconds after the title item starts. It leaves the same time before the end."
 msgstr "Seconds after the title item starts. It leaves the same time before the end."
+
+#: src/components/ui/VideoLookSettings.tsx:208
+msgid "Seconds the overview holds after the totals card comes in on the voice."
+msgstr "Seconds the overview holds after the totals card comes in on the voice."
 
 #: src/components/ui/VideoLookSettings.tsx:205
 msgid "Seconds the overview shows the bare map first."
@@ -6065,7 +6069,7 @@ msgstr "The clip is ready."
 msgid "The clips are drawn at 1080p, so a larger size enlarges them: the file is bigger, not sharper."
 msgstr "The clips are drawn at 1080p, so a larger size enlarges them: the file is bigger, not sharper."
 
-#: src/components/ui/VideoLookSettings.tsx:211
+#: src/components/ui/VideoLookSettings.tsx:214
 msgid "The closing close-up of the first stop."
 msgstr "The closing close-up of the first stop."
 
@@ -6102,7 +6106,7 @@ msgstr "The first sunlight reaches the harbour, and the town slowly wakes up."
 msgid "The language the AI writes stop scripts in (Auto-Write, imported documents, the assistant). Auto follows the language of the project's own text. English narration is read by an English voice: Kokoro, with its English voices added below."
 msgstr "The language the AI writes stop scripts in (Auto-Write, imported documents, the assistant). Auto follows the language of the project's own text. English narration is read by an English voice: Kokoro, with its English voices added below."
 
-#: src/components/ui/VideoLookSettings.tsx:222
+#: src/components/ui/VideoLookSettings.tsx:225
 msgid "The last stop's photo shrinks onto its pin and the camera pulls back to show the whole route, then the outro starts."
 msgstr "The last stop's photo shrinks onto its pin and the camera pulls back to show the whole route, then the outro starts."
 
@@ -6158,7 +6162,7 @@ msgstr "The overview stops at each stop while the voice describes it, then moves
 msgid "The photo clip is ready."
 msgstr "The photo clip is ready."
 
-#: src/components/ui/VideoLookSettings.tsx:217
+#: src/components/ui/VideoLookSettings.tsx:220
 msgid "The places-visited clip at the end of the video."
 msgstr "The places-visited clip at the end of the video."
 
@@ -6358,6 +6362,11 @@ msgstr "Time ignores climb: no elevation available for this leg"
 #: src/features/map/components/LegStats.tsx:40
 #~ msgid "Time ignores climb: no elevation recorded for this leg"
 #~ msgstr "Time ignores climb: no elevation recorded for this leg"
+
+#: src/components/ui/VideoLookSettings.tsx:208
+#: src/components/ui/VideoLookSettings.tsx:209
+msgid "Time on the totals"
+msgstr "Time on the totals"
 
 #: src/features/map/components/GenerateDialog.tsx:158
 msgid "Time unavailable"
@@ -6923,8 +6932,8 @@ msgstr "Which places should the video visit?"
 msgid "White"
 msgstr "White"
 
-#: src/components/ui/VideoLookSettings.tsx:222
-#: src/components/ui/VideoLookSettings.tsx:223
+#: src/components/ui/VideoLookSettings.tsx:225
+#: src/components/ui/VideoLookSettings.tsx:226
 msgid "Whole route before the outro"
 msgstr "Whole route before the outro"
 
@@ -7080,7 +7089,7 @@ msgstr "Zoom out and in"
 msgid "Zoom to path"
 msgstr "Zoom to path"
 
-#: src/components/ui/VideoLookSettings.tsx:211
-#: src/components/ui/VideoLookSettings.tsx:212
+#: src/components/ui/VideoLookSettings.tsx:214
+#: src/components/ui/VideoLookSettings.tsx:215
 msgid "Zoom to the start at the end"
 msgstr "Zoom to the start at the end"
