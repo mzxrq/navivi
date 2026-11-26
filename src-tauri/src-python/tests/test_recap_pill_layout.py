@@ -391,7 +391,7 @@ def test_a_run_of_touching_badges_never_mixes_kinds():
     Stops and stop-bys interleaved along one stretch of route."""
     pops = []
     for i in range(8):
-        p = _popup(260 + 150 * i, 520, "s%d" % i, i + 1)
+        p = _popup(260 + 100 * i, 520, "s%d" % i, i + 1)
         if i % 2:
             p["data"]["is_stopby"] = True
         pops.append(p)
@@ -539,3 +539,169 @@ def test_every_staying_card_is_the_same_size():
         assert not (a[0] < hud[0][2] and hud[0][0] < a[2] and a[1] < hud[0][3] and hud[0][1] < a[3])
         for b in boxes[i + 1:]:
             assert not (a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3])
+
+
+def test_the_start_badge_keeps_the_cell_nearest_its_pin():
+    """Stops on both sides of the start (on a loop, also where the route ends) used to share out
+    the cells beside it in the matching, and the start's badge was sent to the end of the row."""
+    start = dict(_popup(1640, 560, "S", 0), index=0)
+    crowd = [dict(_popup(x, 560, f"N{k}", k + 1), index=10 * (k + 1))
+             for k, x in enumerate((1430, 1500, 1570, 1710, 1780, 1850))]
+    laid = _layout()._layout_recap_cards([start] + crowd, 1920, 1080, leaders=False)
+    centre = start["beside_box"][0] + 17
+    assert all(abs(centre - 1640) <= abs(p["beside_box"][0] + 17 - 1640) for p in laid)
+
+
+def test_the_start_badge_never_splits_a_row_of_stop_bys():
+    """The start among stop-bys on both sides: it moves to the end of their block, so they stay together."""
+    start = dict(_popup(1640, 560, "S", 0), index=0)
+    sides = []
+    for k, x in enumerate((1430, 1500, 1570, 1710, 1780, 1850)):
+        p = dict(_popup(x, 560, f"B{k}", k + 1), index=10 * (k + 1))
+        p["data"]["is_stopby"] = True
+        sides.append(p)
+    _layout()._layout_recap_cards([start] + sides, 1920, 1080, leaders=False)
+    row = sorted((p for p in [start] + sides if p["beside_box"][1] == start["beside_box"][1]),
+                 key=lambda p: p["beside_box"][0])
+    assert len(row) > 2 and row.index(start) in (0, len(row) - 1)
+
+
+def test_a_badge_leaves_a_dense_route_loop_clear():
+    """Beside its pin a badge may rest on the line, but of two cells it takes the one that leaves it clear."""
+    import numpy as np
+
+    loop = np.array([[900 + 60 * np.cos(a), 600 + 60 * np.sin(a)] for a in np.linspace(0, 6.28, 300)])
+    pin = _popup(900, 600, "AB", 1)
+    _layout()._layout_recap_cards([pin], 1920, 1080, route_obstacles=loop, leaders=False)
+    bx, by = pin["beside_box"]
+    covered = (loop[:, 0] >= bx) & (loop[:, 0] <= bx + 34) & (loop[:, 1] >= by) & (loop[:, 1] <= by + 180)
+    assert not covered.any()
+
+
+def test_a_far_badge_brings_back_its_pins_number():
+    calls = []
+    layout = _layout()
+    layout._draw_pin = lambda frame, wp, total, scale=1.0: calls.append("pin")
+    layout._draw_recap_dot(None, {"x": 1, "y": 1, "badge_far": True, "data": {}}, 3)
+    assert calls == ["pin"]
+
+
+def test_a_numbered_pin_wears_its_badges_color_and_a_start_badge_the_start_pins():
+    from services import tuning
+
+    start = dict(_popup(300, 300, "S", 0), index=0)
+    stops = [dict(_popup(700 + 200 * k, 500, f"N{k}", k + 1), index=10 * (k + 1)) for k in range(3)]
+    laid = _layout()._layout_recap_cards([start] + stops, 1920, 1080, leaders=False, total_points=31)
+    for p in laid:
+        if p is start:
+            assert tuple(p["recap_line_color"]) == tuple(tuning.START_PIN_COLOR) and "pin_color" not in p
+        elif p is stops[-1]:  # the highest index is the route's end: the badge takes the E pin's red
+            assert tuple(p["recap_line_color"]) == tuple(tuning.END_PIN_COLOR)
+        else:
+            assert p["pin_color"] == p["recap_line_color"]
+            assert _layout()._pin_label_and_color(p, 100)[1] == p["recap_line_color"]
+
+
+def test_on_a_loop_the_last_badge_is_a_numbered_stop_not_the_end():
+    """A loop route's E has no badge of its own (it shares S's), so the last badge is a numbered stop."""
+    start = dict(_popup(300, 300, "S", 0), index=0)
+    stops = [dict(_popup(700 + 200 * k, 500, f"N{k}", k + 1), index=10 * (k + 1)) for k in range(3)]
+    _layout()._layout_recap_cards([start] + stops, 1920, 1080, leaders=False, total_points=41)  # E is index 40
+    assert stops[-1]["pin_color"] == stops[-1]["recap_line_color"]
+
+
+def test_a_badge_stranded_across_the_route_comes_back_beside_its_pin():
+    """The lattice cell is as tall as the longest name, so a stop in tight water can be left a badge across the route from
+    it. That badge moves to clear space beside the pin; a badge merely far away (no route between) keeps its grid cell."""
+    import numpy as np
+
+    from services.vdoprocessing.spatial_renderer.popups import _RecapCardsGeom
+
+    route = np.array([[x, 400.0] for x in range(0, 1900, 6)])  # a line between the pin and its badge
+    pin = (300.0, 600.0)
+    layout = _layout()
+
+    def run(obstacles, kind=1):
+        geom = _RecapCardsGeom([(1000, 60)], 34, 180, False, obstacles, 20)
+        geom.card_hs = [180]
+        slot_for = [0]
+        layout._recap_cards_pull_in(geom, slot_for, [pin], set(), [kind], 1920, 1080, [], obstacles)
+        return geom.slots[slot_for[0]]
+
+    x, y = run(route)  # a stop-by
+    assert abs(x + 17 - pin[0]) < 150 and abs(y + 90 - pin[1]) < 200
+    assert not np.any((route[:, 0] >= x) & (route[:, 0] <= x + 34) & (route[:, 1] >= y) & (route[:, 1] <= y + 180))
+    assert run(None) == (1000, 60)  # nothing between them: stays on the grid
+    assert run(route, kind=0) == (1000, 60)  # a numbered stop keeps its place in the S, 1, 2 … run
+
+
+def test_a_nudged_pin_slides_along_the_route_not_off_it():
+    """Two stops a few px apart on one line are pushed apart ALONG it: pushed sideways (up to 1.5 radii), a pin read as
+    unconnected to the route it sits on. A stop-by well off the route is still nudged freely."""
+    import numpy as np
+
+    route = np.array([[x, 500.0] for x in range(100, 900, 5)])
+    a, b = _popup(400, 500, "a", 1), _popup(410, 500, "b", 2)
+    near, off = _popup(300, 700, "n", 3), _popup(306, 700, "o", 4)  # 200 px off the route
+    layout = _layout()
+    layout._declutter_pins([a, b, near, off], route=route)
+    assert abs(a["pin_y"] - 500) < 1 and abs(b["pin_y"] - 500) < 1
+    assert b["pin_x"] - a["pin_x"] > 10  # still moved apart
+    assert abs(off["pin_x"] - near["pin_x"]) > 6  # off the route: nudged as before
+
+
+def test_a_closed_place_the_route_loops_around_still_gets_its_badge_beside_it():
+    """神島: with no route-free spot anywhere near, the closed place's badge rests on the line beside its own pin
+    (still off every pin) instead of staying across the map."""
+    import numpy as np
+
+    from services.vdoprocessing.spatial_renderer.popups import _RecapCardsGeom
+
+    route = np.array([[x, y] for y in range(100, 1000, 40) for x in range(0, 1900, 6)], dtype=float)  # lines everywhere
+    pin, other_pin = (300.0, 600.0), (300.0, 420.0)
+    geom = _RecapCardsGeom([(1000, 60), (1400, 60)], 34, 180, False, route, 20)
+    geom.card_hs = [180, 180]
+    slot_for = [0, 1]
+    _layout()._recap_cards_pull_in(geom, slot_for, [pin, other_pin], {1}, [2, 0], 1920, 1080, [], route)
+    x, y = geom.slots[slot_for[0]]
+    assert abs(x + 17 - pin[0]) < 150 and abs(y + 90 - pin[1]) < 250
+    for qx, qy in (pin, other_pin):
+        assert not (x - 20 <= qx <= x + 34 + 20 and y - 20 <= qy <= y + 180 + 20)
+
+
+
+def test_pill_badges_lock_only_stopby_clusters_into_one_block():
+    """Without leader lines a cluster of numbered stops is matched badge by badge (locked as one block, Tomogashima's
+    8 stops only fitted in a row 300 px off); a cluster of stop-bys still claims its block together."""
+    import numpy as np
+
+    from services.vdoprocessing.spatial_renderer.popups import _RecapCardsGeom
+
+    slots = [(100 + 48 * i, 60) for i in range(10)]
+    pins = [(300.0, 600.0), (310.0, 600.0), (320.0, 600.0)]
+    layout = _layout()
+
+    def run(kind):
+        geom = _RecapCardsGeom(slots, 34, 180, False, None, 20)
+        geom.card_hs = [180] * 3
+        return layout._recap_cards_lock_clusters(
+            geom, [[0, 1, 2]], pins, [1, 2, 3], np.zeros(len(slots)), [0] * 3, 3, [kind] * 3)
+
+    locked, free = run(0)
+    assert locked == set() and len(free) == len(slots)
+    locked, free = run(1)
+    assert locked == {0, 1, 2} and len(free) == len(slots) - 3
+
+
+def test_a_band_of_columns_slides_its_row_off_the_route():
+    """One row fits under the headline with room to spare: centred it lies on a line across the band, so the whole
+    band's row moves down below it, every column together so the badges stay in one row."""
+    import numpy as np
+
+    layout = _layout()
+    head = [(0.0, 0.0, 1920.0, 185.0)]
+    route = np.array([[x, 400.0] for x in range(0, 1920, 6)])  # crosses the centred row, clear of the bottom one
+    slots = layout._recap_card_slots(1920, 1080, 34, 395, head, route)
+    assert slots and len({y for _, y in slots}) == 1
+    y = slots[0][1]
+    assert y > 400  # below the line
