@@ -40,7 +40,6 @@ DEFAULT_LINE_THICKNESS = 7  # thin traced route (editorial look), not a highway 
 DEFAULT_MARKER_RADIUS = 16
 DEFAULT_SUMMARY_HOLD_SECONDS = 4.0
 
-
 def _output_is_valid(path, min_bytes: int = 1024) -> bool:
     """Checkpoint helper — see spatial_renderer/overview.py's identical
     copy for why this is duplicated instead of imported from
@@ -51,7 +50,6 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
     except OSError:
         return False
 
-
 # Bump when the leg rendering code changes what it draws (v2: stop-by
 # photos always go fullscreen, image_display ignored; v3: legs open on the
 # departure photo, not the destination's; v4: HUD card is the overview's
@@ -60,7 +58,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # v7: leg card numbers are the overview card's own per-leg numbers;
 # v8: stop-bys are framed too, and the summary card sits lower;
 # v9: the 3D leg HUD card sits as low as the 2D one).
-LEG_RENDER_VERSION = 38  # v38: the direction/turn-by-turn HUD card is removed entirely -- didn't work out; v36: the direction arrow moves to bottom-left (above the elevation card's own spot), not bottom-right; v35: the badge's digit goes heavier still (900 + a thin matching text-stroke) since 700 still read thin at this small size; v34: that card sits a bit closer to the label again (108px, not 140); v31: a leg's opening/arrival photo card keeps clear of the pin's name label too, not just the pin itself; v30: the chain pill's circle badge is bigger and vertically centered against the place text; v29: the chain pill drops its 出発/到着 text prefix for a start/end circle badge (the pin's own S/E/number glyph); v28: a stop-by's photo card keeps further off its marker so it doesn't land on the marker's own name pill; v27: the carried-over photo card's leader line stops short of the marker like the others, instead of crossing its label; v26: the chain, progress and destination banners merge into one top bar, with a "stop N of total" progress segment; v25: place names keep off each other, stacking a row further out when every spot beside their point is taken; v24: at a stop with no attraction script the photo card rides along the slide (setting quiet_stop_transition); v23: photo cards keep off the route before keeping the leader short; v22: {view wait} times count from the {start} cue; v21: name tags placed with the real camera scale; v20: cards keep off the kept walked line; v19: a leg continuing the walk slides at the zoom of the leg before; v18: quicker opening/closing zoom (LEG_ZOOM_SECONDS); v17: a leg after a stop with no narration continues the walk; v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
+LEG_RENDER_VERSION = 39  # v39: the card's second column reads 残り (what is left), no empty banner bar at the start; v38: the direction/turn-by-turn HUD card is removed entirely -- didn't work out; v36: the direction arrow moves to bottom-left (above the elevation card's own spot), not bottom-right; v35: the badge's digit goes heavier still (900 + a thin matching text-stroke) since 700 still read thin at this small size; v34: that card sits a bit closer to the label again (108px, not 140); v31: a leg's opening/arrival photo card keeps clear of the pin's name label too, not just the pin itself; v30: the chain pill's circle badge is bigger and vertically centered against the place text; v29: the chain pill drops its 出発/到着 text prefix for a start/end circle badge (the pin's own S/E/number glyph); v28: a stop-by's photo card keeps further off its marker so it doesn't land on the marker's own name pill; v27: the carried-over photo card's leader line stops short of the marker like the others, instead of crossing its label; v26: the chain, progress and destination banners merge into one top bar, with a "stop N of total" progress segment; v25: place names keep off each other, stacking a row further out when every spot beside their point is taken; v24: at a stop with no attraction script the photo card rides along the slide (setting quiet_stop_transition); v23: photo cards keep off the route before keeping the leader short; v22: {view wait} times count from the {start} cue; v21: name tags placed with the real camera scale; v20: cards keep off the kept walked line; v19: a leg continuing the walk slides at the zoom of the leg before; v18: quicker opening/closing zoom (LEG_ZOOM_SECONDS); v17: a leg after a stop with no narration continues the walk; v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
 # Bumped when the heatmap legs' elevation profile card changes (only those legs re-render; v1: the card).
 LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
@@ -75,6 +73,26 @@ _LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text
 # The stops' names on the leg's banner and its narration timing (fix.md #9). Compared only when the leg's
 # record has them, so a leg rendered before these were checked is not re-rendered for it.
 _LEG_RECORDED_PARTS = ("kw.route_chain", "kw.target_duration_seconds", "kw.start_cue_seconds", "kw.arrival_wait_seconds")
+
+def _split_stopby_chain(res_data: Dict[str, Any]) -> Tuple[List[str], List[List[Any]]]:
+    """(the leg's numbered places in travel order, its stop-bys as [name, index of the chain place they come before,
+    lat, lon]): the banner shows the stop-bys inline, in the order walked, and switches as the walker passes each.
+    lat/lon come from the leg's per-point lats/lons (labels run parallel to them) and are None when they don't line up.
+    The destination always stays in the chain."""
+    labels = res_data.get("labels") or []
+    flags = res_data.get("stopbys") or []
+    lats, lons = res_data.get("lats"), res_data.get("lons")
+    aligned = lats is not None and lons is not None and len(lats) == len(labels) == len(lons)
+    rows = [(i, l) for i, l in enumerate(labels) if l]
+    last = len(rows) - 1
+    chain: List[str] = []
+    stopbys: List[List[Any]] = []
+    for k, (i, l) in enumerate(rows):
+        if k != last and i < len(flags) and flags[i]:
+            stopbys.append([l, len(chain), float(lats[i]) if aligned else None, float(lons[i]) if aligned else None])
+        else:
+            chain.append(l)
+    return chain, stopbys
 
 
 def _reported_speed_kmh(mode_speed_kmh: Dict[str, float], mode: str) -> float:
@@ -180,11 +198,12 @@ def _leg_fingerprint_parts(
     if quiet:
         parts["quiet_stopby"] = h(quiet)  # a stop-by whose narration was emptied re-renders only the legs passing it
     # A connected stop-by cuts the leg and the next piece opens on its photo and a camera hop; only those legs
-    # re-render when that opening changes (v3: a brief re-open and a shorter hop, which delayed the narration).
+    # re-render when that opening changes (v3: a brief re-open and a shorter hop, which delayed the narration;
+    # v4: the camera hops only when the next stretch doesn't fit the frame).
     reopen = [lm.get("label") for lm in leg_kwargs.get("landmarks") or []
               if lm.get("connect_to_route") and lm.get("popup_image")]
     if reopen:
-        parts["stopby_reopen"] = h([reopen, 3])
+        parts["stopby_reopen"] = h([reopen, 4])
     if "leg_elevations" in leg_kwargs:
         # Heatmap legs also draw the elevation profile card: re-render only them when it changes.
         parts["kw.leg_elevations"] = h([leg_kwargs["leg_elevations"], LEG_ELEVATION_CARD_VERSION])
@@ -201,7 +220,7 @@ def leg_changed_parts(leg_parts: Dict[str, str], old_parts: Dict[str, str]) -> L
         return [k for k in ("latlon", "render_version") if k in changed]
     return ([k for k in _LEG_CHECKPOINT_PARTS if k in changed]
             + [k for k in _LEG_RECORDED_PARTS if k in old_parts and k in changed]
-            + [k for k in ("kw.pace_cues", "kw.at_cues") if k in changed])  # added/removed {slow}/{fast}/{stop}/{at N} too
+            + [k for k in ("kw.pace_cues", "kw.at_cues", "kw.piece_start_cues") if k in changed])  # added/removed {slow}/{fast}/{stop}/{at N}/a later piece's {start} too
 
 
 def cut_landmark_ids(mid_markers: List[Dict[str, Any]]) -> List[Optional[str]]:
@@ -589,8 +608,10 @@ class RouteAnimator:
         import cv2
 
         def render(distance_km: float, duration_seconds: float, arrived: bool = False, share: float = 1.0) -> bytes:
+            if arrived:
+                share = 0.0  # the countdown ends on 0 (see pedestrian's arrival hold)
             distance_km, duration_seconds = share * leg[0], share * leg[1]
-            left_km, left_s = (0.0, 0.0) if arrived else (distance_km, duration_seconds)
+            left_km, left_s = distance_km, duration_seconds
             card = self.graphics.render_summary_card(
                 distance_km=distance_km,
                 duration_seconds=duration_seconds,
@@ -665,7 +686,7 @@ class RouteAnimator:
                     self.spatial_renderer.render_waypoints([res_data], fps)
                 )
                 continue
-            plan = self._plan_leg(ctx, i, res_data, res_sequence, leg_latlon, dest_label, leg_mode, leg_labels, prev_end_view)
+            plan = self._plan_leg(ctx, i, res_data, res_sequence, leg_latlon, dest_label, leg_mode, prev_end_view)
             prev_end_view = plan.kwargs.get("end_view_path")
             if self.config.get("only_leg_file") is not None and plan.num != self.config["only_leg_file"]:
                 continue  # "Make again" for one leg: the others were only needed for what this one takes from them
@@ -802,9 +823,10 @@ class RouteAnimator:
         )
 
     def _leg_base_kwargs(
-        self, ctx: "_ResContext", res_data: Dict[str, Any], leg_mode: str, leg_labels: List[str],
+        self, ctx: "_ResContext", res_data: Dict[str, Any], leg_mode: str,
         landmarks: List[Dict[str, Any]], photos: "_LegPhotos",
     ) -> Dict[str, Any]:
+        chain, stopbys = _split_stopby_chain(res_data)
         # Narration-synced video length (else a paced distance fallback, see render_step's res_sequence build); real
         # legs run from meters to kilometers, so literal walking pace would make clips seconds to HOURS long. The HUD's
         # remaining-time estimate stays real-world.
@@ -817,7 +839,8 @@ class RouteAnimator:
             bottom_reserve_px=0,
             walker_color=res_data.get("line_color"),
             target_duration_seconds=target_duration,
-            landmarks=landmarks, route_chain=leg_labels or None, context_path=ctx.context_path,
+            landmarks=landmarks, route_chain=chain or None, context_path=ctx.context_path,
+            **({"stopby_chain": stopbys} if stopbys else {}),
             # Straight-down chase cam (still follows/rotates, never tilts); settings.res_follow_pitch opts into a tilt.
             follow_pitch=self.config.get("res_follow_pitch", 0.0),
             dest_popup_image=photos.dest_image,
@@ -833,6 +856,7 @@ class RouteAnimator:
             start_pin=res_data.get("start_pin"),
             dest_pin=res_data.get("dest_pin"),
             total_stops=res_data.get("total_stops"),
+            stop_number=res_data.get("stop_number"),
             theme=self.graphics.theme,
         )
 
@@ -846,6 +870,8 @@ class RouteAnimator:
             }
         if res_data.get("at_cues"):
             leg_kwargs["at_cues"] = res_data["at_cues"]
+        if res_data.get("piece_start_cues"):
+            leg_kwargs["piece_start_cues"] = res_data["piece_start_cues"]
         if self.config.get("mapbox_style_id"):
             leg_kwargs["map_style"] = resolve_map_style(self.config, "mapbox/outdoors-v12")
         if res_data.get("elevations"):  # the heatmap is on
@@ -889,7 +915,7 @@ class RouteAnimator:
 
     def _plan_leg(
         self, ctx: "_ResContext", i: int, res_data: Dict[str, Any], res_sequence: List[Dict],
-        leg_latlon: List, dest_label: str, leg_mode: str, leg_labels: List[str], prev_end_view: Optional[str],
+        leg_latlon: List, dest_label: str, leg_mode: str, prev_end_view: Optional[str],
     ) -> "_LegPlan":
         landmarks = self._leg_landmarks(ctx, i, res_data, leg_mode, leg_latlon)
         # Each connectToRoute landmark cuts the leg into one more piece, piece[k] being the walk TOWARD landmark[k] (the
@@ -908,7 +934,7 @@ class RouteAnimator:
         # A connected stop-by can split ONE leg into several files sharing this "02_waypoint_{N:02d}_" prefix, so
         # "already rendered" is checked by the whole prefix.
         leg_glob_prefix = f"02_waypoint_{leg_file_num:02d}_"
-        leg_kwargs = self._leg_base_kwargs(ctx, res_data, leg_mode, leg_labels, landmarks, photos)
+        leg_kwargs = self._leg_base_kwargs(ctx, res_data, leg_mode, landmarks, photos)
         self._add_optional_leg_kwargs(leg_kwargs, res_data)
         self._add_leg_joins(leg_kwargs, ctx, i, res_data, res_sequence, photos, prev_end_view, leg_glob_prefix)
         # Marks a join at a stop with nothing to tell: the timeline cuts there (same frame), no dissolve.

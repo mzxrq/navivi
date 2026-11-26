@@ -14,6 +14,7 @@ export const DEFAULT_CAPTION_STYLE: Required<TextStyle> = {
   outline_color: "#000000",
   shadow: 0,
   shadow_color: "#000000",
+  shadow_feather: 50,
   letter_spacing: 0,
   background: true,
   background_color: "#000000",
@@ -63,6 +64,14 @@ export function libassEmScale(family: string, bold: boolean): number {
   return scale;
 }
 
+/** (border, blur) as fractions of the glow size for a feather percent; mirrors glow_shape in text_style.py. */
+export function glowShape(feather: number): [number, number] {
+  let k = Math.min(1, Math.max(0, feather / 100));
+  if (k <= 0.5) return [1 - k, k / 2];
+  k -= 0.5;
+  return [0.5 - k / 3, 0.25 + (k * 7) / 6];
+}
+
 export function textStyleToCss(s: Required<TextStyle>): CSSProperties {
   const u = (px: number) => `${(px / 1080) * 100}cqh`;
   const css: CSSProperties = {
@@ -81,7 +90,18 @@ export function textStyleToCss(s: Required<TextStyle>): CSSProperties {
   } else {
     if (s.outline_width > 0) css.WebkitTextStroke = `${u(s.outline_width)} ${s.outline_color}`;
     css.paintOrder = "stroke fill";
-    if (s.shadow > 0) css.textShadow = `0 0 ${u(s.shadow)} ${s.shadow_color}`;
+    if (s.shadow > 1) {
+      // Mirrors to_glow_tags: CSS shadows can't spread, so the grown border is a ring of offset copies, each
+      // blurred like libass's \blur (CSS blur radius ≈ 2σ); blurred copies are faint so their overlap isn't too dense.
+      const [borderK, blurK] = glowShape(s.shadow_feather);
+      const rad = s.shadow * borderK;
+      const blur = u(Math.max(0.5, rad / 6, 2 * s.shadow * blurK));
+      const color = rgba(s.shadow_color, 1 - 0.7 * Math.min(1, blurK / 0.25));
+      css.textShadow = Array.from({ length: 16 }, (_, i) => {
+        const a = (i / 16) * 2 * Math.PI;
+        return `${u(rad * Math.cos(a))} ${u(rad * Math.sin(a))} ${blur} ${color}`;
+      }).join(", ");
+    } else if (s.shadow > 0) css.textShadow = `0 0 ${u(s.shadow)} ${s.shadow_color}`;
   }
   return css;
 }
@@ -148,6 +168,7 @@ const TEXT_LINE_DEFAULTS = {
   outline_color: "#000000",
   shadow: 1,
   shadow_color: "#000000",
+  shadow_feather: 50,
   letter_spacing: 0,
   background: false,
   background_color: "#000000",

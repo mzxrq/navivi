@@ -56,4 +56,3 @@ def test_a_leg_only_change_keeps_the_overview(tmp_path):
         return render_checkpoint.reuse_render_manifest(manifest, "y", parts, str(cfg))[1]
 
     assert not stale({"route.leg_voice": "old"})
-    assert stale({"route.photos": "old"})

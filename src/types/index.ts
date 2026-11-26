@@ -76,8 +76,9 @@ export interface TextStyle {
   underline?: boolean;
   outline_width?: number; // 0–20
   outline_color?: string;
-  shadow?: number; // 0–20
+  shadow?: number; // 0–20 (0–60 on a text-track line, where > 1 is a glow)
   shadow_color?: string;
+  shadow_feather?: number; // glow softness, % of its reach that is blur rather than solid (0–100, default 50)
   letter_spacing?: number; // -20–50
   // Captions only: box behind the text (the default caption look).
   background?: boolean;

@@ -3,7 +3,6 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
   readTextFile,
-  writeTextFile,
   readDir,
   exists,
 } from "@tauri-apps/plugin-fs";
@@ -19,6 +18,7 @@ import { Select } from "../ui/Select";
 import { Switch } from "../ui/Switch";
 import { editorStyleForVideo, editorStyleLabel, resolveVideoStyle, videoMapStyles } from "../../config/constants";
 import { db } from "../../services/db";
+import { writeFileSafely } from "../../services/fileSystem";
 import { VideoLookSettings } from "../ui/VideoLookSettings";
 import { applyOption, lookPatch } from "../../utils/videoLook";
 
@@ -92,7 +92,7 @@ export function ProjectSettingsModal({
       if (configPath) {
         const videoStyle = resolveVideoStyle(config.settings ?? {});
         config.settings = applyOption(config.settings ?? {}, { follow_editor_map_style: videoStyle.follow, mapbox_style_id: videoStyle.id });
-        await writeTextFile(configPath, JSON.stringify(config, null, 2));
+        await writeFileSafely(configPath, JSON.stringify(config, null, 2));
         // The database is what the app reads when it opens the project, so the file alone would be overwritten.
         if (project.projectId) {
           const s = config.settings ?? {};

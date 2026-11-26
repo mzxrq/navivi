@@ -332,12 +332,39 @@ COURSE_TRACE_MAX_SECONDS = 40.0
 COURSE_TAGLINE_SECONDS = 5.0
 COURSE_TAGLINE_FADE_SECONDS = 0.5
 COURSE_CARD_POP_SECONDS = 0.45
+# As the trace passes a stop, its photo card pops up beside it (COURSE_PASS_CARD_SCALE at 1080p) for
+# COURSE_PASS_CARD_SECONDS, or until the next stop's card pops (never under _MIN_SECONDS), then shrinks
+# into the stop's pill badge over COURSE_PASS_CARD_SHRINK_SECONDS.
+COURSE_PASS_CARD_SECONDS = 2.5
+COURSE_PASS_CARD_MIN_SECONDS = 1.8  # 0.9 flashed past where the trace passes stops a fraction of a second apart
+# Cards up together share one size: 1/sqrt(most up at once) of the full one, never under this share of it.
+COURSE_PASS_CARD_CROWD_MIN_SCALE = 0.5
+# While zoomed a crowd's card may shrink further, down to this share of the full size, to fit right beside its own
+# pin: at half size Tomogashima's 5-8 still landed on other pins and the route.
+COURSE_ZOOM_CARD_MIN_SCALE = 0.3
+COURSE_PASS_CARD_SHRINK_SECONDS = 0.45
+COURSE_PASS_CARD_SCALE = 1.8
 COURSE_STATS_SLIDE_SECONDS = 0.6
+# Stop-bys (then closed places) come one at a time across their sentence: at least _STAGGER apart,
+# at most _MAX_STEP, so a long sentence with few places still shows them early on.
 COURSE_STOPBY_STAGGER_SECONDS = 0.15
+COURSE_STOPBY_MAX_STEP_SECONDS = 1.6
 # Share of the frame kept clear of the route at the top (headline) and bottom (subtitles, stats card,
 # stop-by notice), on top of OVERVIEW_PADDING_BY_SPAN_KM.
 COURSE_TOP_BAND_FRACTION = 0.10
 COURSE_BOTTOM_BAND_FRACTION = 0.17
+# The course map is fetched this much wider than the route's own framing, for the badges' room; the
+# video opens on the route's framing and eases out to the whole map over COURSE_OPEN_ZOOM_SECONDS.
+COURSE_OPEN_ZOOM = 1.12
+COURSE_OPEN_ZOOM_SECONDS = 1.2
+# While the trace runs through a tight group of stops (at least _MIN_STOPS whose stretch of route, with their
+# photo cards, is _MIN times smaller than the whole route), the map eases in on it (at most _MAX: it is one
+# image, softer past ~1.5x) and back out once the trace leaves, each ease taking _EASE_SECONDS.
+COURSE_DENSE_ZOOM_MIN = 1.8
+COURSE_DENSE_ZOOM_MAX = 1.5
+COURSE_DENSE_ZOOM_MAX_GL = 2.0  # on the GL map the zoom is real (sharp), so it may go closer
+COURSE_DENSE_MIN_STOPS = 3
+COURSE_DENSE_EASE_SECONDS = 0.8
 # The "walk" overview keeps the same bottom band clear for its captions (no headline above).
 OVERVIEW_BOTTOM_BAND_FRACTION = 0.17
 # Walk / Route map overviews: the route also keeps clear of this top share (the "next stop" banner).
@@ -513,7 +540,7 @@ RESIDENTIAL_ARRIVAL_FREEZE_SECONDS = 1.0
 # [NOTE] [Transition] Fullscreen photo transition plays as an ordered sequence: confirm (pin selected) -> scale (zoom into photo) -> blur -> fade_out; hold_ratio_of_freeze/min_hold_seconds/min_small_hold_seconds bound how long the fullscreen photo is held relative to its freeze duration before the next stage starts.
 FULLSCREEN_TRANSITION_DEFAULTS: Dict[str, float] = {
     "confirm_seconds": 0.4,
-    "scale_seconds": 1.0,
+    "scale_seconds": 0.75,
     "blur_seconds": 0.5,
     "fade_out_seconds": 0.5,
     "hold_ratio_of_freeze": 0.4,

@@ -221,7 +221,7 @@ def _summary_card(engine, config_path: Path):
 
         return render
     except Exception as exc:
-        logger.info("Finale: no summary card (%s).", exc)
+        logger.warning("Finale: no summary card (%s).", exc, exc_info=True)
         return None
 
 

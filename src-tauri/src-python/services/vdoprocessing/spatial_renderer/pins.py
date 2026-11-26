@@ -9,7 +9,23 @@ import numpy as np
 from services import tuning
 
 
+def _nearest_on_route(px: float, py: float, route: np.ndarray) -> tuple:
+    """(x, y, distance) of the point on the polyline `route` (N x 2) closest to (px, py)."""
+    a, ab = route[:-1], np.diff(route, axis=0)
+    t = np.clip(((px - a[:, 0]) * ab[:, 0] + (py - a[:, 1]) * ab[:, 1]) / np.maximum((ab ** 2).sum(axis=1), 1e-9), 0.0, 1.0)
+    q = a + ab * t[:, None]
+    d2 = (q[:, 0] - px) ** 2 + (q[:, 1] - py) ** 2
+    i = int(np.argmin(d2))
+    return float(q[i, 0]), float(q[i, 1]), math.sqrt(float(d2[i]))
+
+
 class _PinMixin:
+    # The pins' role colours (base.py's renderer overrides them per project in __init__).
+    _START_PIN_COLOR = tuning.START_PIN_COLOR
+    _END_PIN_COLOR = tuning.END_PIN_COLOR
+    _DRAWN_PIN_COLOR = tuning.DRAWN_PIN_COLOR
+    _STOPBY_PIN_COLOR = tuning.STOPBY_PIN_COLOR
+
     def _build_freeze_frame(
         self,
         current_bg: np.ndarray,
@@ -97,6 +113,8 @@ class _PinMixin:
     # positions) two pins are treated as one and the same place — see the
     # loop-route "S"/"E" case in the pair loop below.
     _PIN_SAME_PLACE_PX = 2.0
+    # A stop this close to the drawn route (px) is on it, and its pin stays on it when nudged.
+    _PIN_ON_ROUTE_PX = 12.0
 
     def _pin_draw_half_width(self, wp: Dict) -> float:
         """Half the width of this waypoint's DRAWN pin, matching
@@ -106,7 +124,7 @@ class _PinMixin:
         radius = float(self.graphics.marker_radius)
         return radius + 4.0
 
-    def _declutter_pins(self, active_popups: List[Dict]) -> None:
+    def _declutter_pins(self, active_popups: List[Dict], route=None) -> None:
         """Nudges pins apart by the MINIMUM amount needed so no pin is
         drawn completely underneath another, storing the result as
         "pin_x"/"pin_y" (separate from the real "x"/"y", which trigger
@@ -130,12 +148,21 @@ class _PinMixin:
         _PIN_DECLUTTER_MAX_SHIFT_RATIO * marker_radius — so pins stay on
         their line, and a cluster too tight to fully separate within that
         cap ends up slightly offset (all of them visible) rather than
-        perfectly spaced somewhere off-route."""
+        perfectly spaced somewhere off-route.
+
+        `route` (the drawn route's pixel points): a pin whose stop sits on it is slid back onto the line after each sweep,
+        so it moves ALONG the route and never off it (a pin pushed up to 1.5 radii sideways looked unconnected to the line,
+        worse once the course video zoomed in). A stop-by off the route is nudged freely as before."""
         n = len(active_popups)
         for wp in active_popups:
             wp["pin_x"], wp["pin_y"] = float(wp["x"]), float(wp["y"])
         if n < 2:
             return
+        route = np.asarray(route, dtype=float) if route is not None and len(route) > 1 else None
+        on_line = [
+            route is not None and _nearest_on_route(wp["x"], wp["y"], route)[2] <= self._PIN_ON_ROUTE_PX
+            for wp in active_popups
+        ]
 
         half_w = [self._pin_draw_half_width(wp) for wp in active_popups]
         max_shift = float(self.graphics.marker_radius) * self._PIN_DECLUTTER_MAX_SHIFT_RATIO
@@ -176,13 +203,15 @@ class _PinMixin:
             # each sweep — applied here rather than inside the pair loop
             # so one pair's push can't be undone mid-sweep by a clamp
             # that a later pair would have relieved anyway.
-            for wp in active_popups:
+            for wp, stays_on_line in zip(active_popups, on_line):
                 ox, oy = wp["pin_x"] - wp["x"], wp["pin_y"] - wp["y"]
                 shift = math.hypot(ox, oy)
                 if shift > max_shift:
                     scale = max_shift / shift
                     wp["pin_x"] = wp["x"] + ox * scale
                     wp["pin_y"] = wp["y"] + oy * scale
+                if stays_on_line and shift:
+                    wp["pin_x"], wp["pin_y"], _ = _nearest_on_route(wp["pin_x"], wp["pin_y"], route)
             if not moved:
                 break
 
@@ -246,7 +275,12 @@ class _PinMixin:
         """Plain color dot for the recap screen's "pill badge" style — no
         number, no teardrop tail. The number now lives in the badge card
         itself (see _render_pill_badge), so the pin only needs to carry
-        its color; a numbered circle there would just repeat the badge."""
+        its color; a numbered circle there would just repeat the badge.
+        Unless the badge sat far from it (`badge_far`, see _layout_recap_cards): then the number
+        on both is what ties them together."""
+        if wp.get("badge_far"):
+            self._draw_pin(frame, wp, total_points, scale=scale)
+            return
         _, pin_color, _ = self._pin_label_and_color(wp, total_points)
         px, py = int(wp.get("pin_x", wp["x"])), int(wp.get("pin_y", wp["y"]))
         self._draw_recap_dot_color(frame, px, py, pin_color, scale)
@@ -279,4 +313,5 @@ class _PinMixin:
             if self._is_loop_route:
                 return "E", self._START_PIN_COLOR, self._END_PIN_COLOR
             return "E", self._END_PIN_COLOR, None
-        return wp.get("order"), self._pin_color(wp), None
+        # `pin_color`: its recap badge's own color (popups._recap_cards_match_pin_colors).
+        return wp.get("order"), wp.get("pin_color") or self._pin_color(wp), None

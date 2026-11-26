@@ -21,6 +21,7 @@
   "separator": " · ",
   "mode_join": " / ",
   "total_label": "Total",
+  "remaining_label": "Left",
   "course_tagline": {
     "far": "From {start} to {to}",
     "ferry": "Across the sea to {to}",

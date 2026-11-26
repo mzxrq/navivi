@@ -755,18 +755,22 @@ class _CardMixin:
     def _columns_spec(
         self, distance_km: float, duration_seconds: float, mode_breakdown: Optional[Dict[str, float]],
         mode_duration: Optional[Dict[str, float]], total_dist: float, total_dur: float, banner_theme: bool,
+        remaining: bool = False,
     ) -> list:
         """(label, mode, distance, duration, color) per column of the columns card: one per mode plus a Total
-        when there is more than one, a lone mode with its own total, or just the distance without a breakdown."""
+        when there is more than one, a lone mode with its own total, or just the distance without a breakdown.
+        `remaining`: the Total column is what is LEFT of the trip (a leg's card), labelled remaining_label."""
         mode_duration = mode_duration or {}
         multi_mode = bool(mode_breakdown) and len(mode_breakdown) > 1
+        total_label = self.summary_card_labels.get(
+            "remaining_label" if remaining else "total_label") or self.summary_card_labels["total_label"]
         if multi_mode:
             columns = [
                 (self._mode_name_ja(mode), mode, dist, mode_duration.get(mode, 0.0), self._mode_accent(mode))
                 for mode, dist in sorted(mode_breakdown.items(), key=lambda kv: -kv[1])
             ]
             columns.append((
-                self.summary_card_labels["total_label"], "total", total_dist, total_dur,
+                total_label, "total", total_dist, total_dur,
                 self.ui["card_text"],
             ))
         elif mode_breakdown and len(mode_breakdown) == 1:
@@ -778,7 +782,7 @@ class _CardMixin:
                     self._mode_accent(single_mode),
                 ),
                 (
-                    self.summary_card_labels["total_label"], "total", total_dist, total_dur,
+                    total_label, "total", total_dist, total_dur,
                     self.ui["card_text"],
                 ),
             ]
@@ -874,7 +878,8 @@ class _CardMixin:
         total_dur = duration_seconds if total_seconds is None else total_seconds
         font_label, font_value, font_time = self._columns_fonts(scale)
         columns = self._columns_spec(
-            distance_km, duration_seconds, mode_breakdown, mode_duration, total_dist, total_dur, banner_theme
+            distance_km, duration_seconds, mode_breakdown, mode_duration, total_dist, total_dur, banner_theme,
+            remaining=total_km is not None,  # a leg's card: its "total" is the trip still ahead
         )
 
         label_ascent, _ = font_label.getmetrics()
@@ -1420,30 +1425,32 @@ class _CardMixin:
         """How tall the bottom rail is, so a caller can keep its cards off it."""
         return int(round(h * 0.068))
 
-    def _rail_geometry(self, w: int, h: int, margin: int):
+    def _rail_geometry(self, w: int, h: int, margin: int, left: Optional[int] = None):
         """(rail height, cap diameter, bar top, bar height, left x, right x) of the bottom rail,
-        shared by the track drawn per frame and the sprite of ticks and caps drawn once."""
+        shared by the track drawn per frame and the sprite of ticks and caps drawn once.
+        `left` is where the rail starts (default: the margin)."""
         rail_h = self.route_progress_rail_height(h)
         cap_d = int(rail_h * 0.62)
         bar_h = max(4, int(rail_h * 0.16))
         bar_y = rail_h - cap_d // 2 - bar_h // 2  # the caps hang off the bar and still clear the edge
-        return rail_h, cap_d, bar_y, bar_h, margin + cap_d // 2, w - margin - cap_d // 2
+        return rail_h, cap_d, bar_y, bar_h, (margin if left is None else left) + cap_d // 2, w - margin - cap_d // 2
 
     def render_route_progress_rail(
         self, frame: np.ndarray, fraction: float,
         marks: Sequence[Tuple[float, str, Tuple[int, int, int]]],
         alpha: float = 1.0, margin: int = 32,
-        mode: Optional[str] = None, frame_count: int = 0,
+        mode: Optional[str] = None, frame_count: int = 0, left: Optional[int] = None,
     ) -> np.ndarray:
         """The whole route as one line across the foot of the frame: a tick per stop at its
         own share of the distance, the first and last behind their pin's glyph, and the
         trace's progress filled in from the left. `marks` is (fraction, glyph, BGR colour)
         per stop, in route order. The track and fill are drawn straight onto the frame (they
-        change every frame); only the ticks and end caps are a cached sprite."""
+        change every frame); only the ticks and end caps are a cached sprite. `left` starts the
+        rail further right (the course recap shrinks it beside the notices)."""
         if alpha <= 0 or not marks:
             return frame
         h, w = frame.shape[:2]
-        rail_h, _, bar_y, bar_h, x0, x1 = self._rail_geometry(w, h, margin)
+        rail_h, _, bar_y, bar_h, x0, x1 = self._rail_geometry(w, h, margin, left)
         top = h - margin - rail_h
         y = top + bar_y
 
@@ -1463,7 +1470,7 @@ class _CardMixin:
             if icon is not None:
                 self.blit_sprite(out, icon, (icon.shape[1] // 2, icon.shape[0]), end, y + 1)
 
-        sprite = self._progress_rail_sprite(w, h, tuple(marks), margin)
+        sprite = self._progress_rail_sprite(w, h, tuple(marks), margin, left)
         roi = out[top:top + sprite.shape[0], 0:w].astype(np.float32)
         a = sprite[:, :, 3:].astype(np.float32) / 255.0
         out[top:top + sprite.shape[0], 0:w] = np.clip(
@@ -1474,13 +1481,14 @@ class _CardMixin:
     def _progress_rail_sprite(
         self, w: int, h: int,
         marks: Tuple[Tuple[float, str, Tuple[int, int, int]], ...], margin: int,
+        left: Optional[int] = None,
     ) -> np.ndarray:
         """BGRA strip of the rail's ticks and its two end caps (everything that never moves)."""
         cache = self.__dict__.setdefault("_progress_rails", {})
-        key = (w, h, marks, margin, self.theme)
+        key = (w, h, marks, margin, left, self.theme)
         if key in cache:
             return cache[key]
-        rail_h, cap_d, bar_y, bar_h, x0, x1 = self._rail_geometry(w, h, margin)
+        rail_h, cap_d, bar_y, bar_h, x0, x1 = self._rail_geometry(w, h, margin, left)
 
         scale = 2
         canvas = Image.new("RGBA", (w * scale, rail_h * scale), (0, 0, 0, 0))

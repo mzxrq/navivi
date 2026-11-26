@@ -188,11 +188,8 @@ class _SpatialRendererBase:
     # arrived_marker_color, which reach the GraphicsEngine instead) — see
     # the instance attributes set in __init__ below and render_step.py's
     # _project_color, which is where a project's own RGB values are
-    # converted to the BGR the renderer draws in.
-    _START_PIN_COLOR = tuning.START_PIN_COLOR
-    _END_PIN_COLOR = tuning.END_PIN_COLOR
-    _DRAWN_PIN_COLOR = tuning.DRAWN_PIN_COLOR
-    _STOPBY_PIN_COLOR = tuning.STOPBY_PIN_COLOR
+    # converted to the BGR the renderer draws in. The class defaults themselves live on pins._PinMixin, so the pin
+    # and layout helpers also work alone (the finale's recap layout uses them without this class).
 
     @property
     def _is_loop_route(self) -> bool:

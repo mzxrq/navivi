@@ -134,7 +134,8 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
 
 - `main.py` — argv dispatcher only. Per-stage modes (`gps`, `map`, `residential`, `tts`, `tts-all`,
   `attraction-tts[-all]`, `attraction[-all]`, `attraction-finalize`, `intro`, `outro`, `subtitle[-all]`,
-  `concat`, `mux`, `transition`, `overview-script`, `all`, default = overview) live in `services/cli/`.
+  `concat`, `mux`, `overview-script`, default = overview) live in `services/cli/`; a whole render is `full_pipeline`
+  (the old `all` and `transition` modes were removed 2026-11-21).
   Also `get_furigana` (readings) and `extract_words` (whole words with readings from a script) for the pronunciation dictionary, both via `services/localization/japanese_words.py` (fugashi + UniDic, pykakasi as the fallback).
 - `services/vdoprocessing/videopipeline/pipeline.py::run_full_pipeline` — the real 8-stage pipeline:
   GPS → TTS (+cues) → subtitles → attraction videos → route render → leg narration splits →

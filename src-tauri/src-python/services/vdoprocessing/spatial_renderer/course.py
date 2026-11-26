@@ -7,6 +7,7 @@ appear last. Timed by the course script's cues: {route} (the trace starts),
 """
 
 import math
+import tempfile
 from typing import Callable, Dict, List, NamedTuple, Optional, Set, Tuple
 
 import cv2
@@ -27,6 +28,9 @@ _EXTRAS_AFTER_SECONDS = 4.0  # the stop-bys come this long after the stats, the 
 _TRACE_TAIL_SECONDS = 0.6  # the transport icon fades out over this once the trace is done
 _NOTICE_FADE_SECONDS = 0.5
 _LABEL_GAP_PX = 6  # between a stop-by's pin and the name beside it
+_EXTRAS_TAIL_SECONDS = 1.5  # the last kind's last pin is up at least this long before the end
+_RIPPLE_SECONDS = 0.9  # the ring a pin sends out as it comes up
+_BADGE_DIM = 0.4  # the walked stops' badges step back to this once the stop-bys come up
 
 
 def _smoothstep(t: float) -> float:
@@ -177,11 +181,17 @@ def leg_banner(stops: List[Tuple[float, str, str]], dist: float) -> List[Tuple[s
     return [(reached[-1][1], reached[-1][2]), (ahead[0][1], ahead[0][2])]
 
 
-def tagline_at(taglines: List[str], t: float) -> Tuple[str, float]:
-    """(tagline, opacity) at `t`: each held COURSE_TAGLINE_SECONDS, fading through."""
+def tagline_at(taglines: List[str], t: float, hold_from: Optional[float] = None) -> Tuple[str, float]:
+    """(tagline, opacity) at `t`: each held COURSE_TAGLINE_SECONDS, fading through. From `hold_from`
+    the one then showing stays (once fully in), so the text stops changing over a still map."""
     if not taglines:
         return "", 0.0
     period, fade = tuning.COURSE_TAGLINE_SECONDS, tuning.COURSE_TAGLINE_FADE_SECONDS
+    if hold_from is not None and len(taglines) > 1:
+        k, local = divmod(max(0.0, hold_from), period)
+        if local > period - fade:  # already fading out: hold the next one
+            k, local = k + 1, 0.0
+        t = min(t, k * period + max(local, fade))
     k, local = divmod(max(0.0, t), period)
     text = taglines[int(k) % len(taglines)]
     if len(taglines) == 1:
@@ -214,6 +224,7 @@ class _Panels(NamedTuple):
     rail_marks: List[Tuple[float, str, Tuple]]
     closed_offset: int
     reserved: List[Tuple[float, float, float, float]]
+    rail_recap_left: Optional[int]  # where the rail starts once the notices are up (None: no notices)
 
 
 class _Trace(NamedTuple):
@@ -248,6 +259,189 @@ class _Heading:
         self.angle = angle
         self.x: Optional[int] = None
         self.y: Optional[int] = None
+
+
+def _crop_zoom(frame: np.ndarray, s: float, x0: float, y0: float) -> np.ndarray:
+    """The `1/s`-sized crop of `frame` from (x0, y0) scaled back up to the whole frame."""
+    h, w = frame.shape[:2]
+    m = np.float32([[s, 0, -x0 * s], [0, s, -y0 * s]])
+    return cv2.warpAffine(frame, m, (w, h), flags=cv2.INTER_LINEAR)
+
+
+def zoom_view(
+    t: float, zooms: List[Tuple[float, float, float, float, float]], w: int, h: int,
+) -> Optional[Tuple[float, float, float]]:
+    """(zoom, crop x, crop y) of the camera at `t` in base-frame pixels, or None at the whole map. The opening
+    eases out from the route's own framing (the middle 1/COURSE_OPEN_ZOOM of the wider map, see
+    overview_framing._widen); later it eases in on each group of stops while the trace runs through it
+    (dense_zooms). The GL map is captured at this view, or the base frame is cropped to it (_crop_zoom)."""
+    if t < tuning.COURSE_OPEN_ZOOM_SECONDS:
+        s = tuning.COURSE_OPEN_ZOOM + (1.0 - tuning.COURSE_OPEN_ZOOM) * _smoothstep(t / tuning.COURSE_OPEN_ZOOM_SECONDS)
+        return s, (w - w / s) / 2, (h - h / s) / 2
+    ease = tuning.COURSE_DENSE_EASE_SECONDS
+    for t_in, t_out, s, x0, y0 in zooms:
+        if t_in - ease < t < t_out + ease:
+            e = _smoothstep(min((t - t_in + ease) / ease, (t_out + ease - t) / ease, 1.0))
+            return 1.0 + (s - 1.0) * e, x0 * e, y0 * e
+    return None
+
+
+def dense_zooms(
+    stop_dists: List[float], path: np.ndarray, cum: np.ndarray, anchors: List[Tuple], w: int, h: int,
+    max_zoom: float = tuning.COURSE_DENSE_ZOOM_MAX,
+) -> List[Tuple[float, float, float, float, float]]:
+    """(time in, time out, zoom, crop x, crop y) per tight group of stops along the route: the trace reaches
+    the group's first stop at `time in` and its last at `time out`.
+
+    A group is the longest run of stops (in route order) whose stretch of route is at least
+    COURSE_DENSE_ZOOM_MIN times smaller than the whole route: measured against the route, not the frame,
+    since the course map leaves room around the route for the badges and the whole route would otherwise
+    count as one group. Only runs of COURSE_DENSE_MIN_STOPS or more zoom. The view frames the route only:
+    a photo card near the edge may be cut while zoomed (fitting the cards too left only ~1.17x, 2026-11-21)."""
+    top, bottom = tuning.COURSE_TOP_BAND_FRACTION * h, tuning.COURSE_BOTTOM_BAND_FRACTION * h
+    band_h, pad = h - top - bottom, 0.06 * h
+    ease = tuning.COURSE_DENSE_EASE_SECONDS
+
+    def fit(d0: float, d1: float) -> Tuple[float, float, float]:
+        """(uncapped zoom that fits the stretch d0..d1 in the band; crop x, crop y at the capped zoom)."""
+        pts = path[(cum >= d0 - 1e-6) & (cum <= d1 + 1e-6)]
+        (x0, y0), (x1, y1) = pts.min(axis=0), pts.max(axis=0)
+        s = min(w / (x1 - x0 + 2 * pad), band_h / (y1 - y0 + 2 * pad))
+        z = min(s, max_zoom)
+        # The group's middle lands mid-band, the crop kept inside the frame.
+        cx = min(max((x0 + x1) / 2 - w / (2 * z), 0.0), w - w / z)
+        cy = min(max((y0 + y1) / 2 - (top + band_h / 2) / z, 0.0), h - h / z)
+        return s, cx, cy
+
+    whole = fit(0.0, float(cum[-1]))[0]
+    ds = sorted(stop_dists)
+    out: List[Tuple[float, float, float, float, float]] = []
+    i = 0
+    while i < len(ds):
+        j = i
+        while j + 1 < len(ds) and fit(ds[i], ds[j + 1])[0] >= whole * tuning.COURSE_DENSE_ZOOM_MIN:
+            j += 1
+        s, cx, cy = fit(ds[i], ds[j])
+        t_in, t_out = _reveal_time(anchors, ds[i]), _reveal_time(anchors, ds[j])
+        clear = t_in - ease >= max(tuning.COURSE_OPEN_ZOOM_SECONDS, out[-1][1] + ease if out else 0.0)
+        if j - i + 1 >= tuning.COURSE_DENSE_MIN_STOPS and t_out > t_in and clear and s > 1.05:
+            out.append((t_in, t_out, min(s, max_zoom), cx, cy))
+            i = j + 1
+        else:
+            i += 1
+    return out
+
+
+def hold_zooms_for_cards(
+    zooms: List[Tuple[float, float, float, float, float]], cards: List[Tuple[float, float]],
+    limits: Optional[List[float]] = None,
+) -> List[Tuple[float, float, float, float, float]]:
+    """`zooms` with each one held until the last photo card popped inside it has been shown in full (`cards` =
+    (popped at, shown until)), so the camera zooms out after the card, not while it collapses. Never into the
+    next zoom's own ease, nor past its `limits` entry (zoom_exit_limits): the trace head must not leave the view first."""
+    ease, shrink = tuning.COURSE_DENSE_EASE_SECONDS, tuning.COURSE_PASS_CARD_SHRINK_SECONDS
+    out = []
+    for n, (t_in, t_out, *rest) in enumerate(zooms):
+        t_end = max([t_out] + [until + shrink for at, until in cards if t_in <= at <= t_out + ease])
+        if n + 1 < len(zooms):
+            t_end = min(t_end, zooms[n + 1][0] - 2 * ease)
+        if limits is not None:
+            t_end = min(t_end, limits[n])
+        out.append((t_in, max(t_out, t_end), *rest))
+    return out
+
+
+def cut_cards_at_zoom_out(laid_out: List[Dict], zooms: List[Tuple[float, float, float, float, float]]) -> None:
+    """Stamps `pass_cut` on each photo card popped inside a zoom (or during its zoom-out) that would still be up when
+    the camera starts to zoom out: it is gone from that moment, no shrink, so no card is ever up on the whole map
+    (shown, one popping during the zoom-out covered the badges full size). The trace never waits for a card
+    (holding it made the catch-up rush), nor is a card cut for the next (one at a time flashed each for 0.2-0.6 s)."""
+    ease, shrink = tuning.COURSE_DENSE_EASE_SECONDS, tuning.COURSE_PASS_CARD_SHRINK_SECONDS
+    for ap in laid_out:
+        if "pass_until" not in ap:
+            continue
+        for t_in, t_out, *_ in zooms:
+            if t_in <= ap["course_at"] <= t_out + ease and ap["pass_until"] + shrink > t_out:
+                ap["pass_cut"] = max(t_out, ap["course_at"])
+                break
+
+
+def _first_exit(
+    t0: float, s: float, x0: float, y0: float, path: np.ndarray, cum: np.ndarray, anchors: List[Tuple],
+    w: int, h: int, margin: float,
+) -> Optional[float]:
+    """The first time from `t0` the trace head is outside the zoomed view (zoom s at x0, y0), or None."""
+    t = t0
+    while t < anchors[-1][0]:
+        d = distance_at(anchors, t)
+        x, y = np.interp(d, cum, path[:, 0]), np.interp(d, cum, path[:, 1])
+        if not (x0 + margin <= x <= x0 + w / s - margin and y0 + margin <= y <= y0 + h / s - margin):
+            return t
+        t += 1 / 30
+    return None
+
+
+def zoom_exit_limits(
+    zooms: List[Tuple[float, float, float, float, float]], path: np.ndarray, cum: np.ndarray, anchors: List[Tuple],
+    w: int, h: int, margin: float = 90.0,
+) -> List[float]:
+    """Per zoom, the latest time its zoom-out may end: the trace head's exit from the view less the ease (inf when
+    it never leaves). Measured from the group's own end, so a card hold cannot push the search past the exit."""
+    ease = tuning.COURSE_DENSE_EASE_SECONDS
+    out = []
+    for _t_in, t_out, s, x0, y0 in zooms:
+        t_exit = _first_exit(t_out, s, x0, y0, path, cum, anchors, w, h, margin)
+        out.append(math.inf if t_exit is None else t_exit - ease)
+    return out
+
+
+def release_zooms_before_exit(
+    zooms: List[Tuple[float, float, float, float, float]], path: np.ndarray, cum: np.ndarray, anchors: List[Tuple],
+    w: int, h: int, margin: float = 90.0,
+) -> List[Tuple[float, float, float, float, float]]:
+    """`zooms` with each one let go early enough that its zoom-out is done before the trace head (a ferry
+    leaving the pier) leaves the zoomed view, but never before the group's last stop is reached."""
+    limits = zoom_exit_limits(zooms, path, cum, anchors, w, h, margin)
+    return [(t_in, max(t_in, min(t_out, limit)), s, x0, y0)
+            for (t_in, t_out, s, x0, y0), limit in zip(zooms, limits)]
+
+
+def pass_crowd_scales(spans: List[Tuple[float, float]], full: float) -> List[float]:
+    """One card scale per (shown from, shown until) span, in time order: cards whose spans chain into each other
+    are one crowd, all the same size, `full` shrunk by the square root of the most of them up at once (at least
+    COURSE_PASS_CARD_CROWD_MIN_SCALE of it). A card on its own keeps `full`."""
+    out: List[float] = []
+    i = 0
+    while i < len(spans):
+        j, end = i, spans[i][1]
+        while j + 1 < len(spans) and spans[j + 1][0] < end:
+            j += 1
+            end = max(end, spans[j][1])
+        crowd = spans[i:j + 1]
+        most = max(sum(1 for a, b in crowd if a <= at < b) for at, _ in crowd)
+        out += [full * max(tuning.COURSE_PASS_CARD_CROWD_MIN_SCALE, most ** -0.5)] * len(crowd)
+        i = j + 1
+    return out
+
+
+def _view_key(view: Tuple[float, float, float]) -> Tuple[float, float, float]:
+    """A view rounded finer than a pixel: frames holding one view share one capture."""
+    return round(view[0], 4), round(view[1], 1), round(view[2], 1)
+
+
+def gl_view_state(
+    view: Tuple[float, float, float], extent: Tuple[float, float, float, float], base_zoom: float, w: int, h: int,
+) -> Tuple[float, float, float]:
+    """The deck.gl (longitude, latitude, zoom) that shows the crop `view` of the base frame, whose Web
+    Mercator `extent` (min_x, max_x, min_y, max_y) is drawn at `base_zoom` (pydeck_overview.compute_pydeck_view)."""
+    from services.mapfetcher.mapgeometry import EARTH_RADIUS_METERS, _inverse_mercator_y
+
+    s, x0, y0 = view
+    min_x, max_x, min_y, max_y = extent
+    cx, cy = x0 + w / (2 * s), y0 + h / (2 * s)
+    mx = min_x + cx / w * (max_x - min_x)
+    my = max_y - cy / h * (max_y - min_y)
+    return math.degrees(mx / EARTH_RADIUS_METERS), _inverse_mercator_y(my), base_zoom + math.log2(s)
 
 
 def _drawn_path(smooth_path) -> Tuple[np.ndarray, np.ndarray, float]:
@@ -363,9 +557,16 @@ def _set_reveal_times(
         said = cues.get(str(ap.get("order")))
         if said is not None and ap["index"] != 0 and ap is not stop_popup:
             ap["course_at"] = pin_reveal_time(ap["course_at"], said, timing.route_at)
-    for group, at in ((timing.stopbys, timing.extras_at), (timing.closed, timing.closed_at)):
+    # Each kind's pins come one at a time across their own sentence (to the next kind's cue, or the end),
+    # so the still map after the trace keeps moving with the voice instead of popping all at once.
+    spans = ((timing.stopbys, timing.extras_at, timing.closed_at), (timing.closed, timing.closed_at, None))
+    for group, at, until in spans:
+        start = at if at is not None else timing.end_at
+        room = max(0.0, (until if until is not None else timing.end_at - _EXTRAS_TAIL_SECONDS) - start)
+        step = min(tuning.COURSE_STOPBY_MAX_STEP_SECONDS,
+                   max(tuning.COURSE_STOPBY_STAGGER_SECONDS, room * 0.8 / max(1, len(group))))
         for k, ap in enumerate(group):
-            ap["course_at"] = (at if at is not None else timing.end_at) + k * tuning.COURSE_STOPBY_STAGGER_SECONDS
+            ap["course_at"] = start + k * step
             ap["pop_frame"] = int(round(ap["course_at"] * fps))
 
 
@@ -375,6 +576,19 @@ def _log_timing(timing: _Timing, cards: int) -> None:
         timing.end_at, timing.route_at, timing.trace_end, timing.stats_at,
         f", stop-bys at {timing.extras_at:.1f}s" if timing.extras_at is not None else "", cards,
     )
+
+
+def _pin_head_box(graphics, px: float, py: float) -> Tuple[float, float, float, float]:
+    """The box a stop's teardrop covers: its head stands above the point (as popups._recap_cards_pin_cover)."""
+    r = float(graphics.marker_radius)
+    return px - 1.2 * r, py - 3.0 * r, px + 1.2 * r, py + 0.5 * r
+
+
+def _badge_box(graphics, ap: Dict) -> Tuple[float, float, float, float]:
+    """The box a laid-out pill badge covers."""
+    bx, by = ap["beside_box"]
+    bw, bh = graphics.beside_card_footprint(is_pill_badge=True, pill_name_chars=len(str(ap.get("label") or "")))
+    return (bx, by, bx + bw, by + bh)
 
 
 def _largest(panels: List) -> Optional[object]:
@@ -398,7 +612,10 @@ class _CourseOverviewMixin:
         summary: Optional[Dict],
         overview_path: str,
         bounding_box: Optional[Dict[str, float]] = None,
+        preview_only: bool = False,
     ) -> str:
+        """Renders the course overview video; with `preview_only`, just its last frame (laid out exactly as the video
+        is) to a PNG beside `overview_path`, no GL captures and no video, for a quick look at the badges."""
         cues = dict(self.config.get("overview_cue_seconds") or {})
         audio_seconds = float(self.config.get("overview_audio_seconds") or 0.0)
         total_points = len(points)
@@ -411,35 +628,60 @@ class _CourseOverviewMixin:
         timing = _course_timing(cues, audio_seconds, numbered, extras, total)
         panels = self._course_panels(
             summary, w, h, on_route, timing, total_points, total_smooth_dist)
+        # The drawn path resampled every few px: a ferry leg is one long segment whose raw points are
+        # only its ends, so a badge or card on the middle of it counted as covering no route.
+        dense = np.column_stack([np.interp(np.arange(0.0, total, 6.0), cum, path[:, i]) for i in (0, 1)])
+        self._course_route_px = dense  # zoomed cards keep off the route too (_zoom_card_place)
+        obstacles = dense if route_obstacle_arr is None or not len(route_obstacle_arr) else np.vstack(
+            [dense, route_obstacle_arr])
         pill_recap, laid_out, cards = self._course_cards(
-            on_route, extras, returns, stop_popup, panels.reserved, route_obstacle_arr, current_bg, w, h)
+            on_route, extras, returns, stop_popup, panels.reserved, obstacles, current_bg, w, h)
         _set_reveal_times(on_route, stop_popup, cues, timing, fps)
+        if pill_recap:
+            self._course_pass_cards(laid_out, on_route, panels.reserved, obstacles, w, h)
+        from services.mapbox_token import resolve_mapbox_token
+
+        gl = bounding_box is not None and bool(resolve_mapbox_token((self._get_job_config() or {}).get("settings")))
+        self._course_zooms = dense_zooms(
+            [ap["course_dist"] for ap in on_route], path, cum, timing.anchors, w, h,
+            tuning.COURSE_DENSE_ZOOM_MAX_GL if gl else tuning.COURSE_DENSE_ZOOM_MAX)
+        cards_up = [(ap["course_at"], ap["pass_until"]) for ap in laid_out if "pass_until" in ap]
+        limits = zoom_exit_limits(self._course_zooms, path, cum, timing.anchors, w, h)
+        self._course_zooms = release_zooms_before_exit(self._course_zooms, path, cum, timing.anchors, w, h)
+        self._course_zooms = hold_zooms_for_cards(self._course_zooms, cards_up, limits)
+        cut_cards_at_zoom_out(laid_out, self._course_zooms)
 
         route_bg, trace = self._course_route_plate(current_bg, path, cum, modes)
         labels, label_at = self._course_extra_labels(extras, cards, laid_out, on_route, w, h)
-        # A pill badge already shows its stop's number, so the map under it only needs the
-        # color: a plain dot, as the walk's recap draws (_draw_recap_dot), not a numbered
-        # teardrop repeating it.
-        draw_marker = self._draw_recap_dot if pill_recap else self._draw_pin
+        # Every stop its numbered teardrop: most badges sit away from their pins here (badge_far), and
+        # a plain dot for the few beside theirs (the start, a lone stop) read as a missing pin.
+        draw_marker = self._draw_pin
         scene = _Scene(on_route, extras, laid_out, cards, returns, labels, label_at, total_points, fps, draw_marker)
 
         _log_timing(timing, len(laid_out))
-        video = VideoExporter(overview_path, w, h, fps)
-        tracker.begin_substeps(max(1, int(timing.end_at)))
-        self._course_play(video, scene, route_bg, trace, timing, panels, total_smooth_dist)
+        if preview_only:
+            n = max(0, int(math.ceil(timing.end_at * fps)) - 1)
+            state = self._course_plate_state(scene, n / fps, timing.extras_at)
+            keep, layer = self._course_overlay(scene, state, route_bg)
+            frame = self._course_frame(n, n / fps, route_bg, keep, layer, trace, timing, panels,
+                                       _Heading(self._initial_heading(trace.path)), total_smooth_dist)
+            png = overview_path.rsplit(".", 1)[0] + "_recap.png"
+            cv2.imencode(".png", frame)[1].tofile(png)  # imwrite fails on non-ASCII Windows paths
+            return png
+        views = [v for i in range(int(math.ceil(timing.end_at * fps)))
+                 if (v := zoom_view(i / fps, self._course_zooms, w, h)) is not None]
+        with tempfile.TemporaryDirectory(prefix="navivi_course_zoom_") as gl_dir:
+            self._course_gl = self._course_gl_frames(views, bounding_box, w, h, gl_dir)
+            self._zoom_card_sides = {}
+            video = VideoExporter(overview_path, w, h, fps)
+            tracker.begin_substeps(max(1, int(timing.end_at)))
+            self._course_play(video, scene, route_bg, trace, timing, panels, total_smooth_dist)
+            self._course_gl = {}
 
         # After the voice, the walk overview's ending: the GL zoom to the start and its photo.
-        hard_ended = False
         if stop_popup is not None and self.config.get("enable_ending_highlight", True):
-            hard_ended = self._course_ending(
+            self._course_ending(
                 video, w, h, fps, route_bg, trace, scene, stop_popup, active_popups, bounding_box)
-
-        for ap in active_popups:
-            ap["data"]["triggered"] = False
-            ap["data"]["arrived"] = False
-        self.last_rendered_seconds = video.frames_written / fps
-        self.last_ending_hard_ended = hard_ended
-        return video.release(overview_path)
 
     def _course_route_plate(
         self, current_bg: np.ndarray, path: np.ndarray, cum: np.ndarray, modes: List[str],
@@ -478,12 +720,13 @@ class _CourseOverviewMixin:
         summary = self.config.get("course_summary") or summary  # the numbers the script speaks
         summary_card = None
         if summary:
-            summary_card = self.graphics.render_summary_card(
+            # Always the discs-and-chips template: the corners already hold the headline and the totals
+            # chip, and a third accent panel there was one too many (summary_card_style is the walk's).
+            summary_card = self.graphics.create_summary_card_circles(
                 distance_km=summary.get("total_distance_km", 0.0),
                 duration_seconds=summary.get("total_duration_seconds", 0.0),
                 mode_breakdown=summary.get("mode_breakdown"),
                 mode_duration=summary.get("mode_duration"),
-                banner_theme=True,  # it sits under the totals chip now, not alone on the map
             )
         taglines = [str(x) for x in (self.config.get("overview_taglines") or []) if str(x).strip()]
         leg_stops = self._course_leg_stops(on_route, total_points)
@@ -515,9 +758,12 @@ class _CourseOverviewMixin:
         rail_h = self.graphics.route_progress_rail_height(h) if rail_marks else 0
         if rail_h:
             reserved.append((0.0, float(h - margin - rail_h), float(w), float(h)))
+        before = len(reserved)
         closed_offset = self._reserve_notices(reserved, timing, w, h)
+        notices = reserved[before:]
+        rail_recap_left = int(max(b[2] for b in notices) + 24 * h / 1080) if notices else None
         return _Panels(summary_card, taglines, leg_stops, headline_font, margin, totals, stats_y,
-                       rail_marks, closed_offset, reserved)
+                       rail_marks, closed_offset, reserved, rail_recap_left)
 
     def _course_leg_stops(self, on_route: List[Dict], total_points: int) -> List[Tuple[float, str, str]]:
         """(distance, glyph, name) per named stop: the headline names the stretch being drawn ("A → B"),
@@ -576,8 +822,76 @@ class _CourseOverviewMixin:
                                             route_obstacles=route_obstacle_arr,
                                             background=current_bg if pill_recap else None,
                                             leaders=not pill_recap,
-                                            clutter_pull=self._CLUTTER_PULL_COURSE_PX)
+                                            total_points=stop_popup["index"] + 1 if stop_popup else None)
         return pill_recap, laid_out, {ap["index"]: ap for ap in laid_out}
+
+    def _course_pass_cards(
+        self, laid_out: List[Dict], on_route: List[Dict], reserved: List, route_obstacle_arr: np.ndarray,
+        w: int, h: int,
+    ) -> None:
+        """Stamps `pass_box`, `pass_scale` and `pass_until` on each on-route stop's badge: its photo card
+        pops up as the trace passes the stop, right beside its pin (clear of the frame's panels and any card
+        still showing first, then of every stop's pin, its own included, then as near its pin as it can, then of
+        as much route as it can, then of the badges already up - it only covers one for a moment), and shrinks
+        into the badge at `pass_until`. A card gives way early to the next stop's, though it stays up at least
+        COURSE_PASS_CARD_MIN_SECONDS; where stops come faster than that, the cards up together are one crowd,
+        all one size (pass_crowd_scales) so they fit side by side."""
+        on_route_ids = {id(ap) for ap in on_route}
+        passing = sorted((ap for ap in laid_out if id(ap) in on_route_ids), key=lambda ap: ap["course_at"])
+        untils = []
+        for k, ap in enumerate(passing):
+            until = ap["course_at"] + tuning.COURSE_PASS_CARD_SECONDS
+            if k + 1 < len(passing):
+                until = min(until, passing[k + 1]["course_at"])
+            untils.append(max(until, ap["course_at"] + tuning.COURSE_PASS_CARD_MIN_SECONDS))
+        scales = pass_crowd_scales(
+            [(ap["course_at"], u + tuning.COURSE_PASS_CARD_SHRINK_SECONDS) for ap, u in zip(passing, untils)],
+            tuning.COURSE_PASS_CARD_SCALE * h / 1080)
+        gap = int(self.graphics.marker_radius) + 8
+        route = route_obstacle_arr if route_obstacle_arr is not None and len(route_obstacle_arr) else None
+        pins = [_pin_head_box(self.graphics, s.get("pin_x", s["x"]), s.get("pin_y", s["y"])) for s in on_route]
+        up: List[Tuple[float, Tuple[float, float, float, float]]] = []
+        for ap, until, scale in zip(passing, untils, scales):
+            at = ap["course_at"]
+            up = [(end, box) for end, box in up if end > at]
+            card_w, card_h = self.graphics.beside_card_footprint(scale)
+            hard = list(reserved) + [box for _, box in up]
+            badges = [_badge_box(self.graphics, b) for b in laid_out
+                      if b is not ap and b.get("beside_box") and b.get("course_at", 0.0) < at]
+            px, py = ap.get("pin_x", ap["x"]), ap.get("pin_y", ap["y"])
+            near = self._pass_card_spots(px, py, card_w, card_h, w, h)
+            corners = len(self._CARD_SPILL_CORNERS)
+            further = list(self._card_box_candidates(px - gap, py - gap, 2 * gap, 2 * gap, card_w, card_h, w, h))[corners:]
+            best = None
+            for n, (x, y) in enumerate(near + further):
+                def hits(boxes):
+                    return sum(1 for b in boxes if x < b[2] and b[0] < x + card_w and y < b[3] and b[1] < y + card_h)
+                covered = 0 if route is None else int(np.count_nonzero(
+                    (route[:, 0] >= x) & (route[:, 0] <= x + card_w) & (route[:, 1] >= y) & (route[:, 1] <= y + card_h)))
+                # Every pin stays in sight (its own included: the old corner spots all sat on it); then a spot
+                # beside its pin beats any further out (a card across the water read as no stop's); then the least
+                # route covered (the trace runs under it only briefly).
+                ring = 0 if n < len(near) else 1 + (n - len(near)) // self._CARD_SPILL_PER_RING
+                score = (hits(hard), hits(pins), ring, covered, hits(badges))
+                if best is None or score < best[0]:
+                    best = (score, x, y)
+            _, x, y = best
+            ap.update(pass_box=(int(x), int(y)), pass_scale=scale, pass_until=until)
+            up.append((until + tuning.COURSE_PASS_CARD_SHRINK_SECONDS, (x, y, x + card_w, y + card_h)))
+
+    def _pass_card_spots(self, px: float, py: float, card_w: int, card_h: int, w: int, h: int) -> List[Tuple[int, int]]:
+        """The eight spots right around a pin's teardrop for a card of card_w x card_h: beside, above, below and
+        at the diagonals, each just clear of the teardrop, kept in the frame."""
+        from .popups import _card_bottom_limit
+
+        x0, y0, x1, y1 = _pin_head_box(self.graphics, px, py)
+        g, margin = 8, self._RECAP_CARD_MARGIN
+        max_x, max_y = max(margin, w - card_w - margin), max(margin, _card_bottom_limit(h, margin) - card_h)
+        xs = {"right": x1 + g, "left": x0 - g - card_w, "mid": px - card_w / 2}
+        ys = {"above": y0 - g - card_h, "below": y1 + g, "mid": py - card_h / 2}
+        order = [("right", "mid"), ("left", "mid"), ("mid", "above"), ("mid", "below"),
+                 ("right", "above"), ("left", "above"), ("right", "below"), ("left", "below")]
+        return [(int(min(max(xs[a], margin), max_x)), int(min(max(ys[b], margin), max_y))) for a, b in order]
 
     def _course_extra_labels(
         self, extras: List[Dict], cards: Dict[int, Dict], laid_out: List[Dict], on_route: List[Dict],
@@ -593,7 +907,9 @@ class _CourseOverviewMixin:
         taken = [
             (bx, by, bx + cw, by + ch)
             for ap in laid_out if ap.get("beside_box")
-            for (bx, by), (cw, ch) in [(ap["beside_box"], self.graphics.beside_card_footprint(ap.get("card_scale", 1.0)))]
+            for (bx, by), (cw, ch) in [(ap["beside_box"], self.graphics.beside_card_footprint(
+                is_pill_badge=True, pill_name_chars=len(str(ap.get("label") or "")))
+                if ap.get("is_pill_badge") else self.graphics.beside_card_footprint(ap.get("card_scale", 1.0)))]
         ] + [
             (ap.get("pin_x", ap["x"]) - r, ap.get("pin_y", ap["y"]) - r,
              ap.get("pin_x", ap["x"]) + r, ap.get("pin_y", ap["y"]) + r)
@@ -614,21 +930,39 @@ class _CourseOverviewMixin:
                 if 0 <= x and x + sw <= w and 0 <= y and y + sh <= h
                 and not any(x < b[2] and b[0] < x + sw and y < b[3] and b[1] < y + sh for b in taken)
             ]
-            x, y = (free or sides)[0]
+            def overlap(c):
+                return sum(max(0, min(c[0] + sw, b[2]) - max(c[0], b[0])) * max(0, min(c[1] + sh, b[3]) - max(c[1], b[1]))
+                           for b in taken)
+            x, y = free[0] if free else min(sides, key=overlap)
             label_at[id(ap)] = (x, y)
             taken.append((x, y, x + sw, y + sh))
         return labels, label_at
 
-    def _course_plate_state(self, scene: _Scene, t: float):
-        """What is on the cards-and-pins layer at `t`; the layer is only rebuilt when this changes."""
-        pop = tuning.COURSE_CARD_POP_SECONDS
-        shown, anim = [], []
+    def _course_plate_state(self, scene: _Scene, t: float, extras_at: Optional[float] = None):
+        """What is on the cards-and-pins layer at `t`; the layer is only rebuilt when this changes.
+        A badge with a passing card (`pass_until`) shows the card first and fades in as it shrinks.
+        From `extras_at` the walked stops' badges fade back to _BADGE_DIM."""
+        pop, shrink = tuning.COURSE_CARD_POP_SECONDS, tuning.COURSE_PASS_CARD_SHRINK_SECONDS
+        shown, anim, passing = [], [], []
         for ap in scene.laid_out:
             age = t - ap["course_at"]
-            if age >= 0:
+            until = ap.get("pass_until")
+            if age < 0:
+                continue
+            if until is not None and t >= ap.get("pass_cut", math.inf):
+                shown.append(ap["index"])  # cut at the zoom-out: the card is gone, the badge stays
+            elif until is None:
                 shown.append(ap["index"])
                 if age < pop:
                     anim.append((ap["index"], round(age / pop, 2)))
+            elif t < until:
+                passing.append((ap["index"], 0, round(min(1.0, age / pop), 2)))
+            else:
+                shown.append(ap["index"])
+                if t < until + shrink:
+                    v = round((t - until) / shrink, 2)
+                    passing.append((ap["index"], 1, v))
+                    anim.append((ap["index"], v))
         bumps = tuple(
             (ap["index"], round((t - ap["course_at"]) / pop, 2))
             for ap in scene.on_route if 0 <= t - ap["course_at"] < pop
@@ -638,12 +972,34 @@ class _CourseOverviewMixin:
             (ap["index"], round(self._pin_pop_scale(ap, int(round(t * scene.fps)), scene.fps), 2))
             for ap in scene.extras if t >= ap["course_at"]
         )
-        return tuple(shown), tuple(anim), bumps, arrived, extra_on
+        dim = 1.0 if extras_at is None or t < extras_at else round(
+            1.0 - (1.0 - _BADGE_DIM) * _smoothstep((t - extras_at) / _NOTICE_FADE_SECONDS), 2)
+        return tuple(shown), tuple(anim), bumps, arrived, extra_on, tuple(passing), dim
+
+    def _course_pass_hud(self, ap: Dict, shrinking: bool, u: float) -> Tuple[Dict, float]:
+        """(hud, alpha) of a stop's passing photo card: growing in at its spot (u 0..1), or shrinking
+        from there into its badge's (u 0..1, fading as it goes)."""
+        hud = self._course_hud(ap)
+        hud.update(is_pill_badge=False, draw_leader_line=False)
+        scale = float(ap["pass_scale"])
+        (cx, cy), e = ap["pass_box"], _smoothstep(u)
+        if shrinking:
+            bx, by = ap["beside_box"]
+            now = scale * (1 - 0.6 * e)
+            hud.update(card_scale=now, beside_box=(int(cx + (bx - cx) * e), int(cy + (by - cy) * e)))
+            return hud, 1 - e
+        grow = 0.88 + 0.12 * e
+        full_w, full_h = self.graphics.beside_card_footprint(scale)
+        now_w, now_h = self.graphics.beside_card_footprint(scale * grow)
+        hud.update(card_scale=scale * grow,
+                   beside_box=(int(cx + (full_w - now_w) / 2), int(cy + (full_h - now_h) / 2 + 14 * (1 - e))))
+        return hud, e
 
     def _course_layer(self, scene: _Scene, state, base: np.ndarray) -> np.ndarray:
         """The cards and pins drawn over `base`."""
-        shown, anim, bumps, arrived, extra_on = state
+        shown, anim, bumps, arrived, extra_on, passing, dim = state
         alpha = dict(anim)
+        walked = {ap["index"] for ap in scene.on_route}
         for ap in scene.on_route:
             ap["data"]["arrived"] = ap["index"] in arrived
         plate = base.copy()
@@ -667,11 +1023,15 @@ class _CourseOverviewMixin:
             if a is not None and hud.get("beside_box"):  # rises a little as it fades in
                 bx, by = hud["beside_box"]
                 hud = dict(hud, beside_box=(bx, int(by + 14 * (1 - _smoothstep(a)))))
+            fade = dim if hud["index"] in walked else 1.0
             plate = self.graphics.render_popup_box(
-                plate, hud, alpha=_smoothstep(a if a is not None else 1.0), skip_line=True)
+                plate, hud, alpha=_smoothstep(a if a is not None else 1.0) * fade, skip_line=True)
         for ap in scene.extras:  # above the cards, should no side be free
             if id(ap) in scene.label_at and scales.get(ap["index"], 0.0) >= 0.99:
                 self.graphics.blit_sprite(plate, scene.labels[id(ap)], (0, 0), *scene.label_at[id(ap)])
+        for index, shrinking, u in passing:  # the passing photo cards, over everything
+            hud, a = self._course_pass_hud(scene.cards[index], bool(shrinking), u)
+            plate = self.graphics.render_popup_box(plate, hud, alpha=a, skip_line=True)
         return plate
 
     def _course_overlay(self, scene: _Scene, state, route_bg: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -685,6 +1045,220 @@ class _CourseOverviewMixin:
         # 3 channels and the rounding folded in, for the per-frame cv2 blend (3.5x numpy's).
         return np.repeat(1.0 - opacity, 3, axis=2), on_black + 0.5
 
+    def _course_ripples(self, scene: _Scene, timing: _Timing) -> List[Tuple[float, int, int, Tuple]]:
+        """(time, x, y, color) of each ring: every stop-by and closed place as it comes up, and the start as
+        the stats come in (the voice says there the course ends where it began)."""
+        out = []
+        starts = [ap for ap in scene.on_route if ap["index"] == 0]
+        for at, ap in [(timing.stats_at, ap) for ap in starts] + [(ap["course_at"], ap) for ap in scene.extras]:
+            _, color, _ = self._pin_label_and_color(ap, scene.total_points)
+            out.append((float(at), int(ap.get("pin_x", ap["x"])), int(ap.get("pin_y", ap["y"])),
+                        tuple(color or self.graphics.marker_color)[:3]))
+        return out
+
+    def _draw_ripple(self, frame: np.ndarray, x: int, y: int, color: Tuple, u: float) -> None:
+        """One ring growing out of a pin and fading, `u` 0..1 through it."""
+        r = int(self.graphics.marker_radius * (0.6 + 2.4 * _smoothstep(u)))
+        pad = r + 4
+        x0, y0, x1, y1 = max(0, x - pad), max(0, y - pad), min(frame.shape[1], x + pad), min(frame.shape[0], y + pad)
+        if x1 <= x0 or y1 <= y0:
+            return
+        patch = frame[y0:y1, x0:x1]
+        ring = patch.copy()
+        cv2.circle(ring, (x - x0, y - y0), r, color, 3, cv2.LINE_AA)
+        cv2.addWeighted(ring, 1.0 - u, patch, u, 0, dst=patch)
+
+    def _course_gl_frames(
+        self, views: List[Tuple[float, float, float]], bounding_box: Optional[Dict[str, float]],
+        w: int, h: int, out_dir: str,
+    ) -> Dict[Tuple[float, float, float], str]:
+        """The GL map (no route, no pins) captured at each zoomed view, saved under `out_dir`: {view key: file}.
+        Empty with no Mapbox key or when the capture fails; the zoom then crops the base frame instead."""
+        import os
+
+        from services.mapbox_token import resolve_mapbox_token
+        from services.mapfetcher.maplanguage import resolve_map_style
+        from services.mapfetcher.pydeck_overview import _capture_zoom_raw, compute_pydeck_view
+
+        settings = (self._get_job_config() or {}).get("settings", {}) or {}
+        key = resolve_mapbox_token(settings)
+        keys = sorted({_view_key(v) for v in views})
+        if not keys or not key or bounding_box is None:
+            return {}
+        lon, lat, zoom, extent = compute_pydeck_view(bounding_box, (w, h))
+        states = [gl_view_state(k, extent, zoom, w, h) for k in keys]
+
+        class _ToDisk:
+            """Each 2x capture shrunk to the frame and saved as it arrives (all of them in memory ran to GBs)."""
+            def __init__(self):
+                self.paths: List[str] = []
+
+            def append(self, png: bytes) -> None:
+                img = cv2.imdecode(np.frombuffer(png, dtype=np.uint8), cv2.IMREAD_COLOR)
+                path = os.path.join(out_dir, f"{len(self.paths):04d}.jpg")
+                cv2.imwrite(path, cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA), [cv2.IMWRITE_JPEG_QUALITY, 95])
+                self.paths.append(path)
+
+        sink = _ToDisk()
+        tracker.show(f"Capturing the zoomed map ({len(keys)} views)...")
+        try:
+            _capture_zoom_raw((lon, lat, zoom), (w, h), states, resolve_map_style(settings, "mapbox/streets-v12"),
+                              key, sink=sink)
+        except Exception as exc:
+            logger.warning("Course overview: the GL zoom could not be captured (%s); cropping the map instead.", exc)
+            return {}
+        return dict(zip(keys, sink.paths)) if len(sink.paths) == len(keys) else {}
+
+    def _zoom_card_place(
+        self, card: Dict, scene: _Scene, t: float, view: Tuple[float, float, float], reserved, w: int, h: int,
+    ) -> Tuple[int, int, float]:
+        """(x, y, scale) of a card while zoomed, at the zoom's closest view (kept for the whole zoom, so the card follows
+        its pin without jumping). Every card of one zoom is placed together, at one size (see _zoom_place_group)."""
+        ease = tuning.COURSE_DENSE_EASE_SECONDS
+        zoom = next((z for z in getattr(self, "_course_zooms", ()) if z[0] - ease < t < z[1] + ease), None)
+        hold = tuple(zoom[2:]) if zoom else view
+        cache = self.__dict__.setdefault("_zoom_card_sides", {})
+        key = (card["index"], hold)
+        if key not in cache:
+            group = [c for c in scene.cards.values() if c.get("pass_box") and zoom is not None
+                     and zoom[0] - ease <= c.get("course_at", 0.0) <= zoom[1] + ease]
+            if not any(c is card for c in group):
+                group.append(card)
+            self._zoom_place_group(sorted(group, key=lambda c: c.get("course_at", 0.0)), hold, scene, reserved, w, h,
+                                   cache)
+        return cache[key]
+
+    def _zoom_place_group(self, group: List[Dict], hold, scene: _Scene, reserved, w: int, h: int, cache: Dict) -> None:
+        """Places a zoom's cards, in the order they pop, all at ONE size (a lone smaller card read as a mistake): the
+        largest, down to COURSE_ZOOM_CARD_MIN_SCALE of the full one, at which each finds a spot within 150 px clear of
+        the panels, the cards still up, every pin and the route.
+
+        [NOTE] [Course] The cards ring the group: each goes out along the line from the middle of the pins in view
+        through its own pin, so it lands outside the cluster in open space on its pin's side, never among the other
+        pins and the route (the 8 spots round its own pin all lay inside the crowd, Tomogashima 5-8, 2026-11-24)."""
+        from .popups import _card_bottom_limit
+
+        s, x0, y0 = hold
+
+        def at(x: float, y: float) -> Tuple[float, float]:
+            return (x - x0) * s, (y - y0) * s
+
+        pins = [_pin_head_box(self.graphics, *at(p.get("pin_x", p["x"]), p.get("pin_y", p["y"])))
+                for p in scene.on_route]
+        route = getattr(self, "_course_route_px", None)
+        zr = None if route is None else (route - np.array([x0, y0])) * s
+        inside = [(qx, qy) for qx, qy in (at(p.get("pin_x", p["x"]), p.get("pin_y", p["y"])) for p in scene.on_route)
+                  if 0 <= qx <= w and 0 <= qy <= h]
+        cx, cy = np.mean(inside, axis=0) if inside else (w / 2, h / 2)
+        margin, r0 = self._RECAP_CARD_MARGIN, float(self.graphics.marker_radius) + 8
+        shrink = tuning.COURSE_PASS_CARD_SHRINK_SECONDS
+
+        floor = tuning.COURSE_PASS_CARD_SCALE * h / 1080 * tuning.COURSE_ZOOM_CARD_MIN_SCALE
+        scales = [min(float(c["pass_scale"]) for c in group)]
+        while scales[-1] * 0.85 >= floor:
+            scales.append(scales[-1] * 0.85)
+
+        for sc in scales:
+            last = sc == scales[-1]
+            cw, ch = self.graphics.beside_card_footprint(sc)
+            max_x, max_y = max(margin, w - cw - margin), max(margin, _card_bottom_limit(h, margin) - ch)
+
+            def hits(boxes, x, y):
+                return sum(1 for b in boxes if x < b[2] and b[0] < x + cw and y < b[3] and b[1] < y + ch)
+
+            def covered(x: float, y: float) -> int:
+                return 0 if zr is None else int(np.count_nonzero(
+                    (zr[:, 0] >= x) & (zr[:, 0] <= x + cw) & (zr[:, 1] >= y) & (zr[:, 1] <= y + ch)))
+
+            placed: Dict[int, Tuple[int, int]] = {}
+            ok = True
+            for c in group:
+                px, py = at(c.get("pin_x", c["x"]), c.get("pin_y", c["y"]))
+                base = math.atan2(py - cy, px - cx) if math.hypot(px - cx, py - cy) > 1 else -math.pi / 2
+                up = [(ox, oy, ox + cw, oy + ch) for o in group if o["index"] in placed
+                      and o.get("course_at", 0.0) < c.get("course_at", 0.0) < o["pass_until"] + shrink
+                      for ox, oy in [placed[o["index"]]]]
+                spots = []
+                for step in range(14 if last else 6):  # full size only near its pin; only the smallest goes further
+                    for da in (0, 15, -15, 30, -30, 45, -45, 60, -60):
+                        a = base + math.radians(da)
+                        ca, sa = math.cos(a), math.sin(a)
+                        r = r0 + abs(ca) * cw / 2 + abs(sa) * ch / 2 + step * 30
+                        x, y = px + ca * r - cw / 2, py + sa * r - ch / 2
+                        spots.append((int(min(max(x, margin), max_x)), int(min(max(y, margin), max_y)), step, abs(da)))
+                spot = next(((x, y) for x, y, _, _ in spots if not hits(reserved, x, y) and not hits(up, x, y)
+                             and not hits(pins, x, y) and covered(x, y) <= 2), None)
+                if spot is None:
+                    ok = False
+                    if not last:
+                        break
+                    spot = min(spots, key=lambda q: (hits(reserved, q[0], q[1]), hits(up, q[0], q[1]),
+                                                     hits(pins, q[0], q[1]), covered(q[0], q[1]), q[2], q[3]))[:2]
+                placed[c["index"]] = spot
+            if ok or last:
+                for c in group:
+                    cache[(c["index"], hold)] = (*placed[c["index"]], sc)
+                return
+
+    def _course_zoomed_map(
+        self, i: int, t: float, view: Tuple[float, float, float], gl_bg: np.ndarray, scene: _Scene, state,
+        trace: _Trace, timing: _Timing, heading: _Heading, k: int, head, reserved=(),
+    ) -> np.ndarray:
+        """The map layer of a zoomed frame, drawn on the GL map at `view` instead of cropped from the base frame:
+        the route, trace, pins and walker at their zoomed places but their own size, the photo cards their usual
+        size beside their pin and kept on screen, and the badges (laid out for the whole map) faded out."""
+        s, x0, y0 = view
+        h, w = gl_bg.shape[:2]
+
+        def at(x: float, y: float) -> Tuple[int, int]:
+            return int(round((x - x0) * s)), int(round((y - y0) * s))
+
+        def moved(ap: Dict) -> Dict:
+            out = dict(ap)
+            out["x"], out["y"] = at(ap["x"], ap["y"])
+            if "pin_x" in ap:
+                # The declutter nudge keeps its own pixel size: scaled with the zoom, a pin pushed off its stop read as
+                # detached from the route line it sits on.
+                out["pin_x"], out["pin_y"] = out["x"] + ap["pin_x"] - ap["x"], out["y"] + ap["pin_y"] - ap["y"]
+            return out
+
+        frame = gl_bg.copy()
+        path = (trace.path - np.array([x0, y0])) * s
+        zoomed = trace._replace(path=path, pts=[(int(x), int(y)) for x, y in path])
+        self.graphics.draw_path(frame, zoomed.pts, trace.modes)
+        head_at = np.array(at(*head), dtype=float)
+        if t >= timing.route_at and k > 0:
+            self._draw_trace_line(frame, zoomed, k, head_at)
+        if timing.route_at <= t < timing.trace_end + _TRACE_TAIL_SECONDS:  # under the badges and cards drawn next
+            self._draw_walker(frame, i, t, k, head_at, zoomed, timing, heading)
+
+        shown, _anim, bumps, arrived, extra_on, passing, dim = state
+        badge_alpha = max(0.0, 1.0 - (s - 1.0) / 0.15) * dim
+        if badge_alpha > 0:
+            for index in shown:
+                frame = self.graphics.render_popup_box(frame, self._course_hud(scene.cards[index]), alpha=badge_alpha)
+        bump = dict(bumps)
+        for ap in scene.on_route:
+            ap["data"]["arrived"] = ap["index"] in arrived
+            if id(ap) not in scene.returns:
+                u = bump.get(ap["index"])
+                scene.draw_marker(frame, moved(ap), scene.total_points,
+                                  scale=1.0 + 0.3 * math.sin(math.pi * u) if u is not None else 1.0)
+        for index, scale in extra_on:
+            ap = next(a for a in scene.extras if a["index"] == index)
+            scene.draw_marker(frame, moved(ap), scene.total_points, scale=scale)
+        for index, shrinking, u in passing:
+            card = scene.cards[index]
+            # Beside its pin in the ZOOMED layout (the whole-map spot landed on other pins once they spread apart),
+            # smaller in a crowd, moved as it grows in or shrinks away as usual.
+            sx, sy, sc = self._zoom_card_place(card, scene, t, view, reserved, w, h)
+            hud, a = self._course_pass_hud(dict(card, pass_scale=sc), bool(shrinking), u)
+            (bx, by), (cx0, cy0) = hud["beside_box"], card["pass_box"]
+            frame = self.graphics.render_popup_box(
+                frame, dict(hud, beside_box=(int(sx + bx - cx0), int(sy + by - cy0))), alpha=a, skip_line=True)
+
+        return frame
+
     def _course_play(
         self, video: VideoExporter, scene: _Scene, route_bg: np.ndarray, trace: _Trace, timing: _Timing,
         panels: _Panels, total_smooth_dist: float,
@@ -695,14 +1269,25 @@ class _CourseOverviewMixin:
         state, keep, layer = None, None, None
         frame = route_bg
         heading = _Heading(self._initial_heading(trace.path))
+        ripples = self._course_ripples(scene, timing)
+        gl_last = (None, None)  # (path, image) of the GL map view last read
 
         for i in range(total_frames):
             t = i / fps
-            new_state = self._course_plate_state(scene, t)
+            new_state = self._course_plate_state(scene, t, timing.extras_at)
             if new_state != state:
                 state = new_state
                 keep, layer = self._course_overlay(scene, state, route_bg)
-            frame = self._course_frame(i, t, route_bg, keep, layer, trace, timing, panels, heading, total_smooth_dist)
+            view = zoom_view(t, getattr(self, "_course_zooms", ()), *route_bg.shape[1::-1])
+            gl_path = getattr(self, "_course_gl", {}).get(_view_key(view)) if view else None
+            if gl_path and gl_path != gl_last[0]:  # frames holding one view share its image
+                gl_last = (gl_path, cv2.imread(gl_path))
+            zoomed = (view, gl_last[1], scene, state, panels.reserved) if gl_path else None
+            frame = self._course_frame(
+                i, t, route_bg, keep, layer, trace, timing, panels, heading, total_smooth_dist, view, zoomed)
+            for at, x, y, color in ripples:
+                if 0 <= t - at < _RIPPLE_SECONDS:
+                    self._draw_ripple(frame, x, y, color, (t - at) / _RIPPLE_SECONDS)
             video.write(frame)
             if i % fps == 0:
                 tracker.show_item(i // fps + 1, f"Rendering course overview {i // fps}/{int(timing.end_at)}s")
@@ -711,24 +1296,33 @@ class _CourseOverviewMixin:
     def _course_frame(
         self, i: int, t: float, route_bg: np.ndarray, keep: np.ndarray, layer: np.ndarray, trace: _Trace,
         timing: _Timing, panels: _Panels, heading: _Heading, total_smooth_dist: float,
+        view: Optional[Tuple[float, float, float]] = None, zoomed=None,
     ) -> np.ndarray:
-        frame = route_bg.copy()
+        """One frame: the map layer, then the panels. At a zoomed `view`, `zoomed` (view, GL map, scene, plate
+        state) redraws the map layer on the real map there; without it the whole-map layer is cropped to `view`."""
         path = trace.path
         dist = distance_at(timing.anchors, t)
         k = int(np.searchsorted(trace.cum, dist))
         head = path[min(k, len(path) - 1)]
-        if t >= timing.route_at and k > 0:
-            if k < len(path):
-                d0, d1 = trace.cum[k - 1], trace.cum[k]
-                u = (dist - d0) / max(1e-6, d1 - d0)
-                head = path[k - 1] + (path[k] - path[k - 1]) * u
-            self._draw_trace_line(frame, trace, k, head)
-        blended = cv2.add(cv2.multiply(frame, keep, dtype=cv2.CV_32F), layer)
-        frame = np.clip(blended, 0, 255, out=blended).astype(np.uint8)
-
-        tracing = timing.route_at <= t < timing.trace_end + _TRACE_TAIL_SECONDS
-        if tracing:
-            self._draw_walker(frame, i, t, k, head, trace, timing, heading)
+        if t >= timing.route_at and 0 < k < len(path):
+            d0, d1 = trace.cum[k - 1], trace.cum[k]
+            u = (dist - d0) / max(1e-6, d1 - d0)
+            head = path[k - 1] + (path[k] - path[k - 1]) * u
+        if zoomed is not None:
+            gl_view, gl_bg, scene, state, reserved = zoomed
+            frame = self._course_zoomed_map(
+                i, t, gl_view, gl_bg, scene, state, trace, timing, heading, k, head, reserved)
+        else:
+            frame = route_bg.copy()
+            if t >= timing.route_at and k > 0:
+                self._draw_trace_line(frame, trace, k, head)
+            # Under the cards-and-pins layer: the walker or ferry passes BEHIND a badge, not over it.
+            if timing.route_at <= t < timing.trace_end + _TRACE_TAIL_SECONDS:
+                self._draw_walker(frame, i, t, k, head, trace, timing, heading)
+            blended = cv2.add(cv2.multiply(frame, keep, dtype=cv2.CV_32F), layer)
+            frame = np.clip(blended, 0, 255, out=blended).astype(np.uint8)
+            if view is not None:
+                frame = _crop_zoom(frame, *view)
         return self._composite_course_panels(
             frame, i, t, dist, k, timing.route_at <= t < timing.trace_end, trace, timing, panels, total_smooth_dist)
 
@@ -767,7 +1361,7 @@ class _CourseOverviewMixin:
         """Headline, totals, progress rail, stats card and stop-by notices over the frame."""
         margin = panels.margin
         steps = leg_banner(panels.leg_stops, dist) if in_trace else []
-        title, title_alpha = tagline_at(panels.taglines, t)
+        title, title_alpha = tagline_at(panels.taglines, t, hold_from=timing.trace_end)
         # The strip holds the tagline whole while a stretch is under it (one swaps for the
         # next rather than dissolving through: the stretch must stay legible), and fades
         # on its own once the trace is done and the card is the strip alone.
@@ -783,7 +1377,7 @@ class _CourseOverviewMixin:
             frame = self.graphics.render_route_progress_rail(
                 frame, dist / max(1e-6, total_smooth_dist), panels.rail_marks, margin=margin,
                 mode=trace.modes[min(max(0, k - 1), len(trace.modes) - 1)] if t >= timing.route_at else None,
-                frame_count=i)
+                frame_count=i, left=self._course_rail_left(t, timing, panels))
         if panels.summary_card is not None and t >= timing.stats_at:
             u = _smoothstep((t - timing.stats_at) / tuning.COURSE_STATS_SLIDE_SECONDS)
             frame = self.graphics.composite_card_on_frame(
@@ -797,6 +1391,18 @@ class _CourseOverviewMixin:
                 frame, alpha=_smoothstep((t - timing.closed_at) / _NOTICE_FADE_SECONDS), kind="closed",
                 x_offset=panels.closed_offset)
         return frame
+
+    @staticmethod
+    def _course_rail_left(t: float, timing: _Timing, panels: _Panels) -> Optional[int]:
+        """Where the rail starts at `t`: the margin, until the stop-by / closed notices come up at the
+        bottom left; then it shrinks, as they fade in, to the room right of them."""
+        if panels.rail_recap_left is None:
+            return None
+        starts = [at for at in (timing.extras_at, timing.closed_at if timing.closed else None) if at is not None]
+        if not starts or t < min(starts):
+            return None
+        u = _smoothstep((t - min(starts)) / _NOTICE_FADE_SECONDS)
+        return int(round(panels.margin + (panels.rail_recap_left - panels.margin) * u))
 
     def _course_ending(
         self, video: VideoExporter, w: int, h: int, fps: int, route_bg: np.ndarray, trace: _Trace,
@@ -855,3 +1461,4 @@ class _CourseOverviewMixin:
         ImageDraw.Draw(img).text((2 - box[0], 2 - box[1]), text, font=font, fill=(40, 30, 25, 255),
                                  stroke_width=3, stroke_fill=(255, 255, 255, 255))
         return np.array(img)[:, :, [2, 1, 0, 3]]
+    

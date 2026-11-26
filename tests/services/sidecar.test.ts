@@ -47,6 +47,14 @@ describe("runStage", () => {
     });
     await expect(runStage("c.json", "concat")).rejects.toBe("Process terminated");
   });
+
+  it("rejects with main.py's own error when the failed run printed its JSON result", async () => {
+    invoke.mockImplementation(async () => {
+      throw JSON.stringify({ success: false, error: "Unknown mode 'x'.", traceback: "..." }, null, 2);
+    });
+    await expect(runStage("c.json", "x")).rejects.toBe("Unknown mode 'x'.");
+    await expect(callSidecar("system_info")).resolves.toMatchObject({ success: false, error: "Unknown mode 'x'." });
+  });
 });
 
 describe("callSidecar", () => {

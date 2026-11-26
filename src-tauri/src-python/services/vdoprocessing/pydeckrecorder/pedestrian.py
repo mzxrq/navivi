@@ -53,6 +53,15 @@ from .pin_icons import (
 from .stopby_pause import _FRAME_SHOT, _play_stopby_photo_pause, screen_props
 
 
+def _piece_lead(start_cues, piece: int) -> float:
+    """The {start} cue of narration piece `piece`: `start_cues` is one per piece, or a single value for the first."""
+    if isinstance(start_cues, (list, tuple)):
+        value = start_cues[piece] if piece < len(start_cues) else None
+    else:
+        value = start_cues if piece == 0 else None
+    return float(value or 0.0)
+
+
 def _segment_plan(df_raw, leg_dist_km, landmarks, total_seconds):
     """[(last raw point index, seconds)] for a leg cut at a stop-by, from each landmark's own `walk_seconds` (the
     last piece gets what is left of `total_seconds`). None when the leg has no cut, a landmark has no time, or the
@@ -107,7 +116,7 @@ def _wait_view_plan(df_raw, leg_dist_km, plan, landmarks, start_cue_seconds=None
     out, spots, held, walked, start_idx = [], [], 0.0, 0.0, 0
     for piece, (end_idx, seconds) in enumerate(plan):
         idx, used = start_idx, 0.0  # used: this piece's voice seconds already spent walking or waiting
-        lead = float(start_cue_seconds or 0.0) if piece == 0 else 0.0
+        lead = _piece_lead(start_cue_seconds, piece)
         for lm in (w for w in waits if w["piece"] == piece):
             show, hide = float(lm["show_seconds"]) - lead, float(lm["hide_seconds"]) - lead
             seg = df_raw.iloc[idx + 1 : end_idx]
@@ -142,7 +151,7 @@ def _paced_plan(leg_dist_km, plan, spans, start_cue_seconds=None, slow=0.5, fast
     weight = {"slow": slow, "fast": fast, "stop": 0.0}
     out, stops, held, walked, start_idx = [], [], 0.0, 0.0, 0
     for piece, (end_idx, seconds) in enumerate(plan):
-        lead = float(start_cue_seconds or 0.0) if piece == 0 else 0.0
+        lead = _piece_lead(start_cue_seconds, piece)
         own = []  # [(start, end, weight)] inside 0 … seconds
         for p, kind, a, b in spans:
             a, b = max(0.0, a - lead), min(seconds, b - lead)
@@ -183,7 +192,8 @@ def _at_points_plan(df_raw, leg_dist_km, plan, at_cues, start_cue_seconds=None):
     rushing ahead of the piece's own pace if it must - every piece still ends where and when it did. A cue whose
     turn index is out of range, or whose target point/time doesn't fall strictly between the piece's own start
     and end (or an earlier {at} cue already placed in it), is skipped (logged) rather than rushed anyway. Cue
-    times are voice seconds; the first piece's walk only starts at its {start} cue (`start_cue_seconds`)."""
+    times are voice seconds; the first piece's walk only starts at its {start} cue (`start_cue_seconds`).
+    {at N%} (N the string "N%"): the point N% of the piece's distance along, from its start to its stop."""
     if not at_cues:
         return plan
     from services.localization.leg_script import leg_turns
@@ -192,24 +202,35 @@ def _at_points_plan(df_raw, leg_dist_km, plan, at_cues, start_cue_seconds=None):
     by_piece: Dict[int, list] = {}
     for piece, seconds, n in at_cues:
         by_piece.setdefault(piece, []).append((seconds, n))
+    bounds: Dict[int, list] = {}  # piece -> [first raw index, last raw index]
+    prev = 0
+    for i, entry in enumerate(plan):
+        bounds.setdefault(_piece_of(i, entry), [prev, entry[0]])[1] = entry[0]
+        prev = entry[0]
     out, start_idx = [], 0
     for i, entry in enumerate(plan):
         end_idx, seconds = entry[0], entry[1]
         piece = _piece_of(i, entry)
-        lead = float(start_cue_seconds or 0.0) if piece == 0 else 0.0
+        lead = _piece_lead(start_cue_seconds, piece)
         idx, used = start_idx, 0.0
-        for cue_seconds, n in sorted(by_piece.get(piece, [])):
+        for cue_seconds, n in sorted(by_piece.get(piece, []), key=lambda c: c[0]):
             target_t = cue_seconds - lead
-            if not (1 <= n <= len(turns)) or not (used < target_t < seconds):
-                logger.info("Leg's {at %d} cue doesn't fit its piece; skipped.", n)
+            percent = float(n[:-1]) if isinstance(n, str) else None
+            valid = 0 < percent < 100 if percent is not None else 1 <= n <= len(turns)
+            if not valid or not (used < target_t < seconds):
+                logger.info("Leg's {at %s} cue doesn't fit its piece; skipped.", n)
                 continue
-            turn = turns[n - 1]
-            seg = df_raw.iloc[idx + 1 : end_idx]
-            if seg.empty:
-                continue
-            target_idx = int(((seg["lat"] - turn["lat"]) ** 2 + (seg["lon"] - turn["lon"]) ** 2).idxmin())
-            if target_idx <= idx:
-                logger.info("Leg's {at %d} cue is behind an earlier one; skipped.", n)
+            if percent is not None:
+                a, b = bounds[piece]
+                target_idx = bisect.bisect_left(leg_dist_km, leg_dist_km[a] + (leg_dist_km[b] - leg_dist_km[a]) * percent / 100)
+            else:
+                turn = turns[n - 1]
+                seg = df_raw.iloc[idx + 1 : end_idx]
+                if seg.empty:
+                    continue
+                target_idx = int(((seg["lat"] - turn["lat"]) ** 2 + (seg["lon"] - turn["lon"]) ** 2).idxmin())
+            if not idx < target_idx < end_idx:
+                logger.info("Leg's {at %s} cue is behind an earlier one or past its stop; skipped.", n)
                 continue
             out.append((target_idx, target_t - used, 0.0, piece))
             idx, used = target_idx, target_t
@@ -257,6 +278,7 @@ def render_residential_leg_pydeck(
     context_path: Optional[List[List[float]]] = None,
     arrival_hold_seconds: float = 2.0,
     route_chain: Optional[List[str]] = None,
+    stopby_chain: Optional[List[List[Any]]] = None,
     topdown_transition_seconds: float = tuning.LEG_ZOOM_SECONDS,
     topdown_zoom_delta: float = 1.0,
     dest_popup_image: Optional[str] = None,
@@ -266,6 +288,7 @@ def render_residential_leg_pydeck(
     dest_popup_narration_seconds: Optional[float] = None,
     start_popup_narration_seconds: Optional[float] = None,
     start_cue_seconds: Optional[float] = None,
+    piece_start_cues: Optional[List[Optional[float]]] = None,
     pace_cues: Optional[Dict] = None,
     at_cues: Optional[List[Tuple[int, float, int]]] = None,
     arrival_photo_hold_seconds: Optional[float] = None,
@@ -274,6 +297,7 @@ def render_residential_leg_pydeck(
     start_pin: Optional[Dict] = None,
     dest_pin: Optional[Dict] = None,
     total_stops: Optional[int] = None,
+    stop_number: Optional[int] = None,
     hud_card_png: Optional[Callable[[float, float, bool, float], bytes]] = None,
     theme: Optional[str] = None,
     bottom_reserve_px: float = 0.0,
@@ -324,8 +348,10 @@ def render_residential_leg_pydeck(
     than the clip cutting away the instant the walker arrives.
 
     `route_chain`: optional ["友ヶ島", "深山ノ鼻", "加太", ...] -- this leg's
-    own place names in travel order (start through destination, including
-    any stop-bys in between). Shown as a static breadcrumb pill in the
+    own place names in travel order (start through destination, minus its
+    stop-bys). `stopby_chain`: those stop-bys as [name, index of the route_chain place they come before, lat, lon], drawn
+    inline in the same banner (A → stop-by → B), lighter than the numbered places.
+    Shown as a static breadcrumb pill in the
     top-left corner (e.g. "友ヶ島 → 深山ノ鼻 → 加太"), separate from the
     top-right destination banner, so a viewer can place this leg within
     the wider trip at a glance. Omit to leave the corner empty.
@@ -390,8 +416,9 @@ def render_residential_leg_pydeck(
 
     `dest_popup_narration_seconds`/`start_popup_narration_seconds`: the
     narration length of the destination/departure waypoint, passed by
-    route2vdo.py. Accepted for its callers but not used yet: the photo holds
-    do not wait for narration (leg_pieces.py pads the clip's tail instead).
+    route2vdo.py. The arrival card (and each stop-by's, from its landmark's
+    `narration_audio_seconds`) stays small until its voice is done, then grows
+    fullscreen. The departure's is not used.
 
     `start_cue_seconds`: when the leg's narration carries a {start} cue, the
     second of the narration at which the walker should START moving. The
@@ -401,8 +428,11 @@ def render_residential_leg_pydeck(
     None, the narration is delayed by the whole opening so the voice starts
     with the walk. Either way the delay is written next to the clip as a
     `.timing.json` (see services/vdoprocessing/cliptiming.py) for the
-    subtitle burn and final export to apply. Only legs that are not cut by a
-    connected stop-by get one.
+    subtitle burn and final export to apply.
+
+    `piece_start_cues`: the same per narration piece of a leg cut at stop-bys
+    (the first equals `start_cue_seconds`): each later piece holds its opening's
+    last frame until its own {start}.
 
     `arrival_photo_hold_seconds`: how long the at-arrival photo stays fullscreen
     AFTER it has finished growing. The clip's last frames are these, so the
@@ -456,21 +486,22 @@ def render_residential_leg_pydeck(
         else max(3.0, (total_leg_km / travel_speed_kmh) * 3600.0)
     )
     wait_spots, stands = [], []
+    starts = piece_start_cues or start_cue_seconds
     if target_duration_seconds is not None:
-        waited_plan, wait_spots, held = _wait_view_plan(df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], landmarks, start_cue_seconds)
+        waited_plan, wait_spots, held = _wait_view_plan(df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], landmarks, starts)
         if wait_spots:
             segment_plan, leg_duration = waited_plan, leg_duration - held
             if pace_cues:
                 logger.info("Leg %s has {view wait}: its {slow}/{fast}/{stop} cues are not used.", dest_label)
         elif pace_cues and pace_cues.get("spans"):
             segment_plan, stands, held = _paced_plan(
-                leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], pace_cues["spans"], start_cue_seconds,
+                leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], pace_cues["spans"], starts,
                 pace_cues.get("slow", tuning.PACE_SLOW_FACTOR), pace_cues.get("fast", tuning.PACE_FAST_FACTOR),
             )
             leg_duration -= held
         if at_cues:  # {at N}: composes with either branch above, or neither
             segment_plan = _at_points_plan(
-                df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], at_cues, start_cue_seconds,
+                df_raw, leg_dist_km, segment_plan or [(len(df_raw) - 1, leg_duration)], at_cues, starts,
             )
     total_frames = max(10, int(leg_duration * fps))
 
@@ -687,7 +718,7 @@ def render_residential_leg_pydeck(
             except (TypeError, ValueError):
                 return None
 
-        current_stop = _stop_number(dest_pin)
+        current_stop = stop_number or _stop_number(dest_pin)
         progress = (current_stop, total_stops) if current_stop and total_stops else None
         # The chain pill's own start/end circle badges -- the same S/E/number glyph already on that
         # waypoint's map pin (pin_icons' numbered teardrop), not a fresh number of our own.
@@ -709,7 +740,8 @@ def render_residential_leg_pydeck(
             hud_card_png=hud_card_png, theme=theme, bottom_reserve_px=bottom_reserve_px,
             segment_colors=segment_colors, opening_photo=opening_photo,
             opening_view=opening_view, end_view_path=end_view_path, wait_spots=wait_spots, prior_trail=prior_trail,
-            hold_end_card=hold_end_card, progress=progress, chain_badges=chain_badges,
+            hold_end_card=hold_end_card, progress=progress, chain_badges=chain_badges, stopby_chain=stopby_chain,
+            piece_start_cues=piece_start_cues, dest_popup_narration_seconds=dest_popup_narration_seconds,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -739,6 +771,9 @@ async def _record_leg(
     hold_end_card: bool = False,
     progress: Optional[Tuple[int, int]] = None,
     chain_badges: Optional[Tuple[Optional[str], Optional[str]]] = None,
+    stopby_chain: Optional[List[List[Any]]] = None,
+    piece_start_cues: Optional[List[Optional[float]]] = None,
+    dest_popup_narration_seconds: Optional[float] = None,
 ):
     """`wait_spots`: [(walk seconds, card, hold seconds)] for {view wait} street views (see _wait_view_plan).
     `hold_end_card`: the arrival photo card (pip) stays up at the end instead of fading: the next leg slides on with it
@@ -1222,11 +1257,26 @@ async def _record_leg(
                     pass
                 await page.wait_for_timeout(2500)
 
+                # [NOTE] [HUD] One banner: numbered places and the stop-bys between them, in walk order
+                # (a stop-by is [name, index of the chain place it comes before, lat, lon]). Items are
+                # (text, badge, is_stopby). The banner shows one stretch at a time: from the last stop-by passed
+                # (else the start) to the next one (else the end), switched in `_draw_walker_frame`.
+                banner_items: List[Tuple[str, Optional[str], bool]] = []
+                badges = ([chain_badges[0]] + [None] * (len(route_chain) - 2) + [chain_badges[1]]
+                          if route_chain and len(route_chain) >= 2 and chain_badges else [None] * len(route_chain or []))
+                for k, place in enumerate(route_chain or []):
+                    banner_items += [(s[0], None, True) for s in (stopby_chain or []) if s[1] == k]
+                    banner_items.append((place, badges[k], False))
+                banner_items += [(s[0], None, True) for s in (stopby_chain or []) if s[1] >= len(route_chain or [])]
+                banner_stop_items = [i for i, it in enumerate(banner_items) if it[2]]
+                # Without every stop-by's position the stretch can't follow the walker: the whole chain stays up.
+                _stopby_frames_ok = all(s[2] is not None and s[3] is not None for s in (stopby_chain or []))
+
                 progress_text = (
                     hud_labels["stop_progress"].format(n=progress[0], total=progress[1]) if progress else None
                 )
                 await page.evaluate(
-                    """async ([css, bannerIcon, timeLabel, cardIcon, chainPlaces, chainBadges, useImgCard, compassSvg, distLabel, progressText, progressN, progressTotal]) => {
+                    """async ([css, bannerIcon, timeLabel, cardIcon, chainPlaces, chainBadges, useImgCard, compassSvg, distLabel, progressText, progressN, progressTotal, chainVia, firstStop]) => {
                         const style = document.createElement('style');
                         style.textContent = css;
                         document.head.appendChild(style);
@@ -1253,6 +1303,7 @@ async def _record_leg(
                                 if (i > 0) {
                                     const arrow = document.createElement('span');
                                     arrow.className = 'arrow';
+                                    arrow.dataset.i = i;
                                     arrow.innerHTML = '<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-0.1em"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
                                     chain.appendChild(arrow);
                                 }
@@ -1261,11 +1312,13 @@ async def _record_leg(
                                     const circle = document.createElement('span');
                                     circle.className = 'badge';
                                     circle.textContent = badge;
+                                    circle.dataset.i = i;
                                     chain.appendChild(circle);
                                 }
                                 const place = document.createElement('span');
-                                place.className = 'place';
+                                place.className = chainVia && chainVia[i] ? 'place via' : 'place';
                                 place.textContent = p;
+                                place.dataset.i = i;
                                 chain.appendChild(place);
                             });
                             document.body.appendChild(chain);
@@ -1289,8 +1342,24 @@ async def _record_leg(
                                 }
                             };
                             new ResizeObserver(fit).observe(neighbor);
+                            // Only items a..b show (the arrow before item a stays hidden), then the font refits.
+                            // `closed` (a closed place's "×name") replaces the whole stretch while it is up.
+                            const only = document.createElement('span');
+                            only.className = 'place';
+                            only.style.display = 'none';
+                            chain.appendChild(only);
+                            window.__chainWindow = (a, b, closed) => {
+                                for (const el of chain.children) {
+                                    if (el === only) continue;
+                                    const i = +el.dataset.i;
+                                    el.style.display = closed || i < a || i > b || (i === a && el.className === 'arrow') ? 'none' : '';
+                                }
+                                only.textContent = closed || '';
+                                only.style.display = closed ? '' : 'none';
+                                fit();
+                            };
                             if (document.fonts && document.fonts.ready) { await document.fonts.ready; }
-                            fit();
+                            if (firstStop >= 0) { window.__chainWindow(0, firstStop); } else { fit(); }
                         }
 
                         if (compassSvg) {
@@ -1317,14 +1386,15 @@ async def _record_leg(
                             document.body.appendChild(img);
                         }
                     }""",
-                    [_hud_css(theme), mode_hud["banner_icon"], mode_hud["time_label"], mode_hud["icon"], route_chain,
-                     ([chain_badges[0]] + [None] * (len(route_chain) - 2) + [chain_badges[1]])
-                     if route_chain and len(route_chain) >= 2 and chain_badges else None,
+                    [_hud_css(theme), mode_hud["banner_icon"], mode_hud["time_label"], mode_hud["icon"],
+                     [p for p, _, _ in banner_items], [b for _, b, _ in banner_items],
                      hud_card_png is not None,
                      compass_svg(int(tuning.RESIDENTIAL_COMPASS_SIZE_PX))
                      if tuning.RESIDENTIAL_SHOW_COMPASS else "",
                      hud_labels["distance_label"], progress_text,
-                     progress[0] if progress else None, progress[1] if progress else None],
+                     progress[0] if progress else None, progress[1] if progress else None,
+                     [v for _, _, v in banner_items],
+                     banner_stop_items[0] if banner_stop_items and _stopby_frames_ok else -1],
                 )
 
                 hud_card_cache: Dict[Tuple[int, int, bool], str] = {}
@@ -1684,10 +1754,13 @@ async def _record_leg(
                         await page.wait_for_timeout(30)
                         await _write_frame(await page.screenshot(**_FRAME_SHOT))
 
-                def _off_screen(lm) -> bool:
-                    x, y = _project_lonlat_to_px(lm["lon"], lm["lat"], locked_lon, locked_lat, locked_zoom, output_size, pitch=follow_pitch)
+                def _off_screen_at(lon, lat) -> bool:
+                    x, y = _project_lonlat_to_px(lon, lat, locked_lon, locked_lat, locked_zoom, output_size, pitch=follow_pitch)
                     w, h = output_size
                     return not (0.08 * w <= x <= 0.92 * w and _LEG_TOP_MARGIN_PX <= y <= h - _leg_bottom_margin_px(bottom_reserve_px))
+
+                def _off_screen(lm) -> bool:
+                    return _off_screen_at(lm["lon"], lm["lat"])
 
                 async def _play_followers(after: str, tag) -> None:
                     group = [lm for lm in followers if lm.get("pops_after") == after]
@@ -1711,12 +1784,10 @@ async def _record_leg(
                             lm, *view, output_size, f"{tag}_{k}",
                             pitch=follow_pitch,
                             **_quiet_card(lm),
-                            small_hold_seconds=wait_s if wait_s > 0 else None,
+                            small_hold_seconds=_card_hold(wait_s if wait_s > 0 else None, lm.get("narration_audio_seconds")),
                         )
                         if frame_state["cuts"] > cuts_before:
-                            piece_lead = (frame_state["count"] - frame_state["clip_start"]) / fps
-                            write_audio_offset(proc_ref["real_path"], piece_lead)
-                            _voice_from(piece_lead)
+                            await _open_piece()
                     if view != (locked_lon, locked_lat, locked_zoom):
                         await _ease_view(view, (locked_lon, locked_lat, locked_zoom), tuning.STOPBY_CAMERA_MOVE_SECONDS)
 
@@ -1773,6 +1844,27 @@ async def _record_leg(
                 def _voice_from(offset_seconds: float) -> None:
                     voice["piece"], voice["start"] = frame_state["cuts"], frame_state["clip_start"] + offset_seconds * fps
 
+                def _card_hold(planned_s, audio_seconds, pop_s: float = 0.3):
+                    """The small card's hold before it grows fullscreen: the planned wait, or longer while this
+                    piece's voice is still talking (the trigger frame or a one-pace leg can arrive before it ends)."""
+                    left = 0.0
+                    if voice["start"] is not None and audio_seconds:
+                        left = (voice["start"] + float(audio_seconds) * fps - frame_state["count"]) / fps - pop_s
+                    hold = max(float(planned_s or 0.0), left)
+                    return hold if hold > 0 else (None if planned_s is None else 0.0)
+
+                async def _open_piece() -> None:
+                    """A new piece's opening is over: hold its last frame until the piece's {start}, as the leg's
+                    first piece does, and record the voice delay beside the clip."""
+                    lead = (frame_state["count"] - frame_state["clip_start"]) / fps
+                    cue = _piece_lead(piece_start_cues, frame_state["cuts"])
+                    if lead < cue and frame_state["last"] is not None:
+                        for _ in range(int(round((cue - lead) * fps))):
+                            await _write_frame(frame_state["last"])
+                    write_audio_offset(proc_ref["real_path"], max(0.0, lead - cue))
+                    _voice_from(max(0.0, lead - cue))
+                    logger.info("Piece opening %.2fs, {start} cue %.2fs -> narration delayed %.2fs.", lead, cue, max(0.0, lead - cue))
+
                 for lm in (landmarks or []):
                     if lm.get("connect_to_route") or not lm.get("popup_image") or lm.get("show_seconds") is not None:
                         continue
@@ -1825,6 +1917,23 @@ async def _record_leg(
                 last_png_bytes = None
                 crashed = False
 
+                # The frame where the walker is nearest each stop-by (never before the one ahead of it): the banner
+                # moves on to the next stretch from there. [] = no switching.
+                banner_pass: List[int] = []
+                if banner_stop_items and _stopby_frames_ok:
+                    for s in stopby_chain:
+                        near = int(((smooth_df["lat"] - s[2]) ** 2 + (smooth_df["lon"] - s[3]) ** 2).to_numpy().argmin())
+                        banner_pass.append(max(near, banner_pass[-1] if banner_pass else 0))
+                # A closed place shows alone ("×name") from the frame the walker is nearest it, for as long as its
+                # card holds (see _quiet_card's hold_seconds): (first frame, last frame, text).
+                closed_spans: List[Tuple[int, int, str]] = []
+                for lm in (landmarks or []):
+                    if lm.get("inaccessible") and lm.get("label") and lm.get("lat") is not None and lm.get("lon") is not None:
+                        near = int(((smooth_df["lat"] - lm["lat"]) ** 2 + (smooth_df["lon"] - lm["lon"]) ** 2).to_numpy().argmin())
+                        hold = float(lm.get("freeze_seconds") or tuning.POPUP_MIN_DISPLAY_SECONDS)
+                        closed_spans.append((near, near + int(round(hold * fps)), f"×{lm['label']}"))
+                banner_stretch = {"key": (0, None)}
+
                 async def _draw_walker_frame(index: int):
                     """Draws/writes exactly one walking frame at `index` and
                     returns its PNG bytes, or None if ffmpeg crashed (sets
@@ -1864,7 +1973,21 @@ async def _record_leg(
                     banner_text, dist_text = _hud_text(
                         dest_label, rem_m, arrive_threshold_m, mode=mode_hud["mode"], labels=hud_labels
                     )
+                    stretch_js = ""
+                    if banner_pass or closed_spans:
+                        passed = bisect.bisect_right(banner_pass, index)
+                        closed_now = next((t for a, b, t in reversed(closed_spans) if a <= index <= b), None)
+                        if (passed, closed_now) != banner_stretch["key"]:
+                            banner_stretch["key"] = (passed, closed_now)
+                            first, last = 0, len(banner_items) - 1
+                            if banner_pass:
+                                first = banner_stop_items[passed - 1] if passed else 0
+                                last = banner_stop_items[passed] if passed < len(banner_stop_items) else last
+                            stretch_js = (
+                                f"if (window.__chainWindow) window.__chainWindow({first}, {last}, {json.dumps(closed_now)});"
+                            )
                     js = f"""
+                    {stretch_js}
                     if (window.deckgl) {{
                         const currentLayers = window.deckgl.props.layers || [];
                         const afterRemoval = currentLayers.filter(l => !['walker-trail', 'walker-dot', 'walker-halo'].includes(l.id));
@@ -1965,14 +2088,13 @@ async def _record_leg(
                             stopby_lm, locked_lon, locked_lat, locked_zoom, output_size, index,
                             pitch=follow_pitch,
                             **_quiet_card(stopby_lm),
-                            small_hold_seconds=wait_s if wait_s > 0 else None,
+                            small_hold_seconds=_card_hold(
+                                wait_s if wait_s > 0 else None, stopby_lm.get("narration_audio_seconds"),
+                            ),
                         )
                         if any(lm.get("pops_after") == stopby_lm.get("waypoint_id") for lm in followers):
                             if frame_state["cuts"] > cuts_before:
-                                write_audio_offset(
-                                    proc_ref["real_path"], (frame_state["count"] - frame_state["clip_start"]) / fps
-                                )
-                                _voice_from((frame_state["count"] - frame_state["clip_start"]) / fps)
+                                await _open_piece()
                             await _play_followers(stopby_lm.get("waypoint_id"), index)
 
                         # Dynamic hop to the NEXT segment's framing for the new clip!
@@ -1993,7 +2115,8 @@ async def _record_leg(
                             next_df_idx = int(sq_dist_next.idxmin())
                             
                             next_fit_lons, next_fit_lats = _framed_points(df_raw, curr_df_idx, next_df_idx + 2, landmarks)
-                            if next_fit_lons:
+                            # Only hop when the next stretch doesn't already fit the current frame.
+                            if next_fit_lons and any(_off_screen_at(lo, la) for lo, la in zip(next_fit_lons, next_fit_lats)):
                                 new_lon, new_lat, new_zoom = _fit_view_for_path(
                                     next_fit_lons, next_fit_lats, output_size,
                                     padding_frac=tuning.LEG_FRAME_PADDING, pitch=follow_pitch,
@@ -2030,10 +2153,7 @@ async def _record_leg(
                                 locked_lon, locked_lat, locked_zoom = new_lon, new_lat, new_zoom
 
                         if frame_state["cuts"] > cuts_before:
-                            piece_lead = (frame_state["count"] - frame_state["clip_start"]) / fps
-                            write_audio_offset(proc_ref["real_path"], piece_lead)
-                            _voice_from(piece_lead)
-                            logger.info("Piece opening %.2fs -> its narration delayed %.2fs.", piece_lead, piece_lead)
+                            await _open_piece()
 
                     while timed_views and timed_views[0]["piece"] < voice["piece"]:
                         timed_views.pop(0)  # its piece is over before the voice got there
@@ -2089,9 +2209,7 @@ async def _record_leg(
                         # It cut: this new piece needs its own voice delay, or the one beside it stays whatever
                         # an earlier render left there (a stale sidecar made that piece's narration start late).
                         if frame_state["cuts"] > cuts_before:
-                            piece_lead = (frame_state["count"] - frame_state["clip_start"]) / fps
-                            write_audio_offset(proc_ref["real_path"], piece_lead)
-                            _voice_from(piece_lead)
+                            await _open_piece()
                         continue
 
                     index += 1
@@ -2109,16 +2227,10 @@ async def _record_leg(
                 # layers first lets the actual pin read clearly in the held
                 # frame instead of looking like an oversized blurry circle.
                 if not crashed and last_png_bytes is not None:
-                    # The HUD card's own remaining-distance/time reads "0 m
-                    # / 0 分" the instant the walker arrives (see
-                    # _remaining_minutes) -- correct while still walking,
-                    # but meaningless as a held arrival frame. Swapped here
-                    # for the LEG'S OWN total distance/time instead, so the
-                    # freeze below reads as "here's the walk you just did"
-                    # rather than a nonsense zero.
-                    total_m = (total_leg_km or 0.0) * 1000.0
-                    total_min = _remaining_minutes(total_m, total_leg_km or 0.0, travel_speed_kmh)
-                    total_dist_text = f"{total_m:.0f} m" if total_m < 1000 else f"{total_m / 1000.0:.1f} km"
+                    # The countdown ends on 0 and holds there. It used to swap in the leg's own total here ("the
+                    # walk you just did"), but under the same label as the countdown it read as the counter
+                    # jumping back to the start (2026-11-21).
+                    total_m, total_min, total_dist_text = 0.0, 0, "0 m"
                     await page.evaluate(
                         """([distText, minText]) => {
                             if (window.deckgl) {
@@ -2206,9 +2318,10 @@ async def _record_leg(
                             dest_popup_image, dest_popup_freeze_seconds,
                             "dest_arrival", marker_px=arrival_marker_px, grow=True,
                             cut_after=True, quick=True,
-                            small_hold_seconds=(
+                            small_hold_seconds=_card_hold(
                                 None if arrival_wait_seconds is None
-                                else max(0.0, arrival_wait_seconds - tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS)
+                                else max(0.0, arrival_wait_seconds - tuning.RESIDENTIAL_ARRIVAL_FREEZE_SECONDS),
+                                dest_popup_narration_seconds,
                             ),
                             pip_end=dest_image_display == "pip",
                             # The camera was just recentered above so the plain "directly above the pin"

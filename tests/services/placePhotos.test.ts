@@ -5,7 +5,9 @@ vi.mock("@tauri-apps/api/app", () => ({ getVersion: () => Promise.resolve("1.0.0
 vi.mock("@tauri-apps/api/path", () => ({ documentDir: () => Promise.resolve("C:/Docs"), join: (...p: string[]) => Promise.resolve(p.join("/")) }));
 vi.mock("@tauri-apps/plugin-fs", () => ({ mkdir: vi.fn(), writeFile: vi.fn() }));
 
-import { fileNameFor, findPlacePhotos, isFreeLicense, JsonGetter, sameName, stripHtml } from "../../src/services/placePhotos";
+import { fetch } from "@tauri-apps/plugin-http";
+import { writeFile } from "@tauri-apps/plugin-fs";
+import { downloadPhotos, fileNameFor, findPlacePhotos, isFreeLicense, JsonGetter, sameName, stripHtml } from "../../src/services/placePhotos";
 
 const page = (title: string, over: Record<string, unknown> = {}, meta: Record<string, string> = {}) => ({
   title,
@@ -46,10 +48,10 @@ describe("helpers", () => {
   });
 
   it("matches an article to a stop by name, either way round, but not unrelated or very short names", () => {
-    expect(sameName("三段壁展望台", "三段壁")).toBe(true);
+    expect(sameName("ä¸‰æ®µå£å±•æœ›å°", "ä¸‰æ®µå£")).toBe(true);
     expect(sameName("Sandanbeki", "Sandanbeki Cliff")).toBe(true);
-    expect(sameName("白浜バスセンター", "千畳敷 (和歌山県)")).toBe(false);
-    expect(sameName("駅", "駅")).toBe(false);
+    expect(sameName("ç™½æµœãƒã‚¹ã‚»ãƒ³ã‚¿ãƒ¼", "åƒç•³æ•· (å’Œæ­Œå±±çœŒ)")).toBe(false);
+    expect(sameName("é§…", "é§…")).toBe(false);
   });
 
   it("accepts free licenses that allow cropping and credit, refuses the rest", () => {
@@ -67,8 +69,8 @@ describe("findPlacePhotos", () => {
   it("puts the article's lead photo first, then nearby photos, with credit and license", async () => {
     const get = wiki({
       articles: [
-        { title: "三段壁", pageimage: "Sandanbeki.jpg" },
-        { title: "千畳敷", pageimage: "Senjojiki.jpg" },
+        { title: "ä¸‰æ®µå£", pageimage: "Sandanbeki.jpg" },
+        { title: "åƒç•³æ•·", pageimage: "Senjojiki.jpg" },
       ],
       geo: [
         { title: "File:Near.jpg", dist: 40 },
@@ -76,7 +78,7 @@ describe("findPlacePhotos", () => {
       ],
       files: [page("File:Sandanbeki.jpg"), page("File:Near.jpg"), page("File:Far.jpg")],
     });
-    const found = await findPlacePhotos({ name: "三段壁展望台", lat: 33.67, lng: 135.33 }, { get, limit: 3 });
+    const found = await findPlacePhotos({ name: "ä¸‰æ®µå£å±•æœ›å°", lat: 33.67, lng: 135.33 }, { get, limit: 3 });
     expect(found.map((f) => f.title)).toEqual(["File:Sandanbeki.jpg", "File:Near.jpg"]); // Far.jpg is 290 m away and has nothing to do with the name
     expect(found[0]).toMatchObject({ author: "Taro", license: "CC BY-SA 4.0", url: expect.stringContaining("commons.wikimedia.org") });
   });
@@ -89,12 +91,12 @@ describe("findPlacePhotos", () => {
   it("ignores an article of the same name that is far away (a namesake in another country)", async () => {
     const get = wiki({
       articles: [
-        { title: "孝子駅 (韓国)", pageimage: "Korea.jpg", coordinates: [{ lat: 37.7, lon: 127.04 }] },
-        { title: "孝子駅", pageimage: "Japan.jpg", coordinates: [{ lat: 34.29, lon: 135.15 }] },
+        { title: "å­å­é§… (éŸ“å›½)", pageimage: "Korea.jpg", coordinates: [{ lat: 37.7, lon: 127.04 }] },
+        { title: "å­å­é§…", pageimage: "Japan.jpg", coordinates: [{ lat: 34.29, lon: 135.15 }] },
       ],
       files: [page("File:Korea.jpg"), page("File:Japan.jpg")],
     });
-    const found = await findPlacePhotos({ name: "孝子駅", lat: 34.29, lng: 135.15 }, { get });
+    const found = await findPlacePhotos({ name: "å­å­é§…", lat: 34.29, lng: 135.15 }, { get });
     expect(found.map((f) => f.title)).toEqual(["File:Japan.jpg"]);
   });
 
@@ -149,7 +151,7 @@ describe("findPlacePhotos", () => {
 
   it("for a known position takes articles from around that position, not from a name search", async () => {
     const get = wiki({ files: [] });
-    await findPlacePhotos({ name: "孝子駅", lat: 34.29, lng: 135.15 }, { get });
+    await findPlacePhotos({ name: "å­å­é§…", lat: 34.29, lng: 135.15 }, { get });
     const wikipedia = get.calls.filter((u) => u.includes("wikipedia.org"));
     expect(wikipedia.length).toBeGreaterThan(0);
     expect(wikipedia.every((u) => u.includes("generator=geosearch"))).toBe(true);
@@ -185,5 +187,17 @@ describe("findPlacePhotos", () => {
       return { query: {} };
     };
     await expect(findPlacePhotos({ name: "Somewhere", lat: 1, lng: 2 }, { get: refuse, signal: stop.signal })).rejects.toThrow();
+  });
+});
+
+describe("downloadPhotos", () => {
+  it("keeps two photos whose titles clean to the same file name apart", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true, arrayBuffer: async () => new ArrayBuffer(1), headers: new Headers({ "content-type": "image/jpeg" }),
+    } as unknown as Response);
+    const photo = (title: string) => ({ title, downloadUrl: `https://x/${title}`, author: "a", license: "CC0", url: "u" }) as any;
+    const got = await downloadPhotos([photo("File:Kada 1.jpg"), photo("File:Kada 1.png")]);
+    expect(new Set(got.map((g) => g.path)).size).toBe(2);
+    expect(new Set(vi.mocked(writeFile).mock.calls.map((c) => c[0])).size).toBe(2);
   });
 });

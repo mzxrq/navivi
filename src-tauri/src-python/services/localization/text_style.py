@@ -17,6 +17,7 @@ RGB = Tuple[int, int, int]
 
 # libass scales .srt style values from a 288-line script to the frame height.
 _SRT_UNITS_PER_PX = 288 / 1080
+_GLOW_MIN_PX = 1.0  # TextStyle.shadow's default: an untouched style keeps its plain 1 px drop shadow
 
 
 def parse_color(value: Any) -> Optional[Tuple[RGB, Optional[float]]]:
@@ -150,6 +151,15 @@ def wrap_text(text: str, max_chars: int) -> str:
     return "\n".join(part for line in text.split("\n") for part in wrap_line(line, max_chars))
 
 
+def glow_shape(feather: float) -> Tuple[float, float]:
+    """(border, blur) as fractions of the glow size for a feather percent; mirrors glowShape in textStyle.ts."""
+    k = max(0.0, min(1.0, feather / 100))
+    if k <= 0.5:
+        return 1 - k, k / 2
+    k -= 0.5
+    return 0.5 - k / 3, 0.25 + k * 7 / 6
+
+
 @dataclass(frozen=True)
 class TextStyle:
     font_family: str
@@ -163,6 +173,7 @@ class TextStyle:
     outline_color: RGB = (0, 0, 0)
     shadow: float = 1.0
     shadow_color: RGB = (0, 0, 0)
+    shadow_feather: float = 50.0  # glow only: % of the halo that is blurred rather than solid (50 = the old look)
     letter_spacing: float = 0.0
     # Captions only: a box behind the text instead of an outline.
     background: bool = False
@@ -203,7 +214,8 @@ class TextStyle:
             ("background_opacity", 0.0, 1.0),
             ("background_radius", 0.0, 100.0),
             ("outline_width", 0.0, 20.0),
-            ("shadow", 0.0, 20.0),
+            ("shadow", 0.0, 60.0),
+            ("shadow_feather", 0.0, 100.0),
             ("letter_spacing", -20.0, 50.0),
             ("margin_v", 0.0, 400.0),
         ):
@@ -220,15 +232,41 @@ class TextStyle:
             changes["max_chars_per_line"] = int(max_chars)
         return replace(self, **changes)
 
-    def to_ass_tags(self) -> str:
-        """Inline override tags for an .ass event (intro text)."""
+    def has_glow(self) -> bool:
+        """The editor draws the shadow as a blurred halo around the text (CSS `text-shadow: 0 0 blur`), but
+        libass's \\shad is a hard offset copy, so a shadow wider than the untouched default's _GLOW_MIN_PX is
+        exported as a glow layer under the text instead (to_glow_tags; the text itself then takes \\shad0)."""
+        return not self.background and self.shadow > _GLOW_MIN_PX
+
+    def _font_tags(self) -> str:
         return (
             f"\\fn{self.font_family}\\fs{self.font_size}"
             f"\\b{int(self.bold)}\\i{int(self.italic)}\\u{int(self.underline)}"
+        )
+
+    def to_ass_tags(self) -> str:
+        """Inline override tags for an .ass event (intro text)."""
+        return (
+            f"{self._font_tags()}"
             f"\\c&H{_bgr(self.color)}&\\3c&H{_bgr(self.outline_color)}&"
             f"\\4c&H{_bgr(self.shadow_color)}&"
             f"\\alpha&H{255 - int(round(self.opacity * 255)):02X}&"
-            f"\\bord{self.outline_width:g}\\shad{self.shadow:g}\\fsp{self.letter_spacing:g}"
+            f"\\bord{self.outline_width:g}\\shad{0 if self.has_glow() else self.shadow:g}\\fsp{self.letter_spacing:g}"
+        )
+
+    def to_glow_tags(self) -> str:
+        """Override tags for the glow event drawn just under the text: the same line in the shadow colour, its
+        border grown and blurred. `shadow_feather` 0 / 50 / 100 % gives (border, blur) = (r, 0) / (r/2, r/4, the
+        old fixed look) / (r/3, 5r/6), straight lines between. The border never goes to 0: with no border libass
+        blurs the glyph fill instead, which hides under the text and leaves almost no halo."""
+        glow = f"&H{_bgr(self.shadow_color)}&"
+        border_k, blur_k = glow_shape(self.shadow_feather)
+        border = self.outline_width + self.shadow * border_k
+        blur = self.shadow * blur_k
+        return (
+            f"{self._font_tags()}\\c{glow}\\3c{glow}"
+            f"\\alpha&H{255 - int(round(self.opacity * 255)):02X}&"
+            f"\\bord{round(border, 2):g}\\shad0\\blur{round(blur, 2):g}\\fsp{self.letter_spacing:g}"
         )
 
     def with_installed_font(self, fallback: str) -> "TextStyle":

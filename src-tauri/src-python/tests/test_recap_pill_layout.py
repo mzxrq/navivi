@@ -8,7 +8,7 @@ from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
 
 
 class _Layout(_PopupMixin, _PinMixin):
-    pass
+    _is_loop_route = False  # the real renderer reads it from the project (base.py)
 
 
 def _layout():

@@ -409,9 +409,10 @@ def _zoom_push_view_states(push: _ZoomPush, num_frames: int):
 
 def _capture_zoom_raw(
     base_view: Tuple[float, float, float], output_size: Tuple[int, int],
-    view_states: List[Tuple[float, float, float]], map_style: str, mapbox_key: str | None,
+    view_states: List[Tuple[float, float, float]], map_style: str, mapbox_key: str | None, sink=None,
 ) -> List[bytes]:
-    """Renders one deck.gl screenshot (PNG bytes) per view state."""
+    """Renders one deck.gl screenshot (PNG bytes) per view state. `sink` (anything with `.append`) takes each
+    one as it is shot instead of a list holding them all (a long run of 2x captures runs to gigabytes)."""
     base_lon, base_lat, base_zoom = base_view
     view_state = pdk.ViewState(
         longitude=base_lon, latitude=base_lat, zoom=base_zoom, pitch=0, bearing=0,
@@ -425,7 +426,7 @@ def _capture_zoom_raw(
         views=[pdk.View(type="MapView", controller=False)],
     )
 
-    raw_frames: List[bytes] = []
+    raw_frames = sink if sink is not None else []
     with tempfile.TemporaryDirectory(prefix="navivi_pydeck_zoom_") as html_dir:
         html_path = os.path.join(html_dir, "zoom.html")
         deck.to_html(html_path)

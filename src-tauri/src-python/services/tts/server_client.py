@@ -289,7 +289,7 @@ class _LocalServerClient:
         """Explicitly terminates the TTS server now, rather than waiting on
         its idle timeout. For a single process/job that runs TTS generation
         fully up front and then a separate GPU-heavy step afterward (see
-        main.py's test_all) — the 10-minute idle timeout was sized for gaps
+        the full pipeline) — the 10-minute idle timeout was sized for gaps
         BETWEEN waypoints within one job, not for handing the GPU off to a
         different consumer right after TTS finishes, so left alone the
         server stays fully loaded and fights that next step for VRAM for

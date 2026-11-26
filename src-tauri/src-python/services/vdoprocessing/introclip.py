@@ -413,6 +413,8 @@ def title_events(
         )
         line_sec = max(0.0, duration_sec - 2 * delay)
         tags = _line_tags(anim, an, cx, y, int(round(line_sec * 1000)), line_sec)
+        if style.has_glow():  # first, so it sits under the line (same layer: file order)
+            events.append((start_sec + delay, end_sec - delay, f"{{{tags}{style.to_glow_tags()}}}{text}"))
         events.append((start_sec + delay, end_sec - delay, f"{{{tags}{style.to_ass_tags()}}}{text}"))
     return events
 

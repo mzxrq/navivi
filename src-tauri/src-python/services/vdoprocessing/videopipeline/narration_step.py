@@ -12,6 +12,7 @@ after TTS the second each cue is spoken is recorded from the real audio
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -359,13 +360,28 @@ def pace_spans(times: dict, piece: int) -> list:
 
 def at_spans(times: dict, piece: int) -> list:
     """[(piece, voice seconds, turn number N)] from a narration's {at N} cues (at1:N, at2:N, ...): the walker
-    must be at the leg's Nth turn (leg_script.leg_turns, 1-indexed) when the voice reaches each one."""
+    must be at the leg's Nth turn (leg_script.leg_turns, 1-indexed) when the voice reaches each one. {at N%}
+    keeps N as the string "N%": N% of the piece's distance."""
     out = []
     for tag, seconds in times.items():
         name, sep, n = tag.partition(":")
-        if sep and name[:2] == "at" and name[2:].isdigit() and n.isdigit():
+        if not (sep and name[:2] == "at" and name[2:].isdigit()):
+            continue
+        if n.isdigit():
             out.append((piece, float(seconds), int(n)))
+        elif re.fullmatch(r"\d+(?:\.\d+)?%", n):
+            out.append((piece, float(seconds), n))
     return out
+
+
+def _mostly_slow(cues: dict, origin: float, deadline: float) -> bool:
+    """{slow} spans cover at least 90% of the walk (voice seconds origin … origin + deadline)."""
+    end = origin + deadline
+    covered = sum(
+        max(0.0, min(b, end) - max(a, origin))
+        for _, kind, a, b in pace_spans(cues, 0) if kind == "slow"
+    )
+    return deadline > 0 and covered >= 0.9 * deadline
 
 
 def leg_walk_plan(
@@ -406,6 +422,8 @@ def leg_walk_plan(
     walk_on = max((float(k.split(":", 1)[1]) for k in cues if k.startswith("walkon:")), default=0.0)
     if walk_on > 0:  # {walk on N}: arrives N s after the voice ends, the last stretch on the silent map
         deadline = voice + walk_on
+    elif _mostly_slow(cues, origin, deadline):
+        max_wait_seconds = 0.0  # a {slow} over the whole walk has nothing to trade against: spend the early wait walking
     if natural_seconds is None:
         walk = deadline
     else:

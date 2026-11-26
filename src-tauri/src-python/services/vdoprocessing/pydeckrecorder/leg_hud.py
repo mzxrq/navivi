@@ -23,6 +23,8 @@ _HUD_CSS_TEMPLATE = string.Template("""
     padding: 14px 34px; border-radius: 14px; box-shadow: 0 4px 14px rgba(0,0,0,0.35);
     white-space: nowrap; z-index: 1000;
 }
+/* Until its first text is set (the opening photo plays first) the banner was an empty red bar. */
+#hud-banner:has(#hud-banner-text:empty) { display: none; }
 #hud-banner .icon { font-size: 28px; line-height: 1; }
 #hud-banner .icon svg { display: inline-block; width: 0.8em; height: 0.8em; vertical-align: -0.1em; }
 #hud-chain {
@@ -44,6 +46,8 @@ _HUD_CSS_TEMPLATE = string.Template("""
     background: $pill_text; color: $pill_bg; font-size: 0.62em; font-weight: 900;
     line-height: 1; text-align: center; -webkit-text-stroke: 0.4px $pill_bg;
 }
+/* A stop-by between the numbered places: same line, lighter and smaller so it reads as a pass-by. */
+#hud-chain .place.via { font-weight: 500; font-size: 0.8em; opacity: 0.85; }
 /* Small standalone pill, centered at the very top: which numbered stop this leg is walking toward. */
 #hud-stopcount {
     position: fixed; top: 40px; left: 50%; transform: translateX(-50%); z-index: 1000; overflow: hidden;

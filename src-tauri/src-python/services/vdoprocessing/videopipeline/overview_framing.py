@@ -82,6 +82,24 @@ def _reserve_overview_bands(
     }
 
 
+def _widen(bbox: dict, factor: float) -> dict:
+    """`bbox` scaled by `factor` about its centre in Web Mercator, so the old box is the middle of the new
+    frame (the course video's opening zoom crops back to it)."""
+    R = 6378137.0
+
+    def merc_y(lat):
+        return math.log(math.tan(math.pi / 4 + math.radians(lat) / 2)) * R
+
+    def merc_lat(y):
+        return math.degrees(2 * math.atan(math.exp(y / R)) - math.pi / 2)
+
+    y0, y1 = merc_y(bbox["min_lat"]), merc_y(bbox["max_lat"])
+    cy, half_y = (y0 + y1) / 2, (y1 - y0) * factor / 2
+    cx, half_x = (bbox["min_lon"] + bbox["max_lon"]) / 2, (bbox["max_lon"] - bbox["min_lon"]) * factor / 2
+    return {"min_lat": merc_lat(cy - half_y), "max_lat": merc_lat(cy + half_y),
+            "min_lon": cx - half_x, "max_lon": cx + half_x}
+
+
 _MAP_LANGUAGE_STAMP = ".map_language"
 
 
@@ -127,6 +145,7 @@ def overview_bounding_box(fetcher, route_df: pd.DataFrame, project_config: dict)
             OVERVIEW_FRAME_SIZE[1] * tuning.COURSE_TOP_BAND_FRACTION,
             OVERVIEW_FRAME_SIZE[1] * tuning.COURSE_BOTTOM_BAND_FRACTION,
         )
+        bbox = _widen(bbox, tuning.COURSE_OPEN_ZOOM)
     else:
         bbox = _reserve_overview_bands(
             bbox, OVERVIEW_FRAME_SIZE,

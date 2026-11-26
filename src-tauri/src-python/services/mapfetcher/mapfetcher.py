@@ -380,6 +380,10 @@ class MapFetcher:
         if needs_gl_labels(settings, lang, bool(resolve_mapbox_token(settings))):
             background = "pydeck"
             logger.info("Map language %s: drawing the overview map through the GL page so its labels follow it.", lang)
+        # The course overview zooms in on the GL map (course._course_gl_frames): its whole-map frame must be that
+        # same map, or each zoom would switch map style.
+        if settings.get("overview_style") == "course" and resolve_mapbox_token(settings):
+            background = "pydeck"
         if background == "pydeck":
             from services.mapfetcher.pydeck_overview import fetch_overview_image_pydeck
 

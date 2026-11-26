@@ -174,7 +174,7 @@ class _DrawingMixin:
             radius, head_cy = self._draw_circle_pin(frame, cx, cy, radius, pin_color, split_color)
         else:
             self._draw_teardrop_pin(frame, cx, cy, head_cy, radius, pin_color, split_color)
-        self._draw_pin_label(frame, cx, head_cy, radius, number)
+        self._draw_pin_label(frame, cx, head_cy, radius, number, pin_color)
 
     @staticmethod
     def _draw_circle_pin(
@@ -226,8 +226,11 @@ class _DrawingMixin:
                 pin_color, cv2.LINE_AA,
             )
 
-    def _draw_pin_label(self, frame: np.ndarray, cx: int, head_cy: int, radius: int, number: Optional[Any]) -> None:
-        """The white centre, with `number` in dark text inside it when given."""
+    def _draw_pin_label(
+        self, frame: np.ndarray, cx: int, head_cy: int, radius: int, number: Optional[Any], text_color=None,
+    ) -> None:
+        """The white centre, with `number` inside it when given, in `text_color` (the pin's own color: a blue
+        pin's number is blue, a red one's red; tuning.PIN_NUMBER_TEXT_COLOR when none is given)."""
         # White center — always drawn (not just when there's no number) so
         # every numbered pin gets the same dark-on-white number. Smaller
         # than before (0.65 vs 0.8) so more of the pin's own color shows
@@ -269,7 +272,7 @@ class _DrawingMixin:
             (text_x, text_y),
             self.font_cv,
             font_scale,
-            tuning.PIN_NUMBER_TEXT_COLOR,
+            tuple(int(c) for c in text_color[:3]) if text_color is not None else tuning.PIN_NUMBER_TEXT_COLOR,
             thickness,
             cv2.LINE_AA,
         )

@@ -16,7 +16,12 @@ export type SidecarReply<T> = ({ success: true } & T) | { success: false; error:
 
 const CANCELLED = /process was cancelled/i;
 
-const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
+// A failed run's text is main.py's JSON result (see failure_text in lib.rs): its "error" is the message to show.
+const messageOf = (e: unknown) => {
+  const text = e instanceof Error ? e.message : String(e);
+  const reply = parseReply<object>(text);
+  return !reply.success && !reply.error.startsWith("The media pipeline returned an unexpected reply") ? reply.error : text;
+};
 
 // main.py ends stdout with one JSON result, on one line or indented over several (project modes); anything before it is noise.
 export function parseReply<T>(stdout: string): SidecarReply<T> {
@@ -44,7 +49,7 @@ export const sidecarBusy = () => inFlight > 0;
 export function runStage(configPath: string, mode: string): Promise<string> {
   return invoke<string>("run_python_blueprint", { action: configPath, payload: mode }).catch((e) => {
     if (isSetupRequired(e)) announceSetupRequired();
-    throw e;
+    throw messageOf(e);
   });
 }
 

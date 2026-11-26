@@ -1,9 +1,9 @@
 import { join } from "@tauri-apps/api/path";
-import { exists, readDir, readTextFile, remove, writeTextFile } from "@tauri-apps/plugin-fs";
+import { exists, readDir, readTextFile, remove } from "@tauri-apps/plugin-fs";
 import { fileSystem } from "../config/constants";
 import type { RecentProjects } from "../types";
 import { aiEngine, type AiEngine } from "./ai/engine";
-import { duplicateProjectFolder, loadProjectData } from "./fileSystem";
+import { duplicateProjectFolder, loadProjectData, writeFileSafely } from "./fileSystem";
 import { completeText } from "./ollamaApi";
 import { syncProjectOnOpen } from "./projectStore";
 
@@ -206,7 +206,7 @@ export async function createLanguageVersion(input: {
     const next = applyTranslations(config, { ...namesDone.done, ...scriptsDone.done }, target, name);
     onProgress?.({ step: "files", done: 0, total: 1 });
     await clearGenerated(dir);
-    await writeTextFile(configPath, JSON.stringify(next, null, 2));
+    await writeFileSafely(configPath, JSON.stringify(next, null, 2));
 
     const loaded = await loadProjectData(dir);
     if (!loaded) throw new Error("The new version could not be opened.");
