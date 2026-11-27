@@ -144,51 +144,66 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
 - `services/config/job_config.py` — `JobConfigManager` is a **process-wide singleton** (tests reset it in `conftest.py`).
 - `services/tuning.py` — central hand-tuned constants (speeds, colors, timings, GPU cooldown, FFmpeg threads).
   Per-project overrides come from `job_config.json` `settings.*`; tuning.py holds fallback defaults only.
-- Stop numbering (S, 1, 2 … E) is one rule, `route_inputs.stop_is_numbered` + `returns_to`: a stop-by and a stop skipped in
-  video export show "・", and a return stop ("Add return stop", a copy at the same spot) shows again the number of the stop it
-  comes back to and has no number of its own (in the course overview, saying `{n}` a second time times it: cue `n#2`, `cues.py`). Six places count it for their own data shape — `overview_pin_glyphs` (legs/3D),
-  `spatial_renderer/overview.py`'s `order`, `waypoints.py`'s `_numbers`, `route2vdo`'s pydeck pins, `outrocard._route_badges`
+- Stop numbering (S, 1, 2 … E) is one rule, `route_inputs.stop_is_numbered` + `returns_to`: in the video a stop-by and a stop
+  skipped in export show "+1", "+2" … (`route_inputs.stopby_labels`; "・" only for one with no number; test a glyph with
+  `is_stopby_label`, never `int()`), and a return stop ("Add return stop", a copy at the same spot) shows again the number of the stop it
+  comes back to and has no number of its own (in the course overview, saying `{n}` a second time times it: cue `n#2`, `cues.py`). Five places count it for their own data shape — `overview_pin_glyphs` (legs),
+  `spatial_renderer/overview.py`'s `order`, `waypoints.py`'s `_numbers`, `outrocard._route_badges`
   and `overview_script.visible_waypoints` — so a change has to go through all of them (`tests/test_stop_numbering.py`).
   The map editor's own `src/utils/stopLabel.ts` still numbers a return stop separately (it also names asset files).
-- The overview recap's pill badges (`spatial_renderer/popups.py::_layout_recap_cards`, `tests/test_recap_pill_layout.py`):
-  **no leader lines** (`leaders=False` from the walk/map recap — the badge's number and its pin's are the tie), so the
-  badges pack at the tight `_RECAP_CARD_GAP` and none of the route-crossing or line-untangling work runs. Every
-  video style arranges pill badges this way, the course one included (`course.py`, whose badges stay up for the
-  whole video; `_course_hud` reads `suppress_leader_line`). Only a `pop_up_card` recap still passes leaders — a wide
-  photo card carries no number, so the line is all that ties it to a pin — and that is the last user of `_RECAP_BADGE_GAP`.
-  The course style uses the walk recap's clear-space pull (its old 4x pull sent island badges across the frame,
-  2026-11-24); numbered stops are never locked into one cluster block (each takes its nearest cell, the run ordering
-  keeps S, 1, 2 …), and a band of lattice columns slides its rows off the route and pins together
-  (`_slots_slide_bands`). `shoot.py` previews the COURSE last frame for a course project. While the trace passes a stop, its photo
-  card pops beside the pin first and shrinks into the badge (`course._course_pass_cards`, `tuning.COURSE_PASS_CARD_*`),
-  its progress rail shrinks to the room right of the stop-by / closed notices as they come up (`_course_rail_left`),
-  and its summary is always the discs-and-chips `create_summary_card_circles`, whatever `summary_card_style` says.
-  The start's badge claims the free cell nearest its pin before the matching (`_recap_cards_lock_start`) and keeps it
-  through the run ordering: on a loop it also marks the end, and a crowded corner once sent it across the frame.
-  The walk overview draws no preview badge for the stop ahead (removed 2026-11-21); the HUD's "next" line remains.
-  A badge pays for the route it buries (`_recap_cards_route_cover`, `_ROUTE_COVER_PULL_PX`, per badge WIDTH of line)
-  and far more for a pin head it hides (`_recap_cards_pin_cover`), even beside its own pin, so a dense loop's badges go
-  out over open water; one left more than `_BADGE_FAR_PX` from its pin sets `badge_far` and `_draw_recap_dot` then draws
-  the numbered pin (the course overview always draws numbered pins). A cluster's head is picked by the pins its whole block would hide. The course passes its drawn path
+- Overview cards (all styles, `docs/OVERVIEW_RULES.md` 8.18, `tests/test_card_layout.py`,
+  `tests/test_card_circles.py`): one card per place with a photo, one spot and one size for the whole video, the
+  recap / last frame included. `popups._layout_ring_cards` lays them all out before the first frame: on a circle round
+  each group of pins (`card_circles.circle_layout`, a binary search for the largest size with a round, crossing-free
+  arrangement; counts bound the search, never time), falling back to the nearest-free-spot search
+  (`_layout_ring_search`) for groups too big for a circle. walk/map stamp `stay_box` / `stay_scale`
+  (`overview._ov_layout_stay_cards`), course in `course._course_cards`. A place without a photo shows its pin only
+  (`no_card`). Route map's big arriving photo (`popup["big"]`) becomes the standing card when it closes.
+  Leaders are straight, pin to the nearest point of the rounded card (`leader_straight`, set in `_ov_style_badges`);
+  the course cuts them under the card as DRAWN (`popup_card_geometry`, not the layout footprint). The fallback search
+  keeps cards off earlier leaders and `_ring_untangle` re-deals the spots among the pins.
+  `settings.overview_cards_stay` off closes cards during the walk (course: when the next one pops, up at least
+  `tuning.COURSE_CARD_MIN_SECONDS`); the recap / last map shows them at the same spots.
+  There is no pill badge recap setting any more (`overview_recap_style` removed).
+- Course overview extras: its progress rail shrinks to the room right of the stop-by / closed notices as they come up
+  (`_course_rail_left`), and its summary is always the discs-and-chips `create_summary_card_circles`, whatever
+  `summary_card_style` says. The walk overview draws no preview badge for the stop ahead (removed 2026-11-21); the
+  top bar is the same in every style (`render_overview_hud`: title left; remaining over whole route right; no
+  headline, "A → B", mode times or stop counter, 8.14). `shoot.py` previews the course last frame for a course project.
+- Pill badges (`popups.py::_layout_recap_cards`, `tests/test_recap_pill_layout.py`): used by the ending clip
+  (`finale_step._recap_badges`) and by a recap whose storyboard keeps no cards up. **No leader lines**
+  (`leaders=False`), so the badges pack at `_RECAP_BADGE_TOUCH_GAP`. Numbered stops are never locked into one cluster
+  block (each takes its nearest cell, the run ordering keeps S, 1, 2 …), a band of lattice columns slides its rows off
+  the route and pins together (`_slots_slide_bands`), and the start's badge claims the free cell nearest its pin
+  before the matching (`_recap_cards_lock_start`). A badge pays for the route it buries (`_recap_cards_route_cover`,
+  `_ROUTE_COVER_PULL_PX`, per badge WIDTH of line) and far more for a pin head it hides (`_recap_cards_pin_cover`);
+  one left more than `_BADGE_FAR_PX` from its pin sets `badge_far` and `_draw_recap_dot` then draws the numbered pin.
+  A cluster's head is picked by the pins its whole block would hide.
+- The course overview passes its drawn path to the layout
   resampled every 6 px (a ferry leg's raw points are only its ends). The course map is fetched
   `tuning.COURSE_OPEN_ZOOM` wider (`overview_framing._widen`) and the video eases out to it (`course._open_zoom`). After the trace,
   stop-bys and closed places come up one by one across their sentence (`_set_reveal_times`, with a ring `_draw_ripple`),
-  the walked stops' badges fade to `_BADGE_DIM`, and the tagline showing at `trace_end` holds (`tagline_at(hold_from=)`).
+  and the walked stops' cards fade to `_BADGE_DIM`.
   The GL ending stays a hard cut (a crossfade was tried 2026-11-21; the user preferred the cut).
-  Camera moves are real map zooms: `course.zoom_view(t)` gives the view (the opening ease-out, then `dense_zooms`:
-  runs of 3+ stops whose stretch is `COURSE_DENSE_ZOOM_MIN`x smaller than the whole ROUTE, not the frame), the GL map
-  is captured once per distinct view (`_course_gl_frames`, `gl_view_state`, frames saved to a temp dir as they come),
-  and `_course_zoomed_map` redraws route, trace, pins, walker and photo cards on it at their zoomed places but normal
-  size (badges fade out). A passing photo card takes one of the eight spots just outside its pin's teardrop
-  (`_pass_card_spots`), clear of panels, cards still up and EVERY pin (its own too) first; while zoomed it is placed
-  again (`_zoom_card_place` → `_zoom_place_group`, all of a zoom's cards at once and kept for the whole zoom): out
-  along the line from the middle of the pins in view through its own pin, nearest spot clear of panels, cards, pins
-  and route, all at ONE size, shrinking (to `COURSE_ZOOM_CARD_MIN_SCALE`) only if some card finds nothing within 150 px; a card still up at the zoom-out is cut there (`cut_cards_at_zoom_out`), and the
-  trace never waits for cards. Cards up together share one size
-  (`pass_crowd_scales`, `COURSE_PASS_CARD_CROWD_MIN_SCALE`) and stay at least `COURSE_PASS_CARD_MIN_SECONDS`. With a Mapbox key the course background is always the GL map
-  (`mapfetcher.fetch_image`) so the styles match; without one, or if the capture fails, the base frame is cropped. The ending reads
-  job_config.json from the folders ABOVE the output dir, so a test render outside the project silently has no ending.
-  One badge per PLACE (a return stop shares the first visit's, `_recap_popup_set`), all on one frame-wide lattice
+  Camera moves are real map zooms, in every style (`spatial_renderer/cluster_zoom.py`, 8.9): a cluster is the
+  storyboard's `cluster_min_stops` (2) or more stops in route order, each within one pin width
+  (`CLUSTER_PIN_WIDTH_RADII` marker radii) of the next on screen (`cluster_views`; true positions, not decluttered
+  pins). The course times it by its trace (`course.zoom_view(t)`: the opening ease-out, then `dense_zooms`, held until
+  the trace leaves); walk and map by the walker (`WalkCamera`, counted in written frames so a wait on the voice stays
+  in; `_NoticeWriter` swaps in `_walk_zoomed_frame`, and the walk ends back on the whole map). The GL map is captured
+  once per distinct view (`_gl_view_frames`, `gl_view_state`, frames saved to a temp dir as they come), and
+  `_course_zoomed_map` / `_walk_zoomed_frame` redraw route, pins, walker and cards on it at their zoomed places but
+  normal size. A zoomed frame redraws the Route map's card, so it restores `graphics._slide_frames` (one count a frame), and
+  that big card fades to its own zoomed spot too (`_walk_zoom_big_spot`; left in place, the pins moved under it).
+  A card up during a zoom keeps its size: it fades out at its spot and in at the nearest clear one by its zoomed pin,
+  and back (`popups.zoom_card_alphas`; never sliding). A card whose pin is out of view is hidden meanwhile
+  (`_place_zoom_cards`, circle or ring search, all in-view cards at once, kept for the zoom). The overview background
+  is always the straight-down GL map in every style (`mapfetcher.fetch_image`, GPU; no key or a failed capture is an
+  error, no raster fallback; `raster=True` only for `recap_frame` and `test_overview_map`). If only the zoom capture
+  fails, the base map is cropped and the cards redrawn on it. The flat pydeck overview (`use_pydeck_overview`) is
+  removed. The ending reads job_config.json from the
+  folders ABOVE the output dir, so a test render outside the project silently has no ending.
+- Pill badge lattice detail: one badge per PLACE (a return stop shares the first visit's, `_recap_popup_set`), all on one frame-wide lattice
   (`_recap_card_slots`, cells offered nearest-pin-first) so they line up in rows and columns and can never overlap.
   A badge within `_BADGE_BESIDE_PIN` of its own pin may rest on the route line and its leader is not charged the
   route-crossing penalty — every stop sits ON the route, so the old keep-off rule left no cell beside any pin and each

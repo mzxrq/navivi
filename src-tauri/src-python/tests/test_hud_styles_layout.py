@@ -1,6 +1,7 @@
 """Themed cards as drop-in style files, and the hud.json layout."""
 
 import json
+import re
 from types import SimpleNamespace
 
 import numpy as np
@@ -80,7 +81,7 @@ def test_a_strip_style_without_its_progress_line_is_not_used(mine):
 def test_a_style_can_use_the_built_in_artwork(mine):
     _style(mine, "title", "boat.html", '<div class="card"><svg>{% include "parts/ferry.svg" %}</svg></div>')
 
-    assert 'fill="#fff"' in _title("boat")
+    assert re.search(r"<(path|rect|polygon|circle)\b", _title("boat"))  # whatever the boat looks like
 
 
 def test_a_style_runs_no_script_and_loads_nothing_but_the_fonts(mine):
@@ -195,11 +196,11 @@ def test_the_keep_clear_boxes_follow_the_cards_wherever_they_are_put():
 def test_a_themed_frame_draws_the_cards_and_the_progress():
     pytest.importorskip("playwright")
     panels = _panels({"theme": "mine", "title": "t"})
-    timing = SimpleNamespace(stats_at=5.0, extras_at=6.0, closed_at=7.0, closed=[{}], trace_end=9.0)
+    timing = SimpleNamespace(stats_at=5.0, extras_at=6.0, closed_at=7.0, closed=[{}], stopbys=[{}], trace_end=9.0)
     blank = np.full((720, 1280, 3), 128, np.uint8)
 
-    early = panels.compose(blank.copy(), 0, 1.0, 20.0, "walking", timing)
-    late = panels.compose(blank.copy(), 300, 10.0, 90.0, "ferry", timing)
+    early = panels.compose(blank.copy(), 0, 1.0, 20.0, "walking", timing, 0.6)
+    late = panels.compose(blank.copy(), 300, 10.0, 90.0, "ferry", timing, 0.6)
 
     left, top, right, bottom = (int(v) for v in panels.cards["modes"].box)
     inside = (slice(top + 5, bottom - 5), slice(left + 5, right - 5))

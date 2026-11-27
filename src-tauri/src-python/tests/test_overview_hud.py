@@ -68,7 +68,7 @@ def test_the_course_top_bar_counts_down_with_the_trace():
     course = _CourseOverviewMixin()
     course.graphics = SimpleNamespace(render_overview_hud=lambda frame, **kwargs: seen.update(kwargs) or frame)
     panels = SimpleNamespace(title="Trip", total_km=20.0, total_seconds=1000.0, margin=32, rail_marks=[],
-                             summary_card=None, closed=[])
+                             summary_card=None, closed=[], themed=None)
     timing = SimpleNamespace(route_at=0.0, extras_at=None, closed=[], closed_at=None)
     trace = SimpleNamespace(modes=["walking"], cum=np.array([0.0, 200.0]))
     # the rail's own total is a hair longer than the traced path: the bar once ended on "0 m ・ 1 s left"

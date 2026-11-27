@@ -67,6 +67,18 @@ def _blend_card(out: np.ndarray, card_bgra: np.ndarray, x0: int, y0: int, alpha:
     ).astype(np.uint8)
 
 
+def rail_left(margin: int, notices: Sequence[Tuple[int, float]]) -> Optional[int]:
+    """Where the progress rail starts: None (the margin) with no notice up, else NOTICE_RAIL_GAP right of the last
+    one. `notices` is (right edge, opacity) left to right; the rail eases over as each fades in or out."""
+    left = None
+    for right, alpha in notices:
+        if alpha <= 0:
+            continue
+        base = margin if left is None else left
+        left = base + (right + tuning.NOTICE_RAIL_GAP - base) * min(1.0, alpha)
+    return None if left is None else int(round(left))
+
+
 class _CardMixin:
     @staticmethod
     def _draw_clock_icon(draw: ImageDraw.ImageDraw, cx: float, cy: float, size: float, color: Tuple):
@@ -196,7 +208,8 @@ class _CardMixin:
              for k in kinds for p in notice[f"{k}_notice_body"].split(chr(10))),
             default=0,
         )
-        body_w = int(min(0.45 * w, max(360 * s, text_x0 + longest + 24 * s)))
+        title_w = int(max(probe.textlength(notice[f"{k}_notice_title"], font=title_font) for k in kinds))
+        body_w = int(min(0.45 * w, max(title_w + 44 * s, text_x0 + longest + 24 * s)))
         text_w = body_w - text_x0 - int(20 * s)
         wrapped: Dict[str, List[str]] = {}
         for k in kinds:
@@ -218,7 +231,6 @@ class _CardMixin:
         body_x0 = margin
         body_y1 = h - margin
         body_y0 = body_y1 - body_h
-        title_w = int(max(probe.textlength(notice[f"{k}_notice_title"], font=title_font) for k in kinds))
         ribbon_h = int(50 * s)
         ribbon_x0 = body_x0 - int(10 * s)
         ribbon_y1 = body_y0 + int(12 * s)  # overlaps the body card's top edge
@@ -318,7 +330,7 @@ class _CardMixin:
         for bg in (0, 255):
             plate = np.full((y1 - y0, x1 - x0, 3), bg, np.uint8)
             self.draw_marker(plate, int(cx) - x0, int(cy + icon_d / 2 - 2 * s) - y0,
-                             number="×" if kind == "closed" else "・",
+                             number="×" if kind == "closed" else "+",  # the stop-by pins' "+N", for all of them
                              color=tuning.CLOSED_PIN_COLOR if kind == "closed" else marker_color,
                              is_circle=False, scale=s * 0.7)
             marks.append(plate.astype(np.float32))
@@ -1350,81 +1362,6 @@ class _CardMixin:
         _blend_card(out, card_bgra, dst_x0, dst_y0, alpha)
         return out
 
-    def _headline_run(self, measure, font, steps: Sequence[Tuple[str, str]], chip_d: int, gap: float) -> List[Tuple[str, str, float]]:
-        """The headline's stretch as (kind, text, width) pieces: each place behind its glyph chip, arrows between."""
-        arrow = "  →  "
-        run: List[Tuple[str, str, float]] = []  # (kind, text, width)
-        for i, (glyph, name) in enumerate(steps):
-            if i:
-                run.append(("text", arrow, measure.textlength(arrow, font=font)))
-            run.append(("chip", glyph, chip_d + gap / 2))
-            run.append(("text", name, measure.textlength(name, font=font)))
-        return run
-
-    def _render_headline(self, title: str, steps: Sequence[Tuple[str, str]], font_px: int) -> Image.Image:
-        """The headline panel itself (see route_headline_panel): the title strip, then the stretch's pieces."""
-        scale = 2
-        font = self._card_font(self.FONT_CANDIDATES_BOLD, font_px * scale)
-        pad_x, pad_y, gap = int(20 * scale), int(10 * scale), int(10 * scale)
-        measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-        line_h = sum(font.getmetrics())  # the font's own line box, so a CJK name is not clipped
-        chip_d = int(line_h * 1.15)
-
-        run = self._headline_run(measure, font, steps, chip_d, gap)
-        body_w = sum(w for _, _, w in run)
-        title_w = measure.textlength(title, font=font) if title else 0
-        card_w = int(max(title_w, body_w) + pad_x * 2)
-        strip_h = int(line_h + pad_y * 2) if title else 0
-        card_h = strip_h + (int(max(line_h, chip_d) + pad_y * 2) if run else 0)
-
-        canvas = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(canvas)
-        radius = 10 * scale
-        draw.rounded_rectangle([0, 0, card_w - 1, card_h - 1], radius=radius, fill=self.ui["pill_bg"])
-        if title:
-            draw.rounded_rectangle(
-                [0, 0, card_w - 1, strip_h - 1], radius=radius, fill=self.ui["pill_text"],
-            )
-            draw.text(
-                ((card_w - title_w) / 2, pad_y), title, font=font, fill=self.ui["pill_bg"],
-                anchor="la",
-            )
-        x, y = pad_x, strip_h + pad_y
-        for kind, text, w in run:
-            if kind == "chip":
-                cy = y + (max(line_h, chip_d) - chip_d) / 2
-                draw.ellipse([x, cy, x + chip_d, cy + chip_d], fill=self.ui["pill_text"])
-                gw = measure.textlength(text, font=font)
-                draw.text(
-                    (x + (chip_d - gw) / 2, cy + (chip_d - line_h) / 2), text, font=font,
-                    fill=self.ui["pill_bg"], anchor="la",
-                )
-            else:
-                draw.text((x, y), text, font=font, fill=self.ui["pill_text"], anchor="la")
-            x += w
-        return canvas.resize((max(1, card_w // scale), max(1, card_h // scale)), Image.LANCZOS)
-
-    def route_headline_panel(
-        self, title: str, steps: Sequence[Tuple[str, str]], font_px: int = 22,
-    ) -> Optional[Image.Image]:
-        """The course overview's headline: the area's name on a light strip, and under it
-        the stretch being traced, each place behind the glyph its own pin shows — "S 加太駅
-        → 1 加太春日神社". `steps` is [(glyph, name), …]; with none, the strip alone.
-        Memoized on its text, since it is composited onto every frame."""
-        title, steps = drawable(title or ""), [(g, drawable(n)) for g, n in steps]
-        if not title and not steps:
-            return None
-        cache = self.__dict__.setdefault("_route_headlines", {})
-        key = (title, tuple(steps), font_px, self.theme)
-        if key in cache:
-            return cache[key]
-
-        canvas = self._render_headline(title, steps, font_px)
-        if len(cache) >= self._HUD_PANEL_CACHE_MAX:
-            cache.clear()
-        cache[key] = canvas
-        return canvas
-
     def route_progress_rail_height(self, h: int) -> int:
         """How tall the bottom rail is, so a caller can keep its cards off it."""
         return int(round(h * 0.068))
@@ -1454,6 +1391,8 @@ class _CardMixin:
         if alpha <= 0 or not marks:
             return frame
         h, w = frame.shape[:2]
+        if left is not None and w - margin - left < tuning.RAIL_MIN_WIDTH_PX * h / 1080:
+            return frame  # no room right of the notices for its markers
         rail_h, _, bar_y, bar_h, x0, x1 = self._rail_geometry(w, h, margin, left)
         top = h - margin - rail_h
         y = top + bar_y
@@ -1533,19 +1472,6 @@ class _CardMixin:
         cache[key] = strip
         return strip
 
-    def route_totals_panel(
-        self, distance_km: Optional[float], duration_seconds: Optional[float],
-    ) -> Optional[Image.Image]:
-        """The whole route's distance and time as one corner chip (the HUD panel the walk
-        overview uses for what is LEFT, here for the totals, which never change)."""
-        labels = getattr(self, "summary_card_labels", None) or video_text.current_labels()
-        parts = []
-        if distance_km is not None:
-            parts.append(f"{distance_km * 1000:.0f} m" if distance_km < 1 else f"{distance_km:.1f} km")
-        if duration_seconds is not None:
-            parts.append(self._format_duration_ja(duration_seconds))
-        return self._hud_panel(((labels["separator"].join(parts), 20, False),))
-
     def top_banner_width(self, text: str, font_px: int = 22) -> int:
         """Width in px of the pill render_top_banner draws for `text`."""
         text = drawable(text)
@@ -1609,31 +1535,28 @@ class _CardMixin:
         return out
 
     # --- Overview HUD -------------------------------------------------------
-    # The persistent corner panels of the 2D overview (title + mode times on
-    # the left, what is left of the route + stop counter + next stop on the
-    # right). Accent ground / white text, the same pill as render_top_banner,
-    # so the HUD reads as part of the video's palette rather than a neutral
-    # card. Drawn on every frame, so finished panels are memoized on their
-    # own text (which only changes a few times a second).
+    # The persistent corner panels of the 2D overview, the same in every style:
+    # the project's title on the left; what is left of the route over the whole
+    # route on the right. Accent ground / white text, the same pill as
+    # render_top_banner, so the HUD reads as part of the video's palette rather
+    # than a neutral card. Drawn on every frame, so finished panels are
+    # memoized on their own text (which only changes a few times a second).
     _HUD_PANEL_CACHE_MAX = 512
     _HUD_SCALE = 1.5  # the panels were too small to read on a 1080p frame
 
-    def _hud_panel(
-        self, rows: Tuple[Tuple[str, int, bool], ...], progress: Optional[float] = None,
-    ) -> Optional[Image.Image]:
-        """One rounded accent panel: `rows` of (text, font_px, dim), with an
-        optional progress bar below them (None = no bar)."""
+    def _hud_panel(self, rows: Tuple[Tuple[str, int, bool], ...]) -> Optional[Image.Image]:
+        """One rounded accent panel: `rows` of (text, font_px, dim)."""
         rows = tuple(r for r in rows if r[0])
         if not rows:
             return None
         cache = self.__dict__.setdefault("_hud_panels", {})
-        key = (rows, progress, self.theme)
+        key = (rows, self.theme)
         if key in cache:
             return cache[key]
 
         scale = 2
         k = scale * self._HUD_SCALE
-        pad_x, pad_y, gap, bar_h = int(18 * k), int(11 * k), int(7 * k), int(4 * k)
+        pad_x, pad_y, gap = int(18 * k), int(11 * k), int(7 * k)
         measure = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
         laid = []
         for text, font_px, dim in rows:
@@ -1642,7 +1565,7 @@ class _CardMixin:
         text_w = max(b[2] - b[0] for _, _, b, _ in laid)
         text_h = sum(b[3] - b[1] for _, _, b, _ in laid) + gap * (len(laid) - 1)
         card_w = text_w + pad_x * 2
-        card_h = text_h + pad_y * 2 + ((gap + bar_h) if progress is not None else 0)
+        card_h = text_h + pad_y * 2
 
         canvas = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
         draw = ImageDraw.Draw(canvas)
@@ -1653,60 +1576,48 @@ class _CardMixin:
         for text, font, bbox, dim in laid:
             draw.text((pad_x - bbox[0], y - bbox[1]), text, font=font, fill=dimmed if dim else bright)
             y += bbox[3] - bbox[1] + gap
-        if progress is not None:
-            inner = card_w - pad_x * 2
-            draw.rounded_rectangle(
-                [pad_x, y, pad_x + inner, y + bar_h], radius=bar_h // 2, fill=(*bright[:3], 70),
-            )
-            fill_w = int(inner * min(1.0, max(0.0, progress)))
-            if fill_w > bar_h:
-                draw.rounded_rectangle(
-                    [pad_x, y, pad_x + fill_w, y + bar_h], radius=bar_h // 2, fill=bright,
-                )
         canvas = canvas.resize((max(1, card_w // scale), max(1, card_h // scale)), Image.LANCZOS)
         if len(cache) >= self._HUD_PANEL_CACHE_MAX:
             cache.clear()
         cache[key] = canvas
         return canvas
 
+    def overview_hud_panels(
+        self, frame_w: int, title: Optional[str] = None,
+        remaining_km: Optional[float] = None, remaining_seconds: Optional[float] = None,
+        total_km: Optional[float] = None, total_seconds: Optional[float] = None,
+    ) -> Tuple[Optional[Image.Image], Optional[Image.Image]]:
+        """(left, right) panels of the top bar, None where there is nothing to say. A title too long for
+        OVERVIEW_HUD_TITLE_MAX_WIDTH of the frame is cut short with an ellipsis."""
+        labels = getattr(self, "summary_card_labels", None) or video_text.current_labels()
+        title = (title or "").strip()
+        left = self._hud_panel(((title, 20, False),))
+        keep = len(title)
+        while left is not None and left.size[0] > frame_w * tuning.OVERVIEW_HUD_TITLE_MAX_WIDTH and keep > 1:
+            keep -= 1
+            left = self._hud_panel(((title[:keep].rstrip() + "…", 20, False),))
+
+        rows = []
+        for key, km, seconds in (("overview_remaining_hud", remaining_km, remaining_seconds),
+                                 ("overview_total_hud", total_km, total_seconds)):
+            if km is None or seconds is None:
+                continue
+            distance = f"{km * 1000:.0f} m" if km < 1 else f"{km:.1f} km"
+            # nothing left is "0 min": _format_duration_ja never says less than 1 second
+            duration = (self._format_duration_ja(seconds) if seconds > 0
+                        else labels["duration_minutes"].format(m=0))
+            rows.append((labels[key].format(distance=distance, duration=duration), 20, False))
+        return left, self._hud_panel(tuple(rows))
+
     def render_overview_hud(
         self, frame: np.ndarray, title: Optional[str] = None,
-        mode_duration: Optional[Dict[str, float]] = None,
         remaining_km: Optional[float] = None, remaining_seconds: Optional[float] = None,
-        stops: Optional[Tuple[int, int]] = None, next_stop: Optional[str] = None,
-        progress: Optional[float] = None, alpha: float = 1.0,
-        top_margin: int = 20, side_margin: int = 32,
+        total_km: Optional[float] = None, total_seconds: Optional[float] = None,
+        alpha: float = 1.0, top_margin: int = 20, side_margin: int = 32,
     ) -> np.ndarray:
-        """The overview's persistent HUD. Left: the trip's name and how long
-        each travel mode takes. Right: distance/time still ahead, how many
-        stops are done, the stop being walked to, and a progress bar."""
-        labels = getattr(self, "summary_card_labels", None) or video_text.current_labels()
-
-        modes = ""
-        if mode_duration:
-            modes = labels["separator"].join(
-                f"{self._mode_name_ja(m)} {self._format_duration_ja(s)}"
-                for m, s in mode_duration.items() if s
-            )
-        left = self._hud_panel(((title or "", 20, False), (modes, 14, True)))
-
-        remaining = ""
-        if remaining_km is not None and remaining_seconds is not None:
-            dist_s = f"{remaining_km * 1000:.0f} m" if remaining_km < 1 else f"{remaining_km:.1f} km"
-            remaining = labels["overview_remaining_hud"].format(
-                distance=dist_s, duration=self._format_duration_ja(remaining_seconds),
-            )
-        line2 = []
-        if stops:
-            line2.append(labels["overview_stops_hud"].format(n=stops[0], total=stops[1]))
-        if next_stop:
-            line2.append(labels["overview_next_hud"].format(name=next_stop))
-        right = self._hud_panel(
-            ((remaining, 20, False), (labels["separator"].join(line2), 14, True)),
-            # Quantized: the bar only needs to move in visible steps, and a
-            # unique fraction per frame would make the panel cache useless.
-            progress=None if progress is None else round(min(1.0, max(0.0, progress)) * 200) / 200,
-        )
+        """The overview's persistent top bar (see overview_hud_panels), drawn onto `frame`."""
+        left, right = self.overview_hud_panels(
+            frame.shape[1], title, remaining_km, remaining_seconds, total_km, total_seconds)
 
         for canvas, from_left in ((left, True), (right, False)):
             if canvas is None:
