@@ -1,0 +1,6 @@
+{
+  "name": "leg",
+  "include_previous_route": true,
+  "include_previous_pin": true,
+  "include_previous_name": true
+}

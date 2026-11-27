@@ -10,6 +10,7 @@ from services.hudtheme import layout
 from services.projectfiles import NARRATION_CUES, meta_file
 from services.mapfetcher.maplanguage import map_style_inputs
 from services.vdoprocessing.route_inputs import labels_hash, overview_flags_hash, photo_inputs_hash, route_inputs_hash
+from services.vdoprocessing.storyboard import leg as leg_board
 from services.vdoprocessing.storyboard import of as storyboard_of
 from services.config.upscaled_images import IMAGE_KEYS, apply_upscaled_images
 from services.mapfetcher.graphicengine.pinimage import marker_inputs_hash
@@ -144,6 +145,9 @@ def _checkpoint_parts(
     parts["route.leg_version"] = str(LEG_RENDER_VERSION)
     # An edited storyboard file (storyboards/*.json) changes the picture too.
     parts["route.storyboard"] = _short_hash(repr(storyboard_of((config_data.get("settings") or {}).get("overview_style"))))
+    legs = leg_board()
+    if not (legs.include_previous_route and legs.include_previous_pin and legs.include_previous_name):
+        parts["route.leg_storyboard"] = _short_hash(repr(legs))  # absent with all on: nothing re-renders for it
     # Map labels and on-screen text follow this; a project saved before it was written has none.
     language = config_data.get("map_language")
     if language:
@@ -195,7 +199,7 @@ def _checkpoint_parts(
 ROUTE_CHECKPOINT_PARTS = (
     "route.waypoints", "route.overview_flags", "route.photos", "route.markers", "route.map_style",
     "route.overview_voice", "route.map_language", "route.labels", "route.overview_version", "route.leg_version",
-    "route.leg_voice", "route.storyboard",
+    "route.leg_voice", "route.storyboard", "route.leg_storyboard",
 )
 
 

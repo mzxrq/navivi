@@ -364,6 +364,9 @@ def render_residential_leg_pydeck(
     prior_trail: Optional[List[List[float]]] = None,
     hold_end_card: bool = False,
     themed: Optional[ThemedLegHud] = None,
+    prior_pin: Optional[Dict] = None,
+    prior_label: str = "",
+    prior_line: bool = True,
 ) -> List[str]:
     """Renders one leg as a straight-down, locked-camera video with a live
     turn-by-turn HUD (destination banner + time/distance card) -- the
@@ -658,7 +661,7 @@ def render_residential_leg_pydeck(
             line_width_scale=1, line_width_min_pixels=line_thickness,
         ),
     ]
-    if prior_trail and len(prior_trail) >= 2:
+    if prior_line and prior_trail and len(prior_trail) >= 2:
         # The leg walked just before: the walk carries on from it, and it fades away while the camera moves into
         # this leg (_prior_trail_opacity).
         base_layers.insert(0, pdk.Layer(
@@ -698,6 +701,21 @@ def render_residential_leg_pydeck(
     # goes straight into base_layers and is visible for the whole clip, same
     # as the destination pin below.
     start_lat, start_lon = df_raw.iloc[0]["lat"], df_raw.iloc[0]["lon"]
+    if prior_trail and prior_pin:  # the leg before's start pin, fading with its line; under this leg's own pins
+        base_layers.append(
+            pdk.Layer(
+                "IconLayer", id="prior-trail-pin",
+                data=[{
+                    "lon": prior_trail[0][1], "lat": prior_trail[0][0],
+                    "icon": {
+                        "url": _leg_pin_url(prior_pin, _START_PIN_URL), "width": _TEARDROP_PIN_W,
+                        "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
+                    },
+                }],
+                get_icon="icon", get_position="[lon, lat]",
+                get_size=60, size_units="'pixels'", size_scale=1, pickable=False,
+            )
+        )
     base_layers.append(
         pdk.Layer(
             "IconLayer", id="leg-start-pin",
@@ -751,6 +769,15 @@ def render_residential_leg_pydeck(
             pixel_offset_y=8, avoid=route_pts, clear_above=64, clear_side=26, mpp=label_mpp, space=label_space,
         )
     )
+    if prior_trail and prior_label:  # placed last, so it never moves this leg's own names
+        base_layers.extend(
+            _label_pill_layer(
+                [{"lon": prior_trail[0][1], "lat": prior_trail[0][0], "text": prior_label}],
+                "prior-trail-label",
+                size_px=34,
+                pixel_offset_y=8, avoid=route_pts, clear_above=64, clear_side=26, mpp=label_mpp, space=label_space,
+            )
+        )
 
 
     view_state = pdk.ViewState(
@@ -1778,10 +1805,11 @@ async def _record_leg(
                             // pills above THOSE -- otherwise whichever line/dot
                             // layer happens to be re-appended after them each
                             // frame would paint straight over them.
-                            const labelLayers = currentLayers.filter(l => l.id.includes('label'));
-                            const pinLayers = currentLayers.filter(l => !l.id.includes('label') && (l.id.includes('pin') || l.id.includes('dots')));
+                            const fade = l => l.id.startsWith('prior-trail') ? l.clone({{opacity: {_prior_trail_opacity(i, intro_frames)}}}) : l;
+                            const labelLayers = currentLayers.filter(l => l.id.includes('label')).map(fade);
+                            const pinLayers = currentLayers.filter(l => !l.id.includes('label') && (l.id.includes('pin') || l.id.includes('dots'))).map(fade);
                             const staticLayers = currentLayers.filter(l => !['walker-trail', 'walker-dot', 'walker-halo'].includes(l.id) && !l.id.includes('label') && !l.id.includes('pin') && !l.id.includes('dots'))
-                                .map(l => l.id === 'prior-trail' ? l.clone({{opacity: {_prior_trail_opacity(i, intro_frames)}}}) : l);
+                                .map(fade);
                             const newHalo = new deck.ScatterplotLayer({{
                                 id: 'walker-halo', data: {walker_json0},
                                 getPosition: d => [d.lon, d.lat], getFillColor: {c_glow},
@@ -1838,7 +1866,7 @@ async def _record_leg(
                 if prior_trail and intro_frames == 0:
                     await page.evaluate(
                         "window.deckgl && window.deckgl.setProps({layers: (window.deckgl.props.layers || [])"
-                        ".filter(l => l.id !== 'prior-trail')})")
+                        ".filter(l => !l.id.startsWith('prior-trail'))})")
 
                 # Connected stop-by photo pauses (see render_residential_leg_
                 # pydeck's `landmarks` docstring): a merged-in stop-by with

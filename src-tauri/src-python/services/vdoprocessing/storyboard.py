@@ -106,6 +106,24 @@ class OutroBoard:
     include_closed_waypoint: bool
 
 
+@dataclass(frozen=True)
+class LegBoard:
+    """storyboards/leg.json: what of the leg before stays on screen, fading out, while the camera slides into the
+    next leg: its route line, its start pin and that pin's name."""
+    name: str
+    include_previous_route: bool
+    include_previous_pin: bool
+    include_previous_name: bool
+
+
+def leg() -> LegBoard:
+    data: Dict[str, Any] = {"name": "leg", "include_previous_route": True, "include_previous_pin": True,
+                            "include_previous_name": True}
+    found = json.loads((_DIR / "leg.json").read_text(encoding="utf-8"))
+    data.update({k: v for k, v in found.items() if k in data and type(v) is type(data[k])})
+    return LegBoard(**data)
+
+
 def outro() -> OutroBoard:
     data: Dict[str, Any] = {"name": "outro", "include_stopby_waypoint": True, "include_closed_waypoint": True}
     found = json.loads((_DIR / "outro.json").read_text(encoding="utf-8"))
