@@ -36,6 +36,7 @@ the project's own light/dark setting. Only `theme` is required.
 | `compass` | leg | `compass` | top-right, under the banner |
 | `leg_rail` | leg | `leg_rail` | bottom-left |
 | `remaining` | leg | `totals` | bottom-right |
+| `outro` | outro | `outro` | the whole frame (no `hud.json` layout entry) |
 | `place` | attraction clip | `place` | top-left (600-high frame, like the legs) |
 
 A closed place being passed on a leg uses the `place` style folder.
@@ -95,6 +96,9 @@ Filters: `words` (break only between words), `units` (small units beside numbers
 | `place` | `glyph`, `name` |
 | `compass` | `degrees`, `name` |
 | `leg_rail` | `from_glyph`, `to_glyph`, `share` (0 to 1), `vias`: list of (share, glyph), `color`, `icon` |
+| `outro` | `screens`: list of `badge`, `name`, `description`, `photo` (a data URI or ""), `known`, `km`, `time`, `next` (`badge`, `name`, `photo`, or none); `kicker`, `title`, `subtitle`; `distance_label`, `time_label`, `unknown_km`, `unknown_time`; `left` (photo column width), `pitch` (one screen's scroll), `keyframes` (percent, screen), `seconds` |
+
+The outro file is a whole animated page, 600 high: it is animated by CSS animations lasting `seconds` that move the screens by `pitch` at each of `keyframes` (the video code pauses them all and sets their time). the video code grows each `class="desc"` text and its parent from three lines up to seven, and moves later screens down by setting `--at-N` on `.track` (which needs `data-pitch`); `body.bare` must hide everything but the background.
 
 ## A new theme
 
