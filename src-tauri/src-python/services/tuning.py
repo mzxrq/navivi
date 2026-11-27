@@ -1394,7 +1394,10 @@ OUTRO_SCROLL_EDGE_FADE_PX = 56
 # hold also covers the 1 s dissolve into the outro. No cap on the length.
 OUTRO_THEMED_FIRST_HOLD_SECONDS = 2.5
 OUTRO_THEMED_HOLD_SECONDS = 1.5
-OUTRO_THEMED_SCROLL_SECONDS = 0.6
+OUTRO_THEMED_ROLL_SECONDS = 0.8  # the whole step to the next place
+# In that step each box rolls its contents like a slot reel, one starting after another.
+OUTRO_THEMED_BOX_ROLL_SECONDS = 0.42
+OUTRO_THEMED_BOX_STAGGER_SECONDS = 0.07
 # With route info the scroll is a timeline: title and trip summary, then one card per leg (photo, name,
 # start, mode/distance/time chips from route_brief). settings.outro_route_info: false = the grid.
 DEFAULT_OUTRO_ROUTE_INFO = True

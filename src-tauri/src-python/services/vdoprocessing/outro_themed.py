@@ -1,4 +1,4 @@
-"""The themed scroll outro: one screen per place, held and then scrolled to the next.
+"""The themed scroll outro: one place at a time, held, then every box rolls its contents on to the next.
 Used for a project with a themed hud.json; otherwise outrocard.py draws its own scroll."""
 
 from __future__ import annotations
@@ -20,27 +20,18 @@ from services.vdoprocessing.route_inputs import same_place, stopby_labels
 
 
 _HEIGHT = 600  # the layout's height; video px = layout px * height / 600
-_PITCH = 340  # the scroll past a screen with a 3-line description: 316 of cards, then 24 to the next
+_BOXES = 6  # that roll, each starting after the one before (designs/outro)
 _SEEK_JS = "t => document.getAnimations().forEach(a => { a.pause(); a.currentTime = t * 1000; })"
-# A description keeps its size: its card grows, from 3 lines to the 7 that still fit the screen, and each screen
-# after a taller one starts that much lower, so it still follows right behind.
+# A description keeps its size: its box grows with it, from 3 lines to the 7 that still fit the screen.
 _GROW_JS = """() => {
-    const track = document.querySelector('.track'), screens = [...document.querySelectorAll('.screen')];
-    const start = parseFloat(screens[0].style.top), pitch = +track.dataset.pitch;
-    let offset = 0;
-    screens.forEach((screen, i) => {
-        screen.style.top = start + offset + 'px';
-        track.style.setProperty('--at-' + i, -offset + 'px');
-        const text = screen.querySelector('.desc');
-        if (!text) { offset += pitch - 28; return; }  // picture only: the next place card is the lowest thing
+    for (const text of document.querySelectorAll('.desc')) {
         const line = parseFloat(getComputedStyle(text).lineHeight);
         const lines = Math.max(3, Math.min(7, Math.ceil(text.scrollHeight / line - 0.1)));
         text.style.height = lines * line + 'px';
-        text.parentElement.style.height = lines * line + 38 + 'px';
         if (text.scrollHeight > lines * line + 1)
             Object.assign(text.style, { display: '-webkit-box', webkitBoxOrient: 'vertical', webkitLineClamp: '7' });
-        offset += pitch + (lines - 3) * line;
-    });
+        text.closest('.about').style.setProperty('--h-' + text.parentElement.dataset.screen, lines * line + 38 + 'px');
+    }
 }"""
 
 
@@ -99,9 +90,9 @@ def themed_screens(
 
 
 def _timing(fps: int) -> Tuple[int, int, int]:
-    """(first screen's hold, scroll, other holds) in frames."""
+    """(first screen's hold, roll, other holds) in frames."""
     return tuple(int(round(s * fps)) for s in (
-        tuning.OUTRO_THEMED_FIRST_HOLD_SECONDS, tuning.OUTRO_THEMED_SCROLL_SECONDS, tuning.OUTRO_THEMED_HOLD_SECONDS))
+        tuning.OUTRO_THEMED_FIRST_HOLD_SECONDS, tuning.OUTRO_THEMED_ROLL_SECONDS, tuning.OUTRO_THEMED_HOLD_SECONDS))
 
 
 def frame_times(count: int, fps: int) -> List[float]:
@@ -120,14 +111,17 @@ def _seconds() -> Tuple[float, float, float]:
     return tuple(frames / tuning.INTRO_FPS for frames in _timing(tuning.INTRO_FPS))
 
 
-def scroll_keyframes(count: int) -> List[Tuple[float, int]]:
-    """(percent of the whole animation, screen shown) at each end of every hold."""
-    first, scroll, hold = _seconds()
+def scroll_keyframes(count: int, delay: float = 0.0, length: Optional[float] = None) -> List[Tuple[float, int]]:
+    """(percent of the whole animation, screen shown) at each end of every hold, for a box that starts `delay`
+    seconds into each roll and takes `length` seconds (None: the whole roll)."""
+    first, roll, hold = _seconds()
+    length = roll if length is None else length
     seconds = animation_seconds(count)
-    frames = [(0.0, 0), (first, 0)]
+    frames = [(0.0, 0)]
     for index in range(1, count):
-        arrive = first + (index - 1) * (scroll + hold) + scroll
-        frames += [(arrive, index), (arrive + hold, index)]
+        leave = first + (index - 1) * (roll + hold) + delay
+        frames += [(leave, index - 1), (leave + length, index)]
+    frames.append((seconds, count - 1))
     # Rounded down: a held frame must be at or past its keyframe, or the screen before still shows.
     return [(min(100.0, math.floor(at / seconds * 1e6 + 1e-3) / 1e4), index) for at, index in frames]
 
@@ -164,7 +158,7 @@ def _photo_uri(path: Optional[str], width: float, scale: float) -> str:
 
 
 def page_html(screens: List[Screen], theme: Dict, heading: Dict, size: Tuple[int, int]) -> str:
-    """Every screen stacked on one page (designs/outro), with its paused scroll animation."""
+    """Every place stacked in its boxes on one page (designs/outro), with their paused roll animations."""
     width, scale = size[0] * _HEIGHT / size[1], size[1] / _HEIGHT
     left = (width * 0.8 - 76) * 318 / 674  # the photo column, in the mockup's proportion to the figures
     labels = video_text.current_labels()
@@ -180,11 +174,13 @@ def page_html(screens: List[Screen], theme: Dict, heading: Dict, size: Tuple[int
     for item, following in zip(shown, shown[1:] + [None]):
         item["next"] = following and {key: following[key] for key in ("badge", "name", "photo")}
     return cards._card(
-        "outro", styles.DEFAULT, theme, width, _HEIGHT, screens=shown, pitch=_PITCH, left=left,
+        "outro", styles.DEFAULT, theme, width, _HEIGHT, screens=shown, left=left,
         kicker=heading.get("kicker") or "", title=heading.get("title") or "", subtitle=heading.get("subtitle") or "",
         distance_label=labels["distance_label"], time_label=labels["duration_fallback"],
         unknown_km=unknown_km, unknown_time=unknown_time,
         keyframes=scroll_keyframes(len(screens)), seconds=animation_seconds(len(screens)),
+        rolls=[scroll_keyframes(len(screens), box * tuning.OUTRO_THEMED_BOX_STAGGER_SECONDS,
+                                tuning.OUTRO_THEMED_BOX_ROLL_SECONDS) for box in range(_BOXES)],
     ).html
 
 
