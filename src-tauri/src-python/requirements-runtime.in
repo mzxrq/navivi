@@ -31,4 +31,4 @@ pypdf
 rapidocr-onnxruntime
 # Hears each narration line back to check place names (services/tts/name_check.py); CPU, int8.
 faster-whisper
-graphifyy @ git+https://github.com/Graphify-Labs/graphify.git
+graphifyy @ git+https://github.com/Graphify-Labs/graphify.git@f51d46c63d6280a5906277b29b118dc2dd119991
