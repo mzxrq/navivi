@@ -201,6 +201,13 @@ def _piece_glide(start, fit, frames: int) -> list:
     return [tuple(a + (b - a) * t for a, b in zip(start, end)) for t in steps]
 
 
+def _prior_trail_opacity(frame: int, frames: int) -> float:
+    """How visible the leg before's line is on glide frame `frame` (0-based) of `frames`: whole while the camera
+    sets off, then fading out over the glide's last LEG_PRIOR_TRAIL_FADE_SHARE, gone on its last frame."""
+    left = 1.0 - (frame + 1) / max(1, frames)
+    return min(1.0, max(0.0, left / tuning.LEG_PRIOR_TRAIL_FADE_SHARE))
+
+
 def _opening_marker_px(start_lonlat, opening_view: Optional[Dict], output_size):
     """Where the opening photo card's leader points: the start pin under the leg before's last camera, or None (the
     frame's centre) for a leg that opens centred on its start."""
@@ -652,7 +659,8 @@ def render_residential_leg_pydeck(
         ),
     ]
     if prior_trail and len(prior_trail) >= 2:
-        # The leg walked just before (joined at a stop with nothing to tell): already walked, so the walk reads as one.
+        # The leg walked just before: the walk carries on from it, and it fades away while the camera moves into
+        # this leg (_prior_trail_opacity).
         base_layers.insert(0, pdk.Layer(
             "GeoJsonLayer", id="prior-trail",
             data=_route_linestring_feature([[p[1], p[0]] for p in prior_trail], line_color=walker_color),
@@ -1772,7 +1780,8 @@ async def _record_leg(
                             // frame would paint straight over them.
                             const labelLayers = currentLayers.filter(l => l.id.includes('label'));
                             const pinLayers = currentLayers.filter(l => !l.id.includes('label') && (l.id.includes('pin') || l.id.includes('dots')));
-                            const staticLayers = currentLayers.filter(l => !['walker-trail', 'walker-dot', 'walker-halo'].includes(l.id) && !l.id.includes('label') && !l.id.includes('pin') && !l.id.includes('dots'));
+                            const staticLayers = currentLayers.filter(l => !['walker-trail', 'walker-dot', 'walker-halo'].includes(l.id) && !l.id.includes('label') && !l.id.includes('pin') && !l.id.includes('dots'))
+                                .map(l => l.id === 'prior-trail' ? l.clone({{opacity: {_prior_trail_opacity(i, intro_frames)}}}) : l);
                             const newHalo = new deck.ScatterplotLayer({{
                                 id: 'walker-halo', data: {walker_json0},
                                 getPosition: d => [d.lon, d.lat], getFillColor: {c_glow},
@@ -1825,6 +1834,11 @@ async def _record_leg(
                         await page.evaluate(
                             "() => ['leg-carried-card', 'leg-carried-leader'].forEach((id) => document.getElementById(id)?.remove())"
                         )
+
+                if prior_trail and intro_frames == 0:
+                    await page.evaluate(
+                        "window.deckgl && window.deckgl.setProps({layers: (window.deckgl.props.layers || [])"
+                        ".filter(l => l.id !== 'prior-trail')})")
 
                 # Connected stop-by photo pauses (see render_residential_leg_
                 # pydeck's `landmarks` docstring): a merged-in stop-by with
