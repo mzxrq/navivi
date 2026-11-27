@@ -13,7 +13,7 @@ from services import tuning
 from services.logger.progress import tracker
 
 from .base import logger
-from .card_circles import circle_layout
+from .card_spots import place_cards
 
 
 def smoothstep(t: float) -> float:
@@ -201,8 +201,8 @@ class _ClusterZoomMixin:
         route: Optional[np.ndarray], reserved, w: int, h: int,
     ) -> Dict[int, Tuple[int, int, float]]:
         """{popup index: (x, y, scale)} of a zoom's cards at their own size in the zoomed view `hold`, as on the
-        whole map: round their pins (card_circles), clear of the panels, every pin in `pins_shown`, the route and
-        each other; where no circle works, each at the nearest clear spot to its pin (the ring search), in `order`
+        whole map: round their pins (card_spots), clear of the panels, every pin in `pins_shown`, the route and
+        each other; where no free layout works, each at the nearest clear spot to its pin (the ring search), in `order`
         (the order they pop)."""
         s, x0, y0 = hold
 
@@ -216,8 +216,10 @@ class _ClusterZoomMixin:
         keep_off = list(reserved) + [pin_head_box(self.graphics, *at(p)) for p in pins_shown]
         scale = group[0]["stay_scale"]  # every card has the video's one size
         card_w, card_h = self.graphics.beside_card_footprint(scale)
-        boxes = circle_layout(
-            pins, w, h, keep_off, route, float(self.graphics.marker_radius), card_w, card_h)
+        grouped = {id(c) for c in group}
+        boxes = place_cards(
+            pins, w, h, keep_off, route, float(self.graphics.marker_radius), card_w, card_h,
+            others=[at(p) for p in pins_shown if id(p) not in grouped])
         if boxes is not None:
             spots = [(i, box[0], box[1]) for i, box in enumerate(boxes)]
         else:

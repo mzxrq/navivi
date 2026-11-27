@@ -470,8 +470,8 @@ Decided (option A). Done before Phase 2 (section 9, Task 20).
 |---|---|
 | One spot | A card appears where it stays: the same spot while the video runs and on the recap frame. It does not move, resize or turn into a badge. |
 | One size | Every covered card in a video has the same width and the same photo height. |
-| Circles | Approved 2026-11-26: cards sit on a circle round each group of pins (`spatial_renderer/card_circles.py`). No card covers the route, a pin, a panel or another card; no leader crosses or lies on another, or passes under a card; leaders may cross the route. |
-| Scale | The size is the largest at which a round circle layout exists, up to a maximum in `tuning.py`. Where none exists down to `OVERVIEW_CARD_CIRCLE_MIN_SCALE` (very many pins), cards go to the nearest free spots, shrinking until all fit and keeping leaders clear where they can. |
+| Free placement | Approved 2026-11-27 (replaces the 2026-11-26 circles): each card takes a free spot round its own pin, on the side facing away from its group where it can (`spatial_renderer/card_spots.py`). A leader is at most 250 px long at 1080p (`OVERVIEW_CARD_MAX_LEADER_PX`). No card covers the route, a pin, a panel or another card; no leader crosses or lies on another, passes under a card or over another pin; leaders may cross the route. |
+| Scale | The size is the largest with a free layout, every size tried from the maximum in `tuning.py` down. Where none exists down to `OVERVIEW_CARD_FREE_MIN_SCALE`, or more than `OVERVIEW_CARD_FREE_MAX_PINS` (30) pins crowd one group, cards go to the nearest free spots, shrinking until all fit and keeping leaders clear where they can (the line limit and the pin rule do not apply there). |
 | No photo | A place without a photo shows its pin only, with no card and no badge. |
 | Planned up front | One layout is worked out before the first frame, counting every card that will ever appear, including later stop-bys and closed places. |
 | Clear of | Other cards, the route, pin heads, the top and bottom panels, notices and the totals card. |

@@ -92,7 +92,7 @@ Target shape: `SpatialRenderer` holds collaborators and delegates.
 
 | New object | Takes over |
 |---|---|
-| `CardLayout` | `popups.py` placement, `card_circles.py`, the ring fallback, the pill lattice |
+| `CardLayout` | `popups.py` placement, `card_spots.py`, the ring fallback, the pill lattice |
 | `CardPainter` | `popup_box.py` drawing and leader lines |
 | `PinPainter` | `pins.py` |
 | `HudPainter` | top bar, notices, progress rail from `cards.py` |

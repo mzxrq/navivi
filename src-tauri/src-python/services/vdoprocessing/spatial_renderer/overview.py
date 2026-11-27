@@ -23,7 +23,7 @@ from services.vdoprocessing.storyboard import for_config as storyboard_for
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
-from .card_circles import densify
+from .card_spots import densify
 from .cluster_zoom import WalkCamera, cluster_views, pin_width
 from .overview_timing import (
     AUDIO_MATCH_TOLERANCE_SECONDS,
@@ -78,7 +78,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # stops are plain colour dots; v56: top HUD panels 1.5x bigger; v55: the recap sits on a plain plate and arranges its
 # badges on one lattice in walked order (see CLAUDE.md "overview recap's pill badges"); v54: a return stop takes no
 # number of its own. Older history: git log.
-OVERVIEW_RENDER_VERSION = 83  # v83: 3D map background, cluster zoom in every style; v82: course sub course
+OVERVIEW_RENDER_VERSION = 84  # v84: free card layout; v83: 3D map background, cluster zoom in every style
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -1000,8 +1000,10 @@ class _OverviewRenderMixin:
         places = [ap for ap in self._recap_popup_set(active_popups, stop_popup) if ap["data"].get("popup_image")]
         copies = [dict(ap) for ap in places]  # the layout stamps its own keys on what it is given
         originals = {id(copy): ap for copy, ap in zip(copies, places)}
+        carded = {id(ap) for ap in places}  # every other pin, a numbered stop with no photo among them
+        bare = [(ap.get("pin_x", ap["x"]), ap.get("pin_y", ap["y"])) for ap in active_popups if id(ap) not in carded]
         for copy in self._layout_ring_cards(copies, w, h, reserved_boxes=reserved_boxes,
-                                            route_obstacles=route_obstacle_arr):
+                                            route_obstacles=route_obstacle_arr, others=bare):
             originals[id(copy)].update(stay_box=copy["beside_box"], stay_scale=copy["card_scale"])
         for ap in active_popups:
             if "stay_box" not in ap:

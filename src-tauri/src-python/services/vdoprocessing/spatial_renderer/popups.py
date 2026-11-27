@@ -3,7 +3,7 @@ and the end-of-video highlight's higher-zoom image fetch."""
 
 import math
 from functools import partial
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -15,7 +15,7 @@ from services.vdoprocessing.route_inputs import is_stopby_label
 from services.vdoprocessing.storyboard import for_config as storyboard_for
 
 from .base import logger
-from .card_circles import circle_layout
+from .card_spots import place_cards
 
 # Archimedean-spiral search step sizes used by _layout_beside_popups's
 # free_spot — how far the radius grows and the angle advances per
@@ -1612,17 +1612,18 @@ A connected stop-by is loose as well: the walker passes every
         reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
         route_obstacles: Optional[np.ndarray] = None,
         max_scale: Optional[float] = None,
+        others: Sequence[Tuple[float, float]] = (),
     ) -> List[Dict]:
-        """The overview's cards, every one the same size: on a circle round each group of pins
-        (card_circles), or - where no size down to OVERVIEW_CARD_CIRCLE_MIN_SCALE makes a clean
-        circle - at the nearest free spots (_layout_ring_search). Stamps "beside_box",
+        """The overview's cards, every one the same size: placed freely round their pins with short
+        leaders (card_spots), or - where no size down to OVERVIEW_CARD_FREE_MIN_SCALE fits that way -
+        at the nearest free spots (_layout_ring_search). Stamps "beside_box",
         "card_scale" and "recap_line_color" and returns the cards placed. Sizing each card on its
         own would read as a mistake — one stop's photo bigger than its neighbour's for no reason a
         viewer can see."""
         if not popups:
             return []
         pins = [(p.get("pin_x", p["x"]), p.get("pin_y", p["y"])) for p in popups]
-        scale, chosen = (self._circle_search(pins, w, h, reserved_boxes, route_obstacles, max_scale)
+        scale, chosen = (self._free_search(pins, w, h, reserved_boxes, route_obstacles, max_scale, others)
                          or self._layout_ring_search(pins, w, h, reserved_boxes, route_obstacles, max_scale))
         placed = []
         for i, x0, y0 in chosen:
@@ -1634,29 +1635,21 @@ A connected stop-by is loose as well: the walker passes every
             popup["recap_line_color"] = palette[j % len(palette)]
         return placed
 
-    def _circle_search(
+    def _free_search(
         self, pins: List[Tuple[float, float]], w: int, h: int, reserved_boxes, route_obstacles,
-        max_scale: Optional[float] = None,
+        max_scale: Optional[float] = None, others: Sequence[Tuple[float, float]] = (),
     ) -> Optional[Tuple[float, List[Tuple[int, float, float]]]]:
-        """(card scale, [(pin index, x, y)]) of the circle layout at the largest size that has one (a binary search
-        down OVERVIEW_CARD_CIRCLE_SHRINK_STEP's sizes), or None."""
-        scales, scale = [], (max_scale or tuning.OVERVIEW_CARD_MAX_SCALE) * h / 1080
-        while scale >= tuning.OVERVIEW_CARD_CIRCLE_MIN_SCALE * h / 1080:
-            scales.append(scale)
-            scale *= tuning.OVERVIEW_CARD_CIRCLE_SHRINK_STEP
-        best, low, high = None, 0, len(scales)  # the largest size with a layout is at an index in low..high
-        mid = 0  # the largest first: with few stops it fits
-        while low < high:
-            boxes = circle_layout(pins, w, h, reserved_boxes, route_obstacles, float(self.graphics.marker_radius),
-                                  *self.graphics.beside_card_footprint(scales[mid]))
-            if boxes is None:
-                low = mid + 1
-            else:
-                best, high = (scales[mid], [(i, b[0], b[1]) for i, b in enumerate(boxes)]), mid
-            mid = (low + high) // 2
-        if best is not None:
-            logger.info("Circle layout: %d card(s) at scale %.2f.", len(pins), best[0])
-        return best
+        """(card scale, [(pin index, x, y)]) of the free layout at the largest size that has one, or None. Every size
+        is tried from the largest down: a size can fit where a smaller one does not."""
+        scale = (max_scale or tuning.OVERVIEW_CARD_MAX_SCALE) * h / 1080
+        while scale >= tuning.OVERVIEW_CARD_FREE_MIN_SCALE * h / 1080:
+            boxes = place_cards(pins, w, h, reserved_boxes, route_obstacles, float(self.graphics.marker_radius),
+                                *self.graphics.beside_card_footprint(scale), others=others)
+            if boxes is not None:
+                logger.info("Free layout: %d card(s) at scale %.2f.", len(pins), scale)
+                return scale, [(i, b[0], b[1]) for i, b in enumerate(boxes)]
+            scale *= tuning.OVERVIEW_CARD_FREE_SHRINK_STEP
+        return None
 
     def _layout_ring_search(
         self, pins: List[Tuple[float, float]], w: int, h: int, reserved_boxes, route_obstacles,

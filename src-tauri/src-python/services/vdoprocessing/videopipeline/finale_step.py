@@ -174,7 +174,7 @@ def _recap_badges(engine, stops, extent, size, reserved, route_px, card_style: s
     layout = _layout(engine)
     try:
         if card_style == "popup":
-            from services.vdoprocessing.spatial_renderer.card_circles import densify
+            from services.vdoprocessing.spatial_renderer.card_spots import densify
 
             obstacles = layout._pin_obstacle_points(popups)
             if route_px is not None:
@@ -289,7 +289,7 @@ def _overview_hud(settings: dict, config_path: Path, project_dir: Path, engine, 
         from services.mapfetcher.mapgeometry import RouteGeometryProcessor as G
         from services.vdoprocessing.route_inputs import same_place
         from services.vdoprocessing.spatial_renderer import course_themed
-        from services.vdoprocessing.spatial_renderer.card_circles import densify
+        from services.vdoprocessing.spatial_renderer.card_spots import densify
         from services.vdoprocessing.spatial_renderer.course import stop_distances
 
         from .animator_config import _hud_config
@@ -417,7 +417,7 @@ def _clip_key(project_dir: Path, settings: dict, size, voice, stops: list, photo
             __file__, tuning.__file__, storyboard._DIR / "finale.json",
             # the card layouts the finale borrows
             Path(__file__).parents[1] / "spatial_renderer" / "popups.py",
-            Path(__file__).parents[1] / "spatial_renderer" / "card_circles.py",
+            Path(__file__).parents[1] / "spatial_renderer" / "card_spots.py",
             Path(__file__).parents[1] / "spatial_renderer" / "course_themed.py",
         ],
     )
