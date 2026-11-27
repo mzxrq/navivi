@@ -14,8 +14,8 @@ def _hud(layout=None, **more):
                         **more)
 
 
-def test_stop_bys_wear_their_number_counted_through_the_whole_route():
-    places = _hud(stopby_offset=2).places_of(BANNER, "加太港", ("S", "2"), {"番所"})
+def test_stop_bys_wear_the_number_their_map_pin_shows():
+    places = _hud(stopby_glyphs=["+3"]).places_of(BANNER, "加太港", ("S", "2"), {"番所"})
 
     assert [(p.name, p.glyph, p.off_route) for p in places] == [
         ("加太駅", "S", False), ("番所", "+3", True), ("加太港", "2", False)]
@@ -23,6 +23,23 @@ def test_stop_bys_wear_their_number_counted_through_the_whole_route():
 
 def test_a_leg_with_no_chain_shows_its_destination():
     assert _hud().places_of([], "加太港", (None, "2"), set())[0][:2] == ("加太港", "2")
+
+
+def test_a_legs_stop_by_numbers_come_from_the_map_not_from_counting():
+    from types import SimpleNamespace
+
+    from services.vdoprocessing.route2vdo import RouteAnimator
+
+    # An earlier leg's stop-bys are not counted: stop-bys +4 (a return to an earlier one) and an unnumbered one.
+    leg = {"labels": ["加太駅", "番所", None, "寄り道", "加太港"], "stopbys": [False, True, True, True, True],
+           "stopby_labels": [None, "+4", "+8", None, "+9"], "mode": "walking"}
+    animator = SimpleNamespace(config={"hud": {"theme": "sea", "layout": {}}})
+    ctx = SimpleNamespace(leg_totals=[(1.0, 60), (2.0, 120)])
+
+    hud = RouteAnimator._themed_leg_hud(animator, ctx, 1, "walking", [{"mode": "walking"}, leg])
+
+    # In banner order; the destination is the banner's last place (its own pin glyph), not one of these.
+    assert hud.stopby_glyphs == ["+4", "・"]
 
 
 def _prepared(hud, frame=(1280, 720)):
