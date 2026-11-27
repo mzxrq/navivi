@@ -773,6 +773,18 @@ class VideoExporter:
         return fade_start, fade_out
 
     @staticmethod
+    def _is_full_range(path: Path) -> bool:
+        try:
+            result = subprocess.run(
+                [runtime_paths.ffprobe_exe() or "ffprobe", "-v", "error", "-select_streams", "v:0",
+                 "-show_entries", "stream=pix_fmt,color_range", "-of", "default=nk=1:nw=1", str(path)],
+                capture_output=True, encoding="utf-8", errors="replace",
+            )
+        except OSError:
+            return False
+        return any(v == "pc" or v.startswith("yuvj") for v in result.stdout.split())
+
+    @staticmethod
     def _segment_video_filters(
         index: int, video_path: Path, target_size: Optional[Tuple[int, int]], target_fps: Optional[float],
         content_shift: float, hold_extra: float, fade_start: Optional[float], fade_out: float,
@@ -783,6 +795,10 @@ class VideoExporter:
         # cards among 1920x1080 clips) would break the joined video. A clip of
         # another size is scaled to fit and letterboxed.
         filters: List[str] = []
+        # ...and the same color range: a full-range segment among limited ones shifts color after the stream copy.
+        if VideoExporter._is_full_range(video_path):
+            filters.append("scale=in_range=full:out_range=limited,format=yuv420p")
+            logger.info("Track %d: full color range converted to limited.", index)
         if target_size:
             size = VideoExporter._video_size(video_path)
             if size and size != target_size:
@@ -925,6 +941,8 @@ class VideoExporter:
             cmd += [
                 "-c:v", "libx264", "-crf", "18", "-preset", "fast", "-pix_fmt", "yuv420p",
             ]
+            if any("out_range=limited" in f for f in filters):
+                cmd += ["-color_range", "tv"]
         else:
             cmd += ["-c:v", "copy"]
         cmd += ["-c:a", "aac", "-ar", "44100", "-ac", "2"]
@@ -1004,10 +1022,9 @@ class VideoExporter:
     ) -> Optional[Path]:
         """Joins two muxed segments with a crossfade of `seconds` (the first
         one dissolves into the second) as ONE re-encoded segment, sized and
-        timed like the first. Used where a leg ends on its fullscreen arrival
-        photo and the destination's attraction video follows: instead of a
-        hard cut from a frozen photo, it dissolves into the video. Returns
-        None if it can't be done (the caller then cuts as before)."""
+        timed like the first. Used between two legs joined at a return stop,
+        into the outro, and wherever the editor sets a fade. Returns None if it
+        can't be done (the caller then cuts as before)."""
         from services.tts.ttsengine import FFmpegManager
 
         try:
@@ -1020,11 +1037,9 @@ class VideoExporter:
         width, height = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = target_fps or cap.get(cv2.CAP_PROP_FPS) or 30.0
         cap.release()
-        # The dissolve runs on EXTRA frames: the first clip's last frame (its
-        # photo already at fullscreen) is held for `d` more seconds inside the
-        # dissolve only, so the fade starts the instant the photo is fullscreen
-        # and there is no visible freeze before it. Never longer than half the
-        # second clip.
+        # The dissolve runs on EXTRA frames: the first clip's last frame is held
+        # for `d` more seconds inside the dissolve only, so there is no visible
+        # freeze before it. Never longer than half the second clip.
         d = min(float(seconds), second_len / 2.0)
         if width <= 0 or height <= 0 or d < 0.1:
             return None
