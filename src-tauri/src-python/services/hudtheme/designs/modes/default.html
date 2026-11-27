@@ -12,8 +12,7 @@
 {% set mode = m.mode %}
 {% set walker = m.walker %}
 <svg data-part="icon" width="28" height="28" viewBox="5 13 58 58" style="left:{{ x + 7 }}px;top:{{ y + 2 }}px;width:28px">{% include "parts/medallion.svg" %}<circle cx="34" cy="42" r="27" fill="none" stroke="{{ m.color }}" stroke-width="4"/></svg>
-{# Distances end where the pills start; "safe" keeps a too-long one overflowing rightwards, so it is shrunk. #}
-<div class="num fit" data-part="distance" style="left:{{ x + 39 }}px;top:{{ y }}px;width:64px;height:{{ row }}px;line-height:{{ row }}px;font-size:17px;justify-content:safe flex-end">{{ m.distance|units }}</div>
+<div class="num fit" data-part="distance" style="left:{{ x + 40 }}px;top:{{ y }}px;width:64px;height:{{ row }}px;line-height:{{ row }}px;font-size:17px">{{ m.distance|units }}</div>
 {% call box(x + 108, y + 5.5, 72, 21, "border-radius:11px;background:" ~ m.color ~ ";color:#fff;font-size:12px;font-weight:900;text-align:center", ' data-part="time" class="fit"') %}{{ m.time }}{% endcall %}
 {% endfor %}
 </div>

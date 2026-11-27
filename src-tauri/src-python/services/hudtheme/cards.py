@@ -49,7 +49,7 @@ def _mode_color(theme: Dict, mode: str) -> str:
 def title_card(theme: Dict, title: str, loop: bool, start: str, end: str, labels: Dict,
                style: str = styles.DEFAULT) -> Card:
     words = labels["themed_hud"]
-    return _card("title", style, theme, 326, 68, title=str(title or ""), loop=loop, start=str(start or ""),
+    return _card("title", style, theme, 260, 68, title=str(title or ""), loop=loop, start=str(start or ""),
                  end=str(end or ""), stamp=words["loop" if loop else "one_way"],
                  route=f'{words["base"]}　{start}' if loop else f"{start} → {end}")
 

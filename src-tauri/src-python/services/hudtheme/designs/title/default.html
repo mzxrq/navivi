@@ -1,10 +1,10 @@
 {% from "parts/macros.html" import box, grow with context %}
 {% set badge %}
-<div style="left:14px;top:50%;margin-top:-22px;width:42px;height:44px;border-radius:8px;background:{{ theme.accent }};border:2px solid #fff;box-sizing:border-box;transform:rotate(-5deg)">
+<div style="left:14px;top:50%;margin-top:-22px;width:42px;height:44px;border-radius:8px;background:{{ theme.accent }};border:2px solid #fff;box-sizing:border-box">
 {% call box(2, 0, 34, 40, "font-size:" ~ (13 if stamp|length < 3 else 11) ~ "px;font-weight:900;color:#fff;text-align:center", ' class="fit"') %}{{ stamp }}{% endcall %}
 </div>
 {% endset %}
-{% call grow("title", 326, 68, 14, 63, 68, 370, 11, 10, badge) %}
+{% call grow("title", 260, 68, 14, 63, 68, 370, 11, 10, badge) %}
 <div style="font-size:21px;font-weight:900;line-height:28px">{{ title|words }}</div>
 <div style="margin-top:3px;font-size:11px;font-weight:700;line-height:16px;color:{{ theme.gold }}">{{ route|words }}</div>
 {% endcall %}
