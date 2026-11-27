@@ -220,9 +220,11 @@ def test_the_finale_opens_fullscreen_only_when_the_scene_shrinks(shrink):
         lat, lon, [], 1.0, 64, 36, shrink,
     )
     frames = list(finale_step._pull_back_frames(scene))
-    assert len(frames) == 10 + (int(tuning.FINALE_PHOTO_SECONDS * 2) if shrink else 0)
+    held = int(tuning.FINALE_PHOTO_SECONDS * 2)
+    assert len(frames) == held + 10
     photo = (frames[0][:, :, 0] == 255) & (frames[0][:, :, 1] == 0)
     assert photo.all() == shrink and photo.any()  # without the shrink, only the card by its pin
+    assert all((f == frames[0]).all() for f in frames[:held])  # beat 1 is held still
     assert not frames[-1].any()  # the card is gone by the end of the pull-back
 
 
@@ -233,13 +235,114 @@ def test_the_shrink_is_only_dropped_when_the_end_stop_has_no_narration(narration
     assert _shrinks({"finale_shrink_without_voice": setting}, {"attractionNarration": narration}) is shrink
 
 
-def test_without_the_shrink_the_hold_still_fits_the_voice_and_the_clip_is_remade(tmp_path: Path):
-    from services.vdoprocessing.videopipeline.finale_step import _clip_key, _hold_seconds
+def test_switching_the_shrink_remakes_the_clip(tmp_path: Path):
+    from services.vdoprocessing.videopipeline.finale_step import _clip_key
 
-    voice = ("wav", 60.0)
-    assert _hold_seconds(voice, False) == pytest.approx(_hold_seconds(voice, True) + tuning.FINALE_PHOTO_SECONDS)
     keys = [_clip_key(tmp_path, {}, (1920, 1080), None, [], tmp_path / "end.jpg", shrink) for shrink in (True, False)]
     assert keys[0] != keys[1]
+
+
+def test_the_finale_holds_the_walks_last_frame_then_fades_into_the_same_view():
+    from services.vdoprocessing.videopipeline import finale_step
+
+    maps = [Image.new("RGB", (320, 180)) for _ in range(10)]
+    extent = (0.0, 1000.0, 0.0, 1000.0)
+    lat, lon = _at(500.0, 500.0)
+    walk = Image.new("RGB", (320, 180), (0, 0, 200))
+    scene = finale_step._Scene(
+        10, (320, 180), Image.new("RGB", (320, 180), (255, 0, 0)), None, None, maps, [(None, extent)] * 10,
+        lat, lon, [], 1.0, 40, 30, False, handoff=walk, card_offset=(30.0, -50.0),
+    )
+    frames = list(finale_step._pull_back_frames(scene))
+    held = int(tuning.FINALE_PHOTO_SECONDS * 10)
+    fading = int(tuning.FINALE_HANDOFF_SECONDS * 10)
+    assert len(frames) == held + fading + 10
+    assert all((f == np.asarray(walk)).all() for f in frames[:held])
+    assert 0 < frames[held][5, 5, 2] < 200  # the walk's overlays fading out
+    first = frames[held + fading]
+    assert tuple(first[55, 210]) == (255, 0, 0)  # the card where the walk left it: pin (160, 90) + offset
+    assert not first[5, 5].any()
+
+
+def test_the_finale_takes_the_end_view_of_the_walks_last_leg(tmp_path: Path):
+    import json
+
+    from services.vdoprocessing.videopipeline.finale_step import _leg_end
+
+    route = tmp_path / "route"
+    route.mkdir()
+    for name in ("02_waypoint_02_a.mp4", "02_waypoint_10_b.mp4", "02_waypoint_10_b_cont2.mp4"):
+        (route / name).write_bytes(b"x" * 4096)
+    view = {"lon": 135.0, "lat": 34.0, "zoom": 16.0, "pitch": 0.0, "card": {"box": [1, 2, 3, 4]}}
+    (route / "02_waypoint_02_endview.json").write_text(json.dumps(view), encoding="utf-8")
+    assert _leg_end(tmp_path) is None  # an earlier leg's view is not the end
+    (route / "02_waypoint_10_endview.json").write_text(json.dumps(view), encoding="utf-8")
+    assert _leg_end(tmp_path) == (view, route / "02_waypoint_10_b_cont2.mp4")
+
+
+def test_the_rendered_finale_starts_on_the_walks_last_frame(tmp_path: Path, monkeypatch):
+    import json
+
+    from services.mapfetcher import pydeck_overview
+    from services.projectfiles import gps_data_dir
+    from services.vdoprocessing import outrocard, storyboard
+    from services.vdoprocessing.videopipeline import finale_step
+    from services.vdoprocessing.videopipeline.helpers import project_video_dir
+
+    asked, frames = {}, []
+
+    def capture(*args, **kwargs):
+        asked.update(kwargs)
+        return [(np.zeros((1080, 1920, 3), np.uint8), (15027000.0, 15030000.0, 4050000.0, 4052000.0))] * 3
+
+    def pipe(drawn, part, fps, size):
+        frames.append(next(iter(drawn)))
+        Path(part).write_bytes(b"mp4")
+        return True
+
+    board = storyboard.finale({})
+    monkeypatch.setattr(storyboard, "finale", lambda settings=None: board.__class__(
+        **{**board.__dict__, "shrink_without_voice": False}))
+    monkeypatch.setattr(pydeck_overview, "capture_pydeck_zoom_sequence", capture)
+    monkeypatch.setattr(outrocard, "_pipe_frames", pipe)
+    monkeypatch.setattr(finale_step, "_last_frame", lambda clip, size: Image.new("RGB", size, (0, 0, 200)))
+    Image.new("RGB", (64, 48)).save(tmp_path / "end.jpg")
+    d = gps_data_dir(tmp_path)
+    d.mkdir(parents=True)
+    (d / "gpsdata.csv").write_text("latitude,longitude\n34.1,135.2\n34.2,135.3\n", encoding="utf-8")
+    route = Path(project_video_dir(tmp_path)) / "route"
+    route.mkdir(parents=True, exist_ok=True)
+    (route / "02_waypoint_02_b.mp4").write_bytes(b"x" * 4096)
+    view = {"lon": 135.3, "lat": 34.2, "zoom": 16.0, "pitch": 0.0, "card": {"box": [800, 300, 380, 214]}}
+    (route / "02_waypoint_02_endview.json").write_text(json.dumps(view), encoding="utf-8")
+    cfg = tmp_path / "job_config.json"
+    end = {"lat": 34.2, "lng": 135.3, "popup_image": str(tmp_path / "end.jpg"), "attractionNarration": ""}
+    cfg.write_text(json.dumps({"settings": {}, "waypoints": [{"lat": 34.1, "lng": 135.2}, end]}), encoding="utf-8")
+
+    assert finale_step.render_finale_clip(str(cfg), force=True)
+    assert asked["end_view"] == (135.3, 34.2, 16.0) and asked["map_style"].endswith("outdoors-v12")
+    assert tuple(frames[0][5, 5]) == (0, 0, 200)
+
+
+def test_a_zoom_push_can_end_exactly_on_a_given_view(monkeypatch):
+    from services.mapfetcher import pydeck_overview
+
+    shot = []
+    monkeypatch.setattr(pydeck_overview, "_capture_zoom_raw", lambda base, size, views, *a: shot.extend(views) or [])
+    pydeck_overview.capture_pydeck_zoom_sequence(
+        {"min_lat": 34.0, "max_lat": 34.1, "min_lon": 135.0, "max_lon": 135.2}, (1920, 1080), 34.02, 135.03, 5,
+        route_latlon=[(34.0, 135.0), (34.1, 135.2)], end_view=(135.031, 34.021, 16.0),
+    )
+    assert shot[-1] == pytest.approx((135.031, 34.021, 16.0))
+
+
+def test_a_loops_end_pin_is_on_the_map_from_the_first_frame(tmp_path: Path):
+    from services.vdoprocessing.videopipeline.finale_step import _finale_stops
+
+    route = [(34.0, 135.0), (34.1, 135.1), (34.0, 135.00001)]
+    home = {"lat": 34.0, "lng": 135.0}
+    stops = _finale_stops([("S", home), ("E", home)], route, tmp_path, {})
+    assert [s["at"] for s in stops] == [0, 2]
 
 
 def test_the_finales_pins_stay_on_top_of_the_leader_lines():

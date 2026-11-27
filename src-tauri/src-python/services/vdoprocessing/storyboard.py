@@ -66,8 +66,8 @@ def for_config(config: Dict[str, Any]) -> Storyboard:
 @dataclass(frozen=True)
 class FinaleBoard:
     """storyboards/finale.json: pin_shape "teardrop" / "dot", card_style "pill" / "popup", shrink_without_voice
-    (false: when the end stop has no attraction narration, no fullscreen photo shrinks; the pull-back starts with the
-    photo's pop-up card already on its pin) and hud
+    (false: when the end stop has no attraction narration, no fullscreen photo shrinks; the map holds the photo's
+    pop-up card on its pin, then pulls back) and hud
     "overview" (the overview recap's title, totals, travel modes and route strip, for a project with a hud.json)
     or "summary" (the plain totals card). include_stopby_waypoint / include_closed_waypoint: whether every
     stop-by / closed place gets its pin and card, on the route or off it."""

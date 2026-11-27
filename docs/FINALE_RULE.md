@@ -16,8 +16,8 @@ The finale is the clip (`98_finale.mp4`) between the last walking or attraction 
 
 | Beat | Length | On screen |
 |---|---|---|
-| 1. Photo | `FINALE_PHOTO_SECONDS` = 1.0 s | The last stop's photo, full frame (skipped for an end stop without narration, §8) |
-| 2. Pull-back | `FINALE_ZOOM_SECONDS` = 2.5 s | The photo shrinks onto its pin (without beat 1, its card starts there) while the camera pulls back on real map tiles from `FINALE_ZOOM_BOOST` = 3.5 zoom levels closer than the whole route. The route unspools backwards from the last stop, each stop's card lands as the line reaches it, and the summary card's distance and time count up over 1.1 s |
+| 1. Photo | `FINALE_PHOTO_SECONDS` = 1.0 s | The last stop's photo, full frame; held still. For an end stop without narration it can be the map with the photo's card on its pin instead (§8) |
+| 2. Pull-back | `FINALE_ZOOM_SECONDS` = 2.5 s | The photo shrinks onto its pin (a card already there stays) while the camera pulls back on real map tiles from `FINALE_ZOOM_BOOST` = 3.5 zoom levels closer than the whole route. The route unspools backwards from the last stop, each stop's card lands as the line reaches it, and the summary card's distance and time count up over 1.1 s |
 | 3. Hold | At least `FINALE_HOLD_SECONDS` = 3.0 s | The whole route with its summary card |
 
 The route finishes drawing at 70% of the pull-back (`_ROUTE_DRAW_FRACTION`).
@@ -66,10 +66,11 @@ The finale's look is set in `services/vdoprocessing/storyboards/finale.json`, ne
 | `hud` | `overview`, `summary` | `overview` | `overview`: the overview recap's title card, totals, travel modes and route strip, from the project's `hud.json`; the route is framed between them and the cards keep clear. A project without a `hud.json` shows the plain totals card, as `summary` does |
 | `include_stopby_waypoint` | `true`, `false` | `false` | `true`: every stop-by (`+N`), on the route or off it, gets its pin and card |
 | `include_closed_waypoint` | `true`, `false` | `false` | `true`: every closed place (`×`), on the route or off it, gets its pin and card |
-| `shrink_without_voice` | `true`, `false` | `true` | Only when the **end stop** has no attraction narration (and no video of its own). `true`: the photo shrinks onto its pin, as in §2. `false`: no full-frame photo; the first frame is the map with the photo's pop-up card on its pin, and the camera zooms out while the card fades |
+| `shrink_without_voice` | `true`, `false` | `true` | Only when the **end stop** has no attraction narration (and no video of its own). `true`: the photo shrinks onto its pin, as in §2. `false`: no full-frame photo; beat 1 holds the map with the photo's pop-up card on its pin, then the camera zooms out and the card fades |
 
 Rules:
 - A project setting `finale_` plus any key above (for example `finale_include_stopby_waypoint`) (in `job_config.json` `settings`) wins over the file. A value not listed above is ignored.
 - The finale's own narration (§3) does not change the opening.
+- Joining the walk (only when there is no shrink): the last leg saves the camera and photo card it ends on (`…endview.json`). The finale holds that leg's exact last frame for `FINALE_PHOTO_SECONDS`, fades its overlays out over `FINALE_HANDOFF_SECONDS` = 0.4 s on the same view, then pulls back from there in the leg's map style, with the card where the leg left it. A leg rendered before this has no end view: delete its clip and render again, or the finale draws its own opening.
 
 Editing the file or a setting renders the finale again. The settings have no control in the app yet.

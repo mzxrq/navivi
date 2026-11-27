@@ -878,6 +878,8 @@ class RouteAnimator:
             no_fade.unlink(missing_ok=True)
         if photos.dest_quiet and slide and photos.dest_image:
             leg_kwargs["hold_end_card"] = True
+            if not next_leg:  # the last leg: the finale opens on this camera and card
+                leg_kwargs["end_view_path"] = str(self.out_dir / f"{leg_glob_prefix}endview.json")
         prev = res_sequence[i - 1] if i > 0 else {}
         joined = slide and _legs_join(prev, res_data) and (start_quiet or not res_data.get("start_is_return"))
         if (res_data.get("start_is_return") or joined) and prev_end_view:

@@ -1331,7 +1331,8 @@ OUTRO_OUTPUT_FILENAME = "99_outro.mp4"
 # fullscreen, shrinking onto its pin, then the camera pulling back to the whole route.
 FINALE_OUTPUT_FILENAME = "98_finale.mp4"
 DEFAULT_ENABLE_FINALE = True
-FINALE_PHOTO_SECONDS = 1.0  # the photo fullscreen before it shrinks
+FINALE_PHOTO_SECONDS = 1.0  # the opening hold: the photo fullscreen, or (no shrink) its card on the pin
+FINALE_HANDOFF_SECONDS = 0.4  # no shrink: the walk's last frame fading into the finale's drawing of the same view
 FINALE_ZOOM_SECONDS = 2.5  # the pull-back from the last stop to the whole route
 FINALE_ZOOM_BOOST = 3.5  # how much closer than the whole-route view the pull-back starts (zoom levels)
 FINALE_VOICE_TAIL_SECONDS = 0.8  # the whole route still shown after the finale narration ends
