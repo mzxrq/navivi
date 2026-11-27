@@ -1198,6 +1198,15 @@ def _scroll_frame_maker(page_px: np.ndarray, header_h: int, pinned: bool, bg: np
     return frame_at
 
 
+def _logo_tail(last: np.ndarray, end_card: np.ndarray, fps: int):
+    """The last frame fading into the logo end card, then the card held."""
+    steps = max(1, int(round(tuning.OUTRO_LOGO_FADE_SECONDS * fps)))
+    for i in range(steps):
+        yield last + (end_card - last) * ((i + 1) / steps)
+    for _ in range(int(round(tuning.OUTRO_LOGO_HOLD_SECONDS * fps))):
+        yield end_card
+
+
 def _write_scroll_clip(
     page: Image.Image, output_path: Path, fps: int, size: Tuple[int, int],
     start_hold: Optional[float] = None,
@@ -1226,11 +1235,7 @@ def _write_scroll_clip(
     frame_at = _scroll_frame_maker(page_px, header_h, pinned, bg, size, k)
     frames = (frame_at(top) for top in offsets)
     if end_card is not None:
-        last = frame_at(offsets[-1])
-        steps = max(1, int(round(tuning.OUTRO_LOGO_FADE_SECONDS * fps)))
-        fades = (last + (end_card - last) * ((i + 1) / steps) for i in range(steps))
-        hold = (end_card for _ in range(int(round(tuning.OUTRO_LOGO_HOLD_SECONDS * fps))))
-        frames = itertools.chain(frames, fades, hold)
+        frames = itertools.chain(frames, _logo_tail(frame_at(offsets[-1]), end_card, fps))
     return _pipe_frames(frames, output_path, fps, size)
 
 
@@ -1916,8 +1921,11 @@ def generate_outro_clip(
     brief: Optional[Dict[str, Any]] = None,
     heading: Optional[Dict[str, Any]] = None,
     settings: Optional[Dict[str, Any]] = None,
+    themed: Optional[Tuple[Dict[str, Any], list]] = None,
 ) -> Optional[str]:
-    """`settings` (the project's) give the scrapbook and map styles their pin and route colours and summary cards.
+    """`themed` (theme, screens: outro_themed.py) draws the scroll as one screen per described place; if that
+    fails, today's scroll is drawn instead.
+    `settings` (the project's) give the scrapbook and map styles their pin and route colours and summary cards.
     Builds the outro in `style` ("scroll" or "grid" - see the module
     docstring) as an mp4; duration_sec is the grid's hold (the scroll's own
     length follows the page). `size` is the finished video's frame size,
@@ -1928,9 +1936,13 @@ def generate_outro_clip(
     Returns the output path, or None (logged,
     never raises) on any failure — an outro is a nice-to-have, not something
     that should hard-fail a pipeline run."""
+    from services.vdoprocessing import outro_themed  # it imports this module
+
     waypoints_with_image = [wp for wp in waypoints if wp.get("popup_image")]
     has_route = bool(brief and brief.get("legs"))
-    if not waypoints_with_image and not (has_route and style == "scroll"):
+    themed = themed if style == "scroll" else None
+    has_plain = bool(waypoints_with_image) or (has_route and style == "scroll")
+    if not themed and not has_plain:
         logger.warning("Outro: no waypoints with a popup_image — nothing to show.")
         return None
 
@@ -1941,8 +1953,22 @@ def generate_outro_clip(
     # Rendered beside it and swapped in when complete: a cancelled run leaves the last outro, never a cut-off one.
     partial_path = video_dir_path / f".{Path(output_filename).stem}.partial.mp4"
 
+    themed_written = False
+    if themed:
+        theme, screens = themed
+        try:
+            themed_written = outro_themed.write_themed_outro(
+                partial_path, screens, theme, heading or {}, size or (1920, 1080), tuning.INTRO_FPS)
+        except Exception as exc:
+            logger.warning("Themed outro failed (%s); using the plain scroll.", exc)
+        if not themed_written and not has_plain:
+            partial_path.unlink(missing_ok=True)
+            return None
+
     try:
-        if style == "scrapbook":
+        if themed_written:
+            written, note = True, f"({len(themed[1])} places, themed scroll)"
+        elif style == "scrapbook":
             written = _write_scrapbook_clip(
                 (heading or {}).get("subtitle") or project_name or "", waypoints, brief, partial_path, tuning.INTRO_FPS,
                 size or (1920, 1080), _project_colors(settings), heading,
@@ -1961,6 +1987,12 @@ def generate_outro_clip(
         if not written:
             return None
         replace_into(partial_path, output_path)
+        # Beside a clip that draws its own title, so no timeline title goes over it.
+        marker = output_path.with_suffix(".themed.json")
+        if themed_written:
+            marker.write_text('{"title_in_clip": true}', encoding="utf-8")
+        else:
+            marker.unlink(missing_ok=True)
     except Exception as exc:
         logger.error("Outro generation failed: %s", exc)
         return None

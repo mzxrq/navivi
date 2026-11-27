@@ -1390,6 +1390,11 @@ OUTRO_SCROLL_END_HOLD_SECONDS = 0.5
 OUTRO_SCROLL_MAX_SECONDS = 30.0
 # Soft fade under the title box and at the bottom edge, so cards ease in and out of view.
 OUTRO_SCROLL_EDGE_FADE_PX = 56
+# The themed scroll (a project with a hud.json theme, outro_themed.py): one place per screen. The first
+# hold also covers the 1 s dissolve into the outro. No cap on the length.
+OUTRO_THEMED_FIRST_HOLD_SECONDS = 2.5
+OUTRO_THEMED_HOLD_SECONDS = 1.5
+OUTRO_THEMED_SCROLL_SECONDS = 0.6
 # With route info the scroll is a timeline: title and trip summary, then one card per leg (photo, name,
 # start, mode/distance/time chips from route_brief). settings.outro_route_info: false = the grid.
 DEFAULT_OUTRO_ROUTE_INFO = True

@@ -1,0 +1,5 @@
+{
+  "name": "outro",
+  "include_stopby_waypoint": true,
+  "include_closed_waypoint": true
+}
