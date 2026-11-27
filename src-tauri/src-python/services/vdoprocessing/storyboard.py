@@ -95,3 +95,19 @@ def finale(settings: Optional[Dict[str, Any]] = None) -> FinaleBoard:
         if type(value) is type(allowed[0]) and value in allowed:
             data[key] = value
     return FinaleBoard(**data)
+
+
+@dataclass(frozen=True)
+class OutroBoard:
+    """storyboards/outro.json, for the themed scroll outro: include_stopby_waypoint / include_closed_waypoint,
+    whether stop-bys (and stops skipped in video export) / closed places get a screen."""
+    name: str
+    include_stopby_waypoint: bool
+    include_closed_waypoint: bool
+
+
+def outro() -> OutroBoard:
+    data: Dict[str, Any] = {"name": "outro", "include_stopby_waypoint": True, "include_closed_waypoint": True}
+    found = json.loads((_DIR / "outro.json").read_text(encoding="utf-8"))
+    data.update({k: v for k, v in found.items() if k in data and type(v) is type(data[k])})
+    return OutroBoard(**data)

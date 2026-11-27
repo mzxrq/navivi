@@ -107,6 +107,36 @@ def _outro_heading(job_config: JobConfigManager) -> dict:
     return heading
 
 
+def _themed_marker() -> str:
+    from services.vdoprocessing.outro_themed import MARKER
+
+    return MARKER
+
+
+def _themed_outro(config_path: Path, settings: dict, waypoints: list, style: str, brief: Optional[dict]):
+    """(theme, screens) when this outro is to be themed, else None; any fault gives today's outro."""
+    try:
+        from services.vdoprocessing import outro_themed, storyboard
+
+        theme = outro_themed.outro_theme(config_path.parent, settings, waypoints, style)
+        if theme is None:
+            return None
+        if brief is None:  # outro_route_info is off: the screens still show their leg's figures
+            try:
+                from services.localization.route_brief import load_brief
+
+                brief = load_brief(str(config_path))
+            except Exception as exc:
+                logger.warning("Outro step: no route figures for the themed outro (%s).", exc)
+        board = storyboard.outro()
+        screens = outro_themed.themed_screens(
+            waypoints, brief, stopbys=board.include_stopby_waypoint, closed=board.include_closed_waypoint)
+        return (theme, screens) if screens else None
+    except Exception as exc:
+        logger.warning("Outro step: could not theme the outro (%s).", exc)
+        return None
+
+
 def outro_text_item(project_config_path: str) -> Optional[dict]:
     """The scroll outro's kicker + title + subtitle as a text-track item over its pinned box, ending where
     the logo end card starts (`trim_end` seconds before the clip's end; build_timeline uses it). None when
@@ -124,6 +154,9 @@ def outro_text_item(project_config_path: str) -> Optional[dict]:
     style_name = _outro_style(settings)
     if style_name not in ("scroll", "scrapbook"):
         return None
+    video_dir = project_video_dir(job_config.get("directory_path", config_path.parent))
+    if style_name == "scroll" and (video_dir / _themed_marker()).exists():
+        return None  # the themed outro draws its own title
     h = _outro_heading(job_config)
     if not (h["title"] or h["subtitle"] or h["kicker"]):
         return None
@@ -228,7 +261,7 @@ def render_outro_clip(project_config_path: str) -> Optional[str]:
     outro_path = generate_outro_clip(
         video_dir=str(video_dir), project_name=title, waypoints=waypoints, style=style,
         size=size, brief=brief, heading=heading,
-        settings=settings,
+        settings=settings, themed=_themed_outro(config_path, settings, waypoints, style, brief),
     )
 
     if outro_path:
