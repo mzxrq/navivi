@@ -74,7 +74,7 @@ Examples with a 20 s voice and a 12 s natural walk:
 | 7 | Arrived: counters show 0 | 1 s (with a destination photo) |
 | 8 | Camera slides the destination to the middle, a little low | 1 s |
 | 9 | Small photo card, waits for the voice, grows fullscreen | grows in 0.4 s |
-| 10 | Clip ends on the full photo and dissolves into the attraction video | 0.8 s (`attraction_fade_seconds`) |
+| 10 | Clip ends on the full picture, which is the attraction clip's first frame; the next leg opens on its last frame | plain cut |
 
 Without a destination photo: after step 6 the map holds until the voice ends, then zooms out (unless the next leg continues from this view).
 
@@ -130,7 +130,6 @@ Without a destination photo: after step 6 the map holds until the voice ends, th
 | `merge_stopby_waypoints` | on |
 | `quiet_stop_transition` | `slide` |
 | `pace_slow_factor` / `pace_fast_factor` | 0.2 / 1.6 |
-| `attraction_fade_seconds` | 0.8 |
 | `street_photos_at_turns` | off |
 | `show_route_heatmap` | off |
 | `res_follow_pitch` | 0 (flat) |
