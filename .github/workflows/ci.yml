@@ -107,13 +107,15 @@ jobs:
           "$HOME\ffmpeg\bin" >> $env:GITHUB_PATH
           & "$HOME\ffmpeg\bin\ffmpeg.exe" -version
           & "$HOME\ffmpeg\bin\ffprobe.exe" -version
-      # requirements-test.txt is the app's pinned runtime list plus pytest/ruff/soundfile (see requirements-test.in).
+      # requirements-test.txt is the app's pinned runtime list plus the test tools (see requirements-test.in).
       - run: uv pip install --system -r requirements-test.txt
+      # The themed HUD, outro and pin tests draw their cards in a real headless Chromium.
+      - run: python -m playwright install --only-shell chromium
       - name: Lint
         run: python -m ruff check --output-format github .
       # CI=true makes tests/conftest.py fail the run if any test was skipped.
       - name: Tests
-        run: python -m pytest -q -rs
+        run: python -m pytest -q -rs -n auto
 
   rust:
     name: Rust shell

@@ -78,6 +78,8 @@ deprecated==3.0.0
     # via
     #   -c requirements-runtime.txt
     #   pykakasi
+execnet==2.1.2
+    # via pytest-xdist
 faster-whisper==1.2.1
     # via
     #   -c requirements-runtime.txt
@@ -292,6 +294,10 @@ pyproj==3.8.0
     #   -c requirements-runtime.txt
     #   -r requirements-runtime.in
 pytest==9.1.1
+    # via
+    #   -r requirements-test.in
+    #   pytest-xdist
+pytest-xdist==3.8.0
     # via -r requirements-test.in
 python-dateutil==2.9.0.post0
     # via
