@@ -120,7 +120,6 @@ export interface TimelineData {
 export const EDITOR_VERSION = 1;
 export const MIN_SEGMENT = 0.5;
 export const MIN_CUE = 0.3;
-export const AUTO_FADE_SECONDS = 0.8;
 export const DEFAULT_EXTRA_VOLUME = 0.5;
 
 export const emptyTimeline = (): TimelineData => ({
@@ -267,12 +266,7 @@ export function autoArrange(timeline: TimelineData): TimelineData {
   const sorted = timeline.segments
     .map((s, i) => ({ s, i, k: autoOrderKey(s) }))
     .sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.i - b.i)
-    .map(({ s }) => ({ ...s, fadeIntoNext: 0 }));
-  for (let i = 0; i < sorted.length - 1; i++) {
-    if (sorted[i].kind === "route" && sorted[i + 1].kind === "attraction") {
-      sorted[i].fadeIntoNext = AUTO_FADE_SECONDS;
-    }
-  }
+    .map(({ s }) => ({ ...s, fadeIntoNext: 0 })); // a leg ends on its stop clip's first frame: no dissolve
   return { ...timeline, segments: sorted };
 }
 

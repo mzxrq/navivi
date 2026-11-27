@@ -755,8 +755,8 @@ msgstr "AI 機能"
 msgid "AI models"
 msgstr "AI モデル"
 
-#: src/components/view/ProjectSettingsModal.tsx:274
-#: src/components/view/ProjectSettingsModal.tsx:281
+#: src/components/view/ProjectSettingsModal.tsx:272
+#: src/components/view/ProjectSettingsModal.tsx:279
 msgid "AI photo clips"
 msgstr "AIで写真を動かす"
 
@@ -835,8 +835,8 @@ msgstr "アンカー {0} · 角 · ダブルクリックでなめらかに"
 msgid "Anchor {0} · smooth · double-click for a corner"
 msgstr "アンカー {0} · なめらか · ダブルクリックで角に"
 
-#: src/components/view/ProjectSettingsModal.tsx:264
-#: src/components/view/ProjectSettingsModal.tsx:270
+#: src/components/view/ProjectSettingsModal.tsx:262
+#: src/components/view/ProjectSettingsModal.tsx:268
 msgid "Animate photos at stops"
 msgstr "地点の写真をアニメーション化"
 
@@ -845,7 +845,7 @@ msgstr "地点の写真をアニメーション化"
 msgid "Animation"
 msgstr "アニメーション"
 
-#: src/components/view/ProjectSettingsModal.tsx:324
+#: src/components/view/ProjectSettingsModal.tsx:301
 msgid "Anything you leave alone renders the way it always has."
 msgstr "そのままにした項目は、これまでどおりにレンダリングされます。"
 
@@ -1210,7 +1210,7 @@ msgstr "キャンセル"
 #: src/components/view/LanguageVersionDialog.tsx:91
 #: src/components/view/ProjectManager.tsx:641
 #: src/components/view/ProjectManager.tsx:704
-#: src/components/view/ProjectSettingsModal.tsx:131
+#: src/components/view/ProjectSettingsModal.tsx:129
 #: src/features/editor/ExportDialog.tsx:110
 #: src/features/editor/VoicePiecesDialog.tsx:119
 #: src/features/map/components/GenerateDialog.tsx:130
@@ -1243,7 +1243,7 @@ msgstr "キャンセル中..."
 msgid "Cannot close window. Check Tauri capabilities"
 msgstr "[アドミン] ウィンドウを閉じることができません。Tauriの権限を確認してください。"
 
-#: src/components/view/ProjectSettingsModal.tsx:67
+#: src/components/view/ProjectSettingsModal.tsx:66
 msgid "Cannot edit settings directly in .nvv archive. Please open project first."
 msgstr ".nvvアーカイブの設定は直接編集できません。先にプロジェクトを開いてください"
 
@@ -1320,7 +1320,7 @@ msgid "Choose a recording…"
 msgstr "録音ファイルを選択…"
 
 #: src/components/ui/AppSettings.tsx:513
-#: src/components/view/ProjectSettingsModal.tsx:244
+#: src/components/view/ProjectSettingsModal.tsx:242
 msgid "Choose file…"
 msgstr "ファイルを選択…"
 
@@ -1684,8 +1684,8 @@ msgid "Could not look for photos: {0}"
 msgstr "写真を探せませんでした: {0}"
 
 #: src/hooks/useStopRegen.ts:125
-#: src/hooks/useStopRegen.ts:154
-#: src/hooks/useStopRegen.ts:177
+#: src/hooks/useStopRegen.ts:156
+#: src/hooks/useStopRegen.ts:179
 msgid "Could not make that again: {message}"
 msgstr "作り直せませんでした: {message}"
 
@@ -1702,7 +1702,7 @@ msgstr "ファイルの場所を開けませんでした"
 msgid "Could not read {input}."
 msgstr "{input} を読み込めませんでした。"
 
-#: src/components/view/ProjectSettingsModal.tsx:78
+#: src/components/view/ProjectSettingsModal.tsx:77
 msgid "Could not read project config."
 msgstr "プロジェクトの設定を読み込めませんでした"
 
@@ -1844,7 +1844,7 @@ msgid "Cut to next clip"
 msgstr "次のクリップへカット"
 
 #: src/components/ui/VideoLookSettings.tsx:89
-#: src/components/view/ProjectSettingsModal.tsx:181
+#: src/components/view/ProjectSettingsModal.tsx:179
 msgid "Dark"
 msgstr "ダーク"
 
@@ -1856,12 +1856,12 @@ msgstr "日帰り旅"
 msgid "Decrease"
 msgstr "減らす"
 
-#: src/components/view/ProjectSettingsModal.tsx:187
+#: src/components/view/ProjectSettingsModal.tsx:185
 msgid "Default"
 msgstr "標準"
 
 #: src/components/ui/AppSettings.tsx:452
-#: src/components/view/ProjectSettingsModal.tsx:216
+#: src/components/view/ProjectSettingsModal.tsx:214
 msgid "Default marker for all waypoints. Can be overridden per-stop."
 msgstr "すべてのポイントのデフォルトマーカーです。ポイントごとに上書きできます"
 
@@ -2446,8 +2446,8 @@ msgid "Fade into next clip"
 msgstr "次のクリップへフェード"
 
 #: src/components/view/ProjectSettingsModal.tsx:295
-msgid "Fade into the stop's clip"
-msgstr "地点のクリップへのフェード"
+#~ msgid "Fade into the stop's clip"
+#~ msgstr "地点のクリップへのフェード"
 
 #: src/features/editor/TimelinePane.tsx:427
 msgid "Fades into the next clip"
@@ -2529,7 +2529,7 @@ msgstr "プロジェクト名の変更に失敗しました"
 msgid "Failed to save project."
 msgstr "プロジェクトの保存に失敗しました"
 
-#: src/components/view/ProjectSettingsModal.tsx:115
+#: src/components/view/ProjectSettingsModal.tsx:113
 msgid "Failed to save settings"
 msgstr "設定の保存に失敗しました"
 
@@ -2648,8 +2648,8 @@ msgstr "GPSトラックに沿って"
 msgid "Follow the first waypoint again"
 msgstr "最初の地点に合わせ直す"
 
-#: src/components/view/ProjectSettingsModal.tsx:285
-#: src/components/view/ProjectSettingsModal.tsx:291
+#: src/components/view/ProjectSettingsModal.tsx:283
+#: src/components/view/ProjectSettingsModal.tsx:289
 msgid "Follow timing cues in scripts"
 msgstr "台本のタイミング指定に従う"
 
@@ -3274,7 +3274,7 @@ msgstr "新しいバージョンの言語"
 msgid "Language of the text in the video"
 msgstr "動画内の文字の言語"
 
-#: src/components/view/ProjectSettingsModal.tsx:375
+#: src/components/view/ProjectSettingsModal.tsx:352
 msgid "Larger map tiles for a crisper picture. They take longer to download."
 msgstr "より大きな地図タイルで、画像が鮮明になります。ダウンロードに時間がかかります。"
 
@@ -3337,7 +3337,7 @@ msgid "Letter spacing"
 msgstr "文字間隔"
 
 #: src/components/ui/VideoLookSettings.tsx:88
-#: src/components/view/ProjectSettingsModal.tsx:182
+#: src/components/view/ProjectSettingsModal.tsx:180
 msgid "Light"
 msgstr "ライト"
 
@@ -3476,7 +3476,7 @@ msgstr "最長の区間"
 msgid "Longest leg in the overview"
 msgstr "全体表示での最長の区間"
 
-#: src/components/view/ProjectSettingsModal.tsx:321
+#: src/components/view/ProjectSettingsModal.tsx:298
 msgid "Look of the video"
 msgstr "動画の見た目"
 
@@ -3605,7 +3605,7 @@ msgstr "この地点の写真クリップを作成しています。数分かか
 msgid "Making the subtitles for this stop."
 msgstr "この地点の字幕を作成しています。"
 
-#: src/hooks/useStopRegen.ts:163
+#: src/hooks/useStopRegen.ts:165
 msgid "Making the walking clip again. This can take a few minutes."
 msgstr "歩くクリップを作り直しています。数分かかることがあります。"
 
@@ -3642,12 +3642,12 @@ msgstr "地図ラベルのサイズ"
 msgid "Map panel opacity"
 msgstr "地図パネルの不透明度"
 
-#: src/components/view/ProjectSettingsModal.tsx:342
-#: src/components/view/ProjectSettingsModal.tsx:353
+#: src/components/view/ProjectSettingsModal.tsx:319
+#: src/components/view/ProjectSettingsModal.tsx:330
 msgid "Map style"
 msgstr "地図スタイル"
 
-#: src/components/view/ProjectSettingsModal.tsx:339
+#: src/components/view/ProjectSettingsModal.tsx:316
 msgid "Map style in the video"
 msgstr "動画内の地図スタイル"
 
@@ -4117,7 +4117,7 @@ msgstr "確認できるものがまだありません。"
 #~ msgstr "待っている作業はありません"
 
 #: src/hooks/useStopRegen.ts:119
-#: src/hooks/useStopRegen.ts:149
+#: src/hooks/useStopRegen.ts:151
 msgid "Nothing was made: {skipped}"
 msgstr "何も作成されませんでした: {skipped}"
 
@@ -4156,7 +4156,7 @@ msgstr "Ollama またはオンラインAI"
 msgid "On route"
 msgstr "ルート上"
 
-#: src/components/view/ProjectSettingsModal.tsx:275
+#: src/components/view/ProjectSettingsModal.tsx:273
 msgid "On: moves are made with AI on the graphics card (ComfyUI). Off: a 3D photo move on the processor only, no ComfyUI. Changing it makes the photo clips again."
 msgstr "オン: グラフィックボード上のAI（ComfyUI）で動きを作ります。オフ: CPUだけで写真を立体的に動かし、ComfyUIは使いません。切り替えると写真の動画を作り直します。"
 
@@ -4209,7 +4209,7 @@ msgstr "API キーの設定を開く"
 msgid "Open Details to see what went wrong."
 msgstr "「詳細」で原因を確認できます。"
 
-#: src/components/view/ProjectSettingsModal.tsx:398
+#: src/components/view/ProjectSettingsModal.tsx:375
 msgid "Open dictionary…"
 msgstr "辞書を開く…"
 
@@ -4313,7 +4313,7 @@ msgstr "元の音の音量"
 msgid "Other subtitles have their own style. Replace it with this one?"
 msgstr "個別のスタイルを持つ字幕があります。このスタイルで置き換えますか？"
 
-#: src/components/view/ProjectSettingsModal.tsx:178
+#: src/components/view/ProjectSettingsModal.tsx:176
 msgid "Outdoors"
 msgstr "アウトドア"
 
@@ -4671,11 +4671,11 @@ msgstr "プロジェクトを{fileName}に保存しました"
 msgid "Project settings"
 msgstr "プロジェクト設定"
 
-#: src/components/view/ProjectSettingsModal.tsx:124
+#: src/components/view/ProjectSettingsModal.tsx:122
 msgid "Project Settings"
 msgstr "プロジェクト設定"
 
-#: src/components/view/ProjectSettingsModal.tsx:111
+#: src/components/view/ProjectSettingsModal.tsx:109
 msgid "Project settings saved"
 msgstr "プロジェクト設定を保存しました"
 
@@ -4695,7 +4695,7 @@ msgstr "京都観光"
 msgid "Pronunciation"
 msgstr "発音辞書"
 
-#: src/components/view/ProjectSettingsModal.tsx:388
+#: src/components/view/ProjectSettingsModal.tsx:365
 msgid "Pronunciation dictionary"
 msgstr "発音辞書"
 
@@ -4968,7 +4968,7 @@ msgstr "レンダリング中にエラーが発生しました"
 msgid "renderFinishSuccessMessage"
 msgstr "アセットの生成が正常に完了しました"
 
-#: src/components/view/ProjectSettingsModal.tsx:261
+#: src/components/view/ProjectSettingsModal.tsx:259
 msgid "Rendering"
 msgstr "レンダリング"
 
@@ -5019,7 +5019,7 @@ msgstr "マップのレンダリングや3D地形で必要です"
 #: src/components/ui/VideoLookSettings.tsx:39
 #: src/components/ui/VoiceSettings.tsx:508
 #: src/components/ui/VoiceSettings.tsx:524
-#: src/components/view/ProjectSettingsModal.tsx:252
+#: src/components/view/ProjectSettingsModal.tsx:250
 #: src/features/map/components/WaypointEditor.tsx:1063
 msgid "Reset"
 msgstr "リセット"
@@ -5032,7 +5032,7 @@ msgstr "話し方をリセット"
 msgid "Reset style"
 msgstr "スタイルをリセット"
 
-#: src/components/view/ProjectSettingsModal.tsx:332
+#: src/components/view/ProjectSettingsModal.tsx:309
 msgid "Reset the look"
 msgstr "見た目をリセット"
 
@@ -5151,7 +5151,7 @@ msgid "Route map"
 msgstr "ルート地図"
 
 #: src/components/ui/AppSettings.tsx:451
-#: src/components/view/ProjectSettingsModal.tsx:213
+#: src/components/view/ProjectSettingsModal.tsx:211
 msgid "Route marker"
 msgstr "ルートマーカー"
 
@@ -5211,11 +5211,11 @@ msgstr "Gemma 4などのオープンモデルをこのPCで実行します。モ
 msgid "S"
 msgstr "始"
 
-#: src/components/view/ProjectSettingsModal.tsx:190
+#: src/components/view/ProjectSettingsModal.tsx:188
 msgid "Same as the editor"
 msgstr "エディタと同じ"
 
-#: src/components/view/ProjectSettingsModal.tsx:180
+#: src/components/view/ProjectSettingsModal.tsx:178
 msgid "Satellite Streets"
 msgstr "衛星写真+道路"
 
@@ -5263,7 +5263,7 @@ msgstr "プロジェクトを保存"
 msgid "Save Project As"
 msgstr "プロジェクトを名前を付けて保存"
 
-#: src/components/view/ProjectSettingsModal.tsx:134
+#: src/components/view/ProjectSettingsModal.tsx:132
 msgid "Save Settings"
 msgstr "設定を保存"
 
@@ -5360,8 +5360,8 @@ msgid "sec"
 msgstr "秒"
 
 #: src/components/view/ProjectSettingsModal.tsx:296
-msgid "Seconds a leg dissolves into the clip that follows it. 0 is a hard cut."
-msgstr "区間が次のクリップへディゾルブする秒数です。0はカットです。"
+#~ msgid "Seconds a leg dissolves into the clip that follows it. 0 is a hard cut."
+#~ msgstr "区間が次のクリップへディゾルブする秒数です。0はカットです。"
 
 #: src/features/editor/Inspector.tsx:333
 msgid "Seconds after the title item starts. It leaves the same time before the end."
@@ -5509,8 +5509,8 @@ msgstr "影の色"
 msgid "Sharpen photos"
 msgstr "写真をシャープにする"
 
-#: src/components/view/ProjectSettingsModal.tsx:374
-#: src/components/view/ProjectSettingsModal.tsx:380
+#: src/components/view/ProjectSettingsModal.tsx:351
+#: src/components/view/ProjectSettingsModal.tsx:357
 msgid "Sharper map tiles"
 msgstr "より鮮明な地図タイル"
 
@@ -5876,8 +5876,8 @@ msgid "Stop-by pin"
 msgstr "立ち寄りのピン"
 
 #: src/hooks/useStopRegen.ts:124
-#: src/hooks/useStopRegen.ts:153
-#: src/hooks/useStopRegen.ts:176
+#: src/hooks/useStopRegen.ts:155
+#: src/hooks/useStopRegen.ts:178
 msgid "Stopped before it finished."
 msgstr "完了する前に停止しました。"
 
@@ -5918,7 +5918,7 @@ msgstr "ストリートビュー"
 msgid "Street view {0}"
 msgstr "ストリートビュー {0}"
 
-#: src/components/view/ProjectSettingsModal.tsx:179
+#: src/components/view/ProjectSettingsModal.tsx:177
 msgid "Streets"
 msgstr "ストリート"
 
@@ -5980,7 +5980,7 @@ msgstr "字幕"
 msgid "Summary card"
 msgstr "サマリーカード"
 
-#: src/components/view/ProjectSettingsModal.tsx:369
+#: src/components/view/ProjectSettingsModal.tsx:346
 msgid "Sync with the editor's map"
 msgstr "エディターの地図に合わせる"
 
@@ -6066,7 +6066,7 @@ msgstr "アシスタント、台本の自動作成ボタン、全体ナレーシ
 msgid "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
 msgstr "OpenAI API に対応したサーバーのベースアドレス（例: https://example.com/v1）"
 
-#: src/hooks/useStopRegen.ts:150
+#: src/hooks/useStopRegen.ts:152
 msgid "The clip is ready."
 msgstr "クリップができました。"
 
@@ -6087,11 +6087,11 @@ msgstr "ドキュメントを処理できませんでした: {0}"
 msgid "The document could not be processed."
 msgstr "ドキュメントを処理できませんでした。"
 
-#: src/components/view/ProjectSettingsModal.tsx:345
+#: src/components/view/ProjectSettingsModal.tsx:322
 msgid "The editor shows {editorLabel}, which is not a Mapbox style, so the video cannot use it."
 msgstr "エディタでは {editorLabel} を表示していますが、Mapbox のスタイルではないため動画には使えません。"
 
-#: src/components/view/ProjectSettingsModal.tsx:362
+#: src/components/view/ProjectSettingsModal.tsx:339
 msgid "The editor's map is {editorLabel}."
 msgstr "エディターの地図は {editorLabel} です。"
 
@@ -6135,7 +6135,7 @@ msgstr "アシスタントと自動作成が使うモデルです。"
 #~ msgid "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
 #~ msgstr "最も自然な声で、声のクローンもできます。グラフィックスカードのないPCでは最も時間がかかります。"
 
-#: src/hooks/useStopRegen.ts:150
+#: src/hooks/useStopRegen.ts:152
 msgid "The narration is ready. If its length changed, make the clip again so it fits."
 msgstr "ナレーションができました。長さが変わった場合は、クリップも作り直して合わせてください。"
 
@@ -6204,7 +6204,7 @@ msgstr "字幕ができました。"
 msgid "The video starts directly on the route. Turn the intro on to add a title card."
 msgstr "動画はルートから直接始まります。タイトルカードを追加するにはイントロをオンにしてください。"
 
-#: src/components/view/ProjectSettingsModal.tsx:347
+#: src/components/view/ProjectSettingsModal.tsx:324
 msgid "The video's map follows the map in the editor ({editorLabel}) until you pick a style here."
 msgstr "ここでスタイルを選ぶまで、動画の地図はエディターの地図({editorLabel})に合わせます。"
 
@@ -6232,7 +6232,7 @@ msgstr "このプロジェクトのすべてのナレーションをこのボイ
 msgid "The walk reaches the stop by the time its name is spoken. Cues you type yourself always win."
 msgstr "地点の名前が読み上げられるころに、歩きがその地点に到着します。ご自身で入力したキューが常に優先されます。"
 
-#: src/hooks/useStopRegen.ts:173
+#: src/hooks/useStopRegen.ts:175
 msgid "The walking clip is ready."
 msgstr "歩くクリップができました。"
 
@@ -6386,7 +6386,7 @@ msgstr "タイミング"
 msgid "Timing cues"
 msgstr "タイミングのキュー"
 
-#: src/components/view/ProjectSettingsModal.tsx:286
+#: src/components/view/ProjectSettingsModal.tsx:284
 msgid "Timing cues written in a narration decide when the walker reaches the stop."
 msgstr "ナレーションに書いたタイミング指定で、地点に到着する瞬間が決まります。"
 
@@ -6499,7 +6499,7 @@ msgstr "方向転換のなめらかさ"
 msgid "Turn the itinerary I attach into a 3 minute video with Japanese narration"
 msgstr "添付する旅程表を、日本語ナレーションの約 3 分の動画にしてください"
 
-#: src/components/view/ProjectSettingsModal.tsx:265
+#: src/components/view/ProjectSettingsModal.tsx:263
 msgid "Turn the photos of a stop into a moving clip. Off skips them, which renders faster."
 msgstr "地点の写真を動くクリップにします。オフにすると省略され、レンダリングが速くなります。"
 
@@ -6889,7 +6889,7 @@ msgstr "ポイント {idx}"
 msgid "What else do you want to set up?"
 msgstr "ほかに何をセットアップしますか？"
 
-#: src/components/view/ProjectSettingsModal.tsx:348
+#: src/components/view/ProjectSettingsModal.tsx:325
 msgid "What the video's map looks like. Default keeps the look the video always had."
 msgstr "動画の地図の見た目です。「標準」では、これまでの動画と同じ見た目になります。"
 
@@ -6980,7 +6980,7 @@ msgstr "単語 (例: 加太)"
 msgid "Word / Kanji"
 msgstr "単語 / 漢字"
 
-#: src/components/view/ProjectSettingsModal.tsx:391
+#: src/components/view/ProjectSettingsModal.tsx:368
 msgid "Words every project shares live in App Settings, which you can open from here without opening a project."
 msgstr "すべてのプロジェクトで共有する単語はアプリ設定にあります。プロジェクトを開かずにここから開けます。"
 
@@ -7051,7 +7051,7 @@ msgid "You're watching the last version. The new one opens for review when it fi
 msgstr "前回の版を表示しています。完了すると新しい版の確認画面が開きます。"
 
 #: src/components/ui/AppSettings.tsx:452
-#: src/components/view/ProjectSettingsModal.tsx:217
+#: src/components/view/ProjectSettingsModal.tsx:215
 msgid "Your own image is also drawn as the pin in the video; the built-in icons show on the map only."
 msgstr "ご自身の画像は動画内のピンとしても描画されます。内蔵のアイコンは地図上にのみ表示されます。"
 
