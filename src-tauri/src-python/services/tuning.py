@@ -542,6 +542,9 @@ FULLSCREEN_SHRINK_SECONDS = 0.25
 LEG_PHOTO_FADE_SECONDS = 0.2
 # A leg that carries on from the one before: the camera moves from its last view into this one's in this long.
 LEG_CONTINUE_GLIDE_SECONDS = 1.0
+# The leg before's line fades out over this share of that glide, at its end: kept longer it read as part of the
+# new leg, a line running from the departure pin to nowhere (2026-11-27).
+LEG_PRIOR_TRAIL_FADE_SHARE = 0.5
 # ...and keeps that view's zoom while the leg fits at it and is at most this many levels smaller than it could be.
 LEG_KEEP_ZOOM_SLACK = 1.0
 # A leg starting farther than this from the end of the one before (a sub course) opens on its own instead.
