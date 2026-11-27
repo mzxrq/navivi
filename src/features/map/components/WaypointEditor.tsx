@@ -30,6 +30,7 @@ import { useUI } from "../../../hooks/useUI";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { ScriptInput, type CueTag } from "../../../components/ui/ScriptInput";
 import { Switch } from "../../../components/ui/Switch";
+import { dialogInput } from "../../../components/ui/Dialog";
 import { Segmented } from "../../../components/ui/Segmented";
 import { MAX_VIDEOS, WaypointVideos } from "./WaypointVideos";
 import { openContextMenu, separator } from "../../../components/ui/menuItems";
@@ -42,6 +43,7 @@ import {
 import { aiEngine, isOnlineEngine } from "../../../services/ai/engine";
 import { PROVIDERS } from "../../../services/ai/providers";
 import { stopLabel } from "../../../utils/stopLabel";
+import { usesScrollOutro } from "../../../utils/videoLook";
 import { resolveNarrationLanguage } from "../../../utils/narrationLanguage";
 import { i18n } from "@lingui/core";
 import { fetchLegScripts } from "../../../services/legScripts";
@@ -681,6 +683,23 @@ export function WaypointEditor({
                           isGenerating={false}
                           onGenerate={() => {}}
                           cues={[]}
+                        />
+                      </section>
+                    )}
+                    {!isStreetView && !inSubCourse(wp) && usesScrollOutro(settings) && (
+                      <section>
+                        <h3 className="text-[12px] font-semibold text-zinc-800 dark:text-zinc-200">
+                          <Trans>Outro description</Trans>
+                        </h3>
+                        <p className="text-[11px] text-zinc-500 mb-1">
+                          <Trans>Shown under this place's photo in the themed outro. The box grows with the text, up to about 7 lines.</Trans>
+                        </p>
+                        <textarea
+                          rows={3}
+                          aria-label={t`Outro description`}
+                          value={wp.outroDescription ?? ""}
+                          onChange={(e) => updateWaypoint(wp.id, { outroDescription: e.target.value })}
+                          className={`${dialogInput.replace("h-9 ", "")} py-2 leading-relaxed resize-y`}
                         />
                       </section>
                     )}

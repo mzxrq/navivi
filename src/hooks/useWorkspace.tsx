@@ -597,6 +597,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           narration: wp.narration || "",
           arrivingNarration: wp.arrivingNarration || "",
           attractionNarration: wp.attractionNarration || "",
+          outroDescription: wp.outroDescription || undefined,
           audioUrl: wp.audioUrl,
           videoUrl: wp.videoUrl,
         })),

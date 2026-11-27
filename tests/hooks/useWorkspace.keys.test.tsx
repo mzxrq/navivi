@@ -29,6 +29,7 @@ vi.mock("../../src/hooks/useUI", () => ({ useUI: () => ({ editorMode: "map", isR
 vi.mock("../../src/components/ui/UnsavedChanges", () => ({ UnsavedChanges: () => null }));
 
 import { useWorkspace, WorkspaceProvider } from "../../src/hooks/useWorkspace";
+import { loadProjectData, loadRouteCache } from "../../src/services/fileSystem";
 
 const wrapper = ({ children }: { children: ReactNode }) => <WorkspaceProvider>{children}</WorkspaceProvider>;
 const keyWrites = () => store.set.mock.calls.filter(([key]) => key === "api_keys").map(([, value]) => value);
@@ -37,6 +38,20 @@ beforeEach(() => {
   store.records = {};
   store.get.mockReset().mockImplementation((key: string) => Promise.resolve(store.records[key] ?? null));
   store.set.mockReset().mockResolvedValue(undefined);
+});
+
+describe("loading a project", () => {
+  it("keeps a stop's outro description", async () => {
+    vi.mocked(loadRouteCache).mockResolvedValue({});
+    vi.mocked(loadProjectData).mockResolvedValue({
+      selectedPath: "C:/p",
+      data: { project_id: "p", project_name: "P", directory_path: "C:/p", settings: {},
+        waypoints: [{ id: "a", lat: 35, lng: 135, name: "A", outroDescription: "港" }] },
+    } as never);
+    const { result } = renderHook(() => useWorkspace(), { wrapper });
+    await act(async () => void (await result.current.loadProject("C:/p", true)));
+    await waitFor(() => expect(result.current.waypoints[0]?.outroDescription).toBe("港"));
+  });
 });
 
 describe("the Mapbox and OpenRouteService keys live in the app settings", () => {
