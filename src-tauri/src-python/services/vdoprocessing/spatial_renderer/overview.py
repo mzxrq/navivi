@@ -397,7 +397,7 @@ def _reproject_popups(active_popups: List[Dict], extent, w: int, h: int) -> None
 
 def _number_popups(active_popups: List[Dict], points: List) -> None:
     """1-based visit order for each pin; the start (index 0) and stop-bys take no number (they show "S" / "・"), and
-    a return stop shows the number of the stop it comes back to — so it also has no {n} cue (is_return).
+    a return stop shows the number of the stop it comes back to (is_return): only the course overview times it, on that number said again.
     Matches the map editor's own MapArea.tsx normalIndex."""
     order = 0
     popup_places = [ap["data"] for ap in active_popups]

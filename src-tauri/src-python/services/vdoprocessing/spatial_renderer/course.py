@@ -474,6 +474,13 @@ def _split_popups(
         ap["course_dist"] = 0.0 if ap["index"] == 0 else dist
     if stop_popup is not None:
         stop_popup["course_dist"] = total
+    # A return stop shows an earlier stop's number: the voice's second {n} is its cue ("4#2", see cues.py).
+    visits: Dict[str, int] = {}
+    for ap in on_route:
+        if ap["index"] != 0:
+            number = str(ap.get("order"))
+            visits[number] = visits.get(number, 0) + 1
+            ap["cue_key"] = number if visits[number] == 1 else f"{number}#{visits[number]}"
     return on_route, extras, stop_popup
 
 
@@ -493,10 +500,10 @@ def _arrive_cue(ap: Dict, cues: Dict, any_go: bool) -> Tuple:
     """A {go} stop is reached when its name is said and the walker waits there until {go} (arriving at {go}
     spread the walk over the whole description: a crawl between close stops). A stop named without a {go} is
     passed at the second its name is said."""
-    name = cues.get(str(ap.get("order")))
+    name = cues.get(ap["cue_key"])
     if not any_go:
         return (name, ap["course_dist"])
-    go = cues.get(f"go{ap.get('order')}")
+    go = cues.get(f"go{ap['cue_key']}")
     if go is None or ap["data"].get("pause_at_waypoint") is False:  # "Pause at Location" off: passed
         return (name, ap["course_dist"], False)
     if name is not None and float(name) < float(go):
@@ -556,7 +563,7 @@ def _set_reveal_times(
         ap["course_at"] = timing.route_at if ap["index"] == 0 else _reveal_time(timing.anchors, ap["course_dist"])
         # A pin and its card appear when the voice names the stop: never before, and
         # at most COURSE_CUE_WINDOW_SECONDS after, wherever the trace is by then.
-        said = cues.get(str(ap.get("order")))
+        said = cues.get(ap.get("cue_key"))
         if said is not None and ap["index"] != 0 and ap is not stop_popup:
             ap["course_at"] = pin_reveal_time(ap["course_at"], said, timing.route_at)
     # Each kind's pins come one at a time across their own sentence (to the next kind's cue, or the end),

@@ -146,7 +146,7 @@ tidied the first time they are opened (Rust `tidy_project_folder`), and Python r
   Per-project overrides come from `job_config.json` `settings.*`; tuning.py holds fallback defaults only.
 - Stop numbering (S, 1, 2 … E) is one rule, `route_inputs.stop_is_numbered` + `returns_to`: a stop-by and a stop skipped in
   video export show "・", and a return stop ("Add return stop", a copy at the same spot) shows again the number of the stop it
-  comes back to and gets no `{n}` cue. Six places count it for their own data shape — `overview_pin_glyphs` (legs/3D),
+  comes back to and has no number of its own (in the course overview, saying `{n}` a second time times it: cue `n#2`, `cues.py`). Six places count it for their own data shape — `overview_pin_glyphs` (legs/3D),
   `spatial_renderer/overview.py`'s `order`, `waypoints.py`'s `_numbers`, `route2vdo`'s pydeck pins, `outrocard._route_badges`
   and `overview_script.visible_waypoints` — so a change has to go through all of them (`tests/test_stop_numbering.py`).
   The map editor's own `src/utils/stopLabel.ts` still numbers a return stop separately (it also names asset files).

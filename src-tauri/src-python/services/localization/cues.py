@@ -5,7 +5,9 @@ A script may carry inline tags that mark moments the video has to land on:
     {start}   the walk begins moving here
     {arrive}  "we are nearly there" - the walker nears the stop
     {end}     the stop is reached here
-    {n}       overview only: visible waypoint number n is reached here
+    {n}       overview only: visible waypoint number n is reached here. Said again,
+              it is the stop that returns there (recorded as "n#2", its {go} as "gon#2"),
+              so the first time is kept
     {go}      overview only: the description of the stop before it ends here -
               the walker waits at that stop until now, then heads on. Recorded
               as "go<n>" (n: the last {n} before it); ignored before any {n}
@@ -68,12 +70,16 @@ class _CueScan:
         self.scene = 1
         self.photos = 0
         self.nexts = 0
+        self.visits: Dict[str, int] = {}  # how often each {n} has been said
         self.cards = {"view": 0, "turn": 0, "slow": 0, "fast": 0, "stop": 0, "at": 0}  # {view} street views, {turn} automatic turn photos
 
     def add(self, tag: str, length: int) -> None:
         """Records the cue for `tag`, which sits right before character `length` of the clean text."""
         cues, cards = self.cues, self.cards
         if tag.isdigit():
+            visit = self.visits[tag] = self.visits.get(tag, 0) + 1
+            if visit > 1:
+                tag = f"{tag}#{visit}"
             self.stop = tag
         if tag.startswith("photo:"):
             self.photos += 1
