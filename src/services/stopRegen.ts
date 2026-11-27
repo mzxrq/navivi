@@ -227,3 +227,17 @@ export function withOutroBurnedIn(timeline: TimelineData): TimelineData | null {
   });
   return changed ? { ...timeline, texts } : null;
 }
+
+/** A themed outro draws its own title (Python leaves <clip>.themed.json beside it), so the old title leaves the
+ *  text track. Null when nothing changes. */
+export async function withoutThemedOutroTitle(timeline: TimelineData, readText: (rel: string) => Promise<string>): Promise<TimelineData | null> {
+  const seg = timeline.segments.find((s) => routeClipOf(s) === "outro");
+  if (!seg?.video) return null;
+  try {
+    await readText(seg.video.replace(/\.mp4$/i, ".themed.json"));
+  } catch {
+    return null; // today's outro
+  }
+  const texts = timeline.texts.filter((x) => !(x.kind === "outro" && x.segmentId === seg.id));
+  return texts.length === timeline.texts.length ? null : { ...timeline, texts };
+}

@@ -4,7 +4,7 @@ const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 import { emptyTimeline, type Segment, type TimelineData } from "../../src/features/editor/model";
-import { fileIsStop, isBusyClip, lastJson, legOf, narrationOf, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, regenTargetOf, routeClipModes, runRegen, stopIndexOf, withOutroBurnedIn } from "../../src/services/stopRegen";
+import { fileIsStop, isBusyClip, lastJson, legOf, narrationOf, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, regenTargetOf, routeClipModes, runRegen, stopIndexOf, withOutroBurnedIn, withoutThemedOutroTitle } from "../../src/services/stopRegen";
 
 beforeEach(() => invoke.mockReset());
 
@@ -215,6 +215,24 @@ describe("withOutroBurnedIn", () => {
     expect(next.texts[0].end).toBeCloseTo(10.5);
     expect(next.texts[1]).toBe(tl.texts[1]);
     expect(withOutroBurnedIn(next)).toBeNull();
+  });
+});
+
+describe("withoutThemedOutroTitle", () => {
+  const timeline = {
+    segments: [{ id: "o", video: "assets/video/99_outro.mp4" }],
+    texts: [{ id: "t", kind: "outro", segmentId: "o" }, { id: "k", kind: "caption", segmentId: "o" }],
+  } as unknown as TimelineData;
+
+  it("drops the outro title when the clip carries its own", async () => {
+    const read = vi.fn(() => Promise.resolve('{"title_in_clip": true}'));
+    const next = await withoutThemedOutroTitle(timeline, read);
+    expect(read).toHaveBeenCalledWith("assets/video/99_outro.themed.json");
+    expect(next?.texts.map((x) => x.id)).toEqual(["k"]);
+  });
+
+  it("changes nothing without the marker", async () => {
+    expect(await withoutThemedOutroTitle(timeline, () => Promise.reject(new Error("no file")))).toBeNull();
   });
 });
 
