@@ -55,11 +55,32 @@ The app's settings default is `scroll` (`src/config/constants.ts`). The renderer
 - A stop with no photo gets no card. Its route row still shows in the route facts.
 - Badge colours match the stop's numbered pin.
 
-## 7. Tuning
+## 7. Themed scroll (one place per screen)
+
+Code: `services/vdoprocessing/outro_themed.py`, look: `services/hudtheme/designs/outro/default.html`.
+
+| Rule | Value |
+|---|---|
+| Used when | `outro_style` is `scroll` and `<project>/hud.json` names a theme. Otherwise, or if it fails, the plain scroll |
+| Screens | Every stop, described or not, in route order; stop-bys and closed places as `storyboards/outro.json` says. A place come back to gets one screen (the visit with the description). No limit, no 30 s cap |
+| Storyboard | `services/vdoprocessing/storyboards/outro.json`: `include_stopby_waypoint` (stop-bys and stops skipped in video export) and `include_closed_waypoint`, both `true`. It applies to every project |
+| No description | The screen shows the picture and the facts, with no description box |
+| On a screen | Photo (the theme's picture without one), description, badge as on the map pins, name, the distance and time of the leg arriving there (`--.-` when no leg does), and the next place |
+| Banner | The intro's place (kicker), title and subtitle |
+| Timing | First screen 2.5 s, others 1.5 s, 0.6 s scroll between them, then the logos over the same background |
+| Scroll | The next screen follows right behind. The down arrow and the line to it stay put, and fade as the last place arrives |
+| Description | `outroDescription` on the waypoint (stop editor; the box shows only while the outro style is scroll). Its size never changes: the box grows from 3 lines up to 7 (the most that fits the screen), then the text is cut with "…" |
+| Title | Drawn into the clip. `99_outro.themed.json` beside the clip says so: no outro text item on the timeline |
+| Not shown | Trip summary, stop-by and closed-place lists (`outro_route_info` has no effect) |
+
+Frames are captured from headless Chromium on the CPU: the page's CSS animation is paused and set to each frame's time; a held screen is captured once.
+
+## 8. Tuning
 
 All numbers live in `services/tuning.py` (the `OUTRO_*` block, lines ~1320–1400). Change them there, not in `outrocard.py`.
 
-## 8. Checks
+## 9. Checks
 
 - `tests/test_outrocard.py` and `tests/test_look_options.py` cover the outro's options and layout.
 - `tests/test_stop_numbering.py` covers the badge numbers.
+- `tests/test_outro_themed.py` covers the themed scroll.
