@@ -9,7 +9,7 @@ from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 import numpy as np
 
-from services import tuning, video_text
+from services import video_text
 from services.hudtheme import cards, layout, model, render
 from services.logger.logger import setup_logger
 from services.mapfetcher.graphicengine.cards import _blend_card
@@ -145,13 +145,16 @@ class ThemedPanels:
         finally:
             graphics.equal_stopby_notices, graphics.stopby_notice_colors = saved
 
-    def compose(self, frame: np.ndarray, i: int, t: float, dist: float, mode: Optional[str], timing) -> np.ndarray:
-        """The panels over `frame` at time `t`, the trace at `dist` travelling by `mode` (None: not yet moving)."""
+    def compose(
+        self, frame: np.ndarray, i: int, t: float, dist: float, mode: Optional[str], timing, slide_seconds: float,
+    ) -> np.ndarray:
+        """The panels over `frame` at time `t`, the trace at `dist` travelling by `mode` (None: not yet moving).
+        The travel-mode bar takes `slide_seconds` to drop in."""
         for name in ("title", "totals"):
             if name in self.cards:
                 self.cards[name].paste(frame)
         if "modes" in self.cards and t >= timing.stats_at:
-            u = min(1.0, (t - timing.stats_at) / tuning.COURSE_STATS_SLIDE_SECONDS)
+            u = min(1.0, (t - timing.stats_at) / slide_seconds)
             u = u * u * (3 - 2 * u)
             self.cards["modes"].paste(frame, alpha=u, dy=-(1 - u) * _SLIDE_PX * self.unit)
         if "strip" in self.cards:
@@ -159,7 +162,7 @@ class ThemedPanels:
             self._progress(frame, i, dist, mode, arrived=t >= timing.trace_end)
         if self.show_notices:
             with self.banners():
-                for at, kind, offset in ((timing.extras_at, "stopby", 0),
+                for at, kind, offset in ((timing.extras_at if timing.stopbys else None, "stopby", 0),
                                          (timing.closed_at if timing.closed else None, "closed", self.closed_offset)):
                     if at is not None and t >= at:
                         u = min(1.0, (t - at) / _NOTICE_FADE_SECONDS)

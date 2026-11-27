@@ -11,8 +11,21 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 from services.localization.localization import is_japanese
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services import tuning
+from services.vdoprocessing.storyboard import of as storyboard_of
 
 from .glyphs import drawable
+
+CARD_CORNER_RADIUS = 18  # the photo card's corners, in frame pixels (whatever the card's scale)
+
+
+def fill_card_shape(mask: np.ndarray, x: int, y: int, w: int, h: int) -> None:
+    """Marks the pixels a card at (x, y) of w x h really covers - its corners are rounded - in a uint8 `mask`."""
+    r = int(min(CARD_CORNER_RADIUS, w // 2, h // 2))
+    cv2.rectangle(mask, (x + r, y), (x + w - 1 - r, y + h - 1), 255, -1)
+    cv2.rectangle(mask, (x, y + r), (x + w - 1, y + h - 1 - r), 255, -1)
+    for cx in (x + r, x + w - 1 - r):
+        for cy in (y + r, y + h - 1 - r):
+            cv2.circle(mask, (cx, cy), r, 255, -1)
 
 
 class _PopupBoxMixin:
@@ -158,7 +171,7 @@ class _PopupBoxMixin:
         return lines, font
 
     def slide_to_card(self, data: Dict, photo: np.ndarray) -> np.ndarray:
-        """The "map" overview's pop-up: the photo for OVERVIEW_MAP_PHOTO_SECONDS of being shown, then it slides
+        """The "map" overview's pop-up: the photo for map_photo_seconds of being shown, then it slides
         left and the stop's leg card (data["leg_card_bgr"], map_style.attach_leg_cards) slides in after it.
         Counts the frames each stop's card has been drawn (one draw per frame)."""
         card = data.get("leg_card_bgr")
@@ -166,7 +179,8 @@ class _PopupBoxMixin:
             return photo
         counts = self.__dict__.setdefault("_slide_frames", {})
         shown = counts[id(data)] = counts.get(id(data), 0) + 1
-        p = (shown / getattr(self, "slide_fps", 30) - tuning.OVERVIEW_MAP_PHOTO_SECONDS) / tuning.OVERVIEW_MAP_SLIDE_SECONDS
+        timings = storyboard_of("map").timings
+        p = (shown / getattr(self, "slide_fps", 30) - timings["map_photo_seconds"]) / timings["map_slide_seconds"]
         if p <= 0:
             return photo
         p = min(1.0, p)
@@ -364,7 +378,7 @@ class _PopupBoxMixin:
         bd = total_w - 8
         cbx, cby = bx + 4, by + 5
         draw.ellipse([cbx, cby, cbx + bd, cby + bd], fill=circle_rgba)
-        # "badge_label" is the glyph its own pin shows — "S"/"E"/"・"/the
+        # "badge_label" is the glyph its own pin shows — "S"/"E"/"+1"/the
         # visit number (see overview.py) — so the badge and the pin agree;
         # "order" is the fallback for a caller that sets no label.
         order_text = str(popup_info.get("badge_label") or popup_info.get("order") or "")
@@ -461,17 +475,16 @@ class _PopupBoxMixin:
         # edge", not from the pin itself.
         via = popup_info.get("leader_via")
         if popup_info.get("leader_straight"):
-            # Radial: pin straight to where the line toward the card's centre meets its edge.
-            cx, cy = box_x + total_w / 2.0, box_y + total_h / 2.0
-            dx, dy = cx - point_x, cy - point_y
-            t = 0.0
-            for p, d, lo, hi in ((point_x, dx, box_x, box_x + total_w), (point_y, dy, box_y, box_y + total_h)):
-                if d and not lo <= p <= hi:
-                    t = max(t, (lo - p) / d if d > 0 else (hi - p) / d)
-            cv2.line(
-                working_frame, (point_x, point_y), (int(point_x + dx * t), int(point_y + dy * t)),
-                line_color, line_width, cv2.LINE_AA,
-            )
+            # The overview's cards: one straight line from the pin to the nearest point of the card, which is
+            # what the layout keeps clear of every other card (popups._ring_attempt).
+            # On the ROUNDED card: stopping at the square corner left a gap there. Ends 2 px inside, under it.
+            r = min(CARD_CORNER_RADIUS, total_w // 2, total_h // 2)
+            cx = min(max(point_x, box_x + r), box_x + total_w - r)  # the nearest point of the card shrunk by r
+            cy = min(max(point_y, box_y + r), box_y + total_h - r)
+            away = math.hypot(point_x - cx, point_y - cy)
+            reach = (r - 2) / away if away > r else 0.0
+            end = (int(round(cx + (point_x - cx) * reach)), int(round(cy + (point_y - cy) * reach)))
+            cv2.line(working_frame, (point_x, point_y), end, line_color, line_width, cv2.LINE_AA)
         elif via is not None:
             via_x, via_y = int(via[0]), int(via[1])
             anchor_x = min(max(via_x, box_x), box_x + total_w)
@@ -645,7 +658,7 @@ class _PopupBoxMixin:
         card_box = [box_x, box_y, box_x + total_w - 1, box_y + total_h - 1]
         draw.rounded_rectangle(
             card_box,
-            radius=18,
+            radius=CARD_CORNER_RADIUS,
             fill=self.ui["card_bg"][:3] + (250,),
         )
         return pil_canvas
@@ -662,7 +675,7 @@ class _PopupBoxMixin:
         """
         mask = Image.new("L", (pw, ph), 0)
         ImageDraw.Draw(mask).rounded_rectangle(
-            [0, 0, pw - 1, ph - 1], radius=18, fill=255,
+            [0, 0, pw - 1, ph - 1], radius=CARD_CORNER_RADIUS, fill=255,
             corners=(True, True, not caption_below, not caption_below),
         )
         return mask
@@ -792,7 +805,7 @@ class _PopupBoxMixin:
         """The leader line and/or card of one popup drawn onto `working_frame`; unchanged when its photo can't be read."""
         h, w = working_frame.shape[:2]
         pop_img = None if line_only else self.read_image_safe(image_path, copy=False)  # only resized below
-        if pop_img is not None and "recap_line_color" not in popup_info:
+        if pop_img is not None and "recap_line_color" not in popup_info and popup_info.get("leg_card", True):
             pop_img = self.slide_to_card(popup_info["data"], pop_img)
         if not (line_only or pop_img is not None):
             return working_frame

@@ -39,6 +39,7 @@ TAIL_SECONDS = 0.0
 # down so the wait never exceeds it. settings.max_early_arrival_seconds.
 MAX_EARLY_ARRIVAL_SECONDS = 3.0
 MIN_WALK_SECONDS = 4.0
+OVERVIEW_CUE_KINDS = ("n", "go", "start", "extras", "closed", "scene")  # each: settings.auto_cue_<kind>
 
 
 def _sentences(text: str) -> list[str]:
@@ -65,13 +66,18 @@ class CueStore:
         except (OSError, json.JSONDecodeError):
             self._data = {}
 
-    def cued_text(self, key: str, base: str) -> Optional[str]:
-        """The stored cued script for `key` if it was made from this exact base."""
+    def cued_text(self, key: str, base: str, skip: Optional[frozenset] = None) -> Optional[str]:
+        """The stored cued script for `key` if it was made from this exact base - and, when `skip` is given,
+        with those cue kinds switched off."""
         entry = self._data.get(key)
-        return entry.get("text") if entry and entry.get("base") == _hash(base) else None
+        if not entry or entry.get("base") != _hash(base):
+            return None
+        if skip is not None and entry.get("skip", []) != sorted(skip):
+            return None
+        return entry.get("text")
 
-    def put_text(self, key: str, base: str, text: str) -> None:
-        self._data[key] = {"base": _hash(base), "text": text}
+    def put_text(self, key: str, base: str, text: str, skip: frozenset = frozenset()) -> None:
+        self._data[key] = {"base": _hash(base), "text": text, **({"skip": sorted(skip)} if skip else {})}
 
     def cue_times_for(self, key: str) -> dict:
         return dict(self._data.get(key, {}).get("cue_times", {}))
@@ -147,6 +153,7 @@ def _overview_source_ids(project: dict) -> str:
     import hashlib
 
     from services.localization.overview_script import overview_style, visible_waypoints
+    from services.vdoprocessing.storyboard import of as storyboard_of
 
     waypoints = [wp for wp in project.get("waypoints", []) if isinstance(wp, dict)]
     numbered = {id(wp) for wp in visible_waypoints(project)}
@@ -160,7 +167,7 @@ def _overview_source_ids(project: dict) -> str:
         return "+" if wp.get("isStopBy") else ""
 
     ids = ",".join(str(wp.get("id", "")) + mark(i, wp) for i, wp in enumerate(waypoints))
-    if overview_style(project) != "course":
+    if not storyboard_of(overview_style(project)).script_intro_in_key:
         return ids
     intro = ((project.get("settings") or {}).get("overview_intro") or "").strip()
     return f"{ids}|course|{hashlib.md5(intro.encode('utf-8')).hexdigest()[:8]}"
@@ -259,7 +266,7 @@ def add_overview_cues(project_config_path: str) -> bool:
     localization/overview_cues.py), so the walker stops at each waypoint while
     the voice describes it. Words are never changed, so audio already made
     stays valid; the user's own tags win. On by default (tuning.DEFAULT_AUTO_OVERVIEW_CUES);
-    settings.auto_overview_cues=false turns it off.
+    settings.auto_overview_cues=false turns every kind off, settings.auto_cue_<kind>=false one of OVERVIEW_CUE_KINDS.
     Returns whether a new tagged version was stored.
 
     Always calls ensure_overview_narration first (see its docstring) so a
@@ -275,25 +282,27 @@ def add_overview_cues(project_config_path: str) -> bool:
     project = json.loads(config_path.read_text(encoding="utf-8"))
     from services import tuning
 
-    if not project.get("settings", {}).get("auto_overview_cues", tuning.DEFAULT_AUTO_OVERVIEW_CUES):
-        return False
+    settings = project.get("settings") or {}
+    master = settings.get("auto_overview_cues", tuning.DEFAULT_AUTO_OVERVIEW_CUES)
+    skip = frozenset(k for k in OVERVIEW_CUE_KINDS if not (master and settings.get(f"auto_cue_{k}", True)))
     base = project.get("overview_narration") or ""
     store = CueStore(config_path.parent)
     if not base.strip():
         return False
-    stored = store.cued_text(OVERVIEW_CUE_KEY, base)
+    previous = store.cued_text(OVERVIEW_CUE_KEY, base)  # whatever the switches were
+    stored = store.cued_text(OVERVIEW_CUE_KEY, base, skip)
     if stored and numbers_in_opening(stored) and not numbers_in_opening(base):
         stored = None  # tagged by an earlier version, which numbered the opening: place them again
     if stored:
         tagged = stored
     else:
         labels = [w.get("label") or w.get("name") or "" for w in visible_waypoints(project)]
-        tagged = auto_tag_overview(base, labels) or base
+        tagged = auto_tag_overview(base, labels, skip) or base
     # A text-led intro cuts its scenes on the opening's {scene} cues (the user's win).
     from .intro_step import intro_style
 
     style = intro_style(project.get("settings") or {})
-    if style != "slideshow":
+    if style != "slideshow" and "scene" not in skip:
         from services.localization.overview_cues import add_scene_cues
 
         tagged = add_scene_cues(tagged, [s["seconds"] for s in tuning.INTRO_STYLE_SCENES[style]])
@@ -304,9 +313,9 @@ def add_overview_cues(project_config_path: str) -> bool:
             "Overview script: {%d} is followed by \"%s\", but stop %d is \"%s\" - the cues land on the wrong places.",
             n, said, n, label or "(no such stop)",
         )
-    if tagged == (stored or base):
+    if tagged == (previous or base):
         return False
-    store.put_text(OVERVIEW_CUE_KEY, base, tagged)
+    store.put_text(OVERVIEW_CUE_KEY, base, tagged, skip)
     store.save()
     return True
 

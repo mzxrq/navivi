@@ -10,9 +10,9 @@ never changing a word of the script:
     {go}  before the first later sentence of that stop's passage that sets
           off for somewhere else ("次は…", "ここから…"): the stop is described
           until there, then the walker heads on
-    {start} before "これが全体のルートです。" (the map appears; the opening
-          before it plays over the intro, and its names are not stops), and
-          {route} before the next sentence (the route is traced from there)
+    {start} before "これが全体のルートです。" (the map appears and the route is
+          traced; the opening before it plays over the intro, and its names are
+          not stops)
     {extras} before "黒色で示した地点は…" (the stop-bys appear; not stops either)
     {closed} before "赤色で示した地点は…" (the closed places appear, after the stop-bys)
 
@@ -24,7 +24,7 @@ the opening before it.
 from __future__ import annotations
 
 import re
-from typing import List, Optional, Sequence
+from typing import FrozenSet, List, Optional, Sequence
 
 from services.localization.cues import clean_text, cue_tags
 from services.localization.sentence_split import SENTENCE_END
@@ -146,14 +146,11 @@ def _go_positions(sentences: List[str], starts: dict) -> set:
     return go_before
 
 
-def _sentence_marks(sentences: List[str], tags: List[str], pivot: Optional[int], extras: Optional[int],
-                    closed: Optional[int]) -> dict:
-    """Sentence index -> the {start} / {route} / {extras} / {closed} tags that go before it."""
+def _sentence_marks(pivot: Optional[int], extras: Optional[int], closed: Optional[int]) -> dict:
+    """Sentence index -> the {start} / {extras} / {closed} tags that go before it."""
     marks: dict = {}
     if pivot is not None:
         marks.setdefault(pivot, []).append("{start}")
-        if pivot + 1 < len(sentences) and "route" not in tags:
-            marks.setdefault(pivot + 1, []).append("{route}")
     if extras is not None:
         marks.setdefault(extras, []).append("{extras}")
     if closed is not None:
@@ -167,11 +164,24 @@ def numbers_in_opening(script: Optional[str]) -> bool:
     return bool(start) and any(t.isdigit() for t in cue_tags(opening))
 
 
-def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[str]:
+def auto_tag_overview(
+    script: Optional[str], labels: Sequence[str], skip: FrozenSet[str] = frozenset(),
+) -> Optional[str]:
     """`script` with {n} / {go} tags placed; `labels[i]` is visible waypoint
-    i + 1's name. Returns the script unchanged when nothing could be placed."""
+    i + 1's name. `skip` names the kinds not to add ("n", "go", "start",
+    "extras", "closed"). Returns the script unchanged when nothing could be placed."""
     if not script:
         return script
+    tagged = _place_tags(script, labels)
+    for kind in skip:
+        tag = r"\{\d+\}" if kind == "n" else r"\{%s\}" % kind
+        if not re.search(tag, script):  # a kind the user typed: none was added, theirs stay
+            tagged = re.sub(tag, "", tagged)
+    return tagged
+
+
+def _place_tags(script: str, labels: Sequence[str]) -> str:
+    """auto_tag_overview with every kind placed."""
     tags = cue_tags(script)
     has_numbers = any(t.isdigit() for t in tags)
     has_go = "{go}" in script
@@ -182,14 +192,14 @@ def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[
     kept = opening + start
     sentences = _sentences(body)
     # "これが全体のルートです。": the map appears there, so the opening before it plays
-    # over the intro ({start}); the route is traced from the next sentence ({route}).
+    # over the intro, and the route is traced from there ({start}).
     # "黒色で示した地点は…": the stop-bys appear ({extras}); their names are not stops.
     pivot = None if start else _first_sentence_matching(sentences, _ROUTE_PIVOT)  # where our {start} goes
     # "{start}これが全体のルートです。" is the course layout whoever wrote the {start}.
     layout_at = 0 if start and sentences and _ROUTE_PIVOT.search(sentences[0]) else pivot
     extras = None if "extras" in tags else _first_sentence_matching(sentences, _EXTRAS)
     closed = None if "closed" in tags else _first_sentence_matching(sentences, _CLOSED)
-    marks = _sentence_marks(sentences, tags, pivot, extras, closed)
+    marks = _sentence_marks(pivot, extras, closed)
     limit = min(i for i in (extras, closed, len(sentences)) if i is not None)
     if has_numbers and has_go:
         return kept + _with_marks(sentences, marks)
