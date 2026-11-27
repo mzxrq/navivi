@@ -10,6 +10,9 @@ route unspools backwards out of the close-up, each badge lands in turn as the li
 card's distance and time tick up to the real figures. Then the outro cuts in."""
 
 import csv
+import json
+import re
+import tempfile
 from functools import partial
 from pathlib import Path
 from typing import Callable, List, NamedTuple, Optional, Tuple
@@ -372,7 +375,8 @@ def _finale_stops(badges, route, project_dir: Path, settings: dict) -> list:
             order = int(badge)
         wp_photo = _first_image(wp)
         wp_photo_path = _photo_path(wp_photo, project_dir)
-        at = min(
+        # The end is the track's last point: on a loop the nearest one is the start, hiding its pin until then.
+        at = len(route) - 1 if badge == "E" else min(
             range(len(route)),
             key=lambda i: (route[i][0] - wp_lat) ** 2 + (route[i][1] - wp_lon) ** 2,
         )
@@ -390,9 +394,9 @@ def _finale_stops(badges, route, project_dir: Path, settings: dict) -> list:
 _VOICE_START_SECONDS = 0.0
 
 
-def _hold_seconds(voice, shrink: bool = True) -> float:
+def _hold_seconds(voice) -> float:
     """The whole-route hold, stretched so the voice ends inside the clip."""
-    before_hold = tuning.FINALE_ZOOM_SECONDS + (tuning.FINALE_PHOTO_SECONDS if shrink else 0.0)
+    before_hold = tuning.FINALE_PHOTO_SECONDS + tuning.FINALE_ZOOM_SECONDS
     hold_seconds = tuning.FINALE_HOLD_SECONDS
     if voice:
         hold_seconds = max(
@@ -401,19 +405,52 @@ def _hold_seconds(voice, shrink: bool = True) -> float:
     return hold_seconds
 
 
-def _clip_key(project_dir: Path, settings: dict, size, voice, stops: list, photo_path: Path, shrink: bool = True) -> str:
+def _leg_end(video_dir: Path) -> Optional[Tuple[dict, Path]]:
+    """(end view, clip) of the walk's last leg, when it saved the flat camera and the photo card it ends on."""
+    from services.vdoprocessing.route2vdo import leg_clips
+
+    route_dir = Path(video_dir) / "route"
+    numbers = [m.group(1) for p in route_dir.glob("02_waypoint_*.mp4") if (m := re.match(r"02_waypoint_(\d+)_", p.name))]
+    if not numbers:
+        return None
+    prefix = f"02_waypoint_{max(numbers, key=int)}_"
+    clips = leg_clips(route_dir, f"{prefix}*.mp4")
+    try:
+        view = json.loads((route_dir / f"{prefix}endview.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not clips or view.get("pitch") or not view.get("card"):
+        return None
+    return view, clips[-1]
+
+
+def _last_frame(clip: Path, size) -> Optional[Image.Image]:
+    from services.vdoprocessing.video_frames import clip_end_frames
+
+    with tempfile.TemporaryDirectory(prefix="navivi_finale_") as tmp:
+        ends = clip_end_frames(str(clip), tmp)
+        if not ends:
+            return None
+        with Image.open(ends[1]) as frame:
+            return frame.convert("RGB").resize(size, Image.LANCZOS)
+
+
+def _clip_key(
+    project_dir: Path, settings: dict, size, voice, stops: list, photo_path: Path, shrink: bool = True, leg_end=None,
+) -> str:
     from . import clip_cache
 
     return clip_cache.fingerprint(
         {
             "settings": settings, "size": size, "voice": voice and voice[1], "shrink": shrink,
+            "leg_end": leg_end and leg_end[0],
             "hud": layout.fingerprint(project_dir),
             "stops": [
                 (s["badge"], s["lat"], s["lon"], s["name"], str(s["photo"] or "")) for s in stops
             ],
         },
         [
-            gps_data_dir(project_dir) / "gpsdata.csv", photo_path, voice and voice[0],
+            gps_data_dir(project_dir) / "gpsdata.csv", photo_path, voice and voice[0], leg_end and leg_end[1],
             __file__, tuning.__file__, storyboard._DIR / "finale.json",
             # the card layouts the finale borrows
             Path(__file__).parents[1] / "spatial_renderer" / "popups.py",
@@ -424,9 +461,10 @@ def _clip_key(project_dir: Path, settings: dict, size, voice, stops: list, photo
 
 
 def _pull_back_maps(
-    settings: dict, route, stops: list, size, fps: int, lat, lon, room_for_hud: bool = False,
+    settings: dict, route, stops: list, size, fps: int, lat, lon, room_for_hud: bool = False, start_view=None,
 ) -> tuple:
-    """(frames, maps): the pydeck pull-back, close-up first, and each frame overlaid with the route and stops."""
+    """(frames, maps): the pydeck pull-back, close-up first, and each frame overlaid with the route and stops.
+    `start_view` (lon, lat, zoom): the walk's last camera, which it then starts on, in the walk's map style."""
     lats, lons = [p[0] for p in route], [p[1] for p in route]
     pad_lat, pad_lon = (max(lats) - min(lats)) * 0.12 + 1e-4, (max(lons) - min(lons)) * 0.12 + 1e-4
     bbox = {"min_lat": min(lats) - pad_lat, "max_lat": max(lats) + pad_lat, "min_lon": min(lons) - pad_lon, "max_lon": max(lons) + pad_lon}
@@ -443,8 +481,9 @@ def _pull_back_maps(
     n = max(2, int(tuning.FINALE_ZOOM_SECONDS * fps))
     frames = capture_pydeck_zoom_sequence(
         bbox, size, float(lat), float(lon), n, zoom_boost=tuning.FINALE_ZOOM_BOOST,
-        mapbox_key=resolve_mapbox_token(settings), map_style=resolve_map_style(settings, "mapbox/streets-v12"),
-        route_latlon=route,
+        mapbox_key=resolve_mapbox_token(settings),
+        map_style=resolve_map_style(settings, "mapbox/outdoors-v12" if start_view else "mapbox/streets-v12"),
+        route_latlon=route, end_view=start_view,
     )[::-1]  # pulls back: the close-up first
     # [NOTE] The overview's own route colour, read the way render_look reads it (the app writes RGB), not the
     # way outrocard does, which hands back the project's cyan as orange.
@@ -497,6 +536,8 @@ class _Scene(NamedTuple):
     shrink: bool = True  # opens fullscreen and shrinks onto the pin; else the card starts on the pin
     draw_pins: Optional[Callable] = None  # redraws the pins over the cards' leader lines
     hud: Optional[object] = None  # the overview's themed furniture, in place of the summary card
+    handoff: Optional[Image.Image] = None  # the walk's last frame, held and faded into the first map
+    card_offset: Optional[Tuple[float, float]] = None  # (left, top) of the walk's card from the pin
 
 
 def _shrinks(settings: dict, end_stop: dict) -> bool:
@@ -545,8 +586,9 @@ def _card_box(scene: _Scene, i: int) -> Tuple[float, float, float, float]:
 
     out_w, out_h = scene.size
     px, py = G.project_latlon_to_pixel(float(scene.lat), float(scene.lon), scene.frames[i][1], out_w, out_h)
-    left = min(max(px - scene.card_w / 2, 16), out_w - scene.card_w - 16)
-    top = min(max(py - scene.card_h - 40, 16), out_h - scene.card_h - 16)
+    dx, dy = scene.card_offset or (-scene.card_w / 2, -scene.card_h - 40)
+    left = min(max(px + dx, 16), out_w - scene.card_w - 16)
+    top = min(max(py + dy, 16), out_h - scene.card_h - 16)
     return left, top, px, py
 
 
@@ -558,7 +600,7 @@ def _with_card(scene: _Scene, base: Image.Image, box, scale: float, alpha: float
         d.line([(left + w / 2, top + h), (pin[0], pin[1] - 4)], fill=(255, 255, 255, int(255 * leader)), width=3)
     if alpha > 0:
         cw, ch = max(1, int(w * scale)), max(1, int(h * scale))
-        photo_img = scene.full.resize((cw, ch), Image.LANCZOS)
+        photo_img = ImageOps.fit(scene.full, (cw, ch), Image.LANCZOS)  # cropped, not squashed, into another shape
         mask = Image.new("L", (cw, ch), 0)
         ImageDraw.Draw(mask).rounded_rectangle([0, 0, cw - 1, ch - 1], radius=int(14 * (1 - min(1.0, w / scene.size[0]))) + 2, fill=int(255 * alpha))
         img.paste(photo_img, (int(left + (w - cw) / 2), int(top + (h - ch) / 2)), mask)
@@ -566,14 +608,14 @@ def _with_card(scene: _Scene, base: Image.Image, box, scale: float, alpha: float
 
 
 def _pull_back_frames(scene: _Scene):
-    """Opens on the fullscreen photo, which the pull-back then shrinks back onto its pin and fades off it
-    (without `scene.shrink`, it starts on the map with the card already on its pin)."""
+    """Opens on the held fullscreen photo, which the pull-back then shrinks back onto its pin and fades off it
+    (without `scene.shrink`, it holds the map with the card already on its pin, then pulls back; with
+    `scene.handoff` it holds that picture instead and fades it into the map)."""
     out_w, out_h = scene.size
-    for _ in range(int(tuning.FINALE_PHOTO_SECONDS * scene.fps) if scene.shrink else 0):
-        yield np.asarray(scene.full)
     shrink = max(1, int(len(scene.maps) * 0.35))
     fade = max(1, int(len(scene.maps) * 0.3))
-    for i, base in enumerate(scene.maps):
+
+    def frame(i: int):
         left, top, px, py = _card_box(scene, i)
         t = _ease(min(1.0, i / shrink)) if scene.shrink else 1.0
         box = tuple(
@@ -581,7 +623,18 @@ def _pull_back_frames(scene: _Scene):
             for a, b in zip((0.0, 0.0, float(out_w), float(out_h)), (left, top, float(scene.card_w), float(scene.card_h)))
         )
         f = min(1.0, max(0.0, (i - shrink) / fade))
-        yield np.asarray(_with_card(scene, base, box, 1 - 0.4 * f, 1 - f, (1 - f) * t, (px, py)))
+        return np.asarray(_with_card(scene, scene.maps[i], box, 1 - 0.4 * f, 1 - f, (1 - f) * t, (px, py)))
+
+    handoff = None if scene.shrink else scene.handoff
+    still = scene.full if scene.shrink else handoff
+    opening = frame(0) if still is None else np.asarray(still)
+    for _ in range(int(tuning.FINALE_PHOTO_SECONDS * scene.fps)):
+        yield opening
+    if handoff is not None:
+        first, fading = frame(0), int(tuning.FINALE_HANDOFF_SECONDS * scene.fps)
+        for k in range(1, fading + 1):
+            yield cv2.addWeighted(first, k / (fading + 1), opening, 1 - k / (fading + 1), 0)
+    yield from (frame(i) for i in range(len(scene.maps)))
 
 
 def _hold_frames(scene: _Scene):
@@ -656,19 +709,31 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
         fps = int(settings.get("fps") or tuning.INTRO_FPS)
         voice = finale_voice({"settings": settings}, project_dir)
         shrink = _shrinks(settings, badges[-1][1])
-        hold_seconds = _hold_seconds(voice, shrink)
+        hold_seconds = _hold_seconds(voice)
+        leg_end = None if shrink else _leg_end(Path(video_dir))
 
         out = Path(video_dir) / tuning.FINALE_OUTPUT_FILENAME
-        key = _clip_key(project_dir, settings, size, voice, stops, photo_path, shrink)
+        key = _clip_key(project_dir, settings, size, voice, stops, photo_path, shrink, leg_end)
         if not force and clip_cache.reusable(project_dir, out, key):
             return str(out)
 
         room_for_hud = storyboard.finale(settings).hud == "overview" and layout.read(project_dir) is not None
-        frames, maps = _pull_back_maps(settings, route, stops, size, fps, lat, lon, room_for_hud)
+        handoff = leg_end and _last_frame(leg_end[1], size)
+        if not shrink and handoff is None:
+            logger.info("Finale: the last leg saved no end view, so it can't open on its last frame. "
+                        "Delete that leg's clip and render again.")
+        start_view = tuple(leg_end[0][k] for k in ("lon", "lat", "zoom")) if handoff else None
+        frames, maps = _pull_back_maps(settings, route, stops, size, fps, lat, lon, room_for_hud, start_view)
         scene = _build_scene(
             settings, config_path, photo_path, route, stops, frames, maps, size, fps, lat, lon, hold_seconds
         )
         scene = scene._replace(shrink=shrink)
+        if handoff:
+            from services.mapfetcher.mapgeometry import RouteGeometryProcessor as G
+
+            left, top, w, h = leg_end[0]["card"]["box"]
+            px, py = G.project_latlon_to_pixel(float(lat), float(lon), frames[0][1], *size)
+            scene = scene._replace(handoff=handoff, card_w=int(w), card_h=int(h), card_offset=(left - px, top - py))
         part = out.with_name(out.stem + ".part.mp4")
         if not _pipe_frames(_finale_frames(scene), part, fps, size):
             return None

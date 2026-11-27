@@ -92,6 +92,15 @@ def test_first_and_last_leg(tmp_path):
     assert "end_view_path" not in _joins(tmp_path, 1, [A, B], prev_view=_view_file(tmp_path))
 
 
+def test_a_last_leg_to_a_stop_without_narration_saves_its_end_view_for_the_finale(tmp_path):
+    kwargs = {}
+    animator = SimpleNamespace(config={}, out_dir=tmp_path)
+    photos = SimpleNamespace(dest_quiet=True, dest_image="d.jpg", start_image="s.jpg")
+    RouteAnimator._add_leg_joins(animator, kwargs, SimpleNamespace(wp_by_id={}), 1, B, [A, B], photos, None,
+                                 "02_waypoint_02_")
+    assert kwargs["hold_end_card"] and kwargs["end_view_path"].endswith("02_waypoint_02_endview.json")
+
+
 def test_unjoined_leg_opens_as_before(tmp_path):
     broken = tmp_path / "bad.json"
     broken.write_text("{", encoding="utf-8")

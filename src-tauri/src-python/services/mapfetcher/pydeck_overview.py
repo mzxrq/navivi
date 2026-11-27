@@ -283,6 +283,7 @@ def capture_pydeck_zoom_sequence(
     next_lat: float | None = None,
     next_lon: float | None = None,
     must_fit_latlon=None,
+    end_view: Optional[Tuple[float, float, float]] = None,
 ) -> List[Tuple[np.ndarray, Tuple[float, float, float, float]]]:
     """A GENUINE dynamic zoom — `num_frames` real deck.gl re-renders as
     the camera pushes in from the base overview view toward
@@ -316,7 +317,8 @@ def capture_pydeck_zoom_sequence(
     wide shot. That pinning is what left the close-up looking like a map of
     nothing in particular whenever the point sat near a frame edge — the
     line simply ran out of the shot as the camera pushed in. Without the
-    argument the original fixed-boost, fixed-pixel behaviour is unchanged."""
+    argument the original fixed-boost, fixed-pixel behaviour is unchanged.
+    `end_view` (lon, lat, zoom) instead makes the push end on exactly that view."""
     base_lon, base_lat, base_zoom, base_extent = compute_pydeck_view(bounding_box, output_size)
     out_w, out_h = output_size
 
@@ -327,9 +329,8 @@ def capture_pydeck_zoom_sequence(
     )
     target_zoom = base_zoom + zoom_boost
 
-    end_view = None
     end_target_px, end_target_py = target_px, target_py
-    if route_latlon:
+    if end_view is None and route_latlon:
         # Bounded by the zoom this would have used anyway: the chooser may
         # pull BACK from it to keep the line in shot, never past the wide
         # shot the push starts from.
@@ -339,6 +340,7 @@ def capture_pydeck_zoom_sequence(
             next_lat=next_lat, next_lon=next_lon,
             must_fit_latlon=must_fit_latlon,
         )
+    if end_view is not None:
         end_extent = _extent_for_view(end_view[0], end_view[1], end_view[2], output_size)
         end_target_px, end_target_py = RouteGeometryProcessor.project_latlon_to_pixel(
             target_lat, target_lon, end_extent, out_w, out_h
