@@ -161,7 +161,7 @@ pub fn planned_names(archive: &mut ZipArchive<Section>) -> Result<Vec<String>, S
     let mut names = Vec::new();
     for i in 0..archive.len() {
         let entry = archive.by_index_raw(i).map_err(|e| e.to_string())?;
-        let name = entry.name().to_string();
+        let name = entry.name().map_err(|e| e.to_string())?.into_owned();
         if name.starts_with(META_PREFIX) {
             continue;
         }
@@ -193,7 +193,7 @@ pub fn extract(
     let mut total = 0u64;
     for i in 0..archive.len() {
         let entry = archive.by_index_raw(i).map_err(|e| e.to_string())?;
-        if !entry.is_dir() && !entry.name().starts_with(META_PREFIX) {
+        if !entry.is_dir() && !entry.name().map_err(|e| e.to_string())?.starts_with(META_PREFIX) {
             total += entry.size();
         }
     }
@@ -203,7 +203,7 @@ pub fn extract(
     let mut buffer = vec![0u8; 256 * 1024];
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
-        let name = entry.name().to_string();
+        let name = entry.name().map_err(|e| e.to_string())?.into_owned();
         if name.starts_with(META_PREFIX) {
             continue;
         }

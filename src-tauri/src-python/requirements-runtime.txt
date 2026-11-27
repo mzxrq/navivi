@@ -14,7 +14,7 @@ av==19.0.1
     # via faster-whisper
 beautifulsoup4==4.15.0
     # via deep-translator
-certifi==2026.7.22
+certifi==2026.11.20
     # via
     #   httpcore
     #   httpx
@@ -46,7 +46,7 @@ deprecated==3.0.0
     # via pykakasi
 faster-whisper==1.2.1
     # via -r requirements-runtime.in
-filelock==4.0.12
+filelock==4.3.1
     # via huggingface-hub
 flatbuffers==25.12.19
     # via onnxruntime
@@ -132,7 +132,7 @@ packaging==26.3
     #   onnxruntime
 pandas==3.0.6
     # via -r requirements-runtime.in
-pillow==12.3.0
+pillow==13.0.0
     # via
     #   -r requirements-runtime.in
     #   contextily
@@ -165,7 +165,7 @@ pyparsing==3.3.3
     # via
     #   matplotlib
     #   rasterio
-pypdf==6.19.0
+pypdf==6.21.4
     # via -r requirements-runtime.in
 pyproj==3.8.0
     # via -r requirements-runtime.in
@@ -200,7 +200,7 @@ six==1.17.0
     # via
     #   python-dateutil
     #   rapidocr-onnxruntime
-soupsieve==2.10
+soupsieve==4.1.3
     # via beautifulsoup4
 tokenizers==0.23.2
     # via faster-whisper
