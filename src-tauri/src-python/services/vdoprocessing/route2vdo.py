@@ -96,6 +96,15 @@ def _split_stopby_chain(res_data: Dict[str, Any]) -> Tuple[List[str], List[List[
     return chain, stopbys
 
 
+def _stopby_pin_numbers(res_data: Dict[str, Any]) -> List[str]:
+    """What each of _split_stopby_chain's stop-bys' map pin shows, in the same order ("・" for one with no number)."""
+    labels = res_data.get("labels") or []
+    flags, numbers = res_data.get("stopbys") or [], res_data.get("stopby_labels") or []
+    rows = [i for i, label in enumerate(labels) if label]
+    return [str((numbers[i] if i < len(numbers) else None) or "・")
+            for i in rows[:-1] if i < len(flags) and flags[i]]
+
+
 def _legs_join(prev: Dict[str, Any], nxt: Dict[str, Any]) -> bool:
     """Whether `nxt` can carry on from `prev`'s last frame: both are drawn by the street-level renderer and `nxt`
     starts where `prev` ended."""
@@ -899,7 +908,7 @@ class RouteAnimator:
         return ThemedLegHud(
             hud, theme_id, leg_mode, ctx.leg_totals[i],
             after=(sum(km for km, _ in later), sum(s for _, s in later)),
-            stopby_offset=sum(len(_split_stopby_chain(r)[1]) for r in res_sequence[:i]),
+            stopby_glyphs=_stopby_pin_numbers(res_sequence[i]),
         )
 
     def _write_piece_plan(self, plan: "_LegPlan", piece_paths) -> None:

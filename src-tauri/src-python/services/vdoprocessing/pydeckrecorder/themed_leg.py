@@ -62,14 +62,14 @@ class _Picture(NamedTuple):
 class ThemedLegHud:
     def __init__(
         self, hud: Dict, theme_id: str, mode: str, leg: Tuple[float, float], after: Tuple[float, float],
-        stopby_offset: int = 0,
+        stopby_glyphs: Sequence[str] = (),
     ):
-        """`leg` and `after`: (km, seconds) of this leg and of every later one. `stopby_offset`: the stop-bys on
-        earlier legs, so "+n" counts on through the whole route."""
+        """`leg` and `after`: (km, seconds) of this leg and of every later one. `stopby_glyphs`: what the map pin
+        of each of the banner's stop-bys shows ("+n"), in banner order."""
         self.theme = model.load_theme(theme_id, bool(hud.get("dark")))
         self.entries = layout.merge(self.theme["layout"], hud.get("layout"))
-        self.mode, self.leg, self.after, self.stopby_offset = mode, leg, after, stopby_offset
-        self.fingerprint = f"{hud.get('fingerprint')}-{stopby_offset}"
+        self.mode, self.leg, self.after, self.stopby_glyphs = mode, leg, after, list(stopby_glyphs)
+        self.fingerprint = f"{hud.get('fingerprint')}-{','.join(self.stopby_glyphs)}"
         self.labels: Dict = {}
         self.places: List[Place] = []
         self.vias: List[Tuple[float, str]] = []
@@ -84,12 +84,11 @@ class ThemedLegHud:
     def places_of(self, banner_items: Sequence[Tuple], dest: str, badges: Sequence, off_route: Set[str]) -> List[Place]:
         """The leg's banner items (text, badge, is stop-by) with the glyph each card shows. `badges`: the start's
         and the destination's."""
-        found, via = [], self.stopby_offset
+        found, glyphs = [], iter(self.stopby_glyphs)
         numbered = [i for i, item in enumerate(banner_items) if not item[2]]
         for i, (text, badge, is_stopby) in enumerate(banner_items):
             if is_stopby:
-                via += 1
-                found.append(Place(str(text), f"+{via}", str(text) in off_route))
+                found.append(Place(str(text), next(glyphs, "・"), str(text) in off_route))
                 continue
             if not badge and numbered and i in (numbered[0], numbered[-1]):
                 badge = badges[0] if i == numbered[0] else badges[1]

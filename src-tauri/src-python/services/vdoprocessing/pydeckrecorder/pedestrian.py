@@ -1570,7 +1570,7 @@ async def _record_leg(
                     places = themed.places_of(
                         banner_items, dest_label, chain_badges or (None, None),
                         {str(lm["label"]) for lm in named if not lm.get("connect_to_route")})
-                    via_glyphs = [p.glyph for p in places if p.glyph.startswith("+")]
+                    via_glyphs = [places[i].glyph for i in banner_stop_items]
                     await asyncio.to_thread(
                         themed.prepare, output_size, places,
                         [(shares[i], glyph) for i, glyph in zip(passed_at, via_glyphs)], shares, headings, windows,
