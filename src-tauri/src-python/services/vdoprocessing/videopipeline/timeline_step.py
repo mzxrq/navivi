@@ -497,19 +497,10 @@ class _TrackBuilder:
 
 def _apply_fades(tracks: list, ordered: list, attraction_fade_seconds: float) -> None:
     """Sets `fade_into_next_seconds` where a clip dissolves into the next one."""
-    # A leg ends on its destination's fullscreen arrival photo and the
-    # destination's own attraction video comes right after it: dissolve
-    # between them (VideoExporter.concat_from_timeline) instead of cutting from
-    # a frozen photo. Only leg -> attraction joins; never the intro or overview.
+    # Never between a leg and an attraction clip: the leg ends on the clip's own first frame (route2vdo.py).
     if attraction_fade_seconds > 0:
         for k in range(len(tracks) - 1):
             kind, source, _ = ordered[k]
-            if (
-                kind == "route"
-                and ordered[k + 1][0] == "attraction"
-                and Path(source).name != tuning.INTRO_OUTPUT_FILENAME
-            ):
-                tracks[k]["fade_into_next_seconds"] = attraction_fade_seconds
             # Two legs joined at a return stop share their camera there (pedestrian.py `end_view_path`):
             # the dissolve only swaps the route lines and cards over the same map.
             leg = _RESIDENTIAL_LEG_RE.search(Path(source).name)

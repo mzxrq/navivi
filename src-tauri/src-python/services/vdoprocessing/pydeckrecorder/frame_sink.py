@@ -43,6 +43,8 @@ class FrameSink:
         ffmpeg_cmd = [
             self.editor.resolve_binary(), "-y", *tuning.ffmpeg_log_args(),
             "-f", "image2pipe", "-vcodec", "mjpeg", "-framerate", str(self.fps), "-i", "-",
+            # [NOTE] [Color] JPEG frames are full range; joined to limited-range attraction clips they shift color.
+            "-vf", "scale=in_range=full:out_range=limited,format=yuv420p", "-color_range", "tv",
             "-c:v", "libx264", *tuning.ffmpeg_thread_args(),
             "-r", str(self.fps), "-pix_fmt", "yuv420p", temp_path,
         ]
