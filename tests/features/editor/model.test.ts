@@ -129,9 +129,9 @@ describe("autoArrange", () => {
     expect(out.segments.map((s) => s.id)).toEqual(["intro", "overview", "leg1", "stop1", "leg2", "mine", "outro"]);
   });
 
-  it("fades from a leg into the stop it arrives at and nowhere else", () => {
-    const out = autoArrange(timeline(clips));
-    expect(Object.fromEntries(out.segments.map((s) => [s.id, s.fadeIntoNext]))).toMatchObject({ leg1: 0.8, leg2: 0, intro: 0, stop1: 0 });
+  it("adds no dissolve: a leg ends on the very frame its stop's clip starts on", () => {
+    const out = autoArrange(timeline(clips.map((c) => ({ ...c, fadeIntoNext: 0.8 }))));
+    expect(out.segments.every((s) => s.fadeIntoNext === 0)).toBe(true);
   });
 
   it("keeps the order of clips it cannot place", () => {
