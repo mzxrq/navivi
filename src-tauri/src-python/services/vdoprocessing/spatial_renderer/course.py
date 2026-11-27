@@ -8,7 +8,7 @@ appear last. Timed by the course script's cues: {route} (the trace starts),
 
 import math
 import tempfile
-from typing import Callable, Dict, List, NamedTuple, Optional, Set, Tuple
+from typing import Callable, Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 import cv2
 import numpy as np
@@ -20,6 +20,7 @@ from services.mapfetcher.graphicengine.glyphs import drawable
 from services.logger.progress import tracker
 from services.vdoprocessing.vdoexporter import VideoExporter
 
+from .course_themed import ThemedPanels, themed_panels
 from .base import logger
 
 _MIN_ANCHOR_GAP_SECONDS = 0.4
@@ -225,6 +226,7 @@ class _Panels(NamedTuple):
     closed_offset: int
     reserved: List[Tuple[float, float, float, float]]
     rail_recap_left: Optional[int]  # where the rail starts once the notices are up (None: no notices)
+    themed: Optional[ThemedPanels] = None  # a themed design draws all the furniture itself
 
 
 class _Trace(NamedTuple):
@@ -627,7 +629,7 @@ class _CourseOverviewMixin:
         returns = _return_stops(numbered, on_route, stop_popup, self._is_loop_route)
         timing = _course_timing(cues, audio_seconds, numbered, extras, total)
         panels = self._course_panels(
-            summary, w, h, on_route, timing, total_points, total_smooth_dist)
+            summary, w, h, on_route, timing, total_points, total_smooth_dist, cum, modes)
         # The drawn path resampled every few px: a ferry leg is one long segment whose raw points are
         # only its ends, so a badge or card on the middle of it counted as covering no route.
         dense = np.column_stack([np.interp(np.arange(0.0, total, 6.0), cum, path[:, i]) for i in (0, 1)])
@@ -723,11 +725,20 @@ class _CourseOverviewMixin:
 
     def _course_panels(
         self, summary: Optional[Dict], w: int, h: int, on_route: List[Dict], timing: _Timing,
-        total_points: int, total_smooth_dist: float,
+        total_points: int, total_smooth_dist: float, cum: Sequence[float] = (), modes: Sequence[str] = (),
     ) -> _Panels:
         """Everything fixed on the frame, and `reserved`: the boxes the cards are laid out clear of (the
         headline, the totals, the stats card, the progress rail and the stop-by notices)."""
         summary = self.config.get("course_summary") or summary  # the numbers the script speaks
+        leg_stops = self._course_leg_stops(on_route, total_points)
+        margin = int(h * 0.03)
+        hud = self.config.get("hud")
+        themed = themed_panels(
+            self.graphics, hud, w, h, summary, leg_stops, cum, modes, self._is_loop_route,
+            bool(timing.stopbys), bool(timing.closed)) if hud else None
+        if themed is not None:
+            return _Panels(None, [], leg_stops, 0, margin, None, 0, [], themed.closed_offset, themed.reserved,
+                           None, themed)
         summary_card = None
         if summary:
             # Always the discs-and-chips template: the corners already hold the headline and the totals
@@ -739,9 +750,7 @@ class _CourseOverviewMixin:
                 mode_duration=summary.get("mode_duration"),
             )
         taglines = [str(x) for x in (self.config.get("overview_taglines") or []) if str(x).strip()]
-        leg_stops = self._course_leg_stops(on_route, total_points)
         headline_font = max(22, int(h * 0.033))
-        margin = int(h * 0.03)
         reserved: List[Tuple[float, float, float, float]] = []
 
         # Reserved at the widest the headline ever gets, so no badge sits where a later stretch's own
@@ -1410,6 +1419,9 @@ class _CourseOverviewMixin:
         timing: _Timing, panels: _Panels, total_smooth_dist: float,
     ) -> np.ndarray:
         """Headline, totals, progress rail, stats card and stop-by notices over the frame."""
+        if panels.themed is not None:
+            mode = trace.modes[min(max(0, k - 1), len(trace.modes) - 1)] if t >= timing.route_at else None
+            return panels.themed.compose(frame, i, t, dist, mode, timing)
         margin = panels.margin
         steps = leg_banner(panels.leg_stops, dist) if in_trace else []
         title, title_alpha = tagline_at(panels.taglines, t, hold_from=timing.trace_end)

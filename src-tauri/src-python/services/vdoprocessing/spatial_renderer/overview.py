@@ -80,7 +80,7 @@ OVERVIEW_RENDER_VERSION = 74  # 73 was used by the broken merge f959dec
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
 _OVERVIEW_CHECKPOINT_PARTS = (
     "render_version", "route_waypoints", "photos", "config.overview_cue_seconds", "config.overview_audio_seconds",
-    "job_config.map_language", "video_text", "config.sub_course_overview",
+    "job_config.map_language", "video_text", "config.sub_course_overview", "config.hud",
 )
 # Rendered before route_waypoints was recorded: fall back to the drawn line.
 _LEGACY_CHECKPOINT_PARTS = ("render_version", "arg.points", "arg.point_modes")

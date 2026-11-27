@@ -1,6 +1,7 @@
 """Step 4's RouteAnimator config: every render setting, read from the project's settings with their defaults."""
 
 from services import tuning
+from services.hudtheme import layout
 from services.localization.cues import tags_at_sentence_start
 from services.localization.overview_script import overview_style
 
@@ -85,6 +86,13 @@ def _color_options(settings: dict, marker_color_bgr) -> dict:
     }
 
 
+def _hud_config(project_config: dict, project_dir, settings: dict) -> dict:
+    """{"hud": ...} for a project with a themed hud.json; nothing otherwise, so the classic look is untouched."""
+    title = project_config.get("video_title") or project_config.get("project_name") or ""
+    hud = layout.project_hud(project_dir, settings, str(title))
+    return {"hud": hud} if hud else {}
+
+
 def build_animator_config(
     *,
     config_path,
@@ -113,6 +121,7 @@ def build_animator_config(
             project_config=project_config, settings=settings, use_pydeck_pedestrian=use_pydeck_pedestrian,
         ),
         **_course_config(project_config, config_path),
+        **_hud_config(project_config, config_path.parent, settings),
         "res_route_path": project_config_path,
         "leg_durations": seg_durations or None,
         "duration": settings.get("duration", overview_duration),

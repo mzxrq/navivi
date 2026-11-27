@@ -1,0 +1,17 @@
+{# One leg: the stop left behind, the one ahead, the stop-bys between, and the traveller `share` of the way. #}
+{% from "parts/macros.html" import disc with context %}
+{% set x0, x1, y = 50.0, 586.0, 41.0 %}
+{% set at = x0 + (x1 - x0) * share %}
+<div class="card" style="width:636px;height:82px;border-radius:26px;color:{{ theme.ink }}">
+<svg width="636" height="82" viewBox="0 0 636 82"><rect width="636" height="82" fill="{{ theme.pale }}"/>{{ pattern("leg", true, [[175, 400]], 82) }}<path d="M{{ x0|g }} {{ y|g }}H{{ x1|g }}" stroke="{{ color }}" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 11"/><path d="M{{ x0|g }} {{ y|g }}H{{ at|f1 }}" stroke="{{ color }}" stroke-width="7" stroke-linecap="round"/>
+{{ disc(30, y, 17, from_glyph, 16) }}{{ disc(606, y, 17, to_glyph, 16) }}
+{# Stop-bys a few metres apart would cover each other: each stands at least a disc's width past the one before. #}
+{% set marks = [x0] %}
+{% for position, glyph in vias %}
+{% set px = [x0 + (x1 - x0) * position, marks[-1] + (26 if marks|length > 1 else 0)]|max %}
+{% set _ = marks.append(px) %}
+{{ disc(px, y, 12, glyph, 11) }}
+{% endfor %}
+<circle cx="{{ at|f1 }}" cy="{{ y|g }}" r="20" fill="{{ theme.label }}" stroke="{{ color }}" stroke-width="3"/></svg>
+<div style="left:{{ (at - 12)|f1 }}px;top:29px;width:24px;height:24px;line-height:0">{{ icon }}</div>
+</div>

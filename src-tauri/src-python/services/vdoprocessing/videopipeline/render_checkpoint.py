@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Optional
 
+from services.hudtheme import layout
 from services.projectfiles import NARRATION_CUES, meta_file
 from services.mapfetcher.maplanguage import map_style_inputs
 from services.vdoprocessing.route_inputs import labels_hash, overview_flags_hash, photo_inputs_hash, route_inputs_hash
@@ -79,6 +80,9 @@ def _render_checkpoint_key(
         pass
     hasher.update(json.dumps(audio_durations or [], default=str).encode("utf-8"))
     hasher.update(json.dumps(audio_pauses or [], default=str).encode("utf-8"))
+    hud_part = layout.fingerprint(Path(project_config_path).parent)
+    if hud_part:  # only a themed project, so no other project renders again
+        hasher.update(hud_part.encode("utf-8"))
     return hasher.hexdigest()
 
 
@@ -147,6 +151,9 @@ def _checkpoint_parts(
     marker_part = marker_inputs_hash(shown, str(Path(project_config_path).parent))
     if marker_part:
         parts["route.markers"] = marker_part
+    hud_part = layout.fingerprint(Path(project_config_path).parent)
+    if hud_part:
+        parts["route.hud"] = hud_part
     _add_config_parts(parts, config_data)
     route_df = cleaned_route.get("route")
     if route_df is not None:
