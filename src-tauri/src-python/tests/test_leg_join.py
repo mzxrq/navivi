@@ -155,3 +155,14 @@ def test_piece_glide_zooms_out_only_as_far_as_the_next_stretch_needs():
 def test_legs_cut_at_a_stop_by_carry_the_piece_glide_key(stopby):
     kwargs = {"landmarks": [{"label": "Gate", "popup_image": "a.jpg", **stopby}]}
     assert "stopby_reopen" in _leg_fingerprint_parts([], "X", kwargs, "r")
+
+
+def test_the_line_of_the_leg_before_fades_away_as_the_camera_settles():
+    from services.vdoprocessing.pydeckrecorder.pedestrian import _prior_trail_opacity
+
+    shown = [_prior_trail_opacity(i, 30) for i in range(30)]
+
+    assert shown[:15] == [1.0] * 15  # whole while the camera sets off: the join reads as one walk
+    assert shown == sorted(shown, reverse=True) and 0.0 < shown[22] < 1.0
+    assert shown[-1] == 0.0  # gone before the walk starts
+    assert _prior_trail_opacity(0, 1) == 0.0
