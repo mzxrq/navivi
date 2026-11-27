@@ -495,6 +495,10 @@ def render_from_timeline(
     timeline_data.setdefault("burn_subtitles", True)  # the Export dialog may turn it off
     if "caption_style" not in timeline_data:
         timeline_data["caption_style"] = _project_caption_style(project_dir)
+    for item in timeline_data.get("texts") or []:
+        picture = item.get("picture") or {}
+        if picture.get("path") and not Path(picture["path"]).is_absolute():
+            picture["path"] = str(project_dir / picture["path"])
     music = timeline_data.get("music") or {}
     if music.get("path") and not Path(music["path"]).is_absolute():
         music["path"] = str(project_dir / music["path"])

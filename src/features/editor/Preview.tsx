@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "@lingui/core/macro";
 import { Pause, Play, SkipBack } from "../../components/ui/icons";
 import { Tip } from "../../components/ui/Tip";
-import { DEFAULT_EXTRA_VOLUME, fadeIns, isUnlinked, layout, placedCues, placedTexts, PlacedText, segmentAt, trimmedLength, TimelineData } from "./model";
+import { cardOf, DEFAULT_EXTRA_VOLUME, fadeIns, isUnlinked, layout, placedCues, placedTexts, PlacedText, segmentAt, trimmedLength, TimelineData } from "./model";
 import { hexToRgb } from "../../utils/color";
 import { formatTime, mediaUrl, player, usePlayerTime, usePlaying } from "./player";
 import { useWorkspace } from "../../hooks/useWorkspace";
@@ -120,7 +120,7 @@ export function ShiftedLayer({ texts, children }: { texts: PlacedText[]; childre
 }
 
 // Text-track items: centred title + subtitle, animated like the export (introclip.title_events).
-function TextOverlay({ texts, covers }: { texts: PlacedText[]; covers: Map<string, string> }) {
+function TextOverlay({ texts, covers, projectDir }: { texts: PlacedText[]; covers: Map<string, string>; projectDir: string }) {
   const time = usePlayerTime();
   const [missing, setMissing] = useState<ReadonlySet<string>>(new Set());
   // A burned-in title is in its clip's picture; it is drawn live only over the clip's title-free band (outrocard cover).
@@ -134,6 +134,20 @@ function TextOverlay({ texts, covers }: { texts: PlacedText[]; covers: Map<strin
   return (
     <div className="absolute inset-0 pointer-events-none" style={{ containerType: "size" }}>
       {active.map((x) => {
+        const card = cardOf(x);
+        const cardUrl = card && mediaUrl(projectDir, card.path);
+        if (card && cardUrl && !missing.has(cardUrl)) {
+          return (
+            <img
+              key={x.id}
+              src={cardUrl}
+              alt={x.title.text}
+              className="absolute max-w-none"
+              style={{ left: cq(card.x), top: cq(card.y), width: cq(card.width), height: cq(card.height) }}
+              onError={() => setMissing((s) => new Set(s).add(cardUrl))}
+            />
+          );
+        }
         const title = { ...DEFAULT_TEXT_TITLE_STYLE, ...(x.title.style ?? {}) };
         const sub = { ...DEFAULT_TEXT_SUBTITLE_STYLE, ...(x.subtitle.style ?? {}) };
         const hasTitle = !!x.title.text.trim();
@@ -461,7 +475,7 @@ export function Preview({ timeline, projectDir }: PreviewProps) {
             </div>
           )}
           <SubtitleOverlay cues={cues} show />
-          <TextOverlay texts={texts} covers={covers} />
+          <TextOverlay texts={texts} covers={covers} projectDir={projectDir} />
         </div>
       </div>
       <div className="flex items-center justify-center gap-2 h-10 shrink-0">
