@@ -17,7 +17,8 @@ never changing a word of the script:
     {closed} before "赤色で示した地点は…" (the closed places appear, after the stop-bys)
 
 Tags the user wrote win: a script with any {n} keeps its own, and one with any
-{go} keeps its own.
+{go} keeps its own. After a {start} of their own, nothing is placed or searched in
+the opening before it.
 """
 
 from __future__ import annotations
@@ -160,6 +161,12 @@ def _sentence_marks(sentences: List[str], tags: List[str], pivot: Optional[int],
     return marks
 
 
+def numbers_in_opening(script: Optional[str]) -> bool:
+    """Whether a {n} stands before the {start}, where no stop can be reached (the opening plays over the intro)."""
+    opening, start, _ = (script or "").partition("{start}")
+    return bool(start) and any(t.isdigit() for t in cue_tags(opening))
+
+
 def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[str]:
     """`script` with {n} / {go} tags placed; `labels[i]` is visible waypoint
     i + 1's name. Returns the script unchanged when nothing could be placed."""
@@ -168,27 +175,34 @@ def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[
     tags = cue_tags(script)
     has_numbers = any(t.isdigit() for t in tags)
     has_go = "{go}" in script
-    sentences = _sentences(script)
+    # The writer's own {start}: only what follows it is tagged.
+    opening, start, body = script.partition("{start}")
+    if not start:
+        opening, body = "", script
+    kept = opening + start
+    sentences = _sentences(body)
     # "これが全体のルートです。": the map appears there, so the opening before it plays
     # over the intro ({start}); the route is traced from the next sentence ({route}).
     # "黒色で示した地点は…": the stop-bys appear ({extras}); their names are not stops.
-    pivot = None if "start" in tags else _first_sentence_matching(sentences, _ROUTE_PIVOT)
+    pivot = None if start else _first_sentence_matching(sentences, _ROUTE_PIVOT)  # where our {start} goes
+    # "{start}これが全体のルートです。" is the course layout whoever wrote the {start}.
+    layout_at = 0 if start and sentences and _ROUTE_PIVOT.search(sentences[0]) else pivot
     extras = None if "extras" in tags else _first_sentence_matching(sentences, _EXTRAS)
     closed = None if "closed" in tags else _first_sentence_matching(sentences, _CLOSED)
     marks = _sentence_marks(sentences, tags, pivot, extras, closed)
     limit = min(i for i in (extras, closed, len(sentences)) if i is not None)
     if has_numbers and has_go:
-        return _with_marks(sentences, marks)
-    if pivot is not None and not has_numbers:
-        return _with_marks(_tag_route_names(sentences, pivot + 1, limit, labels, not has_go), marks)
+        return kept + _with_marks(sentences, marks)
+    if layout_at is not None and not has_numbers:
+        return kept + _with_marks(_tag_route_names(sentences, layout_at + 1, limit, labels, not has_go), marks)
 
     if has_numbers:
         starts = _numbered_starts(sentences)
     else:
-        after = -1 if pivot is None else pivot  # names in the opening introduce, they are not stops
+        after = -1 if layout_at is None else layout_at  # names in the opening introduce, they are not stops
         starts = _named_starts(sentences, labels, after, limit)
     if not starts:
-        return _with_marks(sentences, marks)
+        return kept + _with_marks(sentences, marks)
 
     go_before = set() if has_go else _go_positions(sentences, starts)
     out = []
@@ -199,7 +213,7 @@ def auto_tag_overview(script: Optional[str], labels: Sequence[str]) -> Optional[
             lead = len(s) - len(s.lstrip())  # keep a line's indent before the tag
             s = s[:lead] + "{%d}" % starts[i] + s[lead:]
         out.append(s)
-    return _with_marks(_sentences("".join(out)), marks)
+    return kept + _with_marks(_sentences("".join(out)), marks)
 
 
 def _tag_route_names(sentences: List[str], first: int, limit: int, labels: Sequence[str], add_go: bool) -> List[str]:

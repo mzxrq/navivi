@@ -268,7 +268,7 @@ def add_overview_cues(project_config_path: str) -> bool:
     (human-script-only) auto-tagging logic runs."""
     ensure_overview_narration(project_config_path)
 
-    from services.localization.overview_cues import auto_tag_overview
+    from services.localization.overview_cues import auto_tag_overview, numbers_in_opening
     from services.localization.overview_script import visible_waypoints
 
     config_path = Path(project_config_path)
@@ -282,6 +282,8 @@ def add_overview_cues(project_config_path: str) -> bool:
     if not base.strip():
         return False
     stored = store.cued_text(OVERVIEW_CUE_KEY, base)
+    if stored and numbers_in_opening(stored) and not numbers_in_opening(base):
+        stored = None  # tagged by an earlier version, which numbered the opening: place them again
     if stored:
         tagged = stored
     else:

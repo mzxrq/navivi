@@ -4,6 +4,51 @@ import json
 
 from services.localization.cues import Cue, clean_text, cue_tags, cue_times, strip_cues
 from services.localization.overview_cues import auto_tag_overview, name_variants
+
+# A script whose {start} the writer typed: the opening before it plays over the intro and names places too.
+OPENING = "{photo:加太淡嶋神社}加太淡嶋神社で知られる町です。常行寺もあります。"
+
+
+def test_no_number_lands_before_the_writers_own_start():
+    text = OPENING + "{start}駅を出発します。常行寺には大木があります。加太淡嶋神社へ着きます。"
+
+    tagged = auto_tag_overview(text, ["常行寺", "加太淡嶋神社"])
+
+    assert tagged.startswith(OPENING + "{start}")  # the opening is untouched, and there is one {start}
+    assert tagged.count("{start}") == 1
+    assert "{1}常行寺には" in tagged and "{2}加太淡嶋神社へ" in tagged
+
+
+def test_a_stop_named_right_after_the_start_is_tagged_there():
+    tagged = auto_tag_overview(OPENING + "{start}常行寺から歩きます。", ["常行寺"])
+
+    assert tagged == OPENING + "{start}{1}常行寺から歩きます。"
+
+
+def test_a_course_script_with_its_own_start_numbers_each_name_in_the_route_sentences():
+    text = OPENING + "{start}これが全体のルートです。{route}常行寺を過ぎて加太淡嶋神社へ向かいます。"
+
+    tagged = auto_tag_overview(text, ["常行寺", "加太淡嶋神社"])
+
+    assert tagged == OPENING + "{start}これが全体のルートです。{route}{1}常行寺を過ぎて{2}加太淡嶋神社へ向かいます。{go}"
+
+
+def test_numbers_an_earlier_version_saved_in_the_opening_are_placed_again(tmp_path):
+    import json
+
+    from services.vdoprocessing.videopipeline.narration_step import CueStore, add_overview_cues
+
+    base = OPENING + "{start}常行寺から歩きます。"
+    config = tmp_path / "job_config.json"
+    places = [{"label": name, "lat": 34.0 + i / 100, "lng": 135.0} for i, name in enumerate(["駅", "常行寺", "港"])]
+    config.write_text(json.dumps({"overview_narration": base, "waypoints": places}), encoding="utf-8")
+    store = CueStore(tmp_path)
+    store.put_text("overview", base, "{1}" + base)  # as saved before the fix
+    store.save()
+
+    assert add_overview_cues(str(config))
+
+    assert CueStore(tmp_path).cued_text("overview", base) == OPENING + "{start}{1}常行寺から歩きます。"
 from services.vdoprocessing.videopipeline.audio_step import overview_tagged_script
 from services.vdoprocessing.videopipeline.narration_step import add_overview_cues
 
