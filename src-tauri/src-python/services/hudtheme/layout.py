@@ -131,7 +131,8 @@ def fingerprint(project_dir) -> Optional[str]:
     digest = hashlib.sha256(str(RENDER_VERSION).encode())
     files = [Path(project_dir) / FILE_NAME]
     for folder in (styles.BUILTIN_DIR, styles.user_dir(), model.THEMES_DIR):
-        files += sorted(p for p in folder.rglob("*") if p.suffix in (".html", ".svg", ".css", ".json"))
+        files += sorted(p for p in folder.rglob("*") if p.suffix in (".html", ".svg", ".css", ".json")
+                        and p.parent.name != "outro")  # the outro is remade every render; its look is not a leg's
     for path in files:
         try:
             digest.update(path.name.encode("utf-8") + path.read_bytes())
