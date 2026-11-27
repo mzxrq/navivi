@@ -262,6 +262,7 @@ export const saveProjectData = async (
         narration: wp.narration || "",
         arrivingNarration: wp.arrivingNarration || "",
         attractionNarration: wp.attractionNarration || "",
+        outroDescription: wp.outroDescription?.trim() || undefined,
 
         audioUrl: wp.audioUrl ? "assets/audio/" + await basename(wp.audioUrl) : undefined,
         videoUrl: wp.videoUrl ? "assets/video/" + await basename(wp.videoUrl) : undefined,

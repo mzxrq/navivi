@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { videoLookDefaults } from "../../src/config/constants";
 import { applyOption, arrivedDefault, LOOK_KEYS, lookPatch, modeLineDefault } from "../../src/utils/videoLook";
+import { usesScrollOutro } from "../../src/utils/videoLook";
 
 describe("videoLook", () => {
   it("defaults match what the renderer does without the key", () => {
@@ -53,5 +54,18 @@ describe("videoLook", () => {
 
   it("removes a key on reset and keeps the rest", () => {
     expect(applyOption({ a: 1, b: 2 }, { a: undefined, c: 3 })).toEqual({ b: 2, c: 3 });
+  });
+});
+
+describe("usesScrollOutro", () => {
+  it("is true for the scroll outro, which is what the settings screen shows when none is chosen", () => {
+    expect(usesScrollOutro({ outro_style: "scroll" })).toBe(true);
+    expect(usesScrollOutro({})).toBe(true);
+  });
+
+  it("is false for the other styles and with the outro off", () => {
+    expect(usesScrollOutro({ outro_style: "grid" })).toBe(false);
+    expect(usesScrollOutro({ outro_style: "scrapbook" })).toBe(false);
+    expect(usesScrollOutro({ outro_style: "scroll", enable_outro: false })).toBe(false);
   });
 });

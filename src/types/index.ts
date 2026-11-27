@@ -29,6 +29,7 @@ export interface Waypoint {
   videoSound?: boolean[];
   arrivingNarration?: string;
   attractionNarration?: string;
+  outroDescription?: string; // shown on this place's themed outro screen
   isGeneratingAudio?: boolean;
   audioUrl?: string;
   isGeneratingVideo?: boolean;

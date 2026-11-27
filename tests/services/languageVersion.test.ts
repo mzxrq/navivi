@@ -43,6 +43,11 @@ describe("collectTexts", () => {
       ["overview_narration", "settings.overview_title", "video_title", "wp.0.arrivingNarration", "wp.1.attractionNarration", "wp.1.narration"].sort(),
     );
   });
+
+  it("translates the outro description with the other stop text", () => {
+    const { scripts } = collectTexts({ waypoints: [{ name: "A", outroDescription: " 港です。 " }] });
+    expect(scripts).toEqual({ "wp.0.outroDescription": "港です。" });
+  });
 });
 
 describe("applyTranslations", () => {
