@@ -755,8 +755,8 @@ msgstr "AI features"
 msgid "AI models"
 msgstr "AI models"
 
-#: src/components/view/ProjectSettingsModal.tsx:274
-#: src/components/view/ProjectSettingsModal.tsx:281
+#: src/components/view/ProjectSettingsModal.tsx:272
+#: src/components/view/ProjectSettingsModal.tsx:279
 msgid "AI photo clips"
 msgstr "AI photo clips"
 
@@ -835,8 +835,8 @@ msgstr "Anchor {0} · corner · double-click to smooth"
 msgid "Anchor {0} · smooth · double-click for a corner"
 msgstr "Anchor {0} · smooth · double-click for a corner"
 
-#: src/components/view/ProjectSettingsModal.tsx:264
-#: src/components/view/ProjectSettingsModal.tsx:270
+#: src/components/view/ProjectSettingsModal.tsx:262
+#: src/components/view/ProjectSettingsModal.tsx:268
 msgid "Animate photos at stops"
 msgstr "Animate photos at stops"
 
@@ -845,7 +845,7 @@ msgstr "Animate photos at stops"
 msgid "Animation"
 msgstr "Animation"
 
-#: src/components/view/ProjectSettingsModal.tsx:324
+#: src/components/view/ProjectSettingsModal.tsx:301
 msgid "Anything you leave alone renders the way it always has."
 msgstr "Anything you leave alone renders the way it always has."
 
@@ -1210,7 +1210,7 @@ msgstr "Cancel"
 #: src/components/view/LanguageVersionDialog.tsx:91
 #: src/components/view/ProjectManager.tsx:641
 #: src/components/view/ProjectManager.tsx:704
-#: src/components/view/ProjectSettingsModal.tsx:131
+#: src/components/view/ProjectSettingsModal.tsx:129
 #: src/features/editor/ExportDialog.tsx:110
 #: src/features/editor/VoicePiecesDialog.tsx:119
 #: src/features/map/components/GenerateDialog.tsx:130
@@ -1243,7 +1243,7 @@ msgstr "Cancelling..."
 msgid "Cannot close window. Check Tauri capabilities"
 msgstr "Cannot close window. Check Tauri capabilities"
 
-#: src/components/view/ProjectSettingsModal.tsx:67
+#: src/components/view/ProjectSettingsModal.tsx:66
 msgid "Cannot edit settings directly in .nvv archive. Please open project first."
 msgstr "Cannot edit settings directly in .nvv archive. Please open project first."
 
@@ -1320,7 +1320,7 @@ msgid "Choose a recording…"
 msgstr "Choose a recording…"
 
 #: src/components/ui/AppSettings.tsx:513
-#: src/components/view/ProjectSettingsModal.tsx:244
+#: src/components/view/ProjectSettingsModal.tsx:242
 msgid "Choose file…"
 msgstr "Choose file…"
 
@@ -1684,8 +1684,8 @@ msgid "Could not look for photos: {0}"
 msgstr "Could not look for photos: {0}"
 
 #: src/hooks/useStopRegen.ts:125
-#: src/hooks/useStopRegen.ts:154
-#: src/hooks/useStopRegen.ts:177
+#: src/hooks/useStopRegen.ts:156
+#: src/hooks/useStopRegen.ts:179
 msgid "Could not make that again: {message}"
 msgstr "Could not make that again: {message}"
 
@@ -1702,7 +1702,7 @@ msgstr "Could not open file location"
 msgid "Could not read {input}."
 msgstr "Could not read {input}."
 
-#: src/components/view/ProjectSettingsModal.tsx:78
+#: src/components/view/ProjectSettingsModal.tsx:77
 msgid "Could not read project config."
 msgstr "Could not read project config."
 
@@ -1844,7 +1844,7 @@ msgid "Cut to next clip"
 msgstr "Cut to next clip"
 
 #: src/components/ui/VideoLookSettings.tsx:89
-#: src/components/view/ProjectSettingsModal.tsx:181
+#: src/components/view/ProjectSettingsModal.tsx:179
 msgid "Dark"
 msgstr "Dark"
 
@@ -1856,12 +1856,12 @@ msgstr "Day trip"
 msgid "Decrease"
 msgstr "Decrease"
 
-#: src/components/view/ProjectSettingsModal.tsx:187
+#: src/components/view/ProjectSettingsModal.tsx:185
 msgid "Default"
 msgstr "Default"
 
 #: src/components/ui/AppSettings.tsx:452
-#: src/components/view/ProjectSettingsModal.tsx:216
+#: src/components/view/ProjectSettingsModal.tsx:214
 msgid "Default marker for all waypoints. Can be overridden per-stop."
 msgstr "Default marker for all waypoints. Can be overridden per-stop."
 
@@ -2446,8 +2446,8 @@ msgid "Fade into next clip"
 msgstr "Fade into next clip"
 
 #: src/components/view/ProjectSettingsModal.tsx:295
-msgid "Fade into the stop's clip"
-msgstr "Fade into the stop's clip"
+#~ msgid "Fade into the stop's clip"
+#~ msgstr "Fade into the stop's clip"
 
 #: src/features/editor/TimelinePane.tsx:427
 msgid "Fades into the next clip"
@@ -2529,7 +2529,7 @@ msgstr "Failed to rename project"
 msgid "Failed to save project."
 msgstr "Failed to save project."
 
-#: src/components/view/ProjectSettingsModal.tsx:115
+#: src/components/view/ProjectSettingsModal.tsx:113
 msgid "Failed to save settings"
 msgstr "Failed to save settings"
 
@@ -2648,8 +2648,8 @@ msgstr "Follow my GPS track"
 msgid "Follow the first waypoint again"
 msgstr "Follow the first waypoint again"
 
-#: src/components/view/ProjectSettingsModal.tsx:285
-#: src/components/view/ProjectSettingsModal.tsx:291
+#: src/components/view/ProjectSettingsModal.tsx:283
+#: src/components/view/ProjectSettingsModal.tsx:289
 msgid "Follow timing cues in scripts"
 msgstr "Follow timing cues in scripts"
 
@@ -3274,7 +3274,7 @@ msgstr "Language of the new version"
 msgid "Language of the text in the video"
 msgstr "Language of the text in the video"
 
-#: src/components/view/ProjectSettingsModal.tsx:375
+#: src/components/view/ProjectSettingsModal.tsx:352
 msgid "Larger map tiles for a crisper picture. They take longer to download."
 msgstr "Larger map tiles for a crisper picture. They take longer to download."
 
@@ -3337,7 +3337,7 @@ msgid "Letter spacing"
 msgstr "Letter spacing"
 
 #: src/components/ui/VideoLookSettings.tsx:88
-#: src/components/view/ProjectSettingsModal.tsx:182
+#: src/components/view/ProjectSettingsModal.tsx:180
 msgid "Light"
 msgstr "Light"
 
@@ -3480,7 +3480,7 @@ msgstr "Longest leg"
 msgid "Longest leg in the overview"
 msgstr "Longest leg in the overview"
 
-#: src/components/view/ProjectSettingsModal.tsx:321
+#: src/components/view/ProjectSettingsModal.tsx:298
 msgid "Look of the video"
 msgstr "Look of the video"
 
@@ -3609,7 +3609,7 @@ msgstr "Making the photo clip for this stop. This can take a few minutes."
 msgid "Making the subtitles for this stop."
 msgstr "Making the subtitles for this stop."
 
-#: src/hooks/useStopRegen.ts:163
+#: src/hooks/useStopRegen.ts:165
 msgid "Making the walking clip again. This can take a few minutes."
 msgstr "Making the walking clip again. This can take a few minutes."
 
@@ -3646,12 +3646,12 @@ msgstr "Map label size"
 msgid "Map panel opacity"
 msgstr "Map panel opacity"
 
-#: src/components/view/ProjectSettingsModal.tsx:342
-#: src/components/view/ProjectSettingsModal.tsx:353
+#: src/components/view/ProjectSettingsModal.tsx:319
+#: src/components/view/ProjectSettingsModal.tsx:330
 msgid "Map style"
 msgstr "Map style"
 
-#: src/components/view/ProjectSettingsModal.tsx:339
+#: src/components/view/ProjectSettingsModal.tsx:316
 msgid "Map style in the video"
 msgstr "Map style in the video"
 
@@ -4121,7 +4121,7 @@ msgstr "Nothing to review yet."
 #~ msgstr "Nothing waiting"
 
 #: src/hooks/useStopRegen.ts:119
-#: src/hooks/useStopRegen.ts:149
+#: src/hooks/useStopRegen.ts:151
 msgid "Nothing was made: {skipped}"
 msgstr "Nothing was made: {skipped}"
 
@@ -4160,7 +4160,7 @@ msgstr "Ollama or online AI"
 msgid "On route"
 msgstr "On route"
 
-#: src/components/view/ProjectSettingsModal.tsx:275
+#: src/components/view/ProjectSettingsModal.tsx:273
 msgid "On: moves are made with AI on the graphics card (ComfyUI). Off: a 3D photo move on the processor only, no ComfyUI. Changing it makes the photo clips again."
 msgstr "On: moves are made with AI on the graphics card (ComfyUI). Off: a 3D photo move on the processor only, no ComfyUI. Changing it makes the photo clips again."
 
@@ -4213,7 +4213,7 @@ msgstr "Open API keys"
 msgid "Open Details to see what went wrong."
 msgstr "Open Details to see what went wrong."
 
-#: src/components/view/ProjectSettingsModal.tsx:398
+#: src/components/view/ProjectSettingsModal.tsx:375
 msgid "Open dictionary…"
 msgstr "Open dictionary…"
 
@@ -4317,7 +4317,7 @@ msgstr "Original sound volume"
 msgid "Other subtitles have their own style. Replace it with this one?"
 msgstr "Other subtitles have their own style. Replace it with this one?"
 
-#: src/components/view/ProjectSettingsModal.tsx:178
+#: src/components/view/ProjectSettingsModal.tsx:176
 msgid "Outdoors"
 msgstr "Outdoors"
 
@@ -4675,11 +4675,11 @@ msgstr "Project saved to {fileName}"
 msgid "Project settings"
 msgstr "Project settings"
 
-#: src/components/view/ProjectSettingsModal.tsx:124
+#: src/components/view/ProjectSettingsModal.tsx:122
 msgid "Project Settings"
 msgstr "Project Settings"
 
-#: src/components/view/ProjectSettingsModal.tsx:111
+#: src/components/view/ProjectSettingsModal.tsx:109
 msgid "Project settings saved"
 msgstr "Project settings saved"
 
@@ -4699,7 +4699,7 @@ msgstr "Kyoto Sightseeing"
 msgid "Pronunciation"
 msgstr "Pronunciation"
 
-#: src/components/view/ProjectSettingsModal.tsx:388
+#: src/components/view/ProjectSettingsModal.tsx:365
 msgid "Pronunciation dictionary"
 msgstr "Pronunciation dictionary"
 
@@ -4972,7 +4972,7 @@ msgstr "Rendering error"
 msgid "renderFinishSuccessMessage"
 msgstr "Asset generation finished successfully"
 
-#: src/components/view/ProjectSettingsModal.tsx:261
+#: src/components/view/ProjectSettingsModal.tsx:259
 msgid "Rendering"
 msgstr "Rendering"
 
@@ -5023,7 +5023,7 @@ msgstr "Required for map rendering and 3D terrain"
 #: src/components/ui/VideoLookSettings.tsx:39
 #: src/components/ui/VoiceSettings.tsx:508
 #: src/components/ui/VoiceSettings.tsx:524
-#: src/components/view/ProjectSettingsModal.tsx:252
+#: src/components/view/ProjectSettingsModal.tsx:250
 #: src/features/map/components/WaypointEditor.tsx:1063
 msgid "Reset"
 msgstr "Reset"
@@ -5036,7 +5036,7 @@ msgstr "Reset speaking style"
 msgid "Reset style"
 msgstr "Reset style"
 
-#: src/components/view/ProjectSettingsModal.tsx:332
+#: src/components/view/ProjectSettingsModal.tsx:309
 msgid "Reset the look"
 msgstr "Reset the look"
 
@@ -5155,7 +5155,7 @@ msgid "Route map"
 msgstr "Route map"
 
 #: src/components/ui/AppSettings.tsx:451
-#: src/components/view/ProjectSettingsModal.tsx:213
+#: src/components/view/ProjectSettingsModal.tsx:211
 msgid "Route marker"
 msgstr "Route marker"
 
@@ -5215,11 +5215,11 @@ msgstr "Runs open models such as Gemma 4 on this PC. Download a model in Setting
 msgid "S"
 msgstr "S"
 
-#: src/components/view/ProjectSettingsModal.tsx:190
+#: src/components/view/ProjectSettingsModal.tsx:188
 msgid "Same as the editor"
 msgstr "Same as the editor"
 
-#: src/components/view/ProjectSettingsModal.tsx:180
+#: src/components/view/ProjectSettingsModal.tsx:178
 msgid "Satellite Streets"
 msgstr "Satellite Streets"
 
@@ -5267,7 +5267,7 @@ msgstr "Save Project"
 msgid "Save Project As"
 msgstr "Save Project As"
 
-#: src/components/view/ProjectSettingsModal.tsx:134
+#: src/components/view/ProjectSettingsModal.tsx:132
 msgid "Save Settings"
 msgstr "Save Settings"
 
@@ -5364,8 +5364,8 @@ msgid "sec"
 msgstr "sec"
 
 #: src/components/view/ProjectSettingsModal.tsx:296
-msgid "Seconds a leg dissolves into the clip that follows it. 0 is a hard cut."
-msgstr "Seconds a leg dissolves into the clip that follows it. 0 is a hard cut."
+#~ msgid "Seconds a leg dissolves into the clip that follows it. 0 is a hard cut."
+#~ msgstr "Seconds a leg dissolves into the clip that follows it. 0 is a hard cut."
 
 #: src/features/editor/Inspector.tsx:333
 msgid "Seconds after the title item starts. It leaves the same time before the end."
@@ -5513,8 +5513,8 @@ msgstr "Shadow color"
 msgid "Sharpen photos"
 msgstr "Sharpen photos"
 
-#: src/components/view/ProjectSettingsModal.tsx:374
-#: src/components/view/ProjectSettingsModal.tsx:380
+#: src/components/view/ProjectSettingsModal.tsx:351
+#: src/components/view/ProjectSettingsModal.tsx:357
 msgid "Sharper map tiles"
 msgstr "Sharper map tiles"
 
@@ -5880,8 +5880,8 @@ msgid "Stop-by pin"
 msgstr "Stop-by pin"
 
 #: src/hooks/useStopRegen.ts:124
-#: src/hooks/useStopRegen.ts:153
-#: src/hooks/useStopRegen.ts:176
+#: src/hooks/useStopRegen.ts:155
+#: src/hooks/useStopRegen.ts:178
 msgid "Stopped before it finished."
 msgstr "Stopped before it finished."
 
@@ -5922,7 +5922,7 @@ msgstr "Street view"
 msgid "Street view {0}"
 msgstr "Street view {0}"
 
-#: src/components/view/ProjectSettingsModal.tsx:179
+#: src/components/view/ProjectSettingsModal.tsx:177
 msgid "Streets"
 msgstr "Streets"
 
@@ -5984,7 +5984,7 @@ msgstr "Subtitles"
 msgid "Summary card"
 msgstr "Summary card"
 
-#: src/components/view/ProjectSettingsModal.tsx:369
+#: src/components/view/ProjectSettingsModal.tsx:346
 msgid "Sync with the editor's map"
 msgstr "Sync with the editor's map"
 
@@ -6070,7 +6070,7 @@ msgstr "The assistant, Auto-Write script buttons and overview narration, in ever
 msgid "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
 msgstr "The base address of a server that speaks the OpenAI API, for example https://example.com/v1"
 
-#: src/hooks/useStopRegen.ts:150
+#: src/hooks/useStopRegen.ts:152
 msgid "The clip is ready."
 msgstr "The clip is ready."
 
@@ -6091,11 +6091,11 @@ msgstr "The document could not be processed: {0}"
 msgid "The document could not be processed."
 msgstr "The document could not be processed."
 
-#: src/components/view/ProjectSettingsModal.tsx:345
+#: src/components/view/ProjectSettingsModal.tsx:322
 msgid "The editor shows {editorLabel}, which is not a Mapbox style, so the video cannot use it."
 msgstr "The editor shows {editorLabel}, which is not a Mapbox style, so the video cannot use it."
 
-#: src/components/view/ProjectSettingsModal.tsx:362
+#: src/components/view/ProjectSettingsModal.tsx:339
 msgid "The editor's map is {editorLabel}."
 msgstr "The editor's map is {editorLabel}."
 
@@ -6139,7 +6139,7 @@ msgstr "The model the assistant and Auto-Write use."
 #~ msgid "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
 #~ msgstr "The most natural, and it clones a voice. Slowest on a PC without a graphics card."
 
-#: src/hooks/useStopRegen.ts:150
+#: src/hooks/useStopRegen.ts:152
 msgid "The narration is ready. If its length changed, make the clip again so it fits."
 msgstr "The narration is ready. If its length changed, make the clip again so it fits."
 
@@ -6208,7 +6208,7 @@ msgstr "The subtitles are ready."
 msgid "The video starts directly on the route. Turn the intro on to add a title card."
 msgstr "The video starts directly on the route. Turn the intro on to add a title card."
 
-#: src/components/view/ProjectSettingsModal.tsx:347
+#: src/components/view/ProjectSettingsModal.tsx:324
 msgid "The video's map follows the map in the editor ({editorLabel}) until you pick a style here."
 msgstr "The video's map follows the map in the editor ({editorLabel}) until you pick a style here."
 
@@ -6236,7 +6236,7 @@ msgstr "The voice reads every narration in this project. Changing the voice or t
 msgid "The walk reaches the stop by the time its name is spoken. Cues you type yourself always win."
 msgstr "The walk reaches the stop by the time its name is spoken. Cues you type yourself always win."
 
-#: src/hooks/useStopRegen.ts:173
+#: src/hooks/useStopRegen.ts:175
 msgid "The walking clip is ready."
 msgstr "The walking clip is ready."
 
@@ -6394,7 +6394,7 @@ msgstr "Timing"
 msgid "Timing cues"
 msgstr "Timing cues"
 
-#: src/components/view/ProjectSettingsModal.tsx:286
+#: src/components/view/ProjectSettingsModal.tsx:284
 msgid "Timing cues written in a narration decide when the walker reaches the stop."
 msgstr "Timing cues written in a narration decide when the walker reaches the stop."
 
@@ -6507,7 +6507,7 @@ msgstr "Turn smoothing"
 msgid "Turn the itinerary I attach into a 3 minute video with Japanese narration"
 msgstr "Turn the itinerary I attach into a 3 minute video with Japanese narration"
 
-#: src/components/view/ProjectSettingsModal.tsx:265
+#: src/components/view/ProjectSettingsModal.tsx:263
 msgid "Turn the photos of a stop into a moving clip. Off skips them, which renders faster."
 msgstr "Turn the photos of a stop into a moving clip. Off skips them, which renders faster."
 
@@ -6901,7 +6901,7 @@ msgstr "Waypoint {idx}"
 msgid "What else do you want to set up?"
 msgstr "What else do you want to set up?"
 
-#: src/components/view/ProjectSettingsModal.tsx:348
+#: src/components/view/ProjectSettingsModal.tsx:325
 msgid "What the video's map looks like. Default keeps the look the video always had."
 msgstr "What the video's map looks like. Default keeps the look the video always had."
 
@@ -6992,7 +6992,7 @@ msgstr "Word (e.g. 加太)"
 msgid "Word / Kanji"
 msgstr "Word / Kanji"
 
-#: src/components/view/ProjectSettingsModal.tsx:391
+#: src/components/view/ProjectSettingsModal.tsx:368
 msgid "Words every project shares live in App Settings, which you can open from here without opening a project."
 msgstr "Words every project shares live in App Settings, which you can open from here without opening a project."
 
@@ -7063,7 +7063,7 @@ msgid "You're watching the last version. The new one opens for review when it fi
 msgstr "You're watching the last version. The new one opens for review when it finishes."
 
 #: src/components/ui/AppSettings.tsx:452
-#: src/components/view/ProjectSettingsModal.tsx:217
+#: src/components/view/ProjectSettingsModal.tsx:215
 msgid "Your own image is also drawn as the pin in the video; the built-in icons show on the map only."
 msgstr "Your own image is also drawn as the pin in the video; the built-in icons show on the map only."
 

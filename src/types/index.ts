@@ -246,7 +246,6 @@ export interface ProjectSettings {
   photo_clip_engine?: "ai" | "cpu"; // "cpu": attraction photo clips are the 3D photo move only, never ComfyUI
 
   use_narration_cues?: boolean;
-  attraction_fade_seconds?: number;
 }
 
 export interface ProjectMetadata {

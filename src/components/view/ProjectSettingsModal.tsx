@@ -12,8 +12,7 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
 import { MapPin } from "../ui/icons";
-import { Dialog, dialogButton, dialogInput } from "../ui/Dialog";
-import { StepButtons } from "../ui/StepButtons";
+import { Dialog, dialogButton } from "../ui/Dialog";
 import { Select } from "../ui/Select";
 import { Switch } from "../ui/Switch";
 import { editorStyleForVideo, editorStyleLabel, resolveVideoStyle, videoMapStyles } from "../../config/constants";
@@ -101,7 +100,6 @@ export function ProjectSettingsModal({
             enable_attraction_videos: s.enable_attraction_videos,
             photo_clip_engine: s.photo_clip_engine,
             use_narration_cues: s.use_narration_cues,
-            attraction_fade_seconds: s.attraction_fade_seconds,
             ...lookPatch(s),
             mapbox_style_id: s.mapbox_style_id ?? null,
             follow_editor_map_style: s.follow_editor_map_style,
@@ -290,27 +288,6 @@ function ProjectSettingsForm({
             onChange={(v) => setOption({ use_narration_cues: v })}
             label={t`Follow timing cues in scripts`}
           />
-        </OptionRow>
-        <OptionRow
-          title={t`Fade into the stop's clip`}
-          description={t`Seconds a leg dissolves into the clip that follows it. 0 is a hard cut.`}
-        >
-          <div className="relative w-20">
-            <input
-              type="number"
-              min={0}
-              max={3}
-              step={0.1}
-              value={options.attraction_fade_seconds ?? 0.8}
-              onChange={(e) => setOption({ attraction_fade_seconds: Math.min(3, Math.max(0, Number(e.target.value) || 0)) })}
-              className={`${dialogInput} w-full pr-6 text-right tabular-nums`}
-            />
-            <StepButtons
-              onStep={(dir) =>
-                setOption({ attraction_fade_seconds: +Math.min(3, Math.max(0, (options.attraction_fade_seconds ?? 0.8) + dir * 0.1)).toFixed(1) })
-              }
-            />
-          </div>
         </OptionRow>
       </div>
 
