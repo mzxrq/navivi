@@ -99,6 +99,24 @@ def test_a_style_runs_no_script_and_loads_nothing_but_the_fonts(mine):
     assert picture.getpixel((render.PAD + 35, render.PAD + 35))[:3] == (0, 255, 0)
 
 
+@pytest.mark.parametrize("seconds", [1320, 11 * 3600 + 59 * 60])  # the long time has to be shrunk to its box
+def test_the_banners_distance_and_time_are_the_same_size(seconds):
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from services.hudtheme import render
+
+    card = cards.totals_card(model.load_theme("sea"), 0.76, seconds, JA, leg=True)
+
+    with sync_api.sync_playwright() as p:
+        browser = p.chromium.launch(headless=True, args=["--disable-gpu"])
+        page = render._new_page(browser, 1.0)
+        page.evaluate("html => { document.body.innerHTML = html; }", card.html)
+        page.evaluate(render._FIT_JS)
+        sizes = page.eval_on_selector_all(".num", "els => els.map(el => getComputedStyle(el).fontSize)")
+        browser.close()
+
+    assert len(sizes) == 2 and sizes[0] == sizes[1]
+
+
 def test_layout_defaults_then_theme_then_project():
     found = layout.merge({"title": {"x": 40}}, {"title": {"y": 50, "style": "ribbon"}, "modes": {"show": False}})
 

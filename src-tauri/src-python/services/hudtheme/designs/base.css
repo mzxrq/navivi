@@ -1,6 +1,6 @@
-/* Shared by every card. Before the picture is taken (see render.py), `.fit` text is shrunk to its box and a
-   `.wrap` name (strip) too long for one line takes two. A `.grow` card is as big as its text, which flows in
-   `.flow`, clear of the pattern strip on the right. */
+/* Shared by every card. Before the picture is taken (see render.py), `.fit` text is shrunk to its box, `.same`
+   texts then take the smallest of their sizes, and a `.wrap` name (strip) too long for one line takes two. A
+   `.grow` card is as big as its text, which flows in `.flow`, clear of the pattern strip on the right. */
 .card { position: relative; overflow: hidden; white-space: nowrap; box-sizing: border-box;
         box-shadow: 0 5px 16px rgba(16,48,78,0.28); font-family: 'Zen Maru Gothic', 'LINE Seed JP', sans-serif; }
 .card > svg { position: absolute; left: 0; top: 0; }
