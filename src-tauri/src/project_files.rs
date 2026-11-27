@@ -344,7 +344,7 @@ mod tests {
 
         write_archive(&src, &out, false).unwrap();
         let mut zip = zip::ZipArchive::new(fs::File::open(&out).unwrap()).unwrap();
-        let names: Vec<String> = (0..zip.len()).map(|i| zip.by_index(i).unwrap().name().to_string()).collect();
+        let names: Vec<String> = (0..zip.len()).map(|i| zip.by_index(i).unwrap().name().unwrap().into_owned()).collect();
         assert!(names.contains(&"job_config.json".to_string()));
         assert!(names.contains(&"assets/audio/a.wav".to_string()));
         assert!(!names.iter().any(|n| n.contains("route") || n.contains("cache")));
