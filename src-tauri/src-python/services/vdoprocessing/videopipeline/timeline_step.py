@@ -403,16 +403,26 @@ class _TrackBuilder:
         return {"start": 0.0, "end": round(end, 3), **shown}
 
     def _attraction_text_items(self, source_or_name: str, source_name: str, length: float, audio_path: Optional[str]) -> list:
-        """An attraction's place name (when its clip was finalized without it) and its photo credits."""
+        """An attraction's place name (when its clip was finalized without it) and its photo credits. A themed
+        project's name item carries its card's picture (hudtheme/clip_card.py)."""
         from services.vdoprocessing.place_label import place_text_item, unburned_place_label
 
         items = []
+        match = _ATTRACTION_RE.search(source_name)
         place = unburned_place_label(source_or_name)
         if place:
-            items.append({"start": 0.0, "end": round(length, 3), **place_text_item(place, self.place_label_look)})
+            from services.hudtheme import clip_card
+            from services.vdoprocessing.vdoexporter import VideoExporter
+
+            index = int(match.group(1)) if match else -1
+            card = clip_card.place_picture(
+                self.project_dir, place, clip_card.stop_glyph(self.run_waypoints, index),
+                VideoExporter._video_size(Path(source_or_name)) or (1920, 1080))
+            if card != {}:  # {}: the project's layout hides it
+                items.append({"start": 0.0, "end": round(length, 3), **place_text_item(place, self.place_label_look),
+                              **({"picture": card} if card else {})})
         from services.vdoprocessing.photo_credit import credit_items
 
-        match = _ATTRACTION_RE.search(source_name)
         if match and int(match.group(1)) < len(self.run_waypoints):
             from .audio_step import read_photo_cuts
 

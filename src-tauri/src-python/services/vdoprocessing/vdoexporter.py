@@ -313,6 +313,32 @@ def write_caption_ass(
     return path
 
 
+def split_card_texts(texts: list) -> Tuple[list, list]:
+    """(text items drawn as their picture, the rest). An item is its picture only while its words are still the
+    picture's: renamed in the editor, or with the file gone, it is drawn as text again."""
+    cards, rest = [], []
+    for item in texts:
+        picture = item.get("picture") or {}
+        same = picture.get("text") == (item.get("title") or {}).get("text")
+        (cards if picture.get("path") and same and Path(picture["path"]).is_file() else rest).append(item)
+    return cards, rest
+
+
+def _overlay_graph(pictures: list, factor: float, subtitle_filter: str) -> str:
+    """The filter graph that lays each item's picture (inputs 1…) over input 0 for its time, then the captions.
+    Their places and sizes are in 1080-high px; `factor` is the video's height over that."""
+    chains, last = [], "0:v"
+    for i, item in enumerate(pictures, start=1):
+        picture = item["picture"]
+        chains.append(f"[{i}:v]scale={max(1, round(picture['width'] * factor))}:"
+                      f"{max(1, round(picture['height'] * factor))}[c{i}]")
+        chains.append(f"[{last}][c{i}]overlay={round(picture['x'] * factor)}:{round(picture['y'] * factor)}:"
+                      f"enable='gte(t,{float(item['start']):.3f})*lt(t,{float(item['end']):.3f})'[v{i}]")
+        last = f"v{i}"
+    chains.append(f"[{last}]{subtitle_filter}[v]")
+    return ";".join(chains)
+
+
 def _run_with_progress(
     cmd: List[str], input_path: str, on_progress: Callable[[float], None]
 ) -> subprocess.CompletedProcess:
@@ -1285,19 +1311,21 @@ class VideoExporter:
 
         cues = VideoExporter._burn_cues(timeline_data)
         # Text-track items (e.g. the intro title) burn even when subtitles are off.
+        pictures, texts = split_card_texts(timeline_data.get("texts") or [])
         texts = [
-            x for x in timeline_data.get("texts") or []
+            x for x in texts
             if str((x.get("title") or {}).get("text", "")).strip()
             or str((x.get("subtitle") or {}).get("text", "")).strip()
         ]
-        if cues or texts:
+        if cues or texts or pictures:
             ass = write_caption_ass(
                 cues, timeline_data.get("caption_style"), VideoExporter._video_size(Path(output_path)),
                 tmp_dir / "subtitles.ass", texts=texts,
             )
             burned = tmp_dir / "with_subtitles.mp4"
             try:
-                VideoExporter.burn_subtitles(str(output_path), str(ass), str(burned), on_progress=on_progress)
+                VideoExporter.burn_subtitles(
+                    str(output_path), str(ass), str(burned), on_progress=on_progress, pictures=pictures)
                 _replace_with_retry(str(burned), str(output_path))
             except Exception as exc:  # the stitched video is still good without them
                 logger.warning("subtitle burn skipped: %s", exc)
@@ -1316,8 +1344,10 @@ class VideoExporter:
         input_video_path: str, subtitle_file_path: str, output_video_path: str,
         style: Optional[SubtitleStyle] = None,
         on_progress: Optional[Callable[[float], None]] = None,
+        pictures: Optional[list] = None,
     ) -> str:
-        """NLE Engine: Burns an .srt or .ass subtitle file permanently into a video track (Cross-Platform Safe)."""
+        """NLE Engine: Burns an .srt or .ass subtitle file permanently into a video track (Cross-Platform Safe).
+        `pictures`: text items drawn as their picture (split_card_texts), laid over under the captions."""
         video_path = Path(input_video_path)
         sub_path = Path(subtitle_file_path)
 
@@ -1340,13 +1370,21 @@ class VideoExporter:
         if style:
             sub_filter = f"subtitles=filename='{safe_sub_path}':force_style='{style.to_force_style()}'"
 
+        if pictures:
+            size = VideoExporter._video_size(video_path)
+            inputs = [arg for item in pictures for arg in ("-i", item["picture"]["path"])]
+            filters = ["-filter_complex", _overlay_graph(pictures, (size[1] if size else 1080) / 1080, sub_filter),
+                       "-map", "[v]", "-map", "0:a?"]
+        else:
+            inputs, filters = [], ["-vf", sub_filter]
+
         cmd = [
             ffmpeg_cmd,
             "-y", *tuning.ffmpeg_log_args(),
             "-i",
             str(video_path),
-            "-vf",
-            sub_filter,
+            *inputs,
+            *filters,
             *tuning.ffmpeg_thread_args(),
             "-c:a",
             "copy",  # Copy the audio without re-encoding it

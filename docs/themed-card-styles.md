@@ -36,8 +36,12 @@ the project's own light/dark setting. Only `theme` is required.
 | `compass` | leg | `compass` | top-right, under the banner |
 | `leg_rail` | leg | `leg_rail` | bottom-left |
 | `remaining` | leg | `totals` | bottom-right |
+| `place` | attraction clip | `place` | top-left (600-high frame, like the legs) |
 
 A closed place being passed on a leg uses the `place` style folder.
+
+On attraction clips the `place` card replaces the plain place name, in the editor and the export, from the next
+render. Renaming the item in the editor shows the new words as plain text until the render after.
 
 ### Settings per card
 
