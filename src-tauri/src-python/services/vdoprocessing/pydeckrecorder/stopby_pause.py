@@ -63,10 +63,9 @@ async def _play_stopby_photo_pause(
       file opens on the same fullscreen photo, holds, and shrinks back
       down to nothing right on the marker before the walk resumes.
     - Has an attraction video (`image_display` is ignored - always
-      fullscreen): grows to fullscreen like the no-attraction
-      case, but ends with a cinematic blur-out (matching popupsequence.
-      py's own arrival blur-out) instead of a flat cut, then cuts to a new
-      file that likewise resumes the walk directly.
+      fullscreen): `popup_image` is that video's first frame, so the clip
+      cuts the moment it is fullscreen; the new file opens on
+      `popup_image_after` (the video's last frame) and shrinks it the same way.
 
     `pip_only`: for an UNCONNECTED landmark with its own photo -- the
     route only passes NEAR it, so unlike a connected stop-by the walk
@@ -314,14 +313,11 @@ async def _play_stopby_photo_pause(
         "() => { const svg = document.getElementById('stopby-leader'); if (svg) svg.remove(); }"
     )
 
-    # Hold at fullscreen size BEFORE cutting/blurring -- the grow animation
-    # used to run straight into the cut with no pause at all, so the photo
-    # was on screen at full size for a single frame before vanishing; a
-    # viewer never actually got to register it fullscreen.
+    # Hold at fullscreen size BEFORE cutting -- the grow animation used to run
+    # straight into the cut, leaving the photo at full size for a single frame
+    # before vanishing; a viewer never actually got to register it fullscreen.
     grown_png = await page.screenshot(**_FRAME_SHOT)
-    dissolve = has_attraction and bool(stopby.get("dissolve_into_attraction"))
-    # With a dissolve (or any cut to an attraction video), the photo is not held:
-    # the clip ends as it reaches fullscreen and hands off to the video.
+    # Before an attraction video the picture is not held: it is that video's first frame, so the video just starts.
     for _ in range(1 if has_attraction else max(1, int(freeze_sec * fps))):
         await write_frame(grown_png)
 
@@ -393,41 +389,26 @@ async def _play_stopby_photo_pause(
             }"""
         )
 
-    if has_attraction and dissolve:
-        await cut_to_new_clip()
-        # Back from the stop-by's attraction video: its photo, then the walk.
-        await reopen_and_shrink(tuning.STOPBY_REOPEN_HOLD_SECONDS)
-        return
-
-    if has_attraction:
-        # Cinematic blur-out (same shape as popupsequence.py's own arrival
-        # blur-out: accelerating blur + fade to black) instead of a flat
-        # cut -- this is the LAST beat of the CURRENT clip. The new file
-        # then resumes the walk directly, same as the pip branch above.
-        blur_frames = max(1, int(tuning.LEG_PHOTO_FADE_SECONDS * fps))
-        for i in range(blur_frames):
-            progress = i / float(blur_frames - 1) if blur_frames > 1 else 1.0
-            ease = progress ** 2
-            blur_px = ease * 40.0
-            alpha = 1.0 - progress
-            await page.evaluate(
-                """([blurPx, alphaVal]) => {
-                    const img = document.getElementById('stopby-preview');
-                    if (!img) return;
-                    img.style.filter = `blur(${blurPx}px)`;
-                    img.style.opacity = alphaVal;
-                }""",
-                [blur_px, alpha],
-            )
-            await write_frame(await page.screenshot(**_FRAME_SHOT))
-
-        await cut_to_new_clip()
-        await reopen_and_shrink(tuning.STOPBY_REOPEN_HOLD_SECONDS)
-        return
-
     # The canvas never stopped rendering across the cut: the walk's map/trail
-    # are underneath the photo the whole time. The photo was already held fullscreen for freeze_sec above, so the
-    # new piece only re-establishes it briefly (as the two attraction branches do); holding freeze_sec again showed
-    # the same still for twice as long and pushed this piece's narration that much later.
+    # are underneath the photo the whole time. Without a video the photo was already held fullscreen for freeze_sec
+    # above, so the new piece only re-establishes it briefly; holding freeze_sec again showed the same still for
+    # twice as long and pushed this piece's narration that much later.
     await cut_to_new_clip()
+    after_video = stopby.get("popup_image_after") if has_attraction else None
+    if after_video:
+        # Back from the attraction video: the new piece opens on the video's last frame.
+        after_name = f"stopby_after_{trigger_index}_{next(_card_numbers)}{os.path.splitext(after_video)[1]}"
+        shutil.copy2(after_video, os.path.join(html_dir, after_name))
+        await page.evaluate(
+            """(url) => new Promise((resolve) => {
+                const img = document.getElementById('stopby-preview');
+                if (!img) return resolve();
+                img.src = url;
+                if (img.decode) { img.decode().then(resolve).catch(resolve); }
+                else { img.onload = resolve; img.onerror = resolve; }
+                setTimeout(resolve, 2000);
+            })""",
+            f"http://127.0.0.1:{port}/{after_name}",
+        )
+        await _wait_for_paint(page)
     await reopen_and_shrink(tuning.STOPBY_REOPEN_HOLD_SECONDS)

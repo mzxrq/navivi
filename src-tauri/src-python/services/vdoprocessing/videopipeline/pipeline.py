@@ -322,8 +322,7 @@ def _finish_timeline(
         attraction_audio_paths=audio_data.get("attraction_audio_paths"),
         attraction_subtitle_paths=subtitles.attractions,
         leg_narration_splits=leg_narration_splits,
-        # settings.attraction_fade_seconds: how long a leg's arrival photo
-        # dissolves into the attraction video after it (0 = hard cut).
+        # settings.attraction_fade_seconds: the dissolve between two legs joined at a return stop (0 = hard cut).
         attraction_fade_seconds=float(settings.get("attraction_fade_seconds", 0.8)),
         intro_text=intro_text_items(config_path, duration_sec=intro_seconds, cue_times=intro_cues) if intro_path else None,
         outro_text=outro_text_item(config_path) if outro_path else None,

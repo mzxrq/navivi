@@ -48,8 +48,7 @@ def test_attraction_follows_the_leg_that_arrives_at_it(tmp_path):
         "02_waypoint_02_d.mp4", "04_attraction_03_x.mp4",  # leg -> destination d
     ]
     fades = dict(_order(path))
-    assert fades["02_waypoint_01_b.mp4"] == 0.8 and fades["02_waypoint_02_d.mp4"] == 0.8
-    assert fades["01_overview.mp4"] is None and fades["04_attraction_00_x.mp4"] is None
+    assert all(fade is None for fade in fades.values())  # leg -> attraction is a plain cut
 
 
 def test_a_leg_cut_by_a_connected_stopby_gets_an_attraction_after_each_piece(tmp_path):
@@ -75,7 +74,7 @@ def test_a_leg_cut_by_a_connected_stopby_gets_an_attraction_after_each_piece(tmp
         "02_waypoint_01_e_cont2.mp4", "04_attraction_03_x.mp4",  # -> d
         "02_waypoint_01_e_cont3.mp4", "04_attraction_04_x.mp4",  # -> e
     ]
-    assert all(f == 0.8 for n, f in _order(path) if n.startswith("02_"))
+    assert all(f is None for n, f in _order(path) if n.startswith("02_"))
 
 
 def _stopby_timeline(tmp_path, b_extra=None):

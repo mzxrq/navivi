@@ -28,6 +28,7 @@ from services.projectfiles import meta_dir, write_json_atomic
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.route_inputs import photo_inputs_hash
 from services.vdoprocessing.storyboard import for_config as storyboard_for
+from services.vdoprocessing.video_frames import clip_end_frames
 
 # Logging configuration
 logger = setup_logger("RouteAnimator")
@@ -59,7 +60,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # v7: leg card numbers are the overview card's own per-leg numbers;
 # v8: stop-bys are framed too, and the summary card sits lower;
 # v9: the 3D leg HUD card sits as low as the 2D one).
-LEG_RENDER_VERSION = 42  # v42: the leg before's line fades away as the camera settles; v41: stop-by pins show +1, +2 …; v40: every leg slides on from the leg before, zooming only when needed; v39: the card's second column reads 残り (what is left), no empty banner bar at the start; v38: the direction/turn-by-turn HUD card is removed entirely -- didn't work out; v36: the direction arrow moves to bottom-left (above the elevation card's own spot), not bottom-right; v35: the badge's digit goes heavier still (900 + a thin matching text-stroke) since 700 still read thin at this small size; v34: that card sits a bit closer to the label again (108px, not 140); v31: a leg's opening/arrival photo card keeps clear of the pin's name label too, not just the pin itself; v30: the chain pill's circle badge is bigger and vertically centered against the place text; v29: the chain pill drops its 出発/到着 text prefix for a start/end circle badge (the pin's own S/E/number glyph); v28: a stop-by's photo card keeps further off its marker so it doesn't land on the marker's own name pill; v27: the carried-over photo card's leader line stops short of the marker like the others, instead of crossing its label; v26: the chain, progress and destination banners merge into one top bar, with a "stop N of total" progress segment; v25: place names keep off each other, stacking a row further out when every spot beside their point is taken; v24: at a stop with no attraction script the photo card rides along the slide (setting quiet_stop_transition); v23: photo cards keep off the route before keeping the leader short; v22: {view wait} times count from the {start} cue; v21: name tags placed with the real camera scale; v20: cards keep off the kept walked line; v19: a leg continuing the walk slides at the zoom of the leg before; v18: quicker opening/closing zoom (LEG_ZOOM_SECONDS); v17: a leg after a stop with no narration continues the walk; v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
+LEG_RENDER_VERSION = 43  # v43: legs end and open on the attraction clip's own frames, limited color range; v42: the leg before's line fades away as the camera settles; v41: stop-by pins show +1, +2 …; v40: every leg slides on from the leg before, zooming only when needed; v39: the card's second column reads 残り (what is left), no empty banner bar at the start; v38: the direction/turn-by-turn HUD card is removed entirely -- didn't work out; v36: the direction arrow moves to bottom-left (above the elevation card's own spot), not bottom-right; v35: the badge's digit goes heavier still (900 + a thin matching text-stroke) since 700 still read thin at this small size; v34: that card sits a bit closer to the label again (108px, not 140); v31: a leg's opening/arrival photo card keeps clear of the pin's name label too, not just the pin itself; v30: the chain pill's circle badge is bigger and vertically centered against the place text; v29: the chain pill drops its 出発/到着 text prefix for a start/end circle badge (the pin's own S/E/number glyph); v28: a stop-by's photo card keeps further off its marker so it doesn't land on the marker's own name pill; v27: the carried-over photo card's leader line stops short of the marker like the others, instead of crossing its label; v26: the chain, progress and destination banners merge into one top bar, with a "stop N of total" progress segment; v25: place names keep off each other, stacking a row further out when every spot beside their point is taken; v24: at a stop with no attraction script the photo card rides along the slide (setting quiet_stop_transition); v23: photo cards keep off the route before keeping the leader short; v22: {view wait} times count from the {start} cue; v21: name tags placed with the real camera scale; v20: cards keep off the kept walked line; v19: a leg continuing the walk slides at the zoom of the leg before; v18: quicker opening/closing zoom (LEG_ZOOM_SECONDS); v17: a leg after a stop with no narration continues the walk; v16: fullscreen photo shrinks in 0.25 s, street view cards show their name; v15: legs joined at a stop with no narration continue from the same frame; v14: no automatic turn photo within 50 m of a placed street view; v13: a leg's own photo card sits off the route line (2026-11-09)
 # Bumped when the heatmap legs' elevation profile card changes (only those legs re-render; v1: the card).
 LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
@@ -676,10 +677,20 @@ class RouteAnimator:
         candidate = ctx.attraction_dir / attraction_output_filename(idx, label or f"waypoint_{idx}")
         return str(candidate) if candidate.exists() else None
 
+    def _clip_pictures(self, ctx: "_ResContext", waypoint_id: Optional[str]) -> Optional[Tuple[str, str, str]]:
+        """(attraction clip, its first frame, its last frame) of a stop whose clip plays in this video, else None."""
+        if not self.config.get("enable_attraction_videos", True):
+            return None
+        clip = self._attraction_video_for(ctx, waypoint_id, (ctx.wp_by_id.get(waypoint_id) or {}).get("label"))
+        if not clip:
+            return None
+        frames = clip_end_frames(clip, str(meta_dir(Path(self.config["res_route_path"]).parent) / "joinframes"))
+        return (clip, *frames) if frames else None
+
     def _landmark_entry(self, ctx: "_ResContext", m: Dict[str, Any]) -> Dict[str, Any]:
         from services.vdoprocessing.videopipeline.audio_step import no_narration_stop
 
-        return {
+        entry = {
             "lat": m["lat"], "lon": m.get("lng", m.get("lon")), "label": m.get("label"),
             # A "connectToRoute" stop-by gets the full fullscreen photo-pause as the walker passes it.
             "connect_to_route": bool(m.get("connect_to_route", False)),
@@ -693,17 +704,20 @@ class RouteAnimator:
             "image_display": "fullscreen",  # residential legs are always fullscreen
             # Its own narration length: pedestrian holds the fullscreen pause at least this long.
             "narration_audio_seconds": m.get("narration_audio_seconds"),
-            # Set only when this stop-by already has a GENERATED attraction video: the photo pause then cuts the
-            # leg clip instead of shrinking back to resume the walk in place.
-            "attraction_video": self._attraction_video_for(ctx, m.get("waypoint_id"), m.get("label")),
-            # The photo ends fullscreen and the attraction video dissolves in from it.
-            "dissolve_into_attraction": bool(self.config.get("dissolve_into_attraction", False)),
+            # Set below, when this stop-by's attraction clip follows the photo pause.
+            "attraction_video": None,
             # Audio-first timing of the walk TOWARD this stop and how long it waits here for the voice.
             "walk_seconds": m.get("walk_seconds"),
             "wait_seconds": m.get("wait_seconds"),
             "pops_after": m.get("pops_after"),
             "waypoint_id": m.get("waypoint_id"),
         }
+        # A photo is only ever swapped, never added: a pause the walk plan gave no piece to would cut the leg.
+        if entry["connect_to_route"] and entry["popup_image"] and not entry.get("quiet"):
+            pictures = self._clip_pictures(ctx, entry["waypoint_id"])
+            if pictures:
+                entry["attraction_video"], entry["popup_image"], entry["popup_image_after"] = pictures
+        return entry
 
     def _leg_landmarks(
         self, ctx: "_ResContext", i: int, res_data: Dict[str, Any], leg_mode: str, leg_latlon: List,
@@ -730,8 +744,8 @@ class RouteAnimator:
         from services.vdoprocessing.videopipeline.audio_step import no_narration_stop
 
         dest_popup = next((p for p in (res_data.get("popups") or []) if p), None) or {}
-        # The leg ends on this photo and the destination's attraction video (dissolve) opens on the waypoint's FIRST
-        # image: with attraction videos on the leg shows the first image too, else the last one.
+        # With attraction videos on the leg shows the first image (swapped below for the clip's own first frame),
+        # else the last one.
         dest_popup_image = (
             dest_popup.get("popup_image")
             if self.config.get("enable_attraction_videos", True)
@@ -752,10 +766,20 @@ class RouteAnimator:
             dest_narration_seconds = end_popup.get("audio_duration")
         # The departure waypoint's popup (render_step's "leg_start_popup"), shown at this leg's own opening.
         start_popup = res_data.get("leg_start_popup") or {}
+        start_image = start_popup.get("popup_image_last") or start_popup.get("popup_image")
+        # The join with an attraction clip: the leg ends on the clip's first frame and the next opens on its last.
+        if dest_popup_image and dest_image_display == "fullscreen":
+            pictures = self._clip_pictures(ctx, res_data.get("end_waypoint_id"))
+            if pictures:
+                dest_popup_image = pictures[1]
+        if start_image:
+            pictures = self._clip_pictures(ctx, res_data.get("start_waypoint_id"))
+            if pictures:
+                start_image = pictures[2]
         return _LegPhotos(
             dest_image=dest_popup_image, dest_freeze=dest_freeze_seconds, dest_narration=dest_narration_seconds,
             dest_display=dest_image_display, dest_quiet=dest_quiet,
-            start_image=start_popup.get("popup_image_last") or start_popup.get("popup_image"),
+            start_image=start_image,
             start_freeze=start_popup.get("freeze_seconds"), start_narration=start_popup.get("audio_duration"),
         )
 

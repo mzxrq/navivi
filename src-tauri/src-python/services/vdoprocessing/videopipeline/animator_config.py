@@ -29,19 +29,11 @@ def _run_options(
         "overview_rerender": overview_stale,
         "min_free_ram_gb": settings.get("min_free_ram_gb"),
         "enable_attraction_videos": attraction_videos_enabled(settings),
-        # The at-arrival photo grows to fullscreen and the clip ends right
-        # there - no hold. The dissolve into the attraction video that follows
-        # runs on extra frames added at export (VideoExporter._crossfade_pair),
-        # so it starts the moment the photo is fullscreen.
+        # The at-arrival picture grows to fullscreen and the clip ends right
+        # there - no hold: the attraction clip that follows starts on that same picture.
         "arrival_photo_hold_seconds": 0.0,
         # At a stop with no attraction script: "slide" (the walk goes on, its photo card rides along) or "zoom".
         "quiet_stop_transition": settings.get("quiet_stop_transition", "slide"),
-        # A connected stop-by's fullscreen photo does the same (no hold, no
-        # blur-out) when an attraction video follows it.
-        "dissolve_into_attraction": (
-            attraction_videos_enabled(settings)
-            and float(settings.get("attraction_fade_seconds", 0.8)) > 0
-        ),
         "use_pydeck_pedestrian": use_pydeck_pedestrian,
         "mapbox_style_id": settings.get("mapbox_style_id"),
         # Where the narration's cues fall: the overview reaches each cued stop
