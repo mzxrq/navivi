@@ -61,6 +61,20 @@ export interface TextBox {
 
 export const DEFAULT_TEXT_BOX: TextBox = { color: "#131C2E", opacity: 0.85, height: 190, fade: 56 };
 
+// A themed card drawn for a text item (hudtheme/clip_card.py): shown instead of the words while they are still its
+// words. x / y / width / height: px of a 1080-high frame; path: relative to the project.
+export interface TextPicture {
+  path: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  text: string;
+}
+
+export const cardOf = (x: { picture?: TextPicture; title: TextLine }): TextPicture | undefined =>
+  x.picture && x.picture.text === x.title.text ? x.picture : undefined;
+
 export interface TextClip {
   id: string;
   segmentId: string;
@@ -80,6 +94,7 @@ export interface TextClip {
   burned_in?: boolean; // already drawn into its clip (scrapbook outro title, under the logo doors): not drawn again
   // What made it: the intro's or outro's title, an attraction's place name, or added by hand.
   kind?: "intro" | "outro" | "place" | "credit";
+  picture?: TextPicture;
 }
 
 export type TextAnimation = "pop" | "fade" | "none";
@@ -491,6 +506,7 @@ export function toManifest(projectName: string, timeline: TimelineData, captionS
       ...(x.wipe_out ? { wipe_out: x.wipe_out } : {}),
       ...(x.burned_in ? { burned_in: true } : {}),
       ...(x.kind ? { kind: x.kind } : {}),
+      ...(x.picture ? { picture: x.picture } : {}),
     })),
     burn_subtitles: options.burnSubtitles ?? true,
     // Absent keys keep the export as it was: the clips' own size and 30 fps.
@@ -564,7 +580,8 @@ export function carryOverLooks(prev: TimelineData, next: TimelineData): Timeline
     const siblings = next.texts.filter((y) => y.segmentId === x.segmentId && y.kind === x.kind);
     const match = prev.texts.filter((y) => y.segmentId === old.id && y.kind === x.kind)[siblings.indexOf(x)];
     if (!match) return x;
-    const { id: _id, segmentId: _seg, start: _s, end: _e, title, subtitle, kicker, kind: _k, ...look } = match;
+    // The card's picture is the new render's (or none, the theme gone), never carried over.
+    const { id: _id, segmentId: _seg, start: _s, end: _e, title, subtitle, kicker, kind: _k, picture: _p, ...look } = match;
     return {
       ...x,
       ...look,

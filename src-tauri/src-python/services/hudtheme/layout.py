@@ -49,6 +49,8 @@ DEFAULTS: Dict[str, Entry] = {
     "compass": Entry("top-right", 16, 100),
     "leg_rail": Entry("bottom-left", 16, 14),
     "remaining": Entry("bottom-right", 16, 14),
+    # the attraction clips (on the walking legs' artboard)
+    "place": Entry("top-left", 16, 14),
 }
 _FIXED = {"notices": ("scale", "style")}  # the app draws its banners itself
 
