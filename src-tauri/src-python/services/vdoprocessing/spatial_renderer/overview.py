@@ -9,7 +9,6 @@ import functools
 import hashlib
 import json
 import re
-import tempfile
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Tuple
 
@@ -19,12 +18,9 @@ import numpy as np
 from services import tuning, video_text
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
 from services.vdoprocessing.route_inputs import photo_inputs_hash, returns_to, route_inputs_hash
-from services.vdoprocessing.storyboard import for_config as storyboard_for
 from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .base import logger
-from .card_circles import densify
-from .cluster_zoom import WalkCamera, cluster_views, pin_width
 from .overview_timing import (
     AUDIO_MATCH_TOLERANCE_SECONDS,
     MAX_WALK_SPEEDUP,
@@ -78,7 +74,7 @@ def _output_is_valid(path, min_bytes: int = 1024) -> bool:
 # stops are plain colour dots; v56: top HUD panels 1.5x bigger; v55: the recap sits on a plain plate and arranges its
 # badges on one lattice in walked order (see CLAUDE.md "overview recap's pill badges"); v54: a return stop takes no
 # number of its own. Older history: git log.
-OVERVIEW_RENDER_VERSION = 83  # v83: 3D map background, cluster zoom in every style; v82: course sub course
+OVERVIEW_RENDER_VERSION = 74  # 73 was used by the broken merge f959dec
 # The overview is reused unless one of these changed (or the file is missing).
 # route_waypoints, not the drawn line: see services/vdoprocessing/route_inputs.py.
 # The narration timings too: the walk stops at the voice's cues, so new cue seconds need a new video.
@@ -111,7 +107,6 @@ def _fingerprint_hash(obj) -> str:
 def _overview_fingerprint_parts(config: Dict, job_config: Optional[Dict], bg_path, render_args: Dict) -> Dict[str, str]:
     """Short hash per overview input, so a re-render can say what changed."""
     parts: Dict[str, str] = {"render_version": str(OVERVIEW_RENDER_VERSION)}
-    parts["storyboard"] = _fingerprint_hash(repr(storyboard_for(config or {})))[:16]  # an edited file renders again
     try:
         parts["background_image"] = hashlib.sha256(Path(bg_path).read_bytes()).hexdigest()[:16]
     except OSError:
@@ -193,10 +188,12 @@ _EXPECTED_FRAME_SEARCH_FRACTION = 0.05  # window size as a fraction of the path'
 _DEFAULT_INTRO_FREEZE_SECONDS = 3.0  # used when the start popup sets no freeze_seconds
 _INTRO_CLEAN_HOLD_FRACTION_OF_FREEZE = 0.5  # clean-beat hold, as a fraction of intro_freeze_sec
 _SUMMARY_CARD_MARGIN_PX = 20  # gap between the summary card and the frame's bottom-right corner
-_HUD_TOP, _HUD_SIDE = 20, 32  # where render_overview_hud puts the top bar's panels
 # [NOTE] The walk never waits past this for the narration's {start} cue: a long opening line would otherwise hold
 # the walker on the clean map well past the intro card's own freeze; the voice finishes it over the moving map.
 _MAX_INTRO_WALK_START_SECONDS = 3.0
+# Longest a stop-by batch's cards hold for their own {goPreN} cue (matches overview_animation.py's
+# _MAX_CUE_WAIT_SECONDS) — unlike the intro cap above this may run long: real content is still being named.
+_MAX_STOPBY_BATCH_WAIT_SECONDS = 20.0
 
 
 class _PathScale(NamedTuple):
@@ -291,11 +288,6 @@ def _is_numbered_stop(ap: Dict, stop_popup: Optional[Dict]) -> bool:
     )
 
 
-def _timing(config: Dict, name: str) -> float:
-    """settings.overview_<name>, else the style's storyboard timing."""
-    return float(config.get(f"overview_{name}", storyboard_for(config).timings[name]))
-
-
 def _intro_cue_walk_frames(popups: List, audio_cues: Dict, config: Dict, fps: int) -> int:
     """Frames before the walk sets off when the narration has cues: the intro's length, or the {start} cue."""
     first = popups[0] if popups else None
@@ -305,7 +297,7 @@ def _intro_cue_walk_frames(popups: List, audio_cues: Dict, config: Dict, fps: in
             intro_freeze = max(float(first["freeze_seconds"]), tuning.POPUP_MIN_DISPLAY_SECONDS)
         clean_hold = min(
             intro_freeze * _INTRO_CLEAN_HOLD_FRACTION_OF_FREEZE,
-            _timing(config, "intro_clean_hold_seconds"),
+            float(config.get("overview_intro_clean_hold_seconds", 1.5)),
         )
         return intro_frame_count(
             intro_freeze, clean_hold, max(1, int(tuning.POPUP_FADE_SECONDS * fps)), fps,
@@ -404,8 +396,8 @@ def _reproject_popups(active_popups: List[Dict], extent, w: int, h: int) -> None
 
 
 def _number_popups(active_popups: List[Dict], points: List) -> None:
-    """1-based visit order for each pin; the start (index 0) and stop-bys take no number (they show "S" / "+1"), and
-    a return stop shows the number of the stop it comes back to — so it also has no {n} cue (is_return).
+    """1-based visit order for each pin; the start (index 0) and stop-bys take no number (they show "S" / "・"), and
+    a return stop shows the number of the stop it comes back to (is_return): only the course overview times it, on that number said again.
     Matches the map editor's own MapArea.tsx normalIndex."""
     order = 0
     popup_places = [ap["data"] for ap in active_popups]
@@ -421,6 +413,16 @@ def _number_popups(active_popups: List[Dict], points: List) -> None:
             continue
         order += 1
         ap["order"] = order
+
+
+def _link_next_numbered_order(active_popups: List[Dict]) -> None:
+    """A stop-by batch has no {n}/{go} cue of its own (cues.py's {goPreN}): this says which numbered stop's "goPre"
+    cue governs when ITS narration mention ends."""
+    next_numbered_order = None
+    for ap in reversed(active_popups):
+        ap["next_numbered_order"] = next_numbered_order
+        if not ap["data"].get("is_stopby") and ap["index"] != 0 and not ap.get("is_return"):
+            next_numbered_order = ap["order"]
 
 
 def _apply_job_overrides(active_popups: List[Dict], job_waypoints: List[Dict]) -> None:
@@ -451,7 +453,7 @@ def _route_obstacle_array(route_avoid_points: List) -> np.ndarray:
 def _set_cue_waits(active_popups: List[Dict], stop_popup: Optional[Dict], audio_cues: Dict, config: Dict, fps: int) -> None:
     # A cue at the start of a sentence: the walker waits at that stop a moment (popup fading in) to stay in step.
     wait_tags = {str(t) for t in (config.get("overview_cue_wait_tags") or [])}
-    wait_frames = int(fps * _timing(config, "cue_wait_seconds"))
+    wait_frames = int(fps * float(config.get("overview_cue_wait_seconds", 2.0)))
     for ap in active_popups:
         numbered = _is_numbered_stop(ap, stop_popup)
         ap["cue_wait_frames"] = (
@@ -503,14 +505,28 @@ def _hold_frames(ap: Dict, fps: int, post_arrival_hold_seconds: float) -> int:
     ))
 
 
-def _start_batch_frames(start_popup: Optional[Dict], fps: int) -> int:
-    """Frames the start popup's stop-by batch holds before the walk."""
+def _start_batch_frames(start_popup: Optional[Dict], audio_cues: Dict, walk_start_frames: int, fps: int) -> int:
+    """Frames the start popup's stop-by batch holds before the walk. With its own {goPreN} cue the cards hold until
+    that line is spoken (capped at _MAX_STOPBY_BATCH_WAIT_SECONDS), stashed on the popup so _play_stopby_batch
+    (overview_animation.py) draws for the same duration this retiming assumes."""
     if not start_popup:
         return 0
-    return int(
+    start_batch = int(
         fps * min(len(start_popup.get("stopby_group") or []), tuning.STOPBY_BATCH_MAX_HELD)
         * tuning.STOPBY_BATCH_SECONDS
     )
+    if not start_popup.get("stopby_group"):
+        return start_batch
+    next_n = start_popup.get("next_numbered_order")
+    go_pre = audio_cues.get(f"goPre{next_n}") if next_n is not None else None
+    if go_pre is not None:
+        needed_frames = int(round(go_pre * fps)) - walk_start_frames
+        min_frames = int(tuning.POPUP_MIN_DISPLAY_SECONDS * fps)
+        start_batch = max(min_frames, min(
+            needed_frames, int(_MAX_STOPBY_BATCH_WAIT_SECONDS * fps)
+        ))
+        start_popup["batch_display_seconds"] = start_batch / fps
+    return start_batch
 
 
 def _warped_total_frames(
@@ -553,7 +569,7 @@ def _retime_to_cues(
         and ap.get("stopby_host") is None
     ]
     hold_before = {n: sum(h for f, h in hosts if f < frame) for n, frame in natural_frames.items()}
-    start_batch = _start_batch_frames(start_popup, fps)
+    start_batch = _start_batch_frames(start_popup, audio_cues, walk_start_frames, fps)
     # The leg cap shortened the natural path, but each cued stop still has its own time (and is itself no more
     # than one cap after the last): the walk may be stretched back out to the length the cues need.
     room = max(len(walk.arr), num_frames)
@@ -647,18 +663,15 @@ def _set_cue_frames(active_popups: List[Dict], stop_popup: Optional[Dict], audio
             int(round(depart * fps)) if ap["cue_frame"] is not None and depart is not None
             and depart > seconds else None
         )
+        # A stop-by batch host has no {n}/{go} of its own: its {goPreN} (the next numbered stop's cue) holds the
+        # freeze until the batch's own narration mention finishes.
+        if ap["depart_frame"] is None and ap is not active_popups[0] and ap.get("stopby_group"):
+            next_n = ap.get("next_numbered_order")
+            go_pre = audio_cues.get(f"goPre{next_n}") if next_n is not None else None
+            if go_pre is not None:
+                ap["depart_frame"] = int(round(go_pre * fps))
         if ap.get("no_pause") and not ap.get("stopby_group"):
             ap["depart_frame"] = None  # "Pause at Location" off: no hold until {go}
-
-
-def _standing_cards(start_popup: Optional[Dict], stop_popup: Optional[Dict]) -> List[Dict]:
-    """The intro's cards that stay on screen when the walk starts: the start's and the end's, at their spots."""
-    return [p for p in (start_popup, stop_popup) if p and p.get("stay_box")]
-
-
-def _spots_decided(popup: Dict) -> bool:
-    """_ov_layout_stay_cards has been over this popup: it has a card spot, or shows its pin only."""
-    return bool(popup.get("stay_box") or popup.get("no_card"))
 
 
 def _intro_freeze_seconds(start_popup: Dict) -> float:
@@ -669,13 +682,6 @@ def _intro_freeze_seconds(start_popup: Dict) -> float:
 
 
 class _OverviewRenderMixin:
-    def _sub_course_frames(self, fps: int) -> int:
-        """How many frames _render_sub_course_part writes: 0 with no sub course."""
-        if len((self.config.get("sub_course_overview") or {}).get("points") or []) < 2:
-            return 0
-        walk = max(2, int(storyboard_for(self.config).timings["sub_course_seconds"] * fps))
-        return walk + max(1, int(tuning.POPUP_FADE_SECONDS * fps))
-
     def _render_sub_course_part(self, video, fps: int, clean_bg: np.ndarray, route_frame: np.ndarray) -> None:
         """After the main course's summary: the main route stays, faded, the marker sets off again from the branch
         stop along the sub course (config "sub_course_overview", render_step._sub_overview_frame), then its own
@@ -689,7 +695,7 @@ class _OverviewRenderMixin:
         color = tuning.SUB_COURSE_LINE_BGR
         pts = np.asarray(sub["points"], dtype=float)
         step = np.r_[0.0, np.cumsum(np.hypot(*np.diff(pts, axis=0).T))]
-        frames = max(2, int(storyboard_for(self.config).timings["sub_course_seconds"] * fps))
+        frames = max(2, int(tuning.SUB_COURSE_OVERVIEW_SECONDS * fps))
         at = np.linspace(0.0, step[-1], frames)
         path = [(int(x), int(y)) for x, y in zip(np.interp(at, step, pts[:, 0]), np.interp(at, step, pts[:, 1]))]
         # Each stop's pin appears when the marker reaches it; anchors (main stops) are already on the map.
@@ -737,13 +743,16 @@ class _OverviewRenderMixin:
         return current_bg, w, h
 
     def _ov_reset_hud(self, summary: Optional[Dict]) -> None:
-        """The persistent top bar (title; what is left over the whole route), drawn per frame by
+        """The persistent HUD (title/mode times + live distance, stop counter, progress), drawn per frame by
         overview_animation.py's _NoticeWriter; each piece is skipped when its value is missing."""
         self._hud_total_distance_km = (summary or {}).get("total_distance_km")
         self._hud_total_duration_seconds = (summary or {}).get("total_duration_seconds")
+        self._hud_mode_duration = (summary or {}).get("mode_duration")
         self._hud_title = self.config.get("overview_title") or (
             self._get_job_config() or {}
         ).get("project_name")
+        self._hud_stops = None
+        self._hud_next_stop = None
         self._hud_progress_frac = 0.0  # the intro, before any walking: the whole trip is still ahead
 
     def _ov_prepare_popups(self, points: List, popups: List, labels: List, extent, w: int, h: int, fps: int) -> List[Dict]:
@@ -754,6 +763,7 @@ class _OverviewRenderMixin:
         if extent is not None:
             _reproject_popups(active_popups, extent, w, h)
         _number_popups(active_popups, points)
+        _link_next_numbered_order(active_popups)
         self._ov_attach_groups(active_popups, fps)
         self._declutter_pins(active_popups, route=points)
         self._ov_style_badges(active_popups, len(points))
@@ -763,25 +773,24 @@ class _OverviewRenderMixin:
     def _ov_attach_groups(self, active_popups: List[Dict], fps: int) -> None:
         """Which stop-bys ride along with which stop (see _attach_stopby_groups). Closed places (red ×) never stop
         the walk: they pop up as it passes, then all come in together at {closed} at the end."""
-        sb = storyboard_for(self.config)
+        is_course = self.config.get("overview_style") == "course"
         self._closed_popups = []
-        if sb.passby_closed:
+        if not is_course:
             self._closed_popups = [ap for ap in active_popups if ap["data"].get("inaccessible")]
-        self._attach_stopby_groups(active_popups, pass_by=sb.passby_stopbys)
-        if sb.leg_cards:
+        self._attach_stopby_groups(active_popups, pass_by=not is_course)
+        if self.config.get("overview_style") == "map":
             from .map_style import attach_leg_cards
 
             attach_leg_cards(active_popups, self.config.get("res_route_path"), self.graphics, fps)
 
     def _ov_style_badges(self, active_popups: List[Dict], total_points: int) -> None:
-        """Card border = the waypoint's own pin color, and its badge shows the glyph its pin does ("S", "E", "+1" or
+        """Card border = the waypoint's own pin color, and its badge shows the glyph its pin does ("S", "E", "・" or
         its visit number). Set once here: nearly every card downstream starts from a .copy() of these entries."""
         for ap in active_popups:
             pin_label, pin_color_for_border, _ = self._pin_label_and_color(ap, total_points)
             # None for a plain numbered pin not yet "arrived" (see _pin_color): fall back to the base color.
             ap["border_color"] = pin_color_for_border or self.graphics.marker_color
             ap["badge_label"] = pin_label
-            ap["leader_straight"] = True  # every style's overview cards (popup_box._draw_leader_line)
 
     def _ov_obstacle_arrays(self, points: List, active_popups: List[Dict]):
         """(route_avoid_points, route_obstacle_arr, recap_obstacle_arr): the static footprint (full route line + every
@@ -809,8 +818,6 @@ class _OverviewRenderMixin:
     ) -> List[Dict]:
         """The start (and, with a photo, the stop) preview cards, laid out beside their own pins and moved above
         them where there is room."""
-        if _spots_decided(start_popup):  # the cards stand where they stay, at the video's one size
-            return [self.walk_card_hud(p, 0, 0, None, None) for p in _standing_cards(start_popup, stop_popup)]
         intro_card_scale = self.config.get("overview_intro_card_scale", 1.3)
         footprint_w, footprint_h = self.graphics.beside_card_footprint(intro_card_scale)
 
@@ -863,7 +870,7 @@ class _OverviewRenderMixin:
             {"total_frames": bounce_frames, "frames_left": frames_left, "fade_frames": bounce_frames}
         )
         for c, box in zip(intro.cards, intro.base_boxes):
-            if box and not c.get("stay_box"):  # a card with a fixed spot only fades
+            if box:
                 c["beside_box"] = (box[0], int(box[1] + slide))
         video.write(self._apply_hud(self._ov_draw_intro_cards(base, alpha, intro)))
 
@@ -872,10 +879,9 @@ class _OverviewRenderMixin:
         stop_popup: Optional[Dict], n_points: int, route_obstacle_arr: np.ndarray, w: int, h: int, fps: int,
         preview_recap_only: bool,
     ) -> np.ndarray:
-        """The intro beats: the map and every pin alone, then the start/stop cards. Returns the frame the walk picks
-        up from: with cards that stay, the cards faded in at their spots; otherwise they slide in, hold and slide
-        out onto the clean map. The intro always shows plain pip cards: "fullscreen" is only honored by the
-        end-of-video zoom (_render_ending_highlight)."""
+        """The intro beats: the map and every pin alone, the start/stop cards sliding in, held, then sliding out onto
+        the clean frame (returned) the walk picks up from. The intro always shows plain pip cards: "fullscreen" is
+        only honored by the end-of-video zoom (_render_ending_highlight)."""
         intro_freeze_sec = _intro_freeze_seconds(start_popup)
         intro_cards = self._ov_make_intro_cards(start_popup, stop_popup, w, h, route_obstacle_arr)
         start_popup["data"]["triggered"] = True
@@ -890,7 +896,7 @@ class _OverviewRenderMixin:
         # Clean beat first, so the video opens on the route itself rather than cutting straight to a photo.
         clean_hold_sec = min(
             intro_freeze_sec * _INTRO_CLEAN_HOLD_FRACTION_OF_FREEZE,
-            _timing(self.config, "intro_clean_hold_seconds"),
+            float(self.config.get("overview_intro_clean_hold_seconds", 1.5)),
         )
         if not preview_recap_only:
             for _ in range(int(clean_hold_sec * fps)):
@@ -913,9 +919,6 @@ class _OverviewRenderMixin:
         )
         for _ in range(remaining_frames):
             video.write(self._apply_hud(intro_frame))
-        if self._cards_stay() and _spots_decided(start_popup):
-            self.last_frame = intro_frame
-            return intro_frame
         # Mirror of the entrance, so the cards don't cut straight to "traveler moving".
         if not preview_recap_only:
             for i in range(bounce_frames):
@@ -954,84 +957,25 @@ class _OverviewRenderMixin:
             tuple(float(v) for v in self.graphics.stopby_notice_box(w, h, kind))
             for kind in ("stopby", "closed")
         ]
-        first = reserved_boxes[-2]  # ...and the closed one beside the stop-by one
-        beside = int(first[2] - first[0] + tuning.NOTICE_RAIL_GAP * h / 1080)
-        reserved_boxes.append(tuple(float(v) for v in self.graphics.stopby_notice_box(w, h, "closed", beside)))
-        rail = self.graphics.route_progress_rail_height(h) + int(h * 0.03)  # the progress rail's band
-        reserved_boxes.append((0.0, float(h - rail), float(w), float(h)))
-        # The top bar's two panels, at their widest (nothing of the route walked yet).
-        km, seconds = (summary or {}).get("total_distance_km"), (summary or {}).get("total_duration_seconds")
-        left, right = self.graphics.overview_hud_panels(
-            w, getattr(self, "_hud_title", None), km, seconds, km, seconds)
-        if left is not None:
-            reserved_boxes.append((0.0, 0.0, float(_HUD_SIDE + left.size[0] + 12), float(_HUD_TOP + left.size[1] + 12)))
-        if right is not None:
-            reserved_boxes.append(
-                (float(w - _HUD_SIDE - right.size[0] - 12), 0.0, float(w), float(_HUD_TOP + right.size[1] + 12)))
         return summary_card, reserved_boxes
-
-    def _walk_rail_marks(self, active_popups: List[Dict], walk: _Walk, n_points: int) -> List[Tuple]:
-        """The progress rail's ticks for the walk: the course's, one per stop on the route, at the share of the walk
-        where the walker reaches it. Stop-bys it only passes get none."""
-        cum = walk.scale.cum_smooth_dist
-        if cum is None:
-            return []
-        stops = []
-        for ap in active_popups:
-            at = 0 if ap["index"] == 0 else len(cum) - 1 if ap["index"] == n_points - 1 else ap.get("expected_frame")
-            if at is not None and not ap["data"].get("is_stopby") and not ap["data"].get("inaccessible"):
-                stops.append({**ap, "course_dist": float(cum[min(int(at), len(cum) - 1)])})
-        stops.sort(key=lambda ap: ap["course_dist"])
-        return self._course_rail_marks(stops, n_points, walk.scale.total_smooth_dist)
 
     def _ov_layout_stay_cards(
         self, active_popups: List[Dict], stop_popup: Optional[Dict], w: int, h: int,
-        reserved_boxes: List, route_obstacle_arr: np.ndarray, route_path=None,
+        reserved_boxes: List, route_obstacle_arr: np.ndarray,
     ) -> None:
-        """One spot and size per place, for the whole video (storyboards with cards_stay): stamps "stay_box" and
-        "stay_scale" on one popup per place that has a photo, round the groups of pins and off the route
-        (`route_path`, the drawn line) and the HUD. Every other popup gets "no_card" and shows its pin only.
-        "card_scale" is left alone."""
-        if not storyboard_for(self.config).cards_stay:
+        """Cards that stay up are clustered around their own pin (off the route, the pins and the HUD), each at the
+        biggest size that fits, so none needs a long leader line. The recap lays its badges out again."""
+        if not self._cards_stay():
             return
-        if route_path is not None:
-            line = densify(route_path)
-            route_obstacle_arr = line if route_obstacle_arr is None else np.vstack([line, route_obstacle_arr])
-        places = [ap for ap in self._recap_popup_set(active_popups, stop_popup) if ap["data"].get("popup_image")]
-        copies = [dict(ap) for ap in places]  # the layout stamps its own keys on what it is given
-        originals = {id(copy): ap for copy, ap in zip(copies, places)}
-        for copy in self._layout_ring_cards(copies, w, h, reserved_boxes=reserved_boxes,
-                                            route_obstacles=route_obstacle_arr):
-            originals[id(copy)].update(stay_box=copy["beside_box"], stay_scale=copy["card_scale"])
-        for ap in active_popups:
-            if "stay_box" not in ap:
-                ap["no_card"] = True
-
-    def _ov_walk_camera(
-        self, job: "_OverviewJob", walk: _Walk, active_popups: List[Dict], reserved_boxes: List,
-    ) -> Optional[WalkCamera]:
-        """The camera that zooms in on the clusters of stops the walker passes, or None when there are none."""
-        cum = walk.scale.cum_smooth_dist
-        if cum is None:  # shortcut: no travel modes, no distances along the path, no zoom; the pipeline always has them
-            return None
-        within = pin_width(self.graphics)
-        stops = []
-        for ap in active_popups:
-            at = ap.get("expected_frame")
-            if at is None or ap.get("is_return"):
-                continue
-            if np.hypot(walk.arr[:, 0] - ap["x"], walk.arr[:, 1] - ap["y"]).min() <= within:  # the walk reaches it
-                stops.append((float(cum[min(int(at), len(cum) - 1)]), ap["x"], ap["y"]))
-        from services.mapbox_token import resolve_mapbox_token
-
-        gl = job.bounding_box is not None and bool(
-            resolve_mapbox_token((self._get_job_config() or {}).get("settings")))
-        clusters = cluster_views(
-            stops, walk.arr, cum, job.w, job.h, within, storyboard_for(self.config).cluster_min_stops,
-            tuning.COURSE_DENSE_ZOOM_MAX_GL if gl else tuning.COURSE_DENSE_ZOOM_MAX)
-        if not clusters:
-            return None
-        return WalkCamera(clusters, job.fps, within, densify(walk.path), reserved_boxes)
+        # Only places with a photo: a card IS the photo, composited into every walk frame. A photo-less stop-by or
+        # closed place still gets its badge in the recap (see _render_recap_and_summary).
+        self._stay_layout = self._layout_ring_cards(
+            [ap for ap in active_popups if ap["data"].get("popup_image")
+             and not (self._is_loop_route and ap is stop_popup)],
+            w, h, reserved_boxes=reserved_boxes, route_obstacles=route_obstacle_arr,
+        )
+        for ap in self._stay_layout:
+            ap["stay_box"] = ap["beside_box"]
 
     def _ov_recap_preview_plate(self, current_bg, walk: _Walk, mode_breakpoints):
         """The plate the walk stashes at its last frame, built straight from the background since no walk ran, with
@@ -1052,15 +996,12 @@ class _OverviewRenderMixin:
     ) -> str:
         """Just the final recap frame as an image, laid out exactly as _render_recap_and_summary does."""
         out_img = str(self.out_dir / "01_overview_recap_preview.png")
-        if storyboard_for(self.config).cards_stay:
-            laid_out = self._recap_cards(active_popups)
-        else:
-            laid_out = self._layout_recap_cards(
-                self._recap_popup_set(active_popups, stop_popup), w, h,
-                reserved_boxes=reserved_boxes, route_obstacles=recap_obstacle_arr,
-                background=pre_popup_frame, leaders=False,
-                total_points=1 + max((ap["index"] for ap in active_popups), default=0),
-            )
+        laid_out = self._layout_recap_cards(
+            self._recap_popup_set(active_popups, stop_popup), w, h,
+            reserved_boxes=reserved_boxes, route_obstacles=recap_obstacle_arr,
+            background=pre_popup_frame, leaders=False,
+            total_points=1 + max((ap["index"] for ap in active_popups), default=0),
+        )
         final_frame = self._render_recap_frame(pre_popup_frame, active_popups, group_popups=laid_out)
         cv2.imwrite(out_img, final_frame)
         return out_img
@@ -1095,27 +1036,19 @@ class _OverviewRenderMixin:
             )
         return _Ending(outro_hold_sec, end_pause_sec, audio_seconds, zoom_follows)
 
-    def _ov_wait_for_distance(self, video, audio_cues: Dict, fps: int) -> None:
-        """Holds the walk's last frame until the {distance} cue, so the totals card comes in on those words."""
-        cue = (audio_cues or {}).get("distance")
-        if cue is not None:
-            for _ in range(int(round(cue * fps)) - video.frames_written):
-                video.write(self.last_frame)
-
     def _ov_hold_summary(
         self, video, summary_card, audio_cues: Dict, outro_hold_sec: float, zoom_follows: bool, fps: int
     ) -> None:
-        """Write the held summary frame, long enough after the {distance} cue to be read, and to the {closed} cue."""
+        """Write the held summary frame, stretched to the {distance} cue ("…キロの旅でした") and the {closed} cue."""
         distance_cue = audio_cues.get("distance") if audio_cues else None
-        if summary_card is not None and distance_cue is not None:
-            hold = float(self.config.get("overview_recap_hold_seconds", tuning.OVERVIEW_RECAP_HOLD_SECONDS))
-            until = distance_cue + hold - video.frames_written / fps
-            if until > outro_hold_sec:
+        if summary_card is not None and distance_cue is not None and not zoom_follows:
+            until_distance = distance_cue - video.frames_written / fps
+            if until_distance > outro_hold_sec:
                 logger.info(
-                    "Summary hold %.1fs -> %.1fs: the totals stay %.1fs after the {distance} cue at %.1fs.",
-                    outro_hold_sec, until, hold, distance_cue,
+                    "Summary hold %.1fs -> %.1fs to reach the {distance} cue at %.1fs.",
+                    outro_hold_sec, until_distance, distance_cue,
                 )
-                outro_hold_sec = until
+                outro_hold_sec = until_distance
         # The {closed} cue holds the summary frame while the voice names the closed places.
         closed_cue = audio_cues.get("closed") if audio_cues and getattr(self, "_closed_popups", None) else None
         if getattr(self, "_closed_popups", None) and (closed_cue is None or zoom_follows):
@@ -1214,7 +1147,7 @@ class _OverviewRenderMixin:
             audio_cues, walk_start_frames, num_frames, mode_breakpoints, smooth_path, cum_smooth_dist,
             total_smooth_dist,
         )
-        if storyboard_for(self.config).traced_route:
+        if self.config.get("overview_style") == "course":
             result = self._render_course_overview(
                 current_bg, w, h, fps, points, smooth_path, mode_breakpoints, cum_smooth_dist,
                 total_smooth_dist, active_popups, route_obstacle_arr, summary, overview_path,
@@ -1254,8 +1187,7 @@ class _OverviewRenderMixin:
         # the stop-by notice plays at the first stop-by of each video
         self._stopby_notice_shown = False
         self._notice_kinds_shown = set()
-        self._stopby_notices, self._notice_edges = {}, []
-        self._rail_marks, self._rail_mode = None, None
+        self._stopby_notice = None
         audio_cues = dict(self.config.get("overview_cue_seconds") or {})
         walk_start_frames = 0
         if audio_cues:
@@ -1283,7 +1215,7 @@ class _OverviewRenderMixin:
         fps, audio_cues = job.fps, job.audio_cues
         walk = _initial_walk(job.points, job.smooth_path, job.cum_smooth_dist, job.total_smooth_dist)
         _set_cue_waits(active_popups, stop_popup, audio_cues, self.config, fps)
-        cap_frames = int(fps * _timing(self.config, "max_leg_seconds"))
+        cap_frames = int(fps * float(self.config.get("overview_max_leg_seconds", 10.0)))
         walk = _cap_legs(walk, active_popups, cap_frames, fps)
         if audio_cues:
             walk = _retime_to_cues(
@@ -1309,40 +1241,30 @@ class _OverviewRenderMixin:
         )
         walk = self._ov_time_walk(job, active_popups, start_popup, stop_popup)
 
-        # Every card's one spot and size, decided before the first frame: the intro, walk and recap read it.
-        summary_card, reserved_boxes = self._ov_reserved_boxes(job.summary, w, h)
-        self._ov_layout_stay_cards(
-            active_popups, stop_popup, w, h, reserved_boxes, route_obstacle_arr, route_path=walk.path)
-        self._rail_marks = self._walk_rail_marks(active_popups, walk, len(job.points))
-
         if start_popup:
-            waiting_frame = self._ov_play_intro(
+            clean_frame = self._ov_play_intro(
                 video, intro_frame, active_popups, start_popup, stop_popup, len(job.points), route_obstacle_arr,
                 w, h, fps, job.preview_recap_only,
             )
             if audio_cues:
                 # The voice's {start} (or a short intro) leaves the map waiting until the route sets off.
                 for _ in range(max(0, job.walk_start_frames - video.frames_written)):
-                    video.write(self._apply_hud(waiting_frame))
+                    video.write(self._apply_hud(clean_frame))
 
         _set_cue_frames(active_popups, stop_popup, audio_cues, fps)
+        summary_card, reserved_boxes = self._ov_reserved_boxes(job.summary, w, h)
+        self._ov_layout_stay_cards(active_popups, stop_popup, w, h, reserved_boxes, route_obstacle_arr)
         if job.preview_recap_only:
             pre_popup_frame = self._ov_recap_preview_plate(job.current_bg, walk, job.mode_breakpoints)
             return self._ov_write_recap_preview(
                 pre_popup_frame, active_popups, stop_popup, w, h, reserved_boxes, recap_obstacle_arr
             )
-        camera = self._ov_walk_camera(job, walk, active_popups, reserved_boxes)
-        with tempfile.TemporaryDirectory(prefix="navivi_walk_zoom_") as gl_dir:
-            if camera:
-                camera.frames = self._gl_view_frames(camera.views(), job.bounding_box, w, h, gl_dir)
-            # [NOTE] Background video is not supported here: no capture, is_video False.
-            pre_popup_frame = self._animate_overview_frames(
-                video, job.current_bg, None, False, w, h, fps,
-                walk.path, job.mode_breakpoints, walk.scale.cum_smooth_dist, job.total_smooth_dist,
-                active_popups, stop_popup, job.points, route_avoid_points, route_obstacle_arr,
-                standing_cards=_standing_cards(start_popup, stop_popup) if self._cards_stay() else (),
-                camera=camera,
-            )
+        # [NOTE] Background video is not supported here: no capture, is_video False.
+        pre_popup_frame = self._animate_overview_frames(
+            video, job.current_bg, None, False, w, h, fps,
+            walk.path, job.mode_breakpoints, walk.scale.cum_smooth_dist, job.total_smooth_dist,
+            active_popups, stop_popup, job.points, route_avoid_points, route_obstacle_arr,
+        )
         return self._ov_write_ending(
             job, video, active_popups, start_popup, stop_popup, summary_card, reserved_boxes,
             recap_obstacle_arr, pre_popup_frame,
@@ -1354,8 +1276,6 @@ class _OverviewRenderMixin:
         pre_popup_frame: np.ndarray,
     ) -> str:
         w, h, fps, audio_cues = job.w, job.h, job.fps, job.audio_cues
-        if summary_card is not None:
-            self._ov_wait_for_distance(video, audio_cues, fps)
         outro_hold_sec = self._render_recap_and_summary(
             video, stop_popup, summary_card, active_popups, w, h, fps,
             recap_obstacle_arr, reserved_boxes, pre_popup_frame,
