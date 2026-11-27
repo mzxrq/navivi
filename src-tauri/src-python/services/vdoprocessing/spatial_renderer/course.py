@@ -25,7 +25,7 @@ from services.vdoprocessing.vdoexporter import VideoExporter
 
 from .course_themed import ThemedPanels, themed_panels
 from .base import logger
-from .card_circles import densify
+from .card_spots import densify
 from .cluster_zoom import (
     _ClusterZoomMixin, cluster_views, moved_to, pin_width, smoothstep as _smoothstep,
     crop_zoom as _crop_zoom, pin_in_view as _pin_in_view, view_key as _view_key)
@@ -712,8 +712,11 @@ class _CourseOverviewMixin(_ClusterZoomMixin):
         card_popups = [ap for ap in on_route + extras if ap["data"].get("popup_image") and id(ap) not in returns]
         if self._is_loop_route and stop_popup is not None:
             card_popups = [ap for ap in card_popups if ap is not stop_popup]
+        carded = {id(ap) for ap in card_popups}
+        bare = [(ap.get("pin_x", ap["x"]), ap.get("pin_y", ap["y"]))
+                for ap in on_route + extras if id(ap) not in carded]
         laid_out = self._layout_ring_cards(card_popups, w, h, reserved_boxes=reserved,
-                                           route_obstacles=route_obstacle_arr)
+                                           route_obstacles=route_obstacle_arr, others=bare)
         for ap in laid_out:
             ap.update(stay_box=ap["beside_box"], stay_scale=ap["card_scale"])
         return laid_out, {ap["index"]: ap for ap in laid_out}

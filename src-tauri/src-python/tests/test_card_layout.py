@@ -269,20 +269,54 @@ def test_cards_keep_off_a_route_drawn_between_two_far_apart_points():
     assert placed and not any(y <= 420 <= y + ch for (_, y), (_, ch) in placed)
 
 
-def test_the_cards_ring_their_pins_where_a_circle_works(monkeypatch):
+def test_the_free_layout_is_used_where_it_fits(monkeypatch):
     seen = []
-    monkeypatch.setattr(popups_module, "circle_layout",
-                        lambda pins, w, h, reserved, route, r, cw, ch: seen.append((cw, ch)) or [
+    monkeypatch.setattr(popups_module, "place_cards",
+                        lambda pins, w, h, reserved, route, r, cw, ch, others=(): seen.append((cw, ch)) or [
                             (10.0 + 400 * i, 20.0, 10.0 + 400 * i + cw, 20.0 + ch) for i in range(len(pins))])
     cards = _layout()._layout_ring_cards(_pins(3), 1920, 1080)
     assert [c["beside_box"] for c in cards] == [(10, 20), (410, 20), (810, 20)]
     assert {c["card_scale"] for c in cards} == {tuning.OVERVIEW_CARD_MAX_SCALE}  # the largest size that works
 
 
-def test_when_no_circle_works_every_card_still_gets_a_spot(monkeypatch):
-    monkeypatch.setattr(popups_module, "circle_layout", lambda *a, **k: None)
+def test_when_nothing_fits_freely_every_card_still_gets_a_spot(monkeypatch):
+    monkeypatch.setattr(popups_module, "place_cards", lambda *a, **k: None)
     cards = _layout()._layout_ring_cards(_pins(24), 1920, 1080)
     assert len(cards) == 24 and not _overlapping(cards)
+
+
+def test_the_largest_size_that_fits_wins_even_when_the_next_one_down_would_not(monkeypatch):
+    calls = []
+
+    def fake(pins, w, h, reserved, route, r, cw, ch, others=()):
+        calls.append(cw)
+        return [(10.0 + 400 * i, 20.0, 10.0 + 400 * i + cw, 20.0 + ch)
+                for i in range(len(pins))] if len(calls) == 4 else None
+
+    monkeypatch.setattr(popups_module, "place_cards", fake)
+    cards = _layout()._layout_ring_cards(_pins(3), 1920, 1080)
+    assert len(calls) == 4
+    assert cards[0]["card_scale"] == pytest.approx(
+        tuning.OVERVIEW_CARD_MAX_SCALE * tuning.OVERVIEW_CARD_FREE_SHRINK_STEP ** 3)
+
+
+@pytest.mark.parametrize("style", ["walk", "course"])
+def test_pins_without_a_photo_are_handed_to_the_layout(monkeypatch, style):
+    seen = []
+
+    def fake(pins, w, h, reserved, route, r, cw, ch, others=()):
+        seen.append(list(others))
+        return None
+
+    monkeypatch.setattr(popups_module, "place_cards", fake)
+    renderer, popups = _renderer({"overview_style": style}), _stops()
+    del popups[0]["data"]["popup_image"]  # a numbered stop with no photo, besides the stop-by
+    if style == "walk":
+        renderer._ov_layout_stay_cards(popups, popups[-1], 1920, 1080, [], None)
+    else:
+        renderer._course_cards([popups[i] for i in (0, 1, 3, 4)], [popups[2]], {id(popups[3])}, popups[4],
+                               [], None, 1920, 1080)
+    assert (1100, 600) in seen[0] and (300, 300) in seen[0]
 
 
 def test_the_size_stops_at_the_maximum_and_follows_the_frame_height():
