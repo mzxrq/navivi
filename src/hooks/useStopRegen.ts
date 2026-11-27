@@ -6,7 +6,7 @@ import { useWorkspace } from "./useWorkspace";
 import { useUI } from "./useUI";
 import { refreshMedia } from "../features/editor/player";
 import { probeDuration, toAbsoluteProjectPath } from "../services/fileSystem";
-import { RegenKind, RouteClip, StopNarration, legModes, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, routeClipModes, runRegen, withOutroBurnedIn } from "../services/stopRegen";
+import { RegenKind, RouteClip, StopNarration, legModes, onlyNarration, refreshLeg, refreshRouteClip, refreshStopMedia, regenModes, routeClipModes, runRegen, withOutroBurnedIn, withoutThemedOutroTitle } from "../services/stopRegen";
 import { inSubCourse, mainStops } from "../utils/courses";
 
 // `leg`: a walking clip job's NN (02_waypoint_NN_*); `index` is then the stop it is listed under.
@@ -140,11 +140,13 @@ export function useStopRegen() {
       await saveProject();
       const { skipped } = await runRegen(`${dir}/job_config.json`, routeClipModes(clip, kind, pieces));
       refreshMedia();
+      const readText = async (rel: string) => readTextFile(await toAbsoluteProjectPath(rel, dir));
       const refreshed = await refreshRouteClip(liveTimeline.current, clip, kind, {
         probe: async (rel, mediaKind) => probeDuration(convertFileSrc(await toAbsoluteProjectPath(rel, dir)), mediaKind, 0),
-        readText: async (rel) => readTextFile(await toAbsoluteProjectPath(rel, dir)),
+        readText,
       });
-      const next = clip === "outro" && settings.outro_style === "scrapbook" ? withOutroBurnedIn(refreshed ?? liveTimeline.current) ?? refreshed : refreshed;
+      let next = clip === "outro" && settings.outro_style === "scrapbook" ? withOutroBurnedIn(refreshed ?? liveTimeline.current) ?? refreshed : refreshed;
+      if (clip === "outro") next = (await withoutThemedOutroTitle(next ?? liveTimeline.current, readText)) ?? next;
       if (next) setTimeline(next);
       if (skipped) showToast(t`Nothing was made: ${skipped}`, "warning");
       else showToast(kind === "voice" ? t`The narration is ready. If its length changed, make the clip again so it fits.` : t`The clip is ready.`, "success");
