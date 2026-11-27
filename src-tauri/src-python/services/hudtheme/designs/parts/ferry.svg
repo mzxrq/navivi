@@ -1,1 +1,37 @@
-<path d="M0 12H46L39 22H8Z" fill="#fff" stroke="{{ theme.line }}" stroke-width="1.5" stroke-linejoin="round"/><path d="M3 16H43" stroke="{{ theme.accent }}" stroke-width="3"/><path d="M10 12V4H31L35 12Z" fill="#fff" stroke="{{ theme.line }}" stroke-width="1.5" stroke-linejoin="round"/><path d="M15 8H18M22 8H25M29 8H30" stroke="{{ theme.line }}" stroke-width="2.5"/><rect x="19" y="-3" width="6" height="7" fill="{{ theme.accent }}"/>
+{# Drawn in 160x80; the transform fits it to the 46-wide box (waterline near y 22) the medallion and strip place it in. #}
+<g transform="translate(-4.1 -1.8) scale(0.338)">
+  <!-- Water Ripples -->
+  <path d="M12 68 Q 35 64, 58 68 T 104 68 T 148 68" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M30 74 Q 55 71, 80 74 T 130 74" fill="none" stroke="#bae6fd" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Symmetrical Hull & Accent Stripe -->
+  <polygon points="14,46 146,46 130,63 30,63" fill="#1e293b"/>
+  <polygon points="18,46 142,46 139,50 21,50" fill="#f43f5e"/>
+
+  <!-- Bow & Stern Safety Railings -->
+  <line x1="20" y1="42" x2="34" y2="42" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="126" y1="42" x2="140" y2="42" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Main Passenger Cabin -->
+  <rect x="34" y="31" width="92" height="15" rx="3" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Symmetrical Windows -->
+  <g fill="#0ea5e9">
+    <rect x="42" y="35" width="9" height="6" rx="1"/>
+    <rect x="55" y="35" width="9" height="6" rx="1"/>
+    <rect x="68" y="35" width="9" height="6" rx="1"/>
+    <rect x="83" y="35" width="9" height="6" rx="1"/>
+    <rect x="96" y="35" width="9" height="6" rx="1"/>
+    <rect x="109" y="35" width="9" height="6" rx="1"/>
+  </g>
+
+  <!-- Central Wheelhouse / Bridge -->
+  <rect x="62" y="19" width="36" height="12" rx="2" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+  <rect x="67" y="22" width="26" height="5" rx="1" fill="#0284c7"/>
+
+  <!-- Central Funnel & Mast -->
+  <rect x="75" y="10" width="10" height="9" rx="1" fill="#f43f5e"/>
+  <rect x="75" y="10" width="10" height="2.5" fill="#1e293b"/>
+  <line x1="80" y1="4" x2="80" y2="10" stroke="#334155" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="80" cy="4" r="1.5" fill="#facc15"/>
+</g>
