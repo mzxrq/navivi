@@ -4,6 +4,7 @@ from services import tuning
 from services.hudtheme import layout
 from services.localization.cues import tags_at_sentence_start
 from services.localization.overview_script import overview_style
+from services.vdoprocessing.storyboard import of as storyboard_of
 
 from .audio_step import overview_tagged_script
 from .helpers import attraction_videos_enabled
@@ -42,7 +43,6 @@ def _run_options(
             and float(settings.get("attraction_fade_seconds", 0.8)) > 0
         ),
         "use_pydeck_pedestrian": use_pydeck_pedestrian,
-        "use_pydeck_overview": bool(settings.get("use_pydeck_overview", tuning.DEFAULT_USE_PYDECK_OVERVIEW)),
         "mapbox_style_id": settings.get("mapbox_style_id"),
         # Where the narration's cues fall: the overview reaches each cued stop
         # then (spatial_renderer/overview.py).
@@ -56,12 +56,19 @@ def _run_options(
         "overview_cue_wait_tags": tags_at_sentence_start(
             overview_tagged_script(project_config, config_path.parent)
         ),
-        "overview_cue_wait_seconds": float(settings.get("overview_cue_wait_seconds", 2.0)),
-        # The overview video type (each with its own script); "course" also
-        # cycles headline taglines taken from the route (overview_script.course_taglines).
+        "overview_cue_wait_seconds": float(settings.get(
+            "overview_cue_wait_seconds", storyboard_of(overview_style(project_config)).timings["cue_wait_seconds"]
+        )),
+        # The overview video type (each with its own script).
         "overview_style": overview_style(project_config),
         "overview_cards_stay": settings.get("overview_cards_stay", True),
     }
+
+
+def summary_card_style(settings: dict) -> str:
+    """The totals card's design: the theme's, else the project's summary_card_style, else the default."""
+    theme = tuning.overview_theme(settings.get("overview_theme"))
+    return theme.get("card_style") or settings.get("summary_card_style") or tuning.DEFAULT_SUMMARY_CARD_STYLE
 
 
 def _color_options(settings: dict, marker_color_bgr) -> dict:
@@ -161,9 +168,9 @@ def build_animator_config(
         # Summary-card template ("glass" default, or "taskbar", see cards.py's render_summary_card) and
         # per-project label overrides (cards.py's merge_summary_card_labels). They must be forwarded through
         # THIS dict: self.config in RouteAnimator is this whole dict, not the raw settings.
-        "summary_card_style": settings.get(
-            "summary_card_style", tuning.DEFAULT_SUMMARY_CARD_STYLE
-        ),
+        # shortcut: legs draw their card from this too; give them their own when a second theme exists.
+        "summary_card_style": summary_card_style(settings),
+        "overview_theme": settings.get("overview_theme", "current"),
         "summary_card_labels": settings.get("summary_card_labels"),
         # HUD/card theme: settings.theme or top-level theme ("light"/"dark").
         "theme": tuning.resolve_ui_theme(project_config),

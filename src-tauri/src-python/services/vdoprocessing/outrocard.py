@@ -826,8 +826,12 @@ def _draw_extra_rows(
     x0: int, card_w: int, col_gap: int, px, title_font, badge_font,
 ) -> list:
     """Draws the stop-by and closed-place sections (titles and cards); returns the leg cards' slots (index, x, top)."""
+    from services.vdoprocessing.route_inputs import stopby_labels
+
     slots = []
-    number = 0  # stop-bys are numbered +1, +2 ... after the leg cards
+    number = 0
+    # Each card shows its place's own pin number (stopby_labels counts every stop-by, carded here or not).
+    pins = {(waypoints[i].get("lat"), waypoints[i].get("lng")): label for i, label in stopby_labels(waypoints).items()}
     for (kind, items), top in zip(rows, row_tops):
         if kind in ("title", "closed_title"):
             draw.text(
@@ -839,7 +843,8 @@ def _draw_extra_rows(
             cx0 = x0 + col * (card_w + col_gap)
             if kind == "stopbys":
                 number += 1
-                _draw_stopby_card(page, waypoints, item, cx0, top, card_w, px, f"+{number}", badge_font)
+                label = pins.get(tuple(item[1] or ()), f"+{number}")
+                _draw_stopby_card(page, waypoints, item, cx0, top, card_w, px, label, badge_font)
             elif kind == "closed":
                 _draw_stopby_card(page, waypoints, item, cx0, top, card_w, px, "×", badge_font)
             else:
@@ -1767,19 +1772,22 @@ def _scrapbook_frames(scene: _ScrapbookScene, fps: int):
 
 def _route_badges(waypoints: List[Dict[str, Any]]) -> List[Tuple[str, Dict[str, Any]]]:
     """The route's stops (stop-bys only when connected) as (S / 1 / 2 … / E, waypoint), numbered as the overview
-    pins are (route_inputs.stop_is_numbered): a stop-by shows "・", a closed place "×", a return stop the
-    number of the stop it comes back to."""
-    from services.vdoprocessing.route_inputs import returns_to, stop_is_numbered
+    pins are (route_inputs.stop_is_numbered): a stop-by shows its "+N" (counted over every stop-by of the route,
+    listed here or not), a closed place "×", a return stop the number of the stop it comes back to."""
+    from services.vdoprocessing.route_inputs import returns_to, stop_is_numbered, stopby_labels
 
-    route = [wp for wp in waypoints if not wp.get("isStopBy") or wp.get("connectToRoute")]
+    stopbys = stopby_labels(waypoints)
+    listed = [(pos, wp) for pos, wp in enumerate(waypoints) if not wp.get("isStopBy") or wp.get("connectToRoute")]
+    route = [wp for _, wp in listed]
     out, order, numbers = [], 0, {}
-    for i, wp in enumerate(route):
+    for i, (pos, wp) in enumerate(listed):
         if 0 < i < len(route) - 1 and stop_is_numbered(route, i):
             order += 1
         numbers[i] = order
         back = returns_to(route, i)
         badge = ("S" if i == 0 else "E" if i == len(route) - 1 else "×" if wp.get("inaccessible")
-                 else "・" if wp.get("isStopBy") or wp.get("skipAssetGeneration")
+                 else stopbys.get(pos, "・")
+                 if pos in stopbys or wp.get("isStopBy") or wp.get("skipAssetGeneration")
                  else str(order if back is None else numbers[back]))
         out.append((badge, wp))
     return out

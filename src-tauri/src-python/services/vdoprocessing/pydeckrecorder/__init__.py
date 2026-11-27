@@ -5,5 +5,5 @@
 - geomath.py: haversine distances
 - routedata.py: route interpolation and pydeck HTML patching
 - popupsequence.py: _wait_for_paint
-- recorder.py: route-line GeoJSON features shared by the leg and overview renderers
+- recorder.py: route-line GeoJSON features of the leg renderer
 """

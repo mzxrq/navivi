@@ -5,7 +5,7 @@ from services.vdoprocessing.spatial_renderer.overview_animation import _Overview
 def _full_frames(seconds, fps=30):
     r = _OverviewAnimationMixin()
     r._start_stopby_notice(fps, seconds)
-    n = r._stopby_notice
+    n = r._stopby_notices["stopby"]
     alphas = [min(1.0, (i + 1) / n["fade"], (n["total"] - i) / n["fade"]) for i in range(n["total"])]
     return sum(a >= 1.0 for a in alphas) / fps
 

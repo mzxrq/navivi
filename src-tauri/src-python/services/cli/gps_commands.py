@@ -105,10 +105,11 @@ def test_overview_video(
 
 
 def test_overview_map(job_config_path: str, output_path: Optional[str] = None) -> Dict[str, Any]:
-    """Fetches just the overview's background map image - the same bounding
+    """Fetches just a map image of the overview's framing - the same bounding
     box, padding (tuning.OVERVIEW_PADDING_BY_SPAN_KM) and crop the real
-    render uses - and saves it, without rendering any video. Takes seconds,
-    so it's the quick way to check how a padding change frames the route.
+    render uses - and saves it, without rendering any video. Raster tiles on
+    the CPU (the video itself uses the 3D map), so it takes seconds and is
+    the quick way to check how a padding change frames the route.
     Defaults to <project>/assets/image/map/overview_map_preview.png (never the
     pipeline's own map_background.png, so a preview can't clobber it)."""
     from services.config.job_config import JobConfigManager
@@ -129,7 +130,7 @@ def test_overview_map(job_config_path: str, output_path: Optional[str] = None) -
         config_path.parent / "assets" / "image" / "map" / "overview_map_preview.png"
     )
     Path(target).parent.mkdir(parents=True, exist_ok=True)
-    saved, extent, size = fetcher.fetch_image(bounding_box=bbox, output_filename=target)
+    saved, extent, size = fetcher.fetch_image(bounding_box=bbox, output_filename=target, raster=True)  # framing only
     return {"success": True, "map_path": saved, "padding_factor": padding, "extent": list(extent), "size": list(size)}
 
 

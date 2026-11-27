@@ -179,6 +179,15 @@ SUMMARY_CARD_VALUE_FONT_SIZE = 34
 # Summary card template: "glass", "taskbar", "stacked" or "columns" (cards.py create_summary_card_*);
 # settings.summary_card_style overrides.
 DEFAULT_SUMMARY_CARD_STYLE = "columns"  # the user's choice (2026-09-30)
+# The overview's design themes (settings.overview_theme). "current" is today's look; a theme may set "card_style"
+# (the totals card's design, over the project's summary_card_style). An unknown name behaves as "current".
+OVERVIEW_THEMES: dict = {"current": {}}
+
+
+def overview_theme(name) -> dict:
+    return OVERVIEW_THEMES.get(name, OVERVIEW_THEMES["current"])
+
+
 # "columns" card: every column's text area is at least as wide as these
 # sample strings, so the card keeps one width whatever the values are.
 SUMMARY_CARD_FIXED_DISTANCE_SAMPLE = "88.8 km"
@@ -278,10 +287,6 @@ RESIDENTIAL_COMPASS_HEADING_WINDOW_M = 20.0
 # A stop-by merges into the leg around it (its pin shown in passing) instead of getting its own leg.
 # settings.merge_stopby_waypoints overrides.
 DEFAULT_MERGE_STOPBY_WAYPOINTS = True
-# 3D pydeck overview (GPU, Chromium) instead of the 2D one. Off (the user's choice): the 2D overview has the
-# photo pop-ups and follows the cues, and still ends on the 3D zoom (settings.enable_gl_ending_zoom).
-# settings.use_pydeck_overview overrides.
-DEFAULT_USE_PYDECK_OVERVIEW = False
 # {n}/{go} cue tags placed automatically in a hand-written overview narration (tags only, the user's own win).
 # settings.auto_overview_cues overrides.
 DEFAULT_AUTO_OVERVIEW_CUES = True
@@ -297,14 +302,32 @@ DEFAULT_OVERVIEW_DESCRIBE_STOPS = True
 #            last; the course-guide script (overview_script.build_course_script).
 DEFAULT_OVERVIEW_STYLE = "walk"
 OVERVIEW_STYLES = ("walk", "course", "map")
-# "map" overview: each main stop's photo pops up this much bigger than a walk card, shows this long, then
-# slides over to its leg card in this long (spatial_renderer/map_style.py, popup_box.slide_to_card).
+# The overview's cards (popups._layout_ring_cards): one size for a whole video, the largest at which every card
+# fits, from MAX (times the frame height over 1080) down in SHRINK_STEP steps, with no minimum.
+OVERVIEW_CARD_MAX_SCALE = 1.8
+OVERVIEW_CARD_SHRINK_STEP = 0.9
+# The cards shrink further so no leader passes under another card, but never below this share of the largest size
+# at which they all fit; past that, the size with the fewest such leaders wins.
+OVERVIEW_CARD_CLEAR_LINES_MIN_SHARE = 0.6  # Tomogashima, 20 cards: all clear at 0.56; 0.70 kept one line under a card
+# The circle layout (spatial_renderer/card_circles.py), px on a 1080p frame: pins this close share one circle; the
+# clear space between two cards, between a card and the frame's edge, and either side of the route line.
+OVERVIEW_CARD_GROUP_LINK_PX = 220
+# A circle's farthest card is at most this many times as far from its pins' middle as its nearest: without it a
+# bigger card in a loose shape beat the round one (the approved Tomogashima layout measures 1.29).
+OVERVIEW_CARD_CIRCLE_ROUNDNESS = 1.35
+OVERVIEW_CARD_CIRCLE_MAX_PINS = 18  # more cards than this round one group: no circle (the search took minutes)
+OVERVIEW_CARD_GAP_PX = 4
+OVERVIEW_CARD_EDGE_PX = 16
+OVERVIEW_CARD_ROUTE_PAD_PX = 10
+# The smallest card the circles are tried at (a share of the 210 px card at 1080p); smaller than this, or where no
+# size works, the cards go to the nearest free spots instead (popups._layout_ring_search).
+OVERVIEW_CARD_CIRCLE_MIN_SCALE = 0.45
+OVERVIEW_CARD_CIRCLE_SHRINK_STEP = 0.95  # finer than the ring search's: a whole 0.9 step cost 10 px of card
+# The top bar's title panel never grows past this share of the frame's width: a longer title is cut short.
+OVERVIEW_HUD_TITLE_MAX_WIDTH = 0.34
+# "map" overview: each main stop's photo pops up this much bigger than a walk card, then slides over to its leg
+# card (spatial_renderer/map_style.py, popup_box.slide_to_card). Its timings: storyboards/map.json.
 OVERVIEW_MAP_CARD_SCALE = 2.6
-OVERVIEW_MAP_PHOTO_SECONDS = 0.8
-OVERVIEW_MAP_SLIDE_SECONDS = 0.5
-# The walker stands at each Route map stop at least this long (photo, slide, then time to read the leg card);
-# the card closes as it walks on.
-OVERVIEW_MAP_MIN_STOP_SECONDS = 3.5
 # The arriving script the course style writes from the route (localization/leg_script.py):
 # "brief" = one sentence, the overall direction only; "turns" = every turn on the way.
 # Overridable per project via job_config.json's settings.leg_directions.
@@ -312,8 +335,6 @@ DEFAULT_LEG_DIRECTIONS = "brief"
 # The "course" overview (spatial_renderer/course.py). The traced line is one
 # accent over the whole planned route (settings.course_trace_color overrides).
 COURSE_TRACE_COLOR: Tuple[int, int, int] = (40, 90, 240)  # BGR, #F05A28 orange
-# Whole route shown this long after {start} when the script has no {route} cue.
-COURSE_PIVOT_HOLD_SECONDS = 2.5
 # Leg summary card margins. The card image has 14-20 px of transparent shadow, so the visible gap is about
 # this + 14 px (right) and this + 20 px (bottom); a lower bottom margin moves the card down.
 LEG_CARD_MARGIN_PX = 4
@@ -330,22 +351,16 @@ COURSE_MIN_PACE_SHARE = 0.5
 COURSE_SECONDS_PER_LEG = 3.0
 COURSE_TRACE_MIN_SECONDS = 8.0
 COURSE_TRACE_MAX_SECONDS = 40.0
-COURSE_TAGLINE_SECONDS = 5.0
-COURSE_TAGLINE_FADE_SECONDS = 0.5
-COURSE_CARD_POP_SECONDS = 0.45
-# As the trace passes a stop, its photo card pops up beside it (COURSE_PASS_CARD_SCALE at 1080p) for
-# COURSE_PASS_CARD_SECONDS, or until the next stop's card pops (never under _MIN_SECONDS), then shrinks
-# into the stop's pill badge over COURSE_PASS_CARD_SHRINK_SECONDS.
-COURSE_PASS_CARD_SECONDS = 2.5
-COURSE_PASS_CARD_MIN_SECONDS = 1.8  # 0.9 flashed past where the trace passes stops a fraction of a second apart
-# Cards up together share one size: 1/sqrt(most up at once) of the full one, never under this share of it.
-COURSE_PASS_CARD_CROWD_MIN_SCALE = 0.5
-# While zoomed a crowd's card may shrink further, down to this share of the full size, to fit right beside its own
-# pin: at half size Tomogashima's 5-8 still landed on other pins and the route.
-COURSE_ZOOM_CARD_MIN_SCALE = 0.3
-COURSE_PASS_CARD_SHRINK_SECONDS = 0.45
-COURSE_PASS_CARD_SCALE = 1.8
-COURSE_STATS_SLIDE_SECONDS = 0.6
+COURSE_CARD_POP_SECONDS = 0.45  # a stop's card fades in as the trace reaches it, then stays
+# The totals card comes in at the script's {distance} cue and the video holds on it at least this long
+# (project setting overview_recap_hold_seconds).
+OVERVIEW_RECAP_HOLD_SECONDS = 3.0
+# The progress rail starts NOTICE_RAIL_GAP frame px right of the last notice up; with less room than
+# RAIL_MIN_WIDTH_PX (on a 1080p frame) for its markers it is not drawn.
+NOTICE_RAIL_GAP = 24
+RAIL_MIN_WIDTH_PX = 240
+# With "Cards stay up" off, a card closes when the next one pops, though never before it was up this long.
+COURSE_CARD_MIN_SECONDS = 1.8
 # Stop-bys (then closed places) come one at a time across their sentence: at least _STAGGER apart,
 # at most _MAX_STEP, so a long sentence with few places still shows them early on.
 COURSE_STOPBY_STAGGER_SECONDS = 0.15
@@ -355,25 +370,21 @@ COURSE_STOPBY_MAX_STEP_SECONDS = 1.6
 COURSE_TOP_BAND_FRACTION = 0.10
 COURSE_BOTTOM_BAND_FRACTION = 0.17
 # The course map is fetched this much wider than the route's own framing, for the badges' room; the
-# video opens on the route's framing and eases out to the whole map over COURSE_OPEN_ZOOM_SECONDS.
+# video opens on the route's framing and eases out to the whole map (open_zoom_seconds, storyboards/course.json).
 COURSE_OPEN_ZOOM = 1.12
-COURSE_OPEN_ZOOM_SECONDS = 1.2
-# While the trace runs through a tight group of stops (at least _MIN_STOPS whose stretch of route, with their
-# photo cards, is _MIN times smaller than the whole route), the map eases in on it (at most _MAX: it is one
-# image, softer past ~1.5x) and back out once the trace leaves, each ease taking _EASE_SECONDS.
-COURSE_DENSE_ZOOM_MIN = 1.8
+# Every overview style: while the trace or the walker passes a cluster of stops (the storyboard's cluster_min_stops
+# or more, each within one pin's width of the next on screen), the map eases in on it (at most _MAX on a cropped
+# still, softer past ~1.5x) and back out once it has left, each ease taking _EASE_SECONDS.
+CLUSTER_PIN_WIDTH_RADII = 2.4  # a pin's width on screen, in marker radii (its teardrop head)
 COURSE_DENSE_ZOOM_MAX = 1.5
 COURSE_DENSE_ZOOM_MAX_GL = 2.0  # on the GL map the zoom is real (sharp), so it may go closer
-COURSE_DENSE_MIN_STOPS = 3
-COURSE_DENSE_EASE_SECONDS = 0.8
+COURSE_DENSE_EASE_SECONDS = 1.0
 # The "walk" overview keeps the same bottom band clear for its captions (no headline above).
 OVERVIEW_BOTTOM_BAND_FRACTION = 0.17
 # Walk / Route map overviews: the route also keeps clear of this top share (the "next stop" banner).
 OVERVIEW_TOP_BAND_FRACTION = 0.12
 # The stats card sits this much lower than the shared 20 px margin (its image has ~26 px of shadow).
 COURSE_STATS_DROP_PX = 30
-# Course legs: the walker slows (to 40% pace) over this long before each stop; arrival times stay.
-COURSE_ARRIVAL_SLOW_SECONDS = 3.0
 # Leg script cues {slow} … {/slow} / {fast} … {/fast}: the walker's pace there against the rest of its piece (the
 # rest makes up the time, so arrival stays on the cue). Per project: settings.pace_slow_factor / pace_fast_factor.
 PACE_SLOW_FACTOR = 0.2  # was 0.5: only 2x slower than the rest, which barely showed over a long {slow}
@@ -1408,10 +1419,10 @@ SUB_COURSE_TITLE_SECONDS = 3.5
 # The main course drawn faint under a sub course leg (RGBA).
 SUB_COURSE_MAIN_LINE_COLOR = (150, 150, 150, 140)
 # Overview: after the main course's summary the sub course plays (overview._render_sub_course_part): its line in the
-# editor's sub course amber (BGR), the main route faded this much toward the bare map, the walk's length, the card's hold.
+# editor's sub course amber (BGR), the main route faded this much toward the bare map, the card's hold. The walk's
+# length is sub_course_seconds in the storyboard files.
 SUB_COURSE_LINE_BGR = (11, 158, 245)
 SUB_COURSE_MAIN_FADE = 0.5
-SUB_COURSE_OVERVIEW_SECONDS = 8.0
 SUB_COURSE_SUMMARY_HOLD_SECONDS = 4.0
 OUTRO_ROUTE_DISTANCE_FONT_SIZE = 22
 # The route page's title + subtitle use the intro's text and styles at this fraction of its size.

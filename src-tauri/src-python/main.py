@@ -66,12 +66,13 @@ def split_mode_payload(argv: list) -> list:
 def _set_stopby_visits(job_config_path: str) -> None:
     from services.localization.overview_script import overview_style
     from services.vdoprocessing.stopby_visits import set_visit_all_stopbys
+    from services.vdoprocessing.storyboard import of as storyboard_of
 
     try:
         project = json.loads(Path(job_config_path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return
-    set_visit_all_stopbys(overview_style(project) == "course")
+    set_visit_all_stopbys(storyboard_of(overview_style(project)).visit_all_stopbys)
 
 
 if __name__ == "__main__":

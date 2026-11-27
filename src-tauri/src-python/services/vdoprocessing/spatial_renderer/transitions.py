@@ -8,7 +8,8 @@ import cv2
 import numpy as np
 
 from services.mapfetcher.mapgeometry import RouteGeometryProcessor
-from services.vdoprocessing.route_inputs import stop_is_numbered
+from services.vdoprocessing.route_inputs import returns_to, stop_is_numbered, stopby_labels
+from services.vdoprocessing.storyboard import for_config as storyboard_for
 from services.vdoprocessing.vdoexporter import VideoExporter
 from services import tuning
 from services.mapbox_token import resolve_mapbox_token
@@ -113,7 +114,7 @@ class _TransitionMixin:
     def _ending_zoom_follows(self, stop_popup) -> bool:
         """The summary is followed by the zoom to the start point and its photo (not the course style)."""
         return bool(
-            stop_popup and self.config.get("enable_ending_highlight", True) and self.config.get("overview_style") != "course"
+            stop_popup and self.config.get("enable_ending_highlight", True) and storyboard_for(self.config).ending_zoom_after_summary
         )
 
     def _render_recap_and_summary(
@@ -171,13 +172,12 @@ class _TransitionMixin:
             # With the zoom next, the summary hold (ENDING_SUMMARY_HOLD_SECONDS) is the only wait.
             hold_frames = 0 if self._ending_zoom_follows(stop_popup) else max(0, int(total_freeze * fps))
 
-            if all_recap_popups:
-                # Laid out again for the recap, even when the cards stayed up
-                # through the whole walk: those sat in slots pitched for a
-                # full photo card, and leaving the badges there spaces them a
-                # card's width apart. A badge is slim, so its own lattice
-                # packs them side by side — the cross-fade below carries each
-                # card into its badge.
+            if storyboard_for(self.config).cards_stay:
+                # The same cards at the same spots: nothing moves, resizes or turns into a badge.
+                final_frame = self._render_recap_frame(
+                    outro_frame, active_popups, group_popups=self._recap_cards(active_popups)
+                )
+            elif all_recap_popups:
                 laid_out = self._layout_recap_cards(
                     all_recap_popups, w, h,
                     reserved_boxes=reserved_boxes,
@@ -297,13 +297,12 @@ class _TransitionMixin:
         exclude_px: int,
         exclude_py: int,
     ) -> None:
-        """Draws a plain color dot (see _draw_recap_dot_color — this
-        highlight beat is the same "recap" family, no teardrop/numbered
-        pins) for every OTHER job_config waypoint that happens to fall
+        """Draws a marker (_draw_ending_pin: a dot, or a teardrop per the
+        storyboard) for every OTHER job_config waypoint that happens to fall
         inside this freshly fetched close-up tile — the featured waypoint
         (at exclude_px/exclude_py) gets its own dedicated marker drawn
         separately by the caller, so it's skipped here. Uses the same
-        S/E/stop-by/number color precedence as everywhere else (via
+        S/E/stop-by/number precedence as everywhere else (via
         _pin_label_and_color), computed from each waypoint's real
         position in job_config's own waypoints list."""
         job_waypoints = (self._get_job_config() or {}).get("waypoints", [])
@@ -327,11 +326,15 @@ class _TransitionMixin:
         offset = 0 if holds_ends else 1
         if holds_ends:
             total_points = total_wp
-        order = 0
+        # Stop-bys count over the list with both true ends, as the overview's pins do.
+        stopbys = stopby_labels(job_waypoints if holds_ends else [{}, *job_waypoints, {}])
+        order, numbers = 0, {}
         for pos, jw in enumerate(job_waypoints):
             is_stopby = bool(jw.get("isStopBy", False) or jw.get("skipAssetGeneration"))
             if stop_is_numbered(job_waypoints, pos) and not (holds_ends and pos == 0):
                 order += 1
+            numbers[pos] = order
+            back = returns_to(job_waypoints, pos)  # a return stop shows the number it comes back to
             # A loop route's job_config waypoints list ends with a
             # synthetic "(Return)" entry at the SAME coordinates as the
             # route's own start/end — the real S/E pin already covers
@@ -365,10 +368,20 @@ class _TransitionMixin:
             # the video, rather than falling back to the DEFAULT
             # (not-yet-visited) marker_color — visibly wrong whenever a
             # project has customized the two to different colors.
-            wp = {"index": pos + offset, "order": order, "data": {"is_stopby": is_stopby, "arrived": True,
-                                                                "inaccessible": bool(jw.get("inaccessible"))}}
-            _, color, _ = self._pin_label_and_color(wp, total_points)
-            self._draw_recap_dot_color(frame, px, py, color)
+            wp = {"index": pos + offset, "order": order if back is None else numbers[back],
+                  "data": {"is_stopby": is_stopby, "arrived": True, "inaccessible": bool(jw.get("inaccessible")),
+                           "stopby_label": stopbys.get(pos + offset)}}
+            self._draw_ending_pin(frame, wp, total_points, px, py)
+
+    def _draw_ending_pin(
+        self, frame: np.ndarray, wp: Dict, total_points: int, px: int, py: int, dot_color=None,
+    ) -> None:
+        """One place's marker in the ending zoom, in the shape the storyboard names (ending_pin_shape): a
+        teardrop with the pin's own label and color, else a dot in `dot_color` (default: the pin's color)."""
+        if storyboard_for(self.config).ending_pin_shape == "teardrop":
+            self._draw_pin(frame, {**wp, "x": px, "y": py}, total_points)
+        else:
+            self._draw_recap_dot_color(frame, px, py, dot_color or self._pin_label_and_color(wp, total_points)[1])
 
     def _gl_ending_zoom_enabled(self, bounding_box) -> bool:
         settings = (self._get_job_config() or {}).get("settings", {}) or {}
@@ -469,7 +482,7 @@ class _TransitionMixin:
 
     def _draw_ending_card(
         self, frame: np.ndarray, highlight_popup: Dict, pop: Dict, frames_left: int,
-        frame_px: int, frame_py: int, pin_color,
+        frame_px: int, frame_py: int, is_start: bool,
     ) -> np.ndarray:
         """Composites the popping-in highlight card (line, then marker, then card) on `frame`."""
         highlight_popup["x"], highlight_popup["y"] = frame_px, frame_py
@@ -487,8 +500,14 @@ class _TransitionMixin:
                 card["card_scale"] = grow
             card["beside_box"] = (int(bx), int(by))
         frame = self.graphics.render_popup_box(frame, card, alpha=alpha, line_only=True)
-        self._draw_recap_dot_color(frame, frame_px, frame_py, pin_color)
+        self._draw_featured_pin(frame, frame_px, frame_py, is_start)
         return self.graphics.render_popup_box(frame, card, alpha=alpha, skip_line=True)
+
+    def _draw_featured_pin(self, frame: np.ndarray, px: int, py: int, is_start: bool) -> None:
+        """The zoomed-on start (or end) point's own marker."""
+        wp = {"index": 0 if is_start else 1, "data": {}}  # of two points: "S" / "E"
+        color = self._START_PIN_COLOR if is_start else self._END_PIN_COLOR
+        self._draw_ending_pin(frame, wp, 2, px, py, color)
 
     def _play_dynamic_ending(
         self, video: VideoExporter, dynamic_frames: List, featured_popup: Dict,
@@ -500,7 +519,6 @@ class _TransitionMixin:
             lat, lng, dynamic_frames[-1][1], w, h
         )
         highlight_popup = self._fresh_highlight_popup(featured_popup, int(px), int(py), w, h)
-        pin_color = self._START_PIN_COLOR if is_start else self._END_PIN_COLOR
 
         pop_start = len(dynamic_frames)
         pop_frames = max(1, int(tuning.ENDING_HIGHLIGHT_POP_SECONDS * fps))
@@ -525,12 +543,12 @@ class _TransitionMixin:
             self._draw_route_line_on_extent(frame_out, w, h, extent)
             self._draw_nearby_waypoints(frame_out, w, h, extent, frame_px, frame_py)
             if frame_idx < pop_start:
-                self._draw_recap_dot_color(frame_out, frame_px, frame_py, pin_color)
+                self._draw_featured_pin(frame_out, frame_px, frame_py, is_start)
             else:
                 frame_out = self._draw_ending_card(
                     frame_out, highlight_popup, pop,
                     _ENDING_POP_TOTAL_FRAMES - (frame_idx - pop_start),
-                    frame_px, frame_py, pin_color,
+                    frame_px, frame_py, is_start,
                 )
             video.write(frame_out)
         self.last_frame = frame_out
@@ -570,10 +588,9 @@ class _TransitionMixin:
         )
 
         highlight_popup = self._fresh_highlight_popup(featured_popup, px, py, w, h)
-        pin_color = self._START_PIN_COLOR if is_start else self._END_PIN_COLOR
         # Line, then marker, then card, so the leader line sits behind both.
         highlight_bg = self.graphics.render_popup_box(highlight_bg, highlight_popup, line_only=True)
-        self._draw_recap_dot_color(highlight_bg, px, py, pin_color)
+        self._draw_featured_pin(highlight_bg, px, py, is_start)
         highlight_frame = self.graphics.render_popup_box(highlight_bg, highlight_popup, skip_line=True)
 
         # Zoom toward the stop at px/py in the highlight image's own pixels (featured_popup's

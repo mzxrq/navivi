@@ -147,7 +147,6 @@ export interface ProjectSettings {
   intro_location_at?: string; // first waypoint "lat,lng" (3 dp) intro_location was detected for
   overview_intro?: string; // course introduction: opens the "course" overview narration, spoken over the intro photos
   overview_style?: "walk" | "course" | "map"; // overview video type; each has its own script (absent = walk)
-  overview_recap_style?: "pill_badge" | "pop_up_card"; // end-of-video recap marker style (absent = pill_badge)
 
   // Append "· N か所" to the intro/outro subtitle (default on).
   intro_place_count?: boolean;
@@ -185,6 +184,7 @@ export interface ProjectSettings {
   overview_max_leg_seconds?: number;
   overview_intro_card_scale?: number;
   overview_intro_clean_hold_seconds?: number;
+  overview_recap_hold_seconds?: number; // the totals card stays at least this long after the {distance} cue
   enable_ending_highlight?: boolean;
   overview_cards_stay?: boolean; // "Walk the route": each stop's card stays up once shown (default on)
   enable_outro?: boolean;
@@ -231,6 +231,13 @@ export interface ProjectSettings {
   pronunciation_dictionary?: Array<{ word: string; reading: string; auto?: boolean; pitch?: string }>;
   tts?: { engine?: "irodori" | "qwen3" | "kokoro"; voice?: string; kokoro_voice?: string; speed?: number; quality?: "fast" | "balanced" | "best"; caption?: string };
   auto_overview_cues?: boolean;
+  // One switch per cue auto_overview_cues places (on when unset).
+  auto_cue_n?: boolean;
+  auto_cue_go?: boolean;
+  auto_cue_start?: boolean;
+  auto_cue_extras?: boolean;
+  auto_cue_closed?: boolean;
+  auto_cue_scene?: boolean;
   auto_narration_cues?: boolean;
   global_pronunciation_dictionary?: Array<{ word: string; reading: string }>;
   auto_dictionary?: boolean; // false: no auto words (useAutoFurigana); on when unset

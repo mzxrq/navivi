@@ -1,0 +1,28 @@
+{
+  "name": "map",
+  "passby_stopbys": true,
+  "passby_closed": true,
+  "cards_stay": true,
+  "big_stop_card": true,
+  "one_card_at_a_time": true,
+  "leg_cards": true,
+  "ending_zoom_after_summary": true,
+  "traced_route": false,
+  "course_brief_legs": false,
+  "arrival_slow_seconds": null,
+  "course_frame": false,
+  "script_intro_in_key": false,
+  "visit_all_stopbys": false,
+  "ending_pin_shape": "dot",
+  "cluster_min_stops": 2,
+  "sub_course_slot": "after_totals",
+  "timings": {
+    "sub_course_seconds": 8.0,
+    "cue_wait_seconds": 2.0,
+    "max_leg_seconds": 10.0,
+    "intro_clean_hold_seconds": 1.5,
+    "map_photo_seconds": 0.8,
+    "map_slide_seconds": 0.5,
+    "map_min_stop_seconds": 3.5
+  }
+}

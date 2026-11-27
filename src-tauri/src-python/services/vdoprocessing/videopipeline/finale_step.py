@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw, ImageOps
 from services import tuning
 from services.config.job_config import JobConfigManager
 from services.projectfiles import gps_data_dir
+from services.vdoprocessing.route_inputs import is_stopby_label
 
 from .helpers import logger, project_video_dir
 
@@ -66,10 +67,9 @@ def _stop_colors(badge: str, settings: dict) -> Tuple[int, int, int]:
     colours channel-swapped (its cyan route arrives as orange)."""
     from .render_look import _arrived_marker_color, _project_color
 
-    bgr = {
+    bgr = tuning.STOPBY_PIN_COLOR if is_stopby_label(badge) else {
         "S": tuning.START_PIN_COLOR,
         "E": tuning.END_PIN_COLOR,
-        "・": tuning.STOPBY_PIN_COLOR,
         "×": tuning.CLOSED_PIN_COLOR,
     }.get(badge)
     if bgr is None:
@@ -131,7 +131,7 @@ def _recap_badges(engine, stops, extent, size, reserved, route_px):
             continue
         # One badge per PLACE, as the overview recap (_recap_popup_set): a return stop, or a loop's E back at
         # S, is a second visit to a place already badged. A stop-by is always its own place.
-        if stop["badge"] != "・":
+        if not is_stopby_label(stop["badge"]):
             if any(same_place(stop, p) for p in places):
                 continue
             places.append(stop)

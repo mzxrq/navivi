@@ -19,6 +19,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from services.localization.spoken_style import SPOKEN_STYLE_JA
 from services.logger.logger import setup_logger
+from services.vdoprocessing.storyboard import of as storyboard_of
 
 logger = setup_logger("OverviewScript")
 
@@ -152,11 +153,9 @@ def _looks_ok(text: str, limit: int, min_chars: int = _MIN_PASSAGE_CHARS, over: 
 
 TRANSITION_CHARS = 50
 
-# The overview's length comes first; the script is sized to it. Default: 20s
-# plus 7s per stop, kept within 60-120s (settings.overview_target_seconds
-# overrides). The voice is then within AUDIO_MATCH_TOLERANCE_SECONDS of it.
-TARGET_MIN_SECONDS = 60.0
-TARGET_MAX_SECONDS = 120.0
+# The script is sized to a target: 20s plus 7s per stop, no floor or ceiling
+# (settings.overview_target_seconds overrides). The voice then decides the
+# video's length, within AUDIO_MATCH_TOLERANCE_SECONDS of it.
 TARGET_BASE_SECONDS = 20.0
 TARGET_SECONDS_PER_STOP = 7.0
 # Shares of the target: the intro plays over the intro card; a way line is
@@ -172,7 +171,7 @@ DESCRIBE_MAX_SECONDS = 15.0
 # stops is at least this long per leg.
 WAY_SECONDS_PER_LEG = 2.0
 # A highlight's description: one short sentence/clause, not two or three -
-# every numbered stop needs a share of the 60-90s target (see plan_budget),
+# every numbered stop needs a share of the target (see plan_budget),
 # so a long per-stop description was crowding several stops out of the
 # budget entirely (unable to fit their own {n} cue's trip+description
 # within target at all - see plan's greedy stops.add loop). Short keeps
@@ -409,20 +408,13 @@ def _intro_fallback(start: str, end: str, area: str, places: int, km, limit: int
     return next((t for t in texts if len(t) <= limit * 1.3), texts[-1])
 
 
-def in_overview_range(seconds: float, tolerance: float = 3.0) -> bool:
-    """Whether an overview of `seconds` is within TARGET_MIN..TARGET_MAX_SECONDS
-    (give or take the tolerance the video absorbs)."""
-    return TARGET_MIN_SECONDS - tolerance <= seconds <= TARGET_MAX_SECONDS + tolerance
-
-
 def overview_target_seconds(project: dict, stops: int) -> float:
     """How long the overview should be: settings.overview_target_seconds, else
-    TARGET_BASE_SECONDS + TARGET_SECONDS_PER_STOP per numbered stop, kept
-    within TARGET_MIN_SECONDS..TARGET_MAX_SECONDS."""
+    TARGET_BASE_SECONDS + TARGET_SECONDS_PER_STOP per numbered stop."""
     chosen = project.get("settings", {}).get("overview_target_seconds")
     if chosen:
         return float(chosen)
-    return min(TARGET_MAX_SECONDS, max(TARGET_MIN_SECONDS, TARGET_BASE_SECONDS + TARGET_SECONDS_PER_STOP * stops))
+    return TARGET_BASE_SECONDS + TARGET_SECONDS_PER_STOP * stops
 
 
 def closing_seconds(project: dict) -> float:
@@ -506,7 +498,7 @@ def _course_budget(
     return {
         "target": target, "cps": cps, "intro": opening, "pivot": pivot, "closing": closing,
         "stops": sorted(stops), "trips": trips, "ways": ways, "describe": describe,
-        "estimated": estimated, "fits": in_overview_range(estimated),
+        "estimated": estimated,
     }
 
 
@@ -528,8 +520,8 @@ def _spend_spare_time(
             ways = [w + (use * r / total_room if r > 0 else 0.0) for w, r in zip(ways, room)]
             spare -= use
     if spare > 0:
-        # Still short of 60-120s (few stops, little to say): the overview's
-        # length is the rule, so the descriptions (else the way lines) take it.
+        # Still short of the target (few stops, little to say): the
+        # descriptions (else the way lines) take it.
         if flexible:
             for n in flexible:
                 describe[n] += spare / len(flexible)
@@ -551,7 +543,7 @@ def plan_budget(project: dict, brief: dict) -> dict:
     the descriptions, then the way lines - `target` no longer decides which
     stops are described, only how their shared time is spent.
     {"target", "cps", "intro", "closing", "stops", "trips", "ways",
-    "describe": {n: s}, "estimated", "fits"}."""
+    "describe": {n: s}, "estimated"}."""
     cps = _chars_per_second(project)
     places = {n: w for n, w in enumerate(visible_waypoints(project), start=1)}
     target = overview_target_seconds(project, len(places))
@@ -562,14 +554,14 @@ def plan_budget(project: dict, brief: dict) -> dict:
     forced = {n for n, w in places.items() if w.get("overviewHighlight") is True}
     banned = {n for n, w in places.items() if w.get("overviewHighlight") is False} - set(hosts)
 
-    if overview_style(project) == "course":
+    if storyboard_of(overview_style(project)).traced_route:
         return _course_budget(project, brief, cps, target, closing, forced, banned)
 
     # Every numbered stop gets described (an explicit overviewHighlight:false
     # still opts a place out) - previously only as many as fit within `target`
     # were picked, ranked by _highlight_score, and the rest were only ever
-    # named in passing on the way; a route with more stops than the 60-120s
-    # budget could fit simply never described most of them at all. `target`
+    # named in passing on the way; a route with more stops than the target
+    # could fit simply never described most of them at all. `target`
     # still drives how spare time is spent below (longer descriptions/ways),
     # it just no longer decides WHICH stops are described.
     stops = (set(places) | set(hosts) | forced) - banned
@@ -582,9 +574,6 @@ def plan_budget(project: dict, brief: dict) -> dict:
     return {
         "target": target, "cps": cps, "intro": INTRO_SECONDS, "closing": closing, "stops": sorted(stops),
         "trips": trips, "ways": ways, "describe": describe, "estimated": estimated,
-        # the overview stays within 60-120s (the video then follows the
-        # voice to within AUDIO_MATCH_TOLERANCE_SECONDS)
-        "fits": in_overview_range(estimated),
     }
 
 
@@ -842,49 +831,6 @@ def closed_text(project: dict) -> str:
     return "赤色で示した地点は、現在訪れることができません。" + "".join(lines) if lines else ""
 
 
-def course_taglines(project: dict, brief: dict, limit: int = 6) -> List[str]:
-    """Headline lines the "course" overview cycles through at the top: the
-    title and subtitle, start -> farthest stop, one per travel mode in route
-    order (a ferry is "海をわたり、Xへ"), and the area."""
-    from services import video_text
-    from services.localization.route_brief import _length_km
-
-    settings = project.get("settings", {})
-    lang = video_text.resolve_language(settings.get("video_text_language"), project.get("map_language"))
-    phrase = video_text.labels_for(lang)["course_tagline"]
-
-    def spoken(text: str) -> str:
-        text = (text or "").strip()
-        # A Japanese video doesn't show an English working title ("Untitled Project").
-        return "" if not text or (lang == "ja" and text.isascii()) else text
-
-    legs = brief["legs"]
-    start = brief["start"]
-    title = project.get("video_title") or (project.get("project_name") if lang == "ja" else "")  # not a folder name
-    lines = [spoken(title), spoken(project.get("video_subtitle"))]
-    if legs:
-        origin = legs[0]["from_at"]
-        far = max(legs, key=lambda leg: _length_km([origin, leg["to_at"]]))
-        if far["to"] != start:
-            lines.append(phrase["far"].format(start=start, to=far["to"]))
-    seen = set()
-    for leg in legs:
-        for piece in leg.get("pieces") or [leg]:
-            mode = "ferry" if piece["mode"] in _BOAT_MODES else piece["mode"]
-            if mode in seen:
-                continue
-            seen.add(mode)
-            key = "driving" if mode == "car" else mode
-            if key in phrase:
-                lines.append(phrase[key].format(start=start, to=leg["to"]))
-    lines.append(spoken(settings.get("intro_location")))
-    out: List[str] = []
-    for line in lines:
-        if line and line not in out:
-            out.append(line)
-    return out[:limit]
-
-
 def course_summary(brief: dict) -> dict:
     """The stats card's numbers from the same pieces totals_text speaks (a
     crossing hidden in a walking leg counts as the boat), so card and voice agree."""
@@ -1027,8 +973,7 @@ def build_course_script(
     opening = _course_opening(project, brief, places, _chars_for(budget["intro"], cps), generate, intro_text)
     report.append(opening)
 
-    # {route}: the trace starts once the whole route has been shown.
-    parts = [opening["text"], "{start}", ROUTE_PIVOT_TEXT, "{route}"]
+    parts = [opening["text"], "{start}", ROUTE_PIVOT_TEXT]
     parts += _course_route_parts(brief, budget["trips"], [_chars_for(s, cps) for s in budget["ways"]], report)
 
     closing_chars = _chars_for(budget["closing"], cps)
@@ -1079,11 +1024,6 @@ def _via_batch_lines(trip: dict, told: str) -> str:
             for name, fact in zip(names, facts or [""] * len(names))
         ]
         line = f"{host}のあたりでは、{'や'.join(phrases)}が見えてきます。"
-        # The map holds on this batch's cards until this line is spoken
-        # (see cues.py's {goPreN}) - every via_batches host, not just
-        # the one before stop 1.
-        if trip.get("to_number") is not None:
-            line += "{goPre%d}" % trip["to_number"]
         # Always inserted, even past the way segment's own character
         # budget (unlike before) - a name silently dropped for staying
         # under budget defeats guaranteeing every waypoint gets named;
@@ -1207,7 +1147,7 @@ class _TourWriter:
         """(the piece to add to the script, the new `previous`) for the stop numbered `n`."""
         label = trip["to"]
         # Route map: the voice reads the leg's numbers while its card shows them (the walker holds until {go}).
-        facts_line = leg_facts_line(trip) if overview_style(self.project) == "map" else ""
+        facts_line = leg_facts_line(trip) if storyboard_of(overview_style(self.project)).leg_cards else ""
         if not describes_stops(self.project):
             # A stop that hosts stop-by cards freezes the map: say what is
             # around it (never the stop's own description or name again).
@@ -1284,7 +1224,7 @@ def build_tour_script(
 
     brief = build_brief(project, routing_cache)
     budget = plan_budget(project, brief)
-    if overview_style(project) == "course":
+    if storyboard_of(overview_style(project)).traced_route:
         return build_course_script(project, brief, budget, generate, intro_text, closing_text)
 
     writer = _TourWriter(project, brief, budget, generate)

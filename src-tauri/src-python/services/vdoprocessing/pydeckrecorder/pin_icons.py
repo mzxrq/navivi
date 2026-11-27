@@ -145,28 +145,6 @@ _START_PIN_URL = _teardrop_pin_svg_url(_bgr_to_hex(tuning.START_PIN_COLOR), "S")
 _DEST_PIN_URL = _teardrop_pin_svg_url(_bgr_to_hex(tuning.END_PIN_COLOR), "E")
 
 
-_OVERVIEW_PIN_SIZE_PX = 48
-_OVERVIEW_PIN_FALLBACK_BGR = (20, 80, 230)
-
-
-def _overview_pin_icons(numbered: List[Dict]) -> List[Dict]:
-    """IconLayer rows for the overview's numbered pins: teardrops with each
-    waypoint's pin_glyph/pin_color (set by RouteAnimator), else its order."""
-    return [
-        {
-            "lon": wp["lon"], "lat": wp["lat"],
-            "icon": deck_icon(wp.get("pin_image")) or {
-                "url": _teardrop_pin_svg_url(
-                    _bgr_to_hex(wp.get("pin_color") or _OVERVIEW_PIN_FALLBACK_BGR),
-                    str(wp.get("pin_glyph") or wp.get("order", "")),
-                ),
-                "width": _TEARDROP_PIN_W, "height": _TEARDROP_PIN_H, "anchorY": _TEARDROP_PIN_H,
-            },
-        }
-        for wp in numbered
-    ]
-
-
 def _leg_pin_url(pin: Optional[Dict], fallback: str) -> str:
     """The pin icon for one end of a leg: the overview's own glyph and color
     for that waypoint ({"glyph": "S"/"3"/"E", "color": BGR}), so a leg reads

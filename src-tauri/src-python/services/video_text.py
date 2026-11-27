@@ -29,7 +29,7 @@ _BUILTIN_JA: Dict[str, Any] = {
     "waypoint_fallback": "ウェイポイント", "start_prefix": "出発: ", "stop_prefix": "到着: ",
     "soon_banner": "まもなく {dest}", "en_route_banner": "{dest} へ{suffix}",
     "stop_progress": "現在 {n}/{total} か所", "overview_remaining_hud": "残り {distance} ・ {duration}", "hud_minutes": "{n} 分",
-    "overview_stops_hud": "{n} / {total} か所", "overview_next_hud": "次は {name}",
+    "overview_total_hud": "全体 {distance} ・ {duration}",
     "duration_seconds": "{n}秒", "duration_hours_minutes": "{h}時間{m:02d}分", "duration_minutes": "{m}分",
     "duration_fallback": "時間", "destination_fallback": "目的地", "overview_start": "開始", "overview_end": "終点",
     "themed_hud": {"leg_distance": "区間距離", "leg_time": "所要時間", "extra": "追加の見どころ","loop": "周回","one_way": "片道", "base": "発着", "next": "つぎは", "previous": "前の地点", "total_distance": "合計距離", "total_time": "合計時間", "remaining_distance": "残り距離", "remaining_time": "残り時間"},

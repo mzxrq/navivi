@@ -304,7 +304,8 @@ def _fetch_overview(job_config_mgr, config_path: Path, route_df, project_config:
     bbox = _overview_bbox(fetcher, route_df, sub_overview, project_config)
 
     map_output_path, extent, (img_w, img_h) = fetcher.fetch_image(
-        bounding_box=bbox, output_filename=map_output_path
+        bounding_box=bbox, output_filename=map_output_path,
+        raster=render_mode == "recap_frame",  # a layout preview, not the video: stays off the GPU
     )
     if not map_output_path:
         raise RuntimeError(

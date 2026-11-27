@@ -75,6 +75,7 @@ export const videoLookDefaults = {
     overview_max_leg_seconds: 10,
     overview_intro_card_scale: 1.3,
     overview_intro_clean_hold_seconds: 1.5,
+    overview_recap_hold_seconds: 3,
     enable_ending_highlight: true,
     overview_cards_stay: true,
     enable_outro: true,

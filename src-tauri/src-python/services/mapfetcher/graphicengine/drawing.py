@@ -254,6 +254,11 @@ class _DrawingMixin:
             font_scale *= 0.7
             thickness = max(2, round(thickness * 0.75))
         (tw, th), baseline = cv2.getTextSize(label, self.font_cv, font_scale, thickness)
+        if label.startswith("+") and tw > hole_radius * 1.5:  # a stop-by's "+12": kept inside the white centre
+            shrink = hole_radius * 1.5 / tw
+            font_scale *= shrink
+            thickness = max(1, int(thickness * shrink))
+            (tw, th), baseline = cv2.getTextSize(label, self.font_cv, font_scale, thickness)
         # Center on the glyph's own visual bounding box (th tall, plus
         # baseline for any descenders) rather than assuming no
         # descenders — round() instead of integer-divide keeps this

@@ -1,4 +1,4 @@
-"""Route-line GeoJSON features shared by the leg and overview renderers (pedestrian.py, overview_pydeck.py)."""
+"""Route-line GeoJSON features of the leg renderer (pedestrian.py)."""
 
 
 def _route_linestring_feature(coords_lonlat: list, line_color: list) -> dict:

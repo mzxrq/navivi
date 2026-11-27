@@ -240,7 +240,7 @@ class _PinMixin:
 
         Label/color precedence matches the map editor's own MapArea.tsx
         exactly: a stop-by waypoint (wp["data"]["is_stopby"]) ALWAYS renders
-        as a "・" dot in STOPBY_PIN_COLOR — even if it happens to be the
+        with its "+N" (data["stopby_label"], else "・") in STOPBY_PIN_COLOR — even if it happens to be the
         route's literal first/last point — since the frontend's isStopBy
         branch is checked before start/end labeling and returns
         unconditionally. Otherwise the very first/last points of the route
@@ -294,7 +294,7 @@ class _PinMixin:
         if wp["data"].get("inaccessible"):
             return "×", tuning.CLOSED_PIN_COLOR, None
         if wp["data"].get("is_stopby"):
-            return "・", self._STOPBY_PIN_COLOR, None
+            return wp["data"].get("stopby_label") or "・", self._STOPBY_PIN_COLOR, None
         if wp["index"] == 0:
             return "S", self._START_PIN_COLOR, None
         if wp["index"] == total_points - 1:

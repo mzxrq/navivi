@@ -8,7 +8,7 @@ from services.vdoprocessing.videopipeline.narration_step import ensure_overview_
 
 REPLY_KEYS = {
     "script", "draft_path", "model", "source_ids", "spoken_chars", "chars_per_second", "target_seconds",
-    "estimated_seconds", "within_60_90s", "min_seconds", "max_seconds", "stopped_at", "pieces",
+    "estimated_seconds", "stopped_at", "pieces",
 }
 
 
@@ -42,9 +42,8 @@ def test_the_draft_reply_has_the_fields_the_panel_reads(tmp_path):
     assert reply["script"].strip() and "{1}" in reply["script"]
     assert reply["source_ids"] == "w0,w1,w2,w3,wz"
     assert reply["stopped_at"] == [1, 2, 3]
-    assert reply["min_seconds"] == 60.0 and reply["max_seconds"] == 120.0
+    assert not {"within_60_90s", "min_seconds", "max_seconds"} & set(reply)  # no length limit
     assert reply["estimated_seconds"] > 0 and reply["chars_per_second"] > 0
-    assert isinstance(reply["within_60_90s"], bool)
     assert {"kind", "used", "budget_chars", "text"} <= set(reply["pieces"][0])
     assert (tmp_path / "overview_script_draft.txt").read_text(encoding="utf-8") == reply["script"]
 
@@ -62,11 +61,9 @@ def test_the_length_of_a_typed_script_uses_the_projects_voice_speed(tmp_path):
     assert reply["success"] is True
     assert reply["spoken_chars"] == 100  # cue tags are never spoken
     assert reply["estimated_seconds"] == round(100 / reply["chars_per_second"], 1)
-    assert reply["within_60_90s"] is False  # about 16 s
     # the same script at a faster voice is shorter
     cfg.write_text(json.dumps({"waypoints": _route(), "settings": {"overview_chars_per_second": 10}}), encoding="utf-8")
     assert overview_length(str(cfg), "あ" * 100)["estimated_seconds"] == 10.0
-    assert overview_length(str(cfg), "あ" * 1000)["within_60_90s"] is True
 
 
 def test_the_length_of_nothing_is_zero(tmp_path):

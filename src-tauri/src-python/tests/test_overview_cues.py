@@ -1,6 +1,9 @@
 """Offline tests for the overview's stop-and-describe cues ({n} ... {go})."""
 
 import json
+import re
+
+import pytest
 
 from services.localization.cues import Cue, clean_text, cue_tags, cue_times, strip_cues
 from services.localization.overview_cues import auto_tag_overview, name_variants
@@ -152,6 +155,69 @@ class TestStored:
         config = _project(tmp_path, {"auto_overview_cues": False})
         assert add_overview_cues(str(config)) is False
         assert overview_tagged_script({"overview_narration": SCRIPT}, tmp_path) == SCRIPT
+
+
+COURSE_SCRIPT = (
+    "友ヶ島は四つの島です。これが全体のルートです。島では、砲台跡やタカノス山をめぐります。"
+    "黒色で示した地点は、追加の見どころです。赤色で示した地点は、立ち入れません。"
+)
+COURSE_LABELS = ["砲台跡", "タカノス山"]
+KIND_TAG = {"n": r"\{\d+\}", "go": r"\{go\}", "start": r"\{start\}", "extras": r"\{extras\}", "closed": r"\{closed\}"}
+
+
+@pytest.mark.parametrize("kind", list(KIND_TAG))
+def test_a_cue_kind_switched_off_is_not_added(kind):
+    full = auto_tag_overview(COURSE_SCRIPT, COURSE_LABELS)
+    assert all(re.search(tag, full) for tag in KIND_TAG.values())  # every kind is there to switch off
+    tagged = auto_tag_overview(COURSE_SCRIPT, COURSE_LABELS, skip=frozenset({kind}))
+    assert tagged == re.sub(KIND_TAG[kind], "", full)
+
+
+@pytest.mark.parametrize("kind", list(KIND_TAG))
+def test_a_typed_cue_stays_when_its_kind_is_off(kind):
+    typed = {"n": "{1}", "go": "{go}", "start": "{start}", "extras": "{extras}", "closed": "{closed}"}[kind]
+    tagged = auto_tag_overview(typed + COURSE_SCRIPT, COURSE_LABELS, skip=frozenset({kind}))
+    assert typed in tagged
+
+
+def _stored_tags(config, tmp_path):
+    return cue_tags(overview_tagged_script(json.loads(config.read_text(encoding="utf-8")), tmp_path))
+
+
+def _set(config, **settings):
+    project = json.loads(config.read_text(encoding="utf-8"))
+    project["settings"] = settings
+    config.write_text(json.dumps(project, ensure_ascii=False), encoding="utf-8")
+
+
+class TestSwitches:
+    def test_a_switch_turned_off_then_on_again_retags(self, tmp_path):
+        config = _project(tmp_path, {"auto_cue_go": False})
+        add_overview_cues(str(config))
+        assert _stored_tags(config, tmp_path) == ["1", "2", "3"]
+        _set(config)
+        assert add_overview_cues(str(config)) is True
+        assert _stored_tags(config, tmp_path) == ["1", "go1", "2", "go2", "3"]
+        _set(config, auto_cue_go=False)
+        assert add_overview_cues(str(config)) is True
+        assert _stored_tags(config, tmp_path) == ["1", "2", "3"]
+
+    def test_the_master_off_drops_the_tags_it_added(self, tmp_path):
+        config = _project(tmp_path, {})
+        add_overview_cues(str(config))
+        _set(config, auto_overview_cues=False)
+        add_overview_cues(str(config))
+        assert _stored_tags(config, tmp_path) == []
+        assert add_overview_cues(str(config)) is False
+
+    @pytest.mark.parametrize("on", [True, False])
+    def test_the_scene_switch(self, tmp_path, on):
+        config = _project(tmp_path, {"intro_style": "cinematic", "auto_cue_scene": on})
+        project = json.loads(config.read_text(encoding="utf-8"))
+        project["overview_narration"] = "一文です。二文です。三文です。{start}" + SCRIPT
+        config.write_text(json.dumps(project, ensure_ascii=False), encoding="utf-8")
+        add_overview_cues(str(config))
+        assert ("{scene}" in overview_tagged_script(project, tmp_path)) is on
 
 
 def test_cue_numbers_that_name_the_wrong_stop_are_reported():

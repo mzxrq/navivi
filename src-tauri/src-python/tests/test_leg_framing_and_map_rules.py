@@ -1,6 +1,5 @@
 import pandas as pd
 
-from services.mapfetcher.maplanguage import needs_gl_labels
 from services.vdoprocessing.pydeckrecorder.leg_camera import _framed_points
 from services.vdoprocessing.spatial_renderer.course import pin_reveal_time
 
@@ -33,19 +32,6 @@ class TestPinReveal:
 
     def test_a_trace_inside_the_window_sets_the_time(self):
         assert pin_reveal_time(reached=12.4, said=12.0, route_at=2.0, window=0.75) == 12.4
-
-
-class TestNeedsGlLabels:
-    def test_japanese_without_its_own_style_uses_the_gl_page(self):
-        assert needs_gl_labels({}, "ja", True)
-
-    def test_english_a_missing_token_or_an_own_style_keep_the_raster_map(self):
-        assert not needs_gl_labels({}, "en", True)
-        assert not needs_gl_labels({}, "ja", False)
-        assert not needs_gl_labels({"mapbox_style_id_ja": "me/ja"}, "ja", True)
-
-    def test_a_chosen_background_is_never_switched(self):
-        assert not needs_gl_labels({"overview_background": "raster"}, "ja", True)
 
 
 def test_photo_card_moves_off_the_route_line():

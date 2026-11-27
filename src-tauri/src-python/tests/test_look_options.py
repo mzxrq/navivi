@@ -24,7 +24,7 @@ OLD_READER_DEFAULTS = {
     "overview_intro_clean_hold_seconds": 1.5,
     "overview_title": None,
     "enable_ending_highlight": True,
-    "overview_recap_style": "pill_badge",
+    "overview_recap_hold_seconds": 3.0,
 }
 
 
@@ -45,12 +45,13 @@ def test_project_values_are_forwarded():
         "overview_intro_card_scale": 1.0,
         "overview_intro_clean_hold_seconds": 0,
         "overview_title": "My trip",
+        "overview_recap_hold_seconds": 5,
         "enable_ending_highlight": False,
-        "overview_recap_style": "pop_up_card",
         "unrelated": 1,
     }
     out = look_options(settings)
     assert out == {k: settings[k] for k in OLD_READER_DEFAULTS}
+    assert "overview_recap_style" not in look_options({"overview_recap_style": "pop_up_card"})  # removed
 
 
 def test_leg_pins_use_project_colors_only_when_set():

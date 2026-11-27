@@ -11,11 +11,7 @@ A script may carry inline tags that mark moments the video has to land on:
     {go}      overview only: the description of the stop before it ends here -
               the walker waits at that stop until now, then heads on. Recorded
               as "go<n>" (n: the last {n} before it); ignored before any {n}
-    {goPreN}  overview only: a stop-by batch mentioned in passing, on the way
-              to numbered stop N, ends here - the walker (or, before stop 1,
-              the route's start) waits until now, then sets off. A literal
-              tag naming the stop it precedes explicitly, unlike {go}, since
-              a stop-by batch has no {n} of its own for {go} to attach to.
+    {goPreN}  no longer used; still matched so an old script never speaks it
     {distance} overview only: the closing line's distance summary ("…24km
               の旅でした") ends here - the ending highlight holds at least
               until now, so it isn't cut short with that line still playing.
@@ -54,7 +50,8 @@ CUE_RE = re.compile(r"\{(start|arrive|end|distance|route|extras|closed|scene|nex
 @dataclass(frozen=True)
 class Cue:
     # "start" | "arrive" | "end" | "1", "2", ... | "go1", "go2", ...; the "course"
-    # overview also has "route" (the trace starts) and "extras" (the stop-bys appear); both styles have
+    # overview also has "extras" (the stop-bys appear; "route" is an old tag, still matched so it is never spoken);
+    # both styles have
     # "closed" (the places that can't be visited appear, after the stop-bys); each {scene}
     # in the opening becomes "scene2", "scene3", ...: the text-led intro cuts to its next scene there
     tag: str

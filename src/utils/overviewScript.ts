@@ -4,24 +4,12 @@ const CUE = /\{(start|arrive|end|distance|route|extras|closed|scene|open|close|\
 export interface OverviewLength {
   chars_per_second: number;
   target_seconds: number;
-  min_seconds: number;
-  max_seconds: number;
 }
-
-export type LengthVerdict = "empty" | "short" | "ok" | "long";
 
 export const spokenChars = (text: string) => text.replace(CUE, "").length;
 
 export const estimateSeconds = (text: string, charsPerSecond: number) =>
   charsPerSecond > 0 ? Math.round((spokenChars(text) / charsPerSecond) * 10) / 10 : 0;
-
-// Same 3 s of slack as overview_script.in_overview_range.
-export function lengthVerdict(seconds: number, { min_seconds, max_seconds }: OverviewLength, tolerance = 3): LengthVerdict {
-  if (seconds <= 0) return "empty";
-  if (seconds < min_seconds - tolerance) return "short";
-  if (seconds > max_seconds + tolerance) return "long";
-  return "ok";
-}
 
 // The opening (before {start}, heard over the intro photos) and the rest; joinOpening puts them back.
 export function splitOpening(text: string): { opening: string; body: string } {

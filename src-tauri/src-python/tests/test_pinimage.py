@@ -188,20 +188,11 @@ def test_pydeck_leg_pin_uses_the_image_and_falls_back(icon, tmp_path):
     assert pin_icons._leg_pin_url(None, fallback) == fallback
 
 
-def test_pydeck_overview_icons(icon):
-    wps = [
-        {"lon": 1, "lat": 2, "order": 1, "pin_glyph": "S", "pin_color": (1, 2, 3), "pin_image": icon},
-        {"lon": 3, "lat": 4, "order": 2, "pin_glyph": "E", "pin_color": (1, 2, 3)},
-    ]
-    rows = pin_icons._overview_pin_icons(wps)
-    assert rows[0]["icon"]["url"].startswith("data:image/png")
-    assert rows[1]["icon"]["url"].startswith("data:image/svg+xml")
-
-
 def test_leg_pin_carries_the_image_but_not_for_a_stopby():
     assert "image" not in _leg_pin("2", {}, arrived=False)
     assert _leg_pin("2", {}, arrived=False, image="/x.png")["image"] == "/x.png"
     assert "image" not in _leg_pin("・", {}, arrived=False, image="/x.png")
+    assert "image" not in _leg_pin("+1", {}, arrived=False, image="/x.png")
 
 
 def test_checkpoint_part_only_exists_with_a_marker(icon, tmp_path):

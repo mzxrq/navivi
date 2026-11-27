@@ -116,6 +116,35 @@ describe("Voice tab timing cues", () => {
     fireEvent.click(screen.getByRole("switch", { name: "Place cues in each stop's narration" }));
     expect(workspace.updateSettings).toHaveBeenLastCalledWith({ auto_narration_cues: false });
   });
+
+  const kinds = [
+    ["Reach each stop", "auto_cue_n"],
+    ["Leave each stop", "auto_cue_go"],
+    ["Set off after the opening", "auto_cue_start"],
+    ["Show the stop-bys", "auto_cue_extras"],
+    ["Show the closed places", "auto_cue_closed"],
+    ["Change scenes in the intro", "auto_cue_scene"],
+  ];
+
+  it("has a switch for each overview cue, on by default", async () => {
+    show();
+    for (const [name, key] of kinds) {
+      const toggle = await screen.findByRole("switch", { name });
+      expect(toggle.getAttribute("aria-checked")).toBe("true");
+      fireEvent.click(toggle);
+      expect(workspace.updateSettings).toHaveBeenLastCalledWith({ [key]: false });
+    }
+  });
+
+  it("disables the cue switches while overview cues are off", async () => {
+    workspace.settings = { auto_overview_cues: false };
+    show();
+    for (const [name] of kinds) {
+      const toggle = await screen.findByRole("switch", { name });
+      expect((toggle as HTMLButtonElement).disabled).toBe(true);
+      expect(toggle.getAttribute("aria-checked")).toBe("false");
+    }
+  });
 });
 
 describe("Voice tab cache", () => {
