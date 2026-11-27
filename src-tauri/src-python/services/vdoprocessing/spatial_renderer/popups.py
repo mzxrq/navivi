@@ -1611,6 +1611,7 @@ A connected stop-by is loose as well: the walker passes every
         h: int,
         reserved_boxes: Optional[List[Tuple[float, float, float, float]]] = None,
         route_obstacles: Optional[np.ndarray] = None,
+        max_scale: Optional[float] = None,
     ) -> List[Dict]:
         """The overview's cards, every one the same size: on a circle round each group of pins
         (card_circles), or - where no size down to OVERVIEW_CARD_CIRCLE_MIN_SCALE makes a clean
@@ -1621,8 +1622,8 @@ A connected stop-by is loose as well: the walker passes every
         if not popups:
             return []
         pins = [(p.get("pin_x", p["x"]), p.get("pin_y", p["y"])) for p in popups]
-        scale, chosen = (self._circle_search(pins, w, h, reserved_boxes, route_obstacles)
-                         or self._layout_ring_search(pins, w, h, reserved_boxes, route_obstacles))
+        scale, chosen = (self._circle_search(pins, w, h, reserved_boxes, route_obstacles, max_scale)
+                         or self._layout_ring_search(pins, w, h, reserved_boxes, route_obstacles, max_scale))
         placed = []
         for i, x0, y0 in chosen:
             popups[i]["beside_box"] = (int(x0), int(y0))
@@ -1635,10 +1636,11 @@ A connected stop-by is loose as well: the walker passes every
 
     def _circle_search(
         self, pins: List[Tuple[float, float]], w: int, h: int, reserved_boxes, route_obstacles,
+        max_scale: Optional[float] = None,
     ) -> Optional[Tuple[float, List[Tuple[int, float, float]]]]:
         """(card scale, [(pin index, x, y)]) of the circle layout at the largest size that has one (a binary search
         down OVERVIEW_CARD_CIRCLE_SHRINK_STEP's sizes), or None."""
-        scales, scale = [], tuning.OVERVIEW_CARD_MAX_SCALE * h / 1080
+        scales, scale = [], (max_scale or tuning.OVERVIEW_CARD_MAX_SCALE) * h / 1080
         while scale >= tuning.OVERVIEW_CARD_CIRCLE_MIN_SCALE * h / 1080:
             scales.append(scale)
             scale *= tuning.OVERVIEW_CARD_CIRCLE_SHRINK_STEP
@@ -1658,6 +1660,7 @@ A connected stop-by is loose as well: the walker passes every
 
     def _layout_ring_search(
         self, pins: List[Tuple[float, float]], w: int, h: int, reserved_boxes, route_obstacles,
+        max_scale: Optional[float] = None,
     ) -> Tuple[float, List[Tuple[int, float, float]]]:
         """(card scale, [(pin index, x, y)]): each card at the nearest free spot around its OWN pin — any
         direction — over no route line, no pin, no HUD panel and no card already placed. The size is the largest at
@@ -1680,7 +1683,7 @@ A connected stop-by is loose as well: the walker passes every
         # A card may sit anywhere in the frame (a leader line joins it to its pin): size comes first, then
         # leaders that pass under no other card (down to OVERVIEW_CARD_CLEAR_LINES_MIN_SHARE of that size).
         steps = int(math.hypot(w, h) // self._RING_STEP_PX)
-        scale = tuning.OVERVIEW_CARD_MAX_SCALE * h / 1080
+        scale = (max_scale or tuning.OVERVIEW_CARD_MAX_SCALE) * h / 1080
         best, floor = None, 0.0  # best: (leaders under a card, scale, spots)
         while scale >= floor:
             chosen = self._ring_attempt(scale, True, w, h, pins, order, fixed, route_layer, steps)
