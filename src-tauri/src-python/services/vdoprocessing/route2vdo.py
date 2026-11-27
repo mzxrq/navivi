@@ -69,7 +69,7 @@ LEG_FAR_STOPBY_VERSION = 2
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
-_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text", "kw.leg_elevations", "return_stop", "closed", "quiet_stopby", "stopby_reopen", "pops_after", "join")
+_LEG_CHECKPOINT_PARTS = ("route_inputs", "render_version", "photos", "video_text", "kw.leg_elevations", "return_stop", "closed", "quiet_stopby", "stopby_reopen", "pops_after", "join", "hud")
 # The stops' names on the leg's banner and its narration timing (fix.md #9). Compared only when the leg's
 # record has them, so a leg rendered before these were checked is not re-rendered for it.
 _LEG_RECORDED_PARTS = ("kw.route_chain", "kw.target_duration_seconds", "kw.start_cue_seconds", "kw.arrival_wait_seconds")
@@ -345,6 +345,7 @@ class _LegPlan(NamedTuple):
     output_path: str
     connected_ids: List[Optional[str]]
     dest_id: Optional[str]
+    themed: Any = None  # a ThemedLegHud for a themed project
 
 
 class _LegReuse(NamedTuple):
@@ -971,6 +972,26 @@ class RouteAnimator:
             kwargs=leg_kwargs, num=leg_file_num, prefix=leg_glob_prefix,
             output_path=str(self.out_dir / f"{leg_glob_prefix}{safe_suffix}.mp4"),
             connected_ids=connected_landmark_ids, dest_id=res_data.get("end_waypoint_id"),
+            themed=self._themed_leg_hud(ctx, i, leg_mode, res_sequence),
+        )
+
+    def _themed_leg_hud(self, ctx: "_ResContext", i: int, leg_mode: str, res_sequence: List[Dict]):
+        """The leg's themed HUD for a project with a `hud` config, else None (the classic HUD)."""
+        hud = self.config.get("hud")
+        if not hud:
+            return None
+        from services.hudtheme import model
+        from services.vdoprocessing.pydeckrecorder.themed_leg import ThemedLegHud
+
+        # One theme for the whole route, as the overview picks it.
+        theme_id = model.resolve_theme(hud.get("theme"), [str(r.get("mode") or "walking") for r in res_sequence], 0.0)
+        if theme_id is None:
+            return None
+        later = ctx.leg_totals[i + 1:]
+        return ThemedLegHud(
+            hud, theme_id, leg_mode, ctx.leg_totals[i],
+            after=(sum(km for km, _ in later), sum(s for _, s in later)),
+            stopby_offset=sum(len(_split_stopby_chain(r)[1]) for r in res_sequence[:i]),
         )
 
     def _write_piece_plan(self, plan: "_LegPlan", piece_paths) -> None:
@@ -1008,6 +1029,8 @@ class RouteAnimator:
         leg_parts = _leg_fingerprint_parts(
             leg_latlon, dest_label, leg_kwargs, route_inputs=res_data.get("route_inputs"),
         )
+        if plan.themed:  # only themed legs record it, so no classic leg renders again
+            leg_parts["hud"] = plan.themed.fingerprint
         stored_inputs = _stored_leg_inputs(fingerprint_path)
         old_parts = stored_inputs.get("parts") or {}
         changed = sorted(k for k in set(leg_parts) | set(old_parts) if leg_parts.get(k) != old_parts.get(k))
@@ -1065,7 +1088,8 @@ class RouteAnimator:
         # several files sharing this prefix ("_cont{n}" per cut); leg_pieces.py splits the leg's narration across them.
         leg_paths = render_residential_leg_pydeck(
             leg_latlon, dest_label, plan.output_path,
-            hud_card_png=self._leg_hud_card_png(
+            themed=plan.themed,
+            hud_card_png=None if plan.themed else self._leg_hud_card_png(
                 leg_kwargs["mode"], ctx.leg_totals[i],
                 after=(sum(km for km, _ in ctx.leg_totals[i + 1:]), sum(s for _, s in ctx.leg_totals[i + 1:])),
             ),

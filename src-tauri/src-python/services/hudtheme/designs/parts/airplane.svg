@@ -1,0 +1,1 @@
+<path d="M1 11L8 9L12 12H19L15 1H20L30 12H41Q46 13 46 15T41 18H12Q5 17 1 11ZM21 17L15 25H20L30 17Z" fill="#fff" stroke="{{ theme.line }}" stroke-width="1.5" stroke-linejoin="round"/>

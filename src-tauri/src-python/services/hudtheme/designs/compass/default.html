@@ -1,0 +1,7 @@
+{# The pointer turned to the heading, its name in the dial and with the degrees below. The hud-compass-* ids are
+   the ones the leg page updates frame by frame. No box shadow: the card's box is square, the compass is not. #}
+<div class="card" style="width:84px;height:114px;box-shadow:none;filter:drop-shadow(0 4px 8px rgba(16,48,78,0.28))">
+{# The pointer stays between 22 and 35 px from the centre: outside the letters, inside the dial. #}
+<svg width="84" height="114" viewBox="0 0 84 114"><circle cx="42" cy="42" r="37" fill="{{ theme.panel }}" stroke="{{ theme.edge }}" stroke-width="3"/><circle cx="42" cy="42" r="31" fill="none" stroke="{{ theme.gold }}"/><polygon id="hud-compass-pointer" points="42,7 49,20 35,20" fill="{{ theme.gold }}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" transform="rotate({{ degrees }} 42 42)"/><text id="hud-compass-letter" x="42" y="48" text-anchor="middle" font-size="17" font-weight="900" fill="#fff">{{ name }}</text></svg>
+<div id="hud-compass-label" style="left:6px;top:90px;width:72px;height:20px;line-height:20px;box-sizing:border-box;border-radius:10px;background:{{ theme.label }};color:{{ theme.ink }};font-size:11px;font-weight:900;text-align:center">{{ name }} {{ degrees }}°</div>
+</div>

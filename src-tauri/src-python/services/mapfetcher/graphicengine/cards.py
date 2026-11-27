@@ -227,18 +227,19 @@ class _CardMixin:
         return s, title_font, body_font, lines, ribbon, body
 
     def stopby_notice_box(
-        self, w: int, h: int, kind: str = "stopby", x_offset: int = 0,
+        self, w: int, h: int, kind: str = "stopby", x_offset: int = 0, y_offset: int = 0,
     ) -> Tuple[int, int, int, int]:
         """(x0, y0, x1, y1) the notice covers, so cards can be kept off it. `x_offset` slides
-        it right of the bottom-left corner, for a second notice beside the first."""
+        it right of the bottom-left corner, for a second notice beside the first; `y_offset`
+        moves it down (negative: up), for a themed layout that places the banners elsewhere."""
         _, _, _, _, ribbon, body = self._stopby_notice_layout(w, h, kind)
-        return (min(ribbon[0], body[0]) + x_offset, ribbon[1],
-                max(ribbon[2], body[2]) + x_offset, body[3])
+        return (min(ribbon[0], body[0]) + x_offset, ribbon[1] + y_offset,
+                max(ribbon[2], body[2]) + x_offset, body[3] + y_offset)
 
     def render_stopby_notice(
         self, frame: np.ndarray, alpha: float = 1.0,
         marker_color: Tuple[int, int, int] = tuning.STOPBY_PIN_COLOR, kind: str = "stopby",
-        x_offset: int = 0,
+        x_offset: int = 0, y_offset: int = 0,
     ) -> np.ndarray:
         """Bottom-left notice for the round stop-by markers: a ribbon with
         tuning.STOPBY_NOTICE_TITLE over a white rounded card with the marker
@@ -255,6 +256,7 @@ class _CardMixin:
             cache[key] = self._stopby_notice_sprite(w, h, marker_color, kind)
         (x0, y0), color, cover = cache[key]
         x0 = max(0, min(x0 + x_offset, w - cover.shape[1]))
+        y0 = max(0, min(y0 + y_offset, h - cover.shape[0]))
         out = frame.copy()
         roi = out[y0:y0 + cover.shape[0], x0:x0 + cover.shape[1]].astype(np.float32)
         blended = color * float(alpha) + roi * (1.0 - cover * float(alpha))

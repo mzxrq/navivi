@@ -8,7 +8,8 @@ from typing import List, Sequence
 
 from PIL import Image
 
-from services.hudtheme.cards import CSS, Card
+from services.hudtheme import styles
+from services.hudtheme.cards import Card
 
 PAD = 24  # artboard px of empty margin around each picture, for the card's shadow
 _VIEWPORT = {"width": 1100, "height": 600}  # room for the biggest card
@@ -53,13 +54,28 @@ def _page_html() -> str:
     faces = "".join(
         f"@font-face {{ font-family: '{family}'; font-weight: {weight}; src: url('{_HOST}{name}'); }}"
         for family, weight, name in _FONTS)
-    return (f"<!doctype html><meta charset='utf-8'><style>{faces}{CSS}"
+    css = (styles.BUILTIN_DIR / "base.css").read_text(encoding="utf-8")
+    return (f"<!doctype html><meta charset='utf-8'><style>{faces}{css}"
             f"html,body{{margin:0;background:transparent}} body{{padding:{PAD}px}}</style><body></body>")
 
 
 def _serve_font(route) -> None:
-    path = _FONT_DIR / route.request.url[len(_HOST):]
-    route.fulfill(path=str(path), content_type="font/ttf", headers={"Access-Control-Allow-Origin": "*"})
+    name = route.request.url[len(_HOST):]
+    if name not in (found for _, _, found in _FONTS):
+        route.abort()
+        return
+    route.fulfill(path=str(_FONT_DIR / name), content_type="font/ttf",
+                  headers={"Access-Control-Allow-Origin": "*"})
+
+
+def _new_page(browser, scale: float):
+    """A page that can load the bundled fonts and nothing else, and runs no script of its own: a style file may
+    be someone else's. (page.evaluate still works.)"""
+    page = browser.new_page(device_scale_factor=scale, viewport=_VIEWPORT, java_script_enabled=False)
+    page.route("**/*", lambda route: route.abort())
+    page.route(_HOST + "*", _serve_font)  # the later route wins
+    page.set_content(_page_html())
+    return page
 
 
 def render_cards(cards: Sequence[Card], scale: float) -> List[Image.Image]:
@@ -72,9 +88,7 @@ def render_cards(cards: Sequence[Card], scale: float) -> List[Image.Image]:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, args=["--disable-gpu"])
         try:
-            page = browser.new_page(device_scale_factor=scale, viewport=_VIEWPORT)
-            page.route(_HOST + "*", _serve_font)
-            page.set_content(_page_html())
+            page = _new_page(browser, scale)
             out = []
             for card in cards:
                 page.evaluate("html => { document.body.innerHTML = html; }", card.html)

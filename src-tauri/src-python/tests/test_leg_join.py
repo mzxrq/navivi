@@ -104,7 +104,8 @@ def test_unjoined_render_removes_the_old_view(tmp_path, monkeypatch):
         out_dir=tmp_path, _reusable_leg_files=lambda *a: _LegReuse([], [], [], {}),
         _leg_hud_card_png=lambda *a, **k: None, _mapbox_token=lambda: "", _write_piece_plan=lambda *a: None,
     )
-    plan = SimpleNamespace(kwargs={"mode": "walking"}, num=2, prefix="02_waypoint_02_", output_path=str(clip))
+    plan = SimpleNamespace(kwargs={"mode": "walking"}, num=2, prefix="02_waypoint_02_", output_path=str(clip),
+                           themed=None)
     RouteAnimator._run_leg(animator, SimpleNamespace(leg_totals=[(1.0, 1.0)]), 0, plan, {}, [(34.0, 135.0)], "d")
     assert not old.exists()
 

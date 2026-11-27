@@ -1,0 +1,20 @@
+{# A box at the card's artboard coordinates, its text centred on one line. `attrs`: extra attributes. #}
+{% macro box(left, top, width, height, style, attrs="") -%}
+<div{{ attrs|safe }} style="left:{{ left|g }}px;top:{{ top|g }}px;width:{{ width|g }}px;height:{{ height|g }}px;line-height:{{ height|g }}px;{{ style }}">{{ caller() }}</div>
+{%- endmacro %}
+
+{# A dark card with a gold frame that grows with its text: `badge` at the left, the called lines beside it (from
+   `left`, at most `widest` px before they wrap) and a `strip` px band of pattern that text never enters. #}
+{% macro grow(name, width, height, radius, strip, left, widest, top, bottom, badge) -%}
+<div class="card grow" style="min-width:{{ width }}px;min-height:{{ height }}px;border-radius:{{ radius }}px;background:{{ theme.panel }};color:#fff">
+<svg data-wave="1" width="{{ strip }}" height="100%" style="left:auto;right:0">{{ pattern(name, false, [[0, strip]], "100%") }}</svg>
+<div style="left:4px;top:4px;right:4px;bottom:4px;border:1px solid {{ theme.gold }};border-radius:{{ radius - 3 }}px"></div>
+{{ badge }}
+<div class="flow" style="margin:{{ top }}px {{ strip + 14 }}px {{ bottom }}px {{ left }}px;max-width:{{ widest }}px">{{ caller() }}</div>
+</div>
+{%- endmacro %}
+
+{# A number circle in its map pin's colour, inside an <svg>. #}
+{% macro disc(x, y, r, glyph, size) -%}
+<circle cx="{{ x|g }}" cy="{{ y|g }}" r="{{ r|g }}" fill="{{ pin(glyph) }}" stroke="#fff" stroke-width="3"/><text x="{{ x|g }}" y="{{ (y + size * 0.36)|f1 }}" text-anchor="middle" font-size="{{ size }}" font-weight="900" fill="#fff">{{ glyph }}</text>
+{%- endmacro %}

@@ -14,6 +14,7 @@ MOUNTAIN_CLIMB_M = 300.0
 _CLIMB_STEP_M = 3.0  # smaller rises are GPS jitter
 _MIN_WALK_SHARE = 0.05  # a shorter walk with no numbered stop (pier to station) gets no segment of its own
 _EVEN_SHARE = 0.5  # of the strip's width split evenly between segments, so a short one still fits its chip
+_PIER_SHARE = 0.02  # of the route: a stop this close to a stretch counts as touching it
 
 Stop = Tuple[float, str, str]  # (distance along the route, pin glyph, name)
 
@@ -35,24 +36,6 @@ def theme_ids() -> List[str]:
     return sorted(p.parent.name for p in THEMES_DIR.glob("*/theme.json"))
 
 
-OVERVIEW_HEIGHT = 568  # the overview artboard; positions below are in its px
-
-
-def overview_positions(width: float, modes: int, banners_right: float = 0) -> Dict:
-    """Top-left corner of each overview card in a frame `width` artboard px wide. The foot is one row: the app's
-    stop-by / closed banners from the left (they place themselves and reach `banners_right`), the progress strip
-    at the right as (left, top, scale), shrunk when the banners need its room. The mode cards stand under the
-    totals, as one bar (cards.mode_bar) two modes wide."""
-    room = width - 16 - (banners_right + 12 if banners_right else 0)
-    k = min(1.0, room / 447)
-    return {
-        "title": (16, 14),
-        "totals": (width - 16 - 372, 14),
-        "strip": (width - 16 - 447 * k, 554 - 76 * k, k),
-        "modes": (width - 16 - 186 * min(modes, 2), 96),
-    }
-
-
 def _hex(bgr: Sequence[int]) -> str:
     return "#%02X%02X%02X" % (bgr[2], bgr[1], bgr[0])
 
@@ -68,6 +51,7 @@ def load_theme(theme_id: str, dark: bool = False) -> Dict:
     """A theme's colors and artwork; `dark` lays its "dark" colors over them (the project's light/dark setting)."""
     folder = THEMES_DIR / theme_id
     data = json.loads((folder / "theme.json").read_text(encoding="utf-8"))
+    layout = data.get("layout") or {}
     if dark:
         night = data["dark"]
         data = {"colors": {**data["colors"], **night["colors"]}, "mode_colors": night["mode_colors"]}
@@ -77,7 +61,7 @@ def load_theme(theme_id: str, dark: bool = False) -> Dict:
             "closed": data["colors"]["closed"]}
     return {
         "id": f"{theme_id}-dark" if dark else theme_id, "dark": dark, **data["colors"],
-        "mode_colors": data["mode_colors"], "pins": pins,
+        "mode_colors": data["mode_colors"], "pins": pins, "layout": layout,
         "scene": (folder / ("scene_dark.svg" if dark else "scene.svg")).read_text(encoding="utf-8"),
         "pattern": (folder / "pattern.svg").read_text(encoding="utf-8"),
     }
@@ -179,7 +163,9 @@ def route_segments(cum: Sequence[float], modes: Sequence[str], stops: Sequence[S
     # A stop where two runs meet (a pier) belongs to the one on foot, not the boat.
     owned: List[List[Stop]] = [[] for _ in merged]
     for stop in inner:
-        near = [i for i, r in enumerate(merged) if r[1] - 1e-6 <= stop[0] <= r[2] + 1e-6]
+        # (A pier's own distance never falls exactly on the change of mode in real route data.)
+        near = [i for i, r in enumerate(merged)
+                if r[1] - total * _PIER_SHARE <= stop[0] <= r[2] + total * _PIER_SHARE]
         if not near:
             continue
         owned[next((i for i in near if merged[i][0] == "walking"), near[0])].append(stop)
@@ -187,8 +173,8 @@ def route_segments(cum: Sequence[float], modes: Sequence[str], stops: Sequence[S
     out = []
     for run, found in zip(merged, owned):
         glyphs = ""
-        if found:
-            first, last = found[0][1], found[-1][1]
+        if found:  # lowest to highest: a return stop wears an earlier number again
+            first, last = (pick((s[1] for s in found), key=int) for pick in (min, max))
             glyphs = first if first == last else f"{first}–{last}"
         out.append(Segment(run[0], run[1], run[2], glyphs, _place_name([s[2] for s in found])))
     return out
