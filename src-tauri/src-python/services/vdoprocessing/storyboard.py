@@ -61,3 +61,37 @@ def of(style: Optional[str]) -> Storyboard:
 
 def for_config(config: Dict[str, Any]) -> Storyboard:
     return of(config.get("overview_style"))
+
+
+@dataclass(frozen=True)
+class FinaleBoard:
+    """storyboards/finale.json: pin_shape "teardrop" / "dot", card_style "pill" / "popup", shrink_without_voice
+    (false: with no finale narration the pull-back cuts in without the photo shrinking onto its pin) and hud
+    "overview" (the overview recap's title, totals, travel modes and route strip, for a project with a hud.json)
+    or "summary" (the plain totals card). include_stopby_waypoint / include_closed_waypoint: whether every
+    stop-by / closed place gets its pin and card, on the route or off it."""
+    name: str
+    pin_shape: str
+    card_style: str
+    shrink_without_voice: bool
+    hud: str
+    include_stopby_waypoint: bool
+    include_closed_waypoint: bool
+
+
+_FINALE_CHOICES = {"pin_shape": ("teardrop", "dot"), "card_style": ("pill", "popup"),
+                   "shrink_without_voice": (True, False), "hud": ("overview", "summary"),
+                   "include_stopby_waypoint": (True, False), "include_closed_waypoint": (True, False)}
+
+
+def finale(settings: Optional[Dict[str, Any]] = None) -> FinaleBoard:
+    """The finale's storyboard; a project setting finale_<key> with a known value wins over the file."""
+    data: Dict[str, Any] = {"name": "finale", "pin_shape": "teardrop", "card_style": "pill",
+                            "shrink_without_voice": True, "hud": "overview",
+                            "include_stopby_waypoint": False, "include_closed_waypoint": False}
+    data.update(json.loads((_DIR / "finale.json").read_text(encoding="utf-8")))
+    for key, allowed in _FINALE_CHOICES.items():
+        value = (settings or {}).get(f"finale_{key}")
+        if type(value) is type(allowed[0]) and value in allowed:
+            data[key] = value
+    return FinaleBoard(**data)
