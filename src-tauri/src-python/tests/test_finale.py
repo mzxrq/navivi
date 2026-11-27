@@ -209,7 +209,7 @@ def test_the_finale_can_lay_the_stops_out_as_pop_up_cards():
 
 
 @pytest.mark.parametrize("shrink", [True, False])
-def test_the_finale_photo_shrinks_only_when_the_scene_says_so(shrink):
+def test_the_finale_opens_fullscreen_only_when_the_scene_shrinks(shrink):
     from services.vdoprocessing.videopipeline import finale_step
 
     maps = [Image.new("RGB", (320, 180)) for _ in range(10)]
@@ -219,16 +219,27 @@ def test_the_finale_photo_shrinks_only_when_the_scene_says_so(shrink):
         2, (320, 180), Image.new("RGB", (320, 180), (255, 0, 0)), None, None, maps, [(None, extent)] * 10,
         lat, lon, [], 1.0, 64, 36, shrink,
     )
-    after_photo = list(finale_step._pull_back_frames(scene))[int(tuning.FINALE_PHOTO_SECONDS * 2):]
-    assert len(after_photo) == 10
-    assert bool(after_photo[0].any()) == shrink  # without the shrink, the plain map cuts straight in
+    frames = list(finale_step._pull_back_frames(scene))
+    assert len(frames) == 10 + (int(tuning.FINALE_PHOTO_SECONDS * 2) if shrink else 0)
+    photo = (frames[0][:, :, 0] == 255) & (frames[0][:, :, 1] == 0)
+    assert photo.all() == shrink and photo.any()  # without the shrink, only the card by its pin
+    assert not frames[-1].any()  # the card is gone by the end of the pull-back
 
 
-@pytest.mark.parametrize("voice, setting, shrink", [(None, False, False), (None, True, True), ("wav", False, True)])
-def test_the_shrink_is_only_dropped_without_narration(voice, setting, shrink):
+@pytest.mark.parametrize("narration, setting, shrink", [("", False, False), ("", True, True), ("A shrine.", False, True)])
+def test_the_shrink_is_only_dropped_when_the_end_stop_has_no_narration(narration, setting, shrink):
     from services.vdoprocessing.videopipeline.finale_step import _shrinks
 
-    assert _shrinks({"finale_shrink_without_voice": setting}, voice) is shrink
+    assert _shrinks({"finale_shrink_without_voice": setting}, {"attractionNarration": narration}) is shrink
+
+
+def test_without_the_shrink_the_hold_still_fits_the_voice_and_the_clip_is_remade(tmp_path: Path):
+    from services.vdoprocessing.videopipeline.finale_step import _clip_key, _hold_seconds
+
+    voice = ("wav", 60.0)
+    assert _hold_seconds(voice, False) == pytest.approx(_hold_seconds(voice, True) + tuning.FINALE_PHOTO_SECONDS)
+    keys = [_clip_key(tmp_path, {}, (1920, 1080), None, [], tmp_path / "end.jpg", shrink) for shrink in (True, False)]
+    assert keys[0] != keys[1]
 
 
 def test_the_finales_pins_stay_on_top_of_the_leader_lines():
