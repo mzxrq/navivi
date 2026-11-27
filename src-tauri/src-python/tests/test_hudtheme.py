@@ -5,7 +5,7 @@ import re
 import pytest
 
 from services import video_text
-from services.hudtheme import cards, model
+from services.hudtheme import cards, layout, model
 from services.localization.japanese_words import phrases
 
 JA = video_text.labels_for("ja")
@@ -38,6 +38,15 @@ def test_a_ferry_loop_splits_into_walk_and_boat_and_groups_the_stops():
     assert [s.glyphs for s in segments] == ["1–3", "", "4–5", "", ""]
     assert [s.place for s in segments] == ["加太春日神社", "", "友ヶ島", "", ""]
     assert segments[0].start == 0.0 and segments[-1].end == cum[-1]
+
+
+def test_a_pier_just_past_the_change_of_mode_is_counted_on_foot():
+    cum, modes = _path(("walking", 3), ("ferry", 4), ("walking", 6))
+    stops = [(1.0, "1", "加太"), (3.1, "2", "加太港"), (6.9, "3", "桟橋"), (9.0, "4", "灯台"), (12.9, "3", "桟橋 (復帰)")]
+
+    segments = model.route_segments(cum, modes, stops)
+
+    assert [s.glyphs for s in segments] == ["1–2", "", "3–4"]  # the return stop does not end the range at 3
 
 
 def test_a_short_walk_with_no_stop_is_not_its_own_segment():
@@ -244,38 +253,17 @@ def test_the_compass_shows_the_heading_and_keeps_the_ids_the_leg_page_updates():
 
 
 @pytest.mark.parametrize("modes", [1, 2, 3, 4])
-def test_the_overview_cards_do_not_overlap(modes):
-    width, notices = 1010, 530  # a 16:9 frame; the banners' reach from the left, Japanese
-    at = model.overview_positions(width, modes, notices)
-    left, top, k = at["strip"]
+def test_the_default_layout_keeps_the_overview_cards_apart(modes):
+    size = (1010, layout.OVERVIEW_HEIGHT)  # a 16:9 frame in artboard px
+    sizes = {"title": (515, 96), "totals": (372, 76), "strip": (447, 76),
+             "modes": (186 * min(modes, 2), 40 if modes <= 2 else 72)}
 
-    boxes = [(*at["title"], 515, 96), (*at["totals"], 372, 76), (left, top, 447 * k, 76 * k),
-             (0, 462, notices, 106), (*at["modes"], 186 * min(modes, 2), 40 if modes <= 2 else 72)]
+    boxes = [(*layout.place(layout.DEFAULTS[name], s, size, 1.0), *s) for name, s in sizes.items()]
 
     for i, (x, y, w, h) in enumerate(boxes):
-        assert x >= 0 and y >= 0 and x + w <= width + 0.01 and y + h <= model.OVERVIEW_HEIGHT
+        assert x >= 0 and y >= 0 and x + w <= size[0] and y + h <= size[1]
         for other_x, other_y, other_w, other_h in boxes[i + 1:]:
             assert x + w <= other_x or other_x + other_w <= x or y + h <= other_y or other_y + other_h <= y
-
-
-def test_the_strip_keeps_its_size_without_banners():
-    assert model.overview_positions(1010, 1)["strip"] == (547, 478, 1.0)
-
-
-@pytest.mark.parametrize("language", ["ja", "en"])
-def test_the_strip_shrinks_to_stay_off_the_apps_banners(language, monkeypatch):
-    from services.mapfetcher.graphicengine import GraphicsEngine
-
-    monkeypatch.setattr(video_text, "current_labels", lambda: video_text.labels_for(language))
-    engine, unit = GraphicsEngine(), 1080 / model.OVERVIEW_HEIGHT
-    engine.equal_stopby_notices = True
-    first = engine.stopby_notice_box(1920, 1080)
-    closed = engine.stopby_notice_box(1920, 1080, "closed", first[2] - first[0] + 24)
-
-    left, top, k = model.overview_positions(1920 / unit, 2, closed[2] / unit)["strip"]
-
-    assert left * unit >= closed[2] and 0.6 < k <= 1.0
-    assert abs(left + 447 * k - (1920 / unit - 16)) < 0.01 and abs(top + 76 * k - 554) < 0.01
 
 
 @pytest.mark.parametrize("language", ["ja", "en"])

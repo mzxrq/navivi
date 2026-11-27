@@ -1,0 +1,18 @@
+/* Shared by every card. Before the picture is taken (see render.py), `.fit` text is shrunk to its box and a
+   `.wrap` name (strip) too long for one line takes two. A `.grow` card is as big as its text, which flows in
+   `.flow`, clear of the pattern strip on the right. */
+.card { position: relative; overflow: hidden; white-space: nowrap; box-sizing: border-box;
+        box-shadow: 0 5px 16px rgba(16,48,78,0.28); font-family: 'Zen Maru Gothic', 'LINE Seed JP', sans-serif; }
+.card > svg { position: absolute; left: 0; top: 0; }
+.card div { position: absolute; }
+.card .fit { overflow: hidden; text-overflow: ellipsis; }
+.card .wrap { overflow: hidden; white-space: nowrap; word-break: keep-all; text-wrap-style: balance; }
+.card.grow { display: flex; flex-direction: column; justify-content: center; width: max-content; }
+.card .flow { position: relative; }
+.card .flow div { position: static; white-space: normal; word-break: keep-all; overflow-wrap: break-word;
+                  text-wrap-style: balance; }
+.card .num { display: flex; align-items: baseline; font-weight: 900; }
+.card .u { font-size: 12px; margin: 0 1px 0 2px; }
+.card .ring { display: inline-block; box-sizing: border-box; min-width: 16px; height: 16px; padding: 0 2px;
+              border: 1.5px solid #fff; border-radius: 8px; font-size: 10px; line-height: 13px; color: #fff;
+              text-align: center; vertical-align: 1px; margin-right: 4px; white-space: nowrap; }

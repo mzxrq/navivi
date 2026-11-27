@@ -52,6 +52,7 @@ from .pin_icons import (
     _leg_pin_url,
 )
 from .stopby_pause import _FRAME_SHOT, _play_stopby_photo_pause, screen_props
+from .themed_leg import ThemedLegHud
 
 
 def _piece_lead(start_cues, piece: int) -> float:
@@ -355,6 +356,7 @@ def render_residential_leg_pydeck(
     end_view_path: Optional[str] = None,
     prior_trail: Optional[List[List[float]]] = None,
     hold_end_card: bool = False,
+    themed: Optional[ThemedLegHud] = None,
 ) -> List[str]:
     """Renders one leg as a straight-down, locked-camera video with a live
     turn-by-turn HUD (destination banner + time/distance card) -- the
@@ -671,7 +673,10 @@ def render_residential_leg_pydeck(
         # The HUD's own corners, in the same centre-relative px: the top pill row, the compass under it and the
         # summary card. A name placed there was hidden behind (or peeked out between) the HUD pills.
         hw, hh = output_size[0] / 2, output_size[1] / 2
-        for box in ((-hw, -hh, hw, -hh + 100), (hw - 140, -hh, hw, -hh + 270), (hw - 760, hh - 200, hw, hh)):
+        corners = ((-hw, -hh, hw, -hh + 100), (hw - 140, -hh, hw, -hh + 270), (hw - 760, hh - 200, hw, hh))
+        if themed:
+            corners = [(x0 - hw, y0 - hh, x1 - hw, y1 - hh) for x0, y0, x1, y1 in themed.room(output_size)]
+        for box in corners:
             label_space.add(box)
         # Slabs just outside the frame: a spot that leaves it counts as taken, so a pill beside an edge stop moves
         # to another side (it still wins if every spot is out, rather than vanishing).
@@ -784,6 +789,7 @@ def render_residential_leg_pydeck(
             opening_view=opening_view, end_view_path=end_view_path, wait_spots=wait_spots, prior_trail=prior_trail,
             hold_end_card=hold_end_card, progress=progress, chain_badges=chain_badges, stopby_chain=stopby_chain,
             piece_start_cues=piece_start_cues, dest_popup_narration_seconds=dest_popup_narration_seconds,
+            themed=themed,
         ))
 
     logger.info(f"Residential leg rendered ({mode}): {produced_paths}")
@@ -816,6 +822,7 @@ async def _record_leg(
     stopby_chain: Optional[List[List[Any]]] = None,
     piece_start_cues: Optional[List[Optional[float]]] = None,
     dest_popup_narration_seconds: Optional[float] = None,
+    themed: Optional[ThemedLegHud] = None,
 ):
     """`wait_spots`: [(walk seconds, card, hold seconds)] for {view wait} street views (see _wait_view_plan).
     `hold_end_card`: the arrival photo card (pip) stays up at the end instead of fading: the next leg slides on with it
@@ -1497,6 +1504,8 @@ async def _record_leg(
                     elevation marker along with it."""
                     path_km = total_leg_km if arrived else float(remaining_km.iloc[0])
                     await _set_elev(1.0 if arrived else 1.0 - rem_m / (path_km * 1000.0) if path_km > 0 else 0.0)
+                    if themed:
+                        await _show_themed(rem_m, arrived)
                     if hud_card_png is None:
                         return
                     key = (int(round(rem_m)), int(rem_min), arrived)
@@ -1540,6 +1549,52 @@ async def _record_leg(
                     )
 
                 await page.evaluate(f"() => {{ {_needle_js(0)} }}")
+
+                # Themed HUD: every picture the walk can show is drawn now, then swapped in as the numbers change.
+                themed_now: Dict[str, Any] = {"index": 0, "window": (0, len(banner_items) - 1), "closed": None}
+                if themed:
+                    def _nearest(lat, lon) -> int:
+                        return int(((smooth_df["lat"] - lat) ** 2 + (smooth_df["lon"] - lon) ** 2).to_numpy().argmin())
+
+                    whole_km = float(remaining_km.iloc[0]) if len(remaining_km) else 0.0
+                    shares = [1.0 - float(km) / whole_km if whole_km > 0 else 0.0 for km in remaining_km]
+                    passed_at: List[int] = []
+                    windows = [themed_now["window"]]
+                    if banner_stop_items and _stopby_frames_ok:
+                        for s in stopby_chain:
+                            passed_at.append(max(_nearest(s[2], s[3]), passed_at[-1] if passed_at else 0))
+                        ends = banner_stop_items + [len(banner_items) - 1]
+                        windows = [(banner_stop_items[k - 1] if k else 0, end) for k, end in enumerate(ends)]
+                        themed_now["window"] = windows[0]
+                    named = [lm for lm in (landmarks or []) if lm.get("label")]
+                    places = themed.places_of(
+                        banner_items, dest_label, chain_badges or (None, None),
+                        {str(lm["label"]) for lm in named if not lm.get("connect_to_route")})
+                    via_glyphs = [p.glyph for p in places if p.glyph.startswith("+")]
+                    await asyncio.to_thread(
+                        themed.prepare, output_size, places,
+                        [(shares[i], glyph) for i, glyph in zip(passed_at, via_glyphs)], shares, headings, windows,
+                        [str(lm["label"]) for lm in named if lm.get("inaccessible")],
+                        bool(tuning.RESIDENTIAL_SHOW_COMPASS))
+                    await themed.start(page)
+
+                async def _show_themed(rem_m: float, arrived: bool) -> None:
+                    """The themed cards for this moment; the elevation card rides above the progress rail."""
+                    whole_m = float(remaining_km.iloc[0]) * 1000.0 if len(remaining_km) else 0.0
+                    share = 1.0 if arrived else 1.0 - rem_m / whole_m if whole_m > 0 else 0.0
+                    if arrived:
+                        themed_now.update(index=len(headings) - 1, closed=None, window=windows[-1])
+                    heading = headings[max(0, min(themed_now["index"], len(headings) - 1))] if headings else 0.0
+                    await themed.show(page, share, heading, themed_now["window"], themed_now["closed"])
+                    top = themed.rail_top()
+                    if elev is not None and top is not None:
+                        await page.evaluate(
+                            """(bottom) => {
+                                const card = document.getElementById('hud-elev-card');
+                                if (card) card.style.bottom = bottom + 'px';
+                            }""",
+                            output_size[1] - top + 12 * themed.unit,
+                        )
 
                 c_trail = json.dumps(walker_color)
                 c_glow = json.dumps(walker_color + [90])
@@ -1990,6 +2045,7 @@ async def _record_leg(
                     showing-the-card beat (see `_play_stopby_photo_pause`)
                     can call this too, instead of freezing the walker."""
                     nonlocal crashed
+                    themed_now["index"] = index
                     row = smooth_df.iloc[index]
                     rem_km = float(remaining_km.iloc[index])
                     # Trail must end exactly where the walker dot actually is
@@ -2034,6 +2090,7 @@ async def _record_leg(
                             stretch_js = (
                                 f"if (window.__chainWindow) window.__chainWindow({first}, {last}, {json.dumps(closed_now)});"
                             )
+                            themed_now.update(window=(first, last), closed=closed_now[1:] if closed_now else None)
                     js = f"""
                     {stretch_js}
                     if (window.deckgl) {{
