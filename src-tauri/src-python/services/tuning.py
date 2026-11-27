@@ -1335,6 +1335,8 @@ FINALE_PHOTO_SECONDS = 1.0  # the photo fullscreen before it shrinks
 FINALE_ZOOM_SECONDS = 2.5  # the pull-back from the last stop to the whole route
 FINALE_ZOOM_BOOST = 3.5  # how much closer than the whole-route view the pull-back starts (zoom levels)
 FINALE_VOICE_TAIL_SECONDS = 0.8  # the whole route still shown after the finale narration ends
+# The largest pop-up card (storyboard card_style "popup"); bigger ones sat far from their pins.
+FINALE_POPUP_CARD_SCALE = 0.55
 FINALE_HOLD_SECONDS = 3.0  # the whole route with its summary card, before the outro cuts in
 # {count} is substituted with the number of waypoint cards shown.
 OUTRO_SUBTITLE_TEMPLATE = LABELS_JA["outro_subtitle"]

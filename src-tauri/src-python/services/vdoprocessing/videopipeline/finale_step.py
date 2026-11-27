@@ -4,12 +4,13 @@ there until the whole route is in view (real map tiles every frame: pydeck_overv
 backwards). Nothing walks.
 
 It lands on the overview's own recap picture, drawn the same way that screen is: the route in the project's
-colour, each stop a plain colour dot, and every stop's slim pill badge (its pin's glyph, its name down the
-capsule, its photo) laid out by the recap's own layout. Three things carry the data in as it arrives - the
+colour, each stop a pin, and every stop's card laid out by the overview's own layout (pin and card styles, and
+whether the photo shrinks, come from storyboards/finale.json). Three things carry the data in as it arrives - the
 route unspools backwards out of the close-up, each badge lands in turn as the line passes it, and the summary
 card's distance and time tick up to the real figures. Then the outro cuts in."""
 
 import csv
+from functools import partial
 from pathlib import Path
 from typing import Callable, List, NamedTuple, Optional, Tuple
 
@@ -19,8 +20,10 @@ from PIL import Image, ImageDraw, ImageOps
 
 from services import tuning
 from services.config.job_config import JobConfigManager
+from services.hudtheme import layout
 from services.projectfiles import gps_data_dir
 from services.vdoprocessing.route_inputs import is_stopby_label
+from services.vdoprocessing import storyboard
 
 from .helpers import logger, project_video_dir
 
@@ -78,10 +81,44 @@ def _stop_colors(badge: str, settings: dict) -> Tuple[int, int, int]:
     return tuple(int(c) for c in reversed(bgr))
 
 
-def _map_frame(engine, frame_bgr, extent, route, stops, line_bgr, line_px, drawn: float) -> Image.Image:
+def _layout(engine):
+    """The overview's pin drawing and card layouts, on this clip's graphics engine."""
+    from services.vdoprocessing.spatial_renderer.pins import _PinMixin
+    from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
+
+    class _RecapLayout(_PopupMixin, _PinMixin):
+        pass
+
+    layout = _RecapLayout()
+    layout.config = {}
+    layout.graphics = engine
+    return layout
+
+
+def _draw_stop_pins(engine, frame, extent, stops, pin_shape: str) -> None:
+    """Each stop's pin on a BGR frame: the numbered map pin, or a plain dot."""
+    from services.mapfetcher.mapgeometry import RouteGeometryProcessor as G
+
+    h, w = frame.shape[:2]
+    r = max(4, int(h // 150))
+    dots = _layout(engine) if pin_shape == "dot" else None
+    for stop in stops:
+        x, y = G.project_latlon_to_pixel(stop["lat"], stop["lon"], extent, w, h)
+        if -r <= x <= w + r and -r <= y <= h + r:
+            color = tuple(reversed(stop["color"]))
+            if dots:
+                dots._draw_recap_dot_color(frame, int(x), int(y), color)
+            else:
+                engine.draw_marker(frame, int(x), int(y), number=stop["badge"], color=color)
+
+
+def _map_frame(
+    engine, frame_bgr, extent, route, stops, line_bgr, line_px, drawn: float, pin_shape: str = "teardrop",
+) -> Image.Image:
     """One map frame of the pull-back, overlaid the way the overview's recap
     screen is: the route in the project's own colour under a white halo, and
-    each stop marked by its numbered pin (it stays on under the badges). `drawn` (0-1) is how much of the
+    each stop marked by its numbered pin, or a plain dot (`pin_shape` "dot"); it stays on under the cards.
+    `drawn` (0-1) is how much of the
     route is on yet: it unspools BACKWARDS, from the last stop the camera
     opens on toward the start, so the walk replays out of the close-up
     instead of creeping in from off-screen. Each stop's dot lands as the
@@ -98,28 +135,16 @@ def _map_frame(engine, frame_bgr, extent, route, stops, line_bgr, line_px, drawn
     pts = np.clip(pts, -3 * w, 4 * w).astype(np.int32)
     cv2.polylines(frame, [pts], False, (255, 255, 255), line_px + 4, cv2.LINE_AA)
     cv2.polylines(frame, [pts], False, line_bgr, line_px, cv2.LINE_AA)
-    r = max(4, int(h // 150))
-    for stop in stops:
-        if stop["at"] < first:
-            continue
-        x, y = G.project_latlon_to_pixel(stop["lat"], stop["lon"], extent, w, h)
-        if -r <= x <= w + r and -r <= y <= h + r:
-            engine.draw_marker(frame, int(x), int(y), number=stop["badge"], color=tuple(reversed(stop["color"])))
+    _draw_stop_pins(engine, frame, extent, [s for s in stops if s["at"] >= first], pin_shape)
     img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
     return img
 
 
-def _recap_badges(engine, stops, extent, size, reserved, route_px):
-    """Every stop laid out as the overview recap lays its pill badges out —
-    same slim capsules, same no-overlap lattice, no leader lines — by borrowing the recap's own layout (_layout_recap_cards)
-    with this clip's graphics engine. Returns them in the order the recap
-    would reveal them. [] for a stop set it can't place."""
-    from services.vdoprocessing.spatial_renderer.pins import _PinMixin
-    from services.vdoprocessing.spatial_renderer.popups import _PopupMixin
-
-    class _RecapLayout(_PopupMixin, _PinMixin):
-        pass
-
+def _recap_badges(engine, stops, extent, size, reserved, route_px, card_style: str = "pill"):
+    """Every stop's card, laid out by the overview's own layouts with this clip's graphics engine. "pill": the
+    recap's slim capsules, no-overlap lattice, no leader lines (_layout_recap_cards), in the order the recap
+    would reveal them. "popup": the overview's pop-up cards with straight leaders (_layout_ring_cards).
+    [] for a stop set it can't place."""
     from services.mapfetcher.mapgeometry import RouteGeometryProcessor as G
 
     from services.vdoprocessing.route_inputs import same_place
@@ -146,10 +171,21 @@ def _recap_badges(engine, stops, extent, size, reserved, route_px):
         })
     if not popups:
         return []
-    layout = _RecapLayout()
-    layout.config = {}
-    layout.graphics = engine
+    layout = _layout(engine)
     try:
+        if card_style == "popup":
+            from services.vdoprocessing.spatial_renderer.card_circles import densify
+
+            obstacles = layout._pin_obstacle_points(popups)
+            if route_px is not None:
+                obstacles = np.vstack([densify(route_px), obstacles])
+            for popup in popups:
+                popup["leader_straight"] = True
+            cards = layout._layout_ring_cards(popups, w, h, reserved_boxes=reserved, route_obstacles=obstacles,
+                                              max_scale=tuning.FINALE_POPUP_CARD_SCALE)
+            for card in cards:
+                card.pop("recap_line_color", None)  # each leader in its pin's color, as the overview's recap
+            return cards
         # No leader lines, as every other recap (the badge's number and its dot's colour are the tie): with
         # them the badges were all strung along the top, their lines crossing the whole map.
         return layout._layout_recap_cards(popups, w, h, reserved_boxes=reserved, route_obstacles=route_px,
@@ -159,9 +195,10 @@ def _recap_badges(engine, stops, extent, size, reserved, route_px):
         return []
 
 
-def _with_badges(img: Image.Image, engine, badges, alphas) -> Image.Image:
+def _with_badges(img: Image.Image, engine, badges, alphas, draw_pins: Optional[Callable] = None) -> Image.Image:
     """`img` with each badge drawn at its own alpha, lines first and then the
-    capsules — the recap's own order, so no line lands on top of a badge."""
+    capsules — the recap's own order, so no line lands on top of a badge.
+    `draw_pins(frame)` redraws the pins between the two, so no line runs over a pin."""
     frame = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR)
     shown = [(b, a) for b, a in zip(badges, alphas) if a > 0.01]
     for badge, alpha in shown:
@@ -170,6 +207,8 @@ def _with_badges(img: Image.Image, engine, badges, alphas) -> Image.Image:
         hud["draw_leader_line"] = not badge.get("suppress_leader_line")
         hud["leader_line_color"] = badge.get("recap_line_color") or badge.get("border_color")
         frame = engine.render_popup_box(frame, hud, alpha=alpha, line_only=True)
+    if draw_pins and any(not b.get("suppress_leader_line") for b, _ in shown):
+        draw_pins(frame)
     for badge, alpha in shown:
         hud = badge.copy()
         hud["hud_corner"] = None
@@ -232,6 +271,54 @@ def _summary_card(engine, config_path: Path):
         return None
 
 
+def _route_modes(legs: list, cum: np.ndarray) -> List[str]:
+    """Each path point's travel mode, by where the brief's legs fall along the route's length."""
+    km = np.cumsum([float(leg.get("km") or 0.0) for leg in legs])
+    at = np.searchsorted(km, cum / max(float(cum[-1]), 1e-6) * km[-1])
+    return [legs[min(int(i), len(legs) - 1)].get("mode") or "walking" for i in at]
+
+
+def _overview_hud(settings: dict, config_path: Path, project_dir: Path, engine, route_px, stops, extent, size):
+    """The overview recap's themed furniture (title, totals, travel modes, route strip) on this clip's view, or
+    None (storyboard hud "summary", no hud.json, or it can't be drawn): the plain summary card is used then."""
+    if storyboard.finale(settings).hud != "overview":
+        return None
+    try:
+        from services.localization.overview_script import course_summary
+        from services.localization.route_brief import load_brief
+        from services.mapfetcher.mapgeometry import RouteGeometryProcessor as G
+        from services.vdoprocessing.route_inputs import same_place
+        from services.vdoprocessing.spatial_renderer import course_themed
+        from services.vdoprocessing.spatial_renderer.card_circles import densify
+        from services.vdoprocessing.spatial_renderer.course import stop_distances
+
+        from .animator_config import _hud_config
+
+        hud = _hud_config(JobConfigManager(config_path), project_dir, settings).get("hud")
+        if not hud:
+            return None
+        brief = load_brief(str(config_path))
+        path = densify(route_px)
+        cum = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(path, axis=0).T))])
+        walked = [s for s in stops if not is_stopby_label(s["badge"]) and s["badge"] != "×"]
+        places = [G.project_latlon_to_pixel(s["lat"], s["lon"], extent, *size) for s in walked]
+        distances = stop_distances(path, cum, places)
+        distances[0] = 0.0
+        if walked[-1]["badge"] == "E":
+            distances[-1] = float(cum[-1])
+        named: list = []
+        for distance, stop in zip(distances, walked):
+            if stop["name"] and (not named or distance > named[-1][0]):
+                named.append((distance, stop["badge"], stop["name"]))
+        return course_themed.themed_panels(
+            engine, hud, size[0], size[1], course_summary(brief), named, cum, _route_modes(brief["legs"], cum),
+            same_place(walked[0], walked[-1]), False, False,
+        )
+    except Exception as exc:
+        logger.warning("Finale: no overview HUD (%s) - using the summary card.", exc, exc_info=True)
+        return None
+
+
 def _photo_path(photo, project_dir: Path) -> Path:
     """A stop's photo as a path: absolute as given, else under the project."""
     return Path(photo) if photo and Path(photo).is_absolute() else project_dir / str(photo or "")
@@ -248,6 +335,27 @@ def _last_stop_photo(last: dict, project_dir: Path):
         logger.info("Finale: the last stop has no photo or position - skipping.")
         return None
     return lat, lon, photo_path
+
+
+def _finale_badges(waypoints: list, settings: dict) -> list:
+    """(glyph, waypoint) of what the finale marks, in route order: the route's stops (S, 1, 2 … E), and every
+    stop-by ("+N") and closed place ("×") only as the storyboard asks."""
+    from services.vdoprocessing.outrocard import _route_badges
+    from services.vdoprocessing.route_inputs import stopby_labels
+
+    board = storyboard.finale(settings)
+    on_route = {id(wp): badge for badge, wp in _route_badges(waypoints)}
+    labels = stopby_labels(waypoints)
+    out = []
+    for pos, wp in enumerate(waypoints):
+        badge = on_route.get(id(wp)) or ("×" if wp.get("inaccessible") else labels.get(pos, "・"))
+        if badge == "×":
+            wanted = board.include_closed_waypoint
+        else:
+            wanted = board.include_stopby_waypoint or not is_stopby_label(badge)
+        if wanted:
+            out.append((badge, wp))
+    return out
 
 
 def _finale_stops(badges, route, project_dir: Path, settings: dict) -> list:
@@ -299,24 +407,35 @@ def _clip_key(project_dir: Path, settings: dict, size, voice, stops: list, photo
     return clip_cache.fingerprint(
         {
             "settings": settings, "size": size, "voice": voice and voice[1],
+            "hud": layout.fingerprint(project_dir),
             "stops": [
                 (s["badge"], s["lat"], s["lon"], s["name"], str(s["photo"] or "")) for s in stops
             ],
         },
         [
             gps_data_dir(project_dir) / "gpsdata.csv", photo_path, voice and voice[0],
-            __file__, tuning.__file__,
-            # the recap badge layout the finale borrows
+            __file__, tuning.__file__, storyboard._DIR / "finale.json",
+            # the card layouts the finale borrows
             Path(__file__).parents[1] / "spatial_renderer" / "popups.py",
+            Path(__file__).parents[1] / "spatial_renderer" / "card_circles.py",
+            Path(__file__).parents[1] / "spatial_renderer" / "course_themed.py",
         ],
     )
 
 
-def _pull_back_maps(settings: dict, route, stops: list, size, fps: int, lat, lon) -> tuple:
+def _pull_back_maps(
+    settings: dict, route, stops: list, size, fps: int, lat, lon, room_for_hud: bool = False,
+) -> tuple:
     """(frames, maps): the pydeck pull-back, close-up first, and each frame overlaid with the route and stops."""
     lats, lons = [p[0] for p in route], [p[1] for p in route]
     pad_lat, pad_lon = (max(lats) - min(lats)) * 0.12 + 1e-4, (max(lons) - min(lons)) * 0.12 + 1e-4
     bbox = {"min_lat": min(lats) - pad_lat, "max_lat": max(lats) + pad_lat, "min_lon": min(lons) - pad_lon, "max_lon": max(lons) + pad_lon}
+    if room_for_hud:  # the route between the title and totals above and the strip below, as the overview frames it
+        from .overview_framing import _reserve_overview_bands
+
+        bbox = _reserve_overview_bands(
+            bbox, size, size[1] * tuning.OVERVIEW_TOP_BAND_FRACTION, size[1] * tuning.OVERVIEW_BOTTOM_BAND_FRACTION,
+        )
     from services.mapbox_token import resolve_mapbox_token
     from services.mapfetcher.maplanguage import resolve_map_style
     from services.mapfetcher.pydeck_overview import capture_pydeck_zoom_sequence
@@ -334,11 +453,12 @@ def _pull_back_maps(settings: dict, route, stops: list, size, fps: int, lat, lon
     line_bgr = _project_color(settings, "line_color", tuning.MODE_LINE_COLORS["walking"])
     line_px = int(settings.get("line_thickness") or 6)
     engine = _graphics(settings)
+    pin_shape = storyboard.finale(settings).pin_shape
     # The route traces itself over the first part of the pull-back, then stays whole for the rest of it.
     maps = [
         _map_frame(
             engine, f, ext, route, stops, line_bgr, line_px,
-            drawn=_ease((i + 1) / max(1, len(frames) * _ROUTE_DRAW_FRACTION)),
+            drawn=_ease((i + 1) / max(1, len(frames) * _ROUTE_DRAW_FRACTION)), pin_shape=pin_shape,
         )
         for i, (f, ext) in enumerate(frames)
     ]
@@ -374,32 +494,46 @@ class _Scene(NamedTuple):
     hold_seconds: float
     card_w: int
     card_h: int
+    shrink: bool = True  # the photo shrinks onto its pin as the pull-back starts
+    draw_pins: Optional[Callable] = None  # redraws the pins over the cards' leader lines
+    hud: Optional[object] = None  # the overview's themed furniture, in place of the summary card
+
+
+def _shrinks(settings: dict, voice) -> bool:
+    """The shrink always plays under narration; without it, as the storyboard's shrink_without_voice says."""
+    return bool(voice) or storyboard.finale(settings).shrink_without_voice
 
 
 def _build_scene(
     settings: dict, config_path: Path, photo_path: Path, route, stops: list, frames: list, maps: list,
     size, fps: int, lat, lon, hold_seconds: float,
 ) -> _Scene:
-    """Loads the photo and the graphics, and lays every stop's pill badge out on the view the pull-back ends on
-    exactly as the recap lays them out."""
+    """Loads the photo and the graphics, and lays every stop's card out on the view the pull-back ends on
+    exactly as the overview lays them out."""
     from services.mapfetcher.mapgeometry import RouteGeometryProcessor as G
 
     out_w, out_h = size
     full = ImageOps.fit(Image.open(photo_path).convert("RGB"), size, Image.LANCZOS)
     engine = _graphics(settings)
-    card_render = _summary_card(engine, config_path)
     card_w = int(out_w * 0.2)
     card_h = int(card_w * out_h / out_w)
     final_extent = frames[-1][1]
-    summary_box = _summary_box(card_render, out_w, out_h)
     route_px = np.array(
         [G.project_latlon_to_pixel(la, lo, final_extent, out_w, out_h) for la, lo in route],
         dtype=float,
     )
-    recap_badges = _recap_badges(engine, stops, final_extent, size, summary_box, route_px)
+    project_dir = Path(JobConfigManager(config_path).get("directory_path") or config_path.parent)
+    hud = _overview_hud(settings, config_path, project_dir, engine, route_px, stops, final_extent, size)
+    card_render = None if hud else _summary_card(engine, config_path)
+    reserved = hud.reserved if hud else _summary_box(card_render, out_w, out_h)
+    recap_badges = _recap_badges(engine, stops, final_extent, size, reserved, route_px,
+                                 card_style=storyboard.finale(settings).card_style)
+    draw_pins = partial(_draw_stop_pins, engine, extent=final_extent, stops=stops,
+                        pin_shape=storyboard.finale(settings).pin_shape)
     # Revealed in the order the route itself unspools past them: the last stop first, back to the start.
     recap_badges.sort(key=lambda b: -int(b.get("index", 0)))
-    return _Scene(fps, size, full, engine, card_render, maps, frames, lat, lon, recap_badges, hold_seconds, card_w, card_h)
+    return _Scene(fps, size, full, engine, card_render, maps, frames, lat, lon, recap_badges, hold_seconds, card_w,
+                  card_h, draw_pins=draw_pins, hud=hud)
 
 
 def _card_box(scene: _Scene, i: int) -> Tuple[float, float, float, float]:
@@ -429,10 +563,14 @@ def _with_card(scene: _Scene, base: Image.Image, box, scale: float, alpha: float
 
 
 def _pull_back_frames(scene: _Scene):
-    """Opens on the fullscreen photo, which the pull-back then shrinks back onto its pin and fades off it."""
+    """Opens on the fullscreen photo, which the pull-back then shrinks back onto its pin and fades off it
+    (without `scene.shrink`, the pull-back cuts straight in)."""
     out_w, out_h = scene.size
     for _ in range(int(tuning.FINALE_PHOTO_SECONDS * scene.fps)):
         yield np.asarray(scene.full)
+    if not scene.shrink:
+        yield from (np.asarray(base) for base in scene.maps)
+        return
     shrink = max(1, int(len(scene.maps) * 0.35))
     fade = max(1, int(len(scene.maps) * 0.3))
     for i, base in enumerate(scene.maps):
@@ -461,7 +599,9 @@ def _hold_frames(scene: _Scene):
         if done and settled is not None:
             yield settled
             continue
-        img = _with_badges(scene.maps[-1], scene.engine, badges, alphas) if badges else scene.maps[-1]
+        img = scene.maps[-1]
+        if badges:
+            img = _with_badges(img, scene.engine, badges, alphas, scene.draw_pins)
         if card_render is None:
             frame_rgb = np.asarray(img)
         else:
@@ -470,6 +610,11 @@ def _hold_frames(scene: _Scene):
                 cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2BGR),
                 counted, alpha=min(1.0, (i + 1) / card_fade),
             )
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        if scene.hud:
+            frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+            for card in scene.hud.cards.values():
+                card.paste(frame, alpha=min(1.0, (i + 1) / card_fade))
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         if done and i + 1 >= count_frames:
             settled = frame_rgb  # nothing moves after this; reuse it
@@ -494,7 +639,8 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
         from . import clip_cache
         from .outro_step import _route_frame_size
 
-        badges = _route_badges(job_config.get("waypoints", []) or [])
+        waypoints = job_config.get("waypoints", []) or []
+        badges = _route_badges(waypoints)
         route = route_latlon(project_dir)
         if len(badges) < 2 or len(route) < 2:
             logger.info("Finale: no route track or stops yet - skipping.")
@@ -503,7 +649,7 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
         if last is None:
             return None
         lat, lon, photo_path = last
-        stops = _finale_stops(badges, route, project_dir, settings)
+        stops = _finale_stops(_finale_badges(waypoints, settings), route, project_dir, settings)
 
         video_dir = project_video_dir(project_dir)
         size = _route_frame_size(Path(video_dir)) or (1920, 1080)
@@ -516,10 +662,12 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
         if not force and clip_cache.reusable(project_dir, out, key):
             return str(out)
 
-        frames, maps = _pull_back_maps(settings, route, stops, size, fps, lat, lon)
+        room_for_hud = storyboard.finale(settings).hud == "overview" and layout.read(project_dir) is not None
+        frames, maps = _pull_back_maps(settings, route, stops, size, fps, lat, lon, room_for_hud)
         scene = _build_scene(
             settings, config_path, photo_path, route, stops, frames, maps, size, fps, lat, lon, hold_seconds
         )
+        scene = scene._replace(shrink=_shrinks(settings, voice))
         part = out.with_name(out.stem + ".part.mp4")
         if not _pipe_frames(_finale_frames(scene), part, fps, size):
             return None

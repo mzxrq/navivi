@@ -1,0 +1,9 @@
+{
+  "name": "finale",
+  "pin_shape": "teardrop",
+  "hud": "overview",
+  "include_stopby_waypoint": false,
+  "include_closed_waypoint": false,
+  "card_style": "popup",
+  "shrink_without_voice": false
+}
