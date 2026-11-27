@@ -27,6 +27,10 @@ export function modeLineDefault(mode: LookMode, lineColor?: Rgb): Rgb {
   return lineColor ?? (mode === "walking" ? [26, 115, 232] : mode === "ferry" ? [255, 140, 0] : [60, 180, 60]);
 }
 
+/** Whether the outro is the sliding scroll, as the settings screen shows it: the outro description box is for it. */
+export const usesScrollOutro = (settings: { enable_outro?: boolean; outro_style?: string }) =>
+  settings.enable_outro !== false && (settings.outro_style ?? videoLookDefaults.outro_style) === "scroll";
+
 const MODES: LookMode[] = ["walking", "driving", "car", "ferry", "airplane"];
 
 /** A database merge patch for the look keys: the file's value, or null so a reset removes the key there too.

@@ -12,7 +12,7 @@ export type VersionLanguage = "en" | "ja";
 export const LANGUAGE_NAMES: Record<VersionLanguage, string> = { en: "English", ja: "Japanese" };
 export const ENGLISH_KOKORO_VOICE = "af_heart";
 
-const WAYPOINT_TEXT_FIELDS = ["arrivingNarration", "attractionNarration", "narration", "script", "voiceover"] as const;
+const WAYPOINT_TEXT_FIELDS = ["arrivingNarration", "attractionNarration", "narration", "script", "voiceover", "outroDescription"] as const;
 const BATCH_CHARS = 2500;
 
 type Config = Record<string, any>;

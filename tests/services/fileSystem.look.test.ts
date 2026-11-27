@@ -59,6 +59,12 @@ describe("saving the per-stop look options", () => {
     expect(config.waypoints[0]).not.toHaveProperty("overviewHighlight");
   });
 
+  it("writes the outro description trimmed, and leaves it out when empty", async () => {
+    const config = await saveStops([{ outroDescription: "  A quiet port.\nFerries leave here. " }, { outroDescription: "   " }]);
+    expect(config.waypoints[0].outroDescription).toBe("A quiet port.\nFerries leave here.");
+    expect(config.waypoints[1]).not.toHaveProperty("outroDescription");
+  });
+
   it("keeps the project's look settings in the file", async () => {
     const config = await saveStops([{}], { enable_outro: false, mode_line_colors: { ferry: [1, 2, 3] }, start_pin_color: [9, 9, 9] });
     expect(config.settings).toMatchObject({ enable_outro: false, mode_line_colors: { ferry: [1, 2, 3] }, start_pin_color: [9, 9, 9] });
