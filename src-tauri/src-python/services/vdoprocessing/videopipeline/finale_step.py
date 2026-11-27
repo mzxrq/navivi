@@ -386,13 +386,13 @@ def _finale_stops(badges, route, project_dir: Path, settings: dict) -> list:
     return stops
 
 
-# The clip opens on the fullscreen photo, so the voice starts with it.
+# The voice starts with the clip's first frame.
 _VOICE_START_SECONDS = 0.0
 
 
-def _hold_seconds(voice) -> float:
+def _hold_seconds(voice, shrink: bool = True) -> float:
     """The whole-route hold, stretched so the voice ends inside the clip."""
-    before_hold = tuning.FINALE_PHOTO_SECONDS + tuning.FINALE_ZOOM_SECONDS
+    before_hold = tuning.FINALE_ZOOM_SECONDS + (tuning.FINALE_PHOTO_SECONDS if shrink else 0.0)
     hold_seconds = tuning.FINALE_HOLD_SECONDS
     if voice:
         hold_seconds = max(
@@ -401,12 +401,12 @@ def _hold_seconds(voice) -> float:
     return hold_seconds
 
 
-def _clip_key(project_dir: Path, settings: dict, size, voice, stops: list, photo_path: Path) -> str:
+def _clip_key(project_dir: Path, settings: dict, size, voice, stops: list, photo_path: Path, shrink: bool = True) -> str:
     from . import clip_cache
 
     return clip_cache.fingerprint(
         {
-            "settings": settings, "size": size, "voice": voice and voice[1],
+            "settings": settings, "size": size, "voice": voice and voice[1], "shrink": shrink,
             "hud": layout.fingerprint(project_dir),
             "stops": [
                 (s["badge"], s["lat"], s["lon"], s["name"], str(s["photo"] or "")) for s in stops
@@ -494,14 +494,17 @@ class _Scene(NamedTuple):
     hold_seconds: float
     card_w: int
     card_h: int
-    shrink: bool = True  # the photo shrinks onto its pin as the pull-back starts
+    shrink: bool = True  # opens fullscreen and shrinks onto the pin; else the card starts on the pin
     draw_pins: Optional[Callable] = None  # redraws the pins over the cards' leader lines
     hud: Optional[object] = None  # the overview's themed furniture, in place of the summary card
 
 
-def _shrinks(settings: dict, voice) -> bool:
-    """The shrink always plays under narration; without it, as the storyboard's shrink_without_voice says."""
-    return bool(voice) or storyboard.finale(settings).shrink_without_voice
+def _shrinks(settings: dict, end_stop: dict) -> bool:
+    """The fullscreen photo follows the end stop's attraction clip. A stop without narration only had its pop-up
+    card, so the finale carries on from that, unless the storyboard's shrink_without_voice says to shrink anyway."""
+    from .audio_step import no_narration_stop
+
+    return storyboard.finale(settings).shrink_without_voice or not no_narration_stop(end_stop)
 
 
 def _build_scene(
@@ -564,18 +567,15 @@ def _with_card(scene: _Scene, base: Image.Image, box, scale: float, alpha: float
 
 def _pull_back_frames(scene: _Scene):
     """Opens on the fullscreen photo, which the pull-back then shrinks back onto its pin and fades off it
-    (without `scene.shrink`, the pull-back cuts straight in)."""
+    (without `scene.shrink`, it starts on the map with the card already on its pin)."""
     out_w, out_h = scene.size
-    for _ in range(int(tuning.FINALE_PHOTO_SECONDS * scene.fps)):
+    for _ in range(int(tuning.FINALE_PHOTO_SECONDS * scene.fps) if scene.shrink else 0):
         yield np.asarray(scene.full)
-    if not scene.shrink:
-        yield from (np.asarray(base) for base in scene.maps)
-        return
     shrink = max(1, int(len(scene.maps) * 0.35))
     fade = max(1, int(len(scene.maps) * 0.3))
     for i, base in enumerate(scene.maps):
         left, top, px, py = _card_box(scene, i)
-        t = _ease(min(1.0, i / shrink))
+        t = _ease(min(1.0, i / shrink)) if scene.shrink else 1.0
         box = tuple(
             a + (b - a) * t
             for a, b in zip((0.0, 0.0, float(out_w), float(out_h)), (left, top, float(scene.card_w), float(scene.card_h)))
@@ -655,10 +655,11 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
         size = _route_frame_size(Path(video_dir)) or (1920, 1080)
         fps = int(settings.get("fps") or tuning.INTRO_FPS)
         voice = finale_voice({"settings": settings}, project_dir)
-        hold_seconds = _hold_seconds(voice)
+        shrink = _shrinks(settings, badges[-1][1])
+        hold_seconds = _hold_seconds(voice, shrink)
 
         out = Path(video_dir) / tuning.FINALE_OUTPUT_FILENAME
-        key = _clip_key(project_dir, settings, size, voice, stops, photo_path)
+        key = _clip_key(project_dir, settings, size, voice, stops, photo_path, shrink)
         if not force and clip_cache.reusable(project_dir, out, key):
             return str(out)
 
@@ -667,7 +668,7 @@ def render_finale_clip(project_config_path: str, force: bool = False) -> Optiona
         scene = _build_scene(
             settings, config_path, photo_path, route, stops, frames, maps, size, fps, lat, lon, hold_seconds
         )
-        scene = scene._replace(shrink=_shrinks(settings, voice))
+        scene = scene._replace(shrink=shrink)
         part = out.with_name(out.stem + ".part.mp4")
         if not _pipe_frames(_finale_frames(scene), part, fps, size):
             return None
