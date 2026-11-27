@@ -28,6 +28,7 @@ from services.projectfiles import meta_dir, write_json_atomic
 from services.vdoprocessing.spatial_renderer import SpatialRenderer
 from services.vdoprocessing.route_inputs import photo_inputs_hash
 from services.vdoprocessing.storyboard import for_config as storyboard_for
+from services.vdoprocessing.storyboard import leg as leg_board
 from services.vdoprocessing.video_frames import clip_end_frames
 
 # Logging configuration
@@ -221,7 +222,10 @@ def _leg_fingerprint_parts(
         )
     if leg_kwargs.get("opening_view") or leg_kwargs.get("end_view_path"):
         # Joined legs share a frame: re-rendered when either side of the join changes, or the join comes or goes.
-        parts["join"] = h([leg_kwargs.get("opening_view"), bool(leg_kwargs.get("end_view_path"))])
+        prior = [leg_kwargs[k] for k in ("prior_pin", "prior_label") if leg_kwargs.get(k)]
+        if leg_kwargs.get("prior_line") is False:
+            prior.append("no-line")
+        parts["join"] = h([leg_kwargs.get("opening_view"), bool(leg_kwargs.get("end_view_path")), *prior])
     closed = [lm.get("label") for lm in leg_kwargs.get("landmarks") or [] if lm.get("inaccessible")]
     if closed:
         parts["closed"] = h([closed, 3])  # a place turned Closed re-renders the legs that pass it (v3: fullscreen photo)
@@ -884,6 +888,14 @@ class RouteAnimator:
         if joined and "opening_view" in leg_kwargs:
             # The walk goes on: the leg before stays drawn as walked while the camera moves into this leg's framing.
             leg_kwargs["prior_trail"] = [[float(a), float(b)] for a, b in zip(prev["lats"], prev["lons"])]
+            board = leg_board()
+            if not board.include_previous_route:
+                leg_kwargs["prior_line"] = False  # the camera still slides; only the line is not drawn
+            if board.include_previous_pin and prev.get("start_pin"):
+                leg_kwargs["prior_pin"] = prev["start_pin"]
+            prev_chain = _split_stopby_chain(prev)[0]
+            if board.include_previous_name and prev_chain:
+                leg_kwargs["prior_label"] = prev_chain[0]
 
     def _plan_leg(
         self, ctx: "_ResContext", i: int, res_data: Dict[str, Any], res_sequence: List[Dict],

@@ -59,6 +59,32 @@ def test_narrated_stop_joins_both_sides(tmp_path):
     assert kwargs["prior_trail"] == [[34.000, 135.0], [34.001, 135.0]]
     assert kwargs["end_view_path"].endswith("02_waypoint_02_endview.json")
     assert "opening_photo" not in kwargs and "hold_end_card" not in kwargs
+    assert "prior_pin" not in kwargs  # the leg before has no pin of its own to keep
+
+
+def test_the_pin_of_the_leg_before_comes_along_with_its_line(tmp_path):
+    pin = {"glyph": "5", "color": [200, 100, 0]}
+    kwargs = _joins(tmp_path, 1, [{**A, "start_pin": pin, "labels": ["Fort", "Deck"]}, B],
+                    prev_view=_view_file(tmp_path))
+    assert kwargs["prior_pin"] == pin and kwargs["prior_label"] == "Fort"
+    for added in ({"prior_pin": pin}, {"prior_label": "Fort"}):
+        old, new = (_leg_fingerprint_parts([], "d", kw, route_inputs="r")
+                    for kw in ({"opening_view": VIEW}, {"opening_view": VIEW, **added}))
+        assert leg_changed_parts(new, old) == ["join"]
+
+
+def test_the_leg_storyboard_turns_off_what_comes_along(tmp_path, monkeypatch):
+    from services.vdoprocessing import route2vdo, storyboard
+
+    assert storyboard.leg() == storyboard.LegBoard("leg", True, True, True)  # the shipped file
+    monkeypatch.setattr(route2vdo, "leg_board", lambda: storyboard.LegBoard("leg", False, False, False))
+    prev = {**A, "start_pin": {"glyph": "5", "color": [0, 0, 0]}, "labels": ["Fort", "Deck"]}
+    kwargs = _joins(tmp_path, 1, [prev, B], prev_view=_view_file(tmp_path))
+    assert kwargs["prior_line"] is False and "prior_trail" in kwargs  # still slides
+    assert "prior_pin" not in kwargs and "prior_label" not in kwargs
+    old, new = (_leg_fingerprint_parts([], "d", kw, route_inputs="r")
+                for kw in ({"opening_view": VIEW}, {"opening_view": VIEW, "prior_line": False}))
+    assert leg_changed_parts(new, old) == ["join"]
 
 
 def test_first_and_last_leg(tmp_path):
