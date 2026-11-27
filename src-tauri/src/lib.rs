@@ -898,7 +898,7 @@ fn unzip_into(source_file: &str, dest_dir: &str) -> Result<(), String> {
             None => continue,
         };
 
-        if (*file.name()).ends_with('/') {
+        if file.is_dir() {
             fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
         } else {
             if let Some(p) = outpath.parent() {
@@ -916,6 +916,25 @@ fn unzip_into(source_file: &str, dest_dir: &str) -> Result<(), String> {
 #[cfg(test)]
 mod asset_tests {
     use super::*;
+
+    #[test]
+    fn unzip_makes_folders_and_keeps_japanese_names() {
+        let root = std::env::temp_dir().join(format!("navivi-unzip-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let source = root.join("p.nvv");
+        let mut zip = zip::ZipWriter::new(fs::File::create(&source).unwrap());
+        let options = zip::write::SimpleFileOptions::default();
+        zip.add_directory("assets/empty", options).unwrap();
+        zip.start_file("assets/image/加太.txt", options).unwrap();
+        std::io::Write::write_all(&mut zip, b"ok").unwrap();
+        zip.finish().unwrap();
+
+        let dest = root.join("out");
+        unzip_into(source.to_str().unwrap(), dest.to_str().unwrap()).unwrap();
+        assert!(dest.join("assets/empty").is_dir());
+        assert_eq!(fs::read_to_string(dest.join("assets/image/加太.txt")).unwrap(), "ok");
+        fs::remove_dir_all(&root).unwrap();
+    }
 
     #[test]
     fn a_failed_run_reports_main_pys_json_not_an_empty_stderr() {
