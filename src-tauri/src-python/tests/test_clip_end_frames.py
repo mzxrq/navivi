@@ -1,5 +1,6 @@
 """The attraction clip's end frames, which the legs on either side show as their own pictures."""
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -37,6 +38,16 @@ def test_names_follow_the_picture(tmp_path):
     assert clip_end_frames(clip, str(tmp_path / "frames")) == before
     _clip(tmp_path / "c.mp4", "smptebars")  # the clip is remade
     assert clip_end_frames(clip, str(tmp_path / "frames")) != before
+
+
+def test_an_unchanged_picture_keeps_its_file_time(tmp_path):
+    clip = _clip(tmp_path / "c.mp4")
+    frames = clip_end_frames(clip, str(tmp_path / "frames"))
+    for frame in frames:
+        os.utime(frame, (1_000_000, 1_000_000))
+    clip_end_frames(clip, str(tmp_path / "frames"))
+    # The legs hash each photo's mtime: a rewrite re-rendered every one of them on every run.
+    assert [os.stat(f).st_mtime for f in frames] == [1_000_000, 1_000_000]
 
 
 def test_a_broken_clip_gives_nothing(tmp_path):

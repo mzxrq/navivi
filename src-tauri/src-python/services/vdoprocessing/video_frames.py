@@ -66,7 +66,8 @@ def clip_end_frames(clip_path: str, out_dir: str) -> Optional[Tuple[str, str]]:
                 return None
             # shortcut: frames of earlier versions of a clip stay on disk; clear the folder if it ever grows large.
             target = out / f"{Path(clip_path).stem}_{end}_{hashlib.sha256(data).hexdigest()[:10]}.png"
-            os.replace(temp, target)
+            if not target.exists():  # rewriting it would change its mtime, which the legs hash
+                os.replace(temp, target)
             frames.append(str(target))
         finally:
             Path(temp).unlink(missing_ok=True)
