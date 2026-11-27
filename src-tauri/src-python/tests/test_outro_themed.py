@@ -69,10 +69,10 @@ def test_without_a_brief_a_screen_has_no_figures():
 
 def test_each_screen_holds_and_then_scrolls():
     times = ot.frame_times(3, 30)
-    assert len(times) == 75 + 2 * (18 + 45)
+    assert len(times) == 75 + 2 * (24 + 45)
     assert times[:75] == [0.0] * 75
     assert times == sorted(times)
-    assert len(set(times)) == 1 + 2 * 18  # holds repeat one picture
+    assert len(set(times)) == 1 + 2 * 24  # holds repeat one picture
     assert len(ot.frame_times(1, 30)) == 75
     assert ot.scroll_keyframes(1) == [(0.0, 0), (100.0, 0)]
     assert [i for _, i in ot.scroll_keyframes(3)] == [0, 0, 1, 1, 2, 2]
@@ -160,7 +160,7 @@ def test_a_long_description_grows_its_box_and_keeps_its_size(tmp_path, text, lin
         page = ot.open_page(browser, html, (1280, 720))
         found = page.locator(".desc").first.evaluate("""e => ({
             size: getComputedStyle(e).fontSize, height: e.clientHeight, all: e.scrollHeight, width: e.clientWidth,
-            card: e.parentElement.getBoundingClientRect().height, bottom: e.parentElement.getBoundingClientRect().bottom })""")
+            card: e.closest('.about').getBoundingClientRect().height, bottom: e.closest('.about').getBoundingClientRect().bottom })""")
         name = page.locator(".name").first.evaluate("e => e.getBoundingClientRect().width")
         browser.close()
     assert found["size"] == "15px"
@@ -278,71 +278,93 @@ def test_the_themed_clip_has_every_screen_then_the_logos(tmp_path, monkeypatch):
     assert (piped[-1] != piped[0]).any()
 
 
+def test_each_box_rolls_one_after_another():
+    seconds = ot.animation_seconds(3)
+    assert seconds == pytest.approx(7.1)
+    for slot in range(6):
+        keys = ot.scroll_keyframes(3, slot * 0.07, 0.42)
+        assert [i for _, i in keys] == [0, 0, 1, 1, 2, 2]
+        assert keys[1][0] * seconds / 100 == pytest.approx(2.5 + slot * 0.07, abs=1e-4)
+        assert keys[2][0] * seconds / 100 == pytest.approx(2.92 + slot * 0.07, abs=1e-4)
+
+
 def test_a_tuned_hold_stays_still_however_many_screens(monkeypatch):
     monkeypatch.setattr(ot.tuning, "OUTRO_THEMED_HOLD_SECONDS", 1.55)  # not a whole number of frames
-    times, keys = ot.frame_times(30, 30), ot.scroll_keyframes(30)
-    arrivals = {index: percent for percent, index in reversed(keys)}  # each screen's first keyframe
-    assert times[-1] / ot.animation_seconds(30) * 100 == pytest.approx(arrivals[29], abs=0.001)
+    times = ot.frame_times(30, 30)
+    held = times[-1] / ot.animation_seconds(30) * 100
+    for slot in range(6):
+        keys = ot.scroll_keyframes(30, slot * 0.07, 0.42)
+        arrivals = {index: percent for percent, index in reversed(keys)}  # each place's first keyframe
+        assert arrivals[29] <= held
+
+
+BOXES = ("photo", "now", "stats", "about", "upcoming", "next")
 
 
 def _at(page, t):
-    """What the page shows at animation time t: each screen's visibility, the arrow, and the boxes that scroll."""
+    """Each box (and the route line and arrow) at animation time t: where it is, how visible, how far rolled."""
     page.evaluate(ot._SEEK_JS, t)
-    return page.evaluate("""() => {
-        const box = e => { const r = e.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; };
-        const arrow = document.querySelector('.arrow');
-        return {
-            shown: [...document.querySelectorAll('.screen')].map(e => getComputedStyle(e).visibility === 'visible'),
-            arrow: arrow && { ...box(arrow), opacity: +getComputedStyle(arrow).opacity },
-            photos: [...document.querySelectorAll('.photo')].map(box),
-            texts: [...document.querySelectorAll('.about')].map(box),
-            nexts: [...document.querySelectorAll('.next')].map(box),
-        };
-    }""")
+    return page.evaluate("""names => Object.fromEntries(names.map(name => {
+        const e = document.querySelector('.' + name);
+        if (!e) return [name, null];
+        const r = e.getBoundingClientRect(), strip = e.querySelector('.strip');
+        return [name, { top: r.top, height: r.height, opacity: +getComputedStyle(e).opacity,
+                        roll: strip ? new DOMMatrix(getComputedStyle(strip).transform).m42 : 0 }];
+    }))""", [*BOXES, "route", "arrow"])
 
 
-def test_the_arrow_stays_put_and_the_next_screen_follows_closely(tmp_path):
+def _shown(screens, times):
     from playwright.sync_api import sync_playwright
 
-    one = two_screens(tmp_path)
-    long = one[0]._replace(description="長い説明です。" * 30)  # a tall box: the next screen still follows it closely
-    html = ot.page_html([long, one[0], one[1]], mine(), {"title": "T", "kicker": ""}, (1280, 720))
-    times = ot.frame_times(3, 30)
+    html = ot.page_html(screens, mine(), {"title": "T", "kicker": ""}, (1280, 720))
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, args=["--disable-gpu"])
         page = ot.open_page(browser, html, (1280, 720))
-        held, moving, second, last = (_at(page, t) for t in (0.0, times[75 + 8], times[75 + 40], times[-1]))
+        found = [_at(page, t) for t in times]
         browser.close()
+    return found
 
-    assert held["shown"] == [True, False, False] and second["shown"] == [False, True, False]
-    assert moving["shown"] == [True, True, False] and last["shown"] == [False, False, True]
-    gap = moving["photos"][1]["top"] - moving["texts"][0]["bottom"]
-    assert 0 <= gap <= 30  # the next screen comes right behind
-    assert held["arrow"]["top"] == moving["arrow"]["top"] == second["arrow"]["top"]
-    assert held["arrow"]["opacity"] == second["arrow"]["opacity"] == 1
-    assert last["arrow"]["opacity"] == 0  # nothing comes after the last place
+
+def test_the_boxes_stay_put_and_their_contents_roll_one_after_another(tmp_path):
+    one = two_screens(tmp_path)
+    long = one[0]._replace(description="長い説明です。" * 30)
+    times = ot.frame_times(3, 30)
+    held, moving, second, last = _shown(
+        [long, one[0], one[1]], (0.0, times[75 + 3], times[75 + 40], times[-1]))
+
+    for name in (*BOXES, "arrow"):
+        assert held[name]["top"] == moving[name]["top"] == second[name]["top"]
+    assert [held[n]["roll"] for n in BOXES] == [0] * 6
+    assert [second[n]["roll"] for n in BOXES] == pytest.approx([-210, -70, -210, -270, -60, -90])
+    assert moving["photo"]["roll"] < 0 and moving["next"]["roll"] == 0  # the next card has not started yet
+    assert (held["about"]["height"], second["about"]["height"]) == pytest.approx((234, 122))
+    assert [second[n]["opacity"] for n in ("upcoming", "next", "route", "arrow")] == [1] * 4
+    assert [last[n]["opacity"] for n in ("upcoming", "next", "route", "arrow")] == [0] * 4
 
 
 def test_a_single_screen_has_no_arrow(tmp_path):
-    html = ot.page_html(two_screens(tmp_path)[:1], mine(), {"title": "T", "kicker": ""}, (640, 360))
-    assert 'class="arrow"' not in html
+    screens = two_screens(tmp_path)[:1]
+    assert 'class="arrow"' not in ot.page_html(screens, mine(), {"title": "T", "kicker": ""}, (640, 360))
+    only = _shown(screens, (0.0,))[0]
+    assert [only[n]["opacity"] for n in ("upcoming", "next", "route")] == [0] * 3
 
 
-def test_a_stop_without_a_description_shows_its_picture_and_no_box(tmp_path):
-    from playwright.sync_api import sync_playwright
-
+def test_a_stop_without_a_description_fades_its_box(tmp_path):
     one = two_screens(tmp_path)
-    html = ot.page_html(
-        [one[0]._replace(description=""), one[0], one[1]], mine(), {"title": "T", "kicker": ""}, (1280, 720))
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--disable-gpu"])
-        page = ot.open_page(browser, html, (1280, 720))
-        held, moving = _at(page, 0.0), _at(page, ot.frame_times(3, 30)[75 + 8])
-        browser.close()
+    bare = one[0]._replace(description="")
+    times = ot.frame_times(3, 30)
+    shown = _shown([bare, one[0], bare], (0.0, times[75 + 40], times[-1]))
+    assert [s["about"]["opacity"] for s in shown] == [0, 1, 0]
+    assert [s["photo"]["opacity"] for s in shown] == [1, 1, 1]
 
-    assert len(held["photos"]) == 3 and len(held["texts"]) == 2
-    gap = moving["photos"][1]["top"] - moving["nexts"][0]["bottom"]
-    assert 0 <= gap <= 30  # the next screen still follows closely
+
+def test_an_old_custom_style_gives_the_built_in_one(tmp_path, monkeypatch):
+    monkeypatch.setenv("NAVIVI_STYLES_DIR", str(tmp_path / "Styles"))
+    (tmp_path / "Styles" / "outro").mkdir(parents=True)
+    (tmp_path / "Styles" / "outro" / "default.html").write_text(
+        '<div class="card">{{ -1 * pitch }}</div>', encoding="utf-8")
+    html = ot.page_html(two_screens(tmp_path), mine(), {"title": "T", "kicker": ""}, (640, 360))
+    assert 'class="boxes"' in html
 
 
 def test_the_outro_storyboard_file_hides_stopbys_and_closed_places(project, monkeypatch, tmp_path):

@@ -1,17 +1,12 @@
 {% set ox = (width - 800) / 2 %}
-{% set top = 132 %}{# the content starts under the title banner #}
 {# the cards fill the middle 80%: a left column, 76 for the route line and its circles, a right column #}
 {% set x0 = width * 0.1 %}
 {% set right = width * 0.8 - 76 - left %}
 {% set mid = x0 + left %}
 {% set x1 = mid + 76 %}
 {% set shift = (right - 356) / 2 %}{# the time figures move over as the right column widens #}
-{% set drop = 40 %}{# the cards sit this far lower than the mockup's, down toward the sea #}
 {% macro wave(y, crest) -%}
 M-8 {{ y }}Q8 {{ y - crest }} 24 {{ y }}{% for n in range(1, ((width + 64) // 32)|int) %}T{{ 24 + n * 32 }} {{ y }}{% endfor %}
-{%- endmacro %}
-{% macro circle(left, top, size, badge, style) -%}
-<div style="left:{{ left|g }}px;top:{{ top }}px;width:{{ size }}px;height:{{ size }}px;box-sizing:border-box;border:4px solid {{ theme.edge }};border-radius:50%;font-weight:900;font-size:{{ (size // 2) if badge|length < 3 else (size * 2 // 5) }}px;line-height:{{ size - 8 }}px;text-align:center;{{ style }}">{{ badge }}</div>
 {%- endmacro %}
 {% macro picture(photo, w, h) -%}
 {% if photo %}
@@ -21,32 +16,41 @@ M-8 {{ y }}Q8 {{ y - crest }} 24 {{ y }}{% for n in range(1, ((width + 64) // 32
 {% endif %}
 {%- endmacro %}
 {% set shadow = "box-shadow:0 6px 18px rgba(0,0,0,0.2)" %}
+{# one slot per box, in the order they roll: photo, number, name and figures, description, next number, next card #}
+{% set steps = [210, 70, 210, 270, 60, 90] %}{# one place's roll; the gap keeps the bounce off the next one #}
 <style>
-@keyframes outro-scroll {
-{% for percent, index in keyframes %}
-  {{ percent }}% { transform: translateY(var(--at-{{ index }}, {{ -index * pitch }}px)); animation-timing-function: ease-in-out; }
+{% for step in steps %}
+{% set slot = loop.index0 %}
+@keyframes outro-roll-{{ slot }} {
+{% for percent, index in rolls[slot] %}
+  {{ percent }}% { transform: translateY({{ -index * step }}px); }
 {% endfor %}
 }
-.card .track { animation: outro-scroll {{ seconds }}s linear both paused; }
-{# a screen shows only while held or scrolling in or out, so the screens can follow each other closely #}
-{% for s in screens %}
-{% set i = loop.index0 %}
-@keyframes outro-screen-{{ i }} {
-  0% { visibility: {{ "visible" if i == 0 else "hidden" }}; }
-{% for percent, index in keyframes if (index - i)|abs <= 1 %}
-  {{ percent }}% { visibility: {{ "visible" if index == i else "hidden" }}; }
+{# the box itself: gone when the place has nothing for it, plus the number's color and the description's height #}
+@keyframes outro-box-{{ slot }} {
+{% for percent, index in rolls[slot] %}
+  {% set s = screens[index] %}
+  {{ percent }}% { opacity: {{ 1 if [true, true, true, s.description, s.next, s.next][slot] else 0 }};{% if slot == 1 %} background-color: {{ pin(s.badge) }};{% elif slot == 3 %} height: var(--h-{{ index }}, 122px);{% endif %} }
 {% endfor %}
-  100% { visibility: {{ "visible" if loop.last else "hidden" }}; }
 }
 {% endfor %}
 {% if screens|length > 1 %}
-{# the arrow and the line down to it stay put, and leave as the last place arrives #}
+{# the arrow and the line down to it leave as the last place arrives #}
 @keyframes outro-more { 0%, {{ keyframes[-3][0] }}% { opacity: 1; } {{ keyframes[-2][0] }}%, 100% { opacity: 0; } }
 .card .arrow, .card .trail { animation: outro-more {{ seconds }}s linear both paused; }
 {% endif %}
 body.bare .banner { visibility: hidden; }
-body.bare .view, body.bare .arrow, body.bare .trail { display: none; }
+body.bare .boxes, body.bare .arrow, body.bare .trail { display: none; }
 </style>
+{% macro box(slot) -%}
+animation:outro-box-{{ slot }} {{ seconds }}s ease-in-out both paused
+{%- endmacro %}
+{% macro strip(slot) -%}
+left:0;top:0;animation:outro-roll-{{ slot }} {{ seconds }}s cubic-bezier(.34,1.35,.64,1) both paused
+{%- endmacro %}
+{% macro item(index, slot, w, h) -%}
+class="item" data-screen="{{ index }}" style="left:0;top:{{ index * steps[slot] }}px;width:{{ w|g }}px;height:{{ h }}px"
+{%- endmacro %}
 <div class="card" style="width:{{ width }}px;height:600px;box-shadow:none;color:{{ theme.ink }}">
 <svg width="{{ width }}" height="600" viewBox="0 0 {{ width }} 600">
   <defs><linearGradient id="outro-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{{ theme.sky }}"/><stop offset="0.5" stop-color="{{ theme.pale }}"/><stop offset="0.8" stop-color="{{ theme.sunset }}"/></linearGradient></defs>
@@ -72,42 +76,77 @@ body.bare .view, body.bare .arrow, body.bare .trail { display: none; }
 </svg>
 
 {% if screens|length > 1 %}
-<svg class="trail" width="20" height="440" viewBox="0 0 20 440" style="position:absolute;left:{{ (mid + 30)|g }}px;top:{{ 112 + drop }}px"><path d="M10 316V408" stroke="{{ theme.edge }}" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 11" stroke-dashoffset="50"/></svg>
+<svg class="trail" width="20" height="440" viewBox="0 0 20 440" style="position:absolute;left:{{ (mid + 30)|g }}px;top:152px"><path d="M10 316V408" stroke="{{ theme.edge }}" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 11" stroke-dashoffset="50"/></svg>
 {% endif %}
 
-<div class="view" style="left:0;top:{{ top }}px;width:{{ width }}px;height:{{ 600 - top }}px;overflow:hidden;-webkit-mask-image:linear-gradient(transparent 0,#000 10px)">
-<div class="track" data-pitch="{{ pitch }}" style="left:0;top:0;width:{{ width }}px">
-{% for s in screens %}
-<div class="screen" style="left:0;top:{{ loop.index0 * pitch - top + drop }}px;width:{{ width|g }}px;height:600px;animation:outro-screen-{{ loop.index0 }} {{ seconds }}s linear both paused">
-  {% if s.next %}
-  <svg width="20" height="440" viewBox="0 0 20 440" style="position:absolute;left:{{ (mid + 30)|g }}px;top:112px"><path d="M10 62V212" stroke="{{ theme.edge }}" stroke-width="10" stroke-linecap="round"/><path d="M10 66V208" stroke="{{ theme.primary }}" stroke-width="5" stroke-linecap="round" stroke-dasharray="6 11"/><path d="M10 266V316" stroke="{{ theme.edge }}" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 11"/></svg>
-  {% endif %}
-  <div class="photo" style="left:{{ x0|g }}px;top:112px;width:{{ left|g }}px;height:180px;box-sizing:border-box;border:4px solid {{ theme.edge }};border-radius:18px;overflow:hidden;background:{{ theme.sky }};{{ shadow }}">{{ picture(s.photo, (left - 8)|g, 172) }}</div>
-  {% if s.description %}
-  <div class="about" style="left:{{ x0|g }}px;top:306px;width:{{ left|g }}px;height:122px;border-radius:18px;background:{{ theme.paper }};overflow:hidden;{{ shadow }}">
-    <div class="desc" style="left:16px;top:19px;width:{{ (left - 32)|g }}px;height:84px;overflow:hidden;white-space:pre-line;overflow-wrap:anywhere;font-size:15px;font-weight:700;line-height:28px">{{ s.description }}</div>
-    <svg width="{{ left|g }}" height="12" viewBox="0 0 {{ left|g }} 12" style="position:absolute;left:0;bottom:0;display:block"><path d="M0 6Q10 0 20 6{% for n in range(2, (left // 20)|int + 3) %}T{{ n * 20 }} 6{% endfor %}V12H0Z" fill="{{ theme.primary }}"/></svg>
+{# the boxes stay put; each one's strip holds every place's content and rolls on to the next #}
+<div class="boxes" style="left:0;top:0">
+<svg class="route" width="20" height="440" viewBox="0 0 20 440" style="position:absolute;left:{{ (mid + 30)|g }}px;top:152px;{{ box(4) }}"><path d="M10 62V212" stroke="{{ theme.edge }}" stroke-width="10" stroke-linecap="round"/><path d="M10 66V208" stroke="{{ theme.primary }}" stroke-width="5" stroke-linecap="round" stroke-dasharray="6 11"/><path d="M10 266V316" stroke="{{ theme.edge }}" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 11"/></svg>
+
+<div class="photo" style="left:{{ x0|g }}px;top:152px;width:{{ left|g }}px;height:180px;box-sizing:border-box;border:4px solid {{ theme.edge }};border-radius:18px;overflow:hidden;background:{{ theme.sky }};{{ shadow }};{{ box(0) }}">
+  <div class="strip" style="{{ strip(0) }}">
+  {% for s in screens %}
+    <div {{ item(loop.index0, 0, left - 8, 172) }}>{{ picture(s.photo, (left - 8)|g, 172) }}</div>
+  {% endfor %}
   </div>
-  {% endif %}
-  {{ circle(mid + 11, 119, 58, s.badge, "background:" ~ pin(s.badge) ~ ";color:#fff;box-shadow:0 0 0 3px " ~ theme.gold) }}
-  <div class="stats" style="left:{{ x1|g }}px;top:112px;width:{{ right|g }}px;height:178px;box-sizing:border-box;border:3px solid {{ theme.edge }};border-radius:18px;background:{{ theme.paper }};{{ shadow }}">
-    <svg width="{{ (right - 6)|g }}" height="172" viewBox="0 0 {{ (right - 6)|g }} 172" style="position:absolute;left:0;top:0"><path d="M18 72Q28 66 38 72{% for n in range(1, ((right - 62) // 20)|int + 1) %}T{{ 38 + n * 20 }} 72{% endfor %}" fill="none" stroke="{{ theme.water }}" stroke-width="2.5" stroke-linecap="round"/><circle cx="40" cy="120" r="23" fill="{{ theme.sky }}"/><path d="M30 130C30 118 50 124 50 110" fill="none" stroke="{{ theme.primary }}" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="2 6"/><circle cx="30" cy="130" r="4.5" fill="{{ theme.hill }}"/><circle cx="50" cy="110" r="4.5" fill="{{ theme.primary }}"/><g transform="translate({{ shift|g }} 0)"><circle cx="188" cy="120" r="23" fill="{{ theme.sunset }}"/><circle cx="188" cy="120" r="15" fill="{{ theme.paper }}" stroke="{{ theme.ink }}" stroke-width="2.5"/><path d="M188 111V120L196 124" fill="none" stroke="{{ theme.primary }}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
-    <div class="fit name" style="left:20px;top:11px;width:{{ (right - 46)|g }}px;height:48px;font-size:34px;font-weight:900;line-height:48px">{{ s.name }}</div>
-    <div style="left:72px;top:87px;width:88px;height:18px;font-size:12px;font-weight:900;line-height:18px;color:{{ theme.muted }}">{{ distance_label }}</div>
-    <div class="num fit" style="left:72px;top:106px;width:{{ (90 + shift)|g }}px;height:42px;font-size:30px;line-height:42px">{% if s.known %}{{ s.km|units }}{% else %}--.-<span class="u">km</span>{% endif %}</div>
-    <div style="left:{{ (220 + shift)|g }}px;top:87px;width:126px;height:18px;font-size:12px;font-weight:900;line-height:18px;color:{{ theme.muted }}">{{ time_label }}</div>
-    <div class="num fit" style="left:{{ (220 + shift)|g }}px;top:106px;width:{{ (126 + shift)|g }}px;height:42px;font-size:30px;line-height:42px">{% if s.known %}{{ s.time|units }}{% else %}{{ s.time }}{% endif %}</div>
-  </div>
-  {% if s.next %}
-  {{ circle(mid + 17, 336, 46, s.next.badge, "background:" ~ theme.pale ~ ";color:" ~ theme.muted ~ ";" ~ shadow) }}
-  <div class="next" style="left:{{ x1|g }}px;top:324px;width:{{ right|g }}px;height:76px;box-sizing:border-box;border:2px solid {{ theme.edge }};border-radius:16px;background:color-mix(in srgb, {{ theme.paper }} 70%, transparent);color:{{ theme.muted }}">
-    <div style="left:8px;top:8px;width:94px;height:56px;border-radius:10px;overflow:hidden;opacity:0.6">{{ picture(s.next.photo, 94, 56) }}</div>
-    <div class="fit" style="left:116px;top:9px;width:{{ (right - 128)|g }}px;height:28px;font-size:20px;font-weight:900;line-height:28px">{{ s.next.name }}</div>
-    <div style="left:116px;top:41px;width:{{ (right - 128)|g }}px;height:20px;font-size:13px;font-weight:700;line-height:20px">{{ unknown_km }}　{{ unknown_time }}</div>
-  </div>
-  {% endif %}
 </div>
-{% endfor %}
+
+<div class="about" style="left:{{ x0|g }}px;top:346px;width:{{ left|g }}px;height:122px;border-radius:18px;background:{{ theme.paper }};overflow:hidden;{{ shadow }};{{ box(3) }}">
+  <div class="strip" style="{{ strip(3) }}">
+  {% for s in screens %}
+    <div {{ item(loop.index0, 3, left, 234) }}>
+    {% if s.description %}
+      <div class="desc" style="left:16px;top:19px;width:{{ (left - 32)|g }}px;height:84px;overflow:hidden;white-space:pre-line;overflow-wrap:anywhere;font-size:15px;font-weight:700;line-height:28px">{{ s.description }}</div>
+    {% endif %}
+    </div>
+  {% endfor %}
+  </div>
+  <svg width="{{ left|g }}" height="12" viewBox="0 0 {{ left|g }} 12" style="position:absolute;left:0;bottom:0;display:block"><path d="M0 6Q10 0 20 6{% for n in range(2, (left // 20)|int + 3) %}T{{ n * 20 }} 6{% endfor %}V12H0Z" fill="{{ theme.primary }}"/></svg>
+</div>
+
+<div class="now" style="left:{{ (mid + 11)|g }}px;top:159px;width:58px;height:58px;box-sizing:border-box;border:4px solid {{ theme.edge }};border-radius:50%;overflow:hidden;font-weight:900;line-height:50px;text-align:center;color:#fff;box-shadow:0 0 0 3px {{ theme.gold }};{{ box(1) }}">
+  <div class="strip" style="{{ strip(1) }}">
+  {% for s in screens %}
+    <div {{ item(loop.index0, 1, 50, 50) }}><span style="font-size:{{ 29 if s.badge|length < 3 else 23 }}px">{{ s.badge }}</span></div>
+  {% endfor %}
+  </div>
+</div>
+
+<div class="stats" style="left:{{ x1|g }}px;top:152px;width:{{ right|g }}px;height:178px;box-sizing:border-box;border:3px solid {{ theme.edge }};border-radius:18px;overflow:hidden;background:{{ theme.paper }};{{ shadow }};{{ box(2) }}">
+  <div class="strip" style="{{ strip(2) }}">
+  {% for s in screens %}
+    <div {{ item(loop.index0, 2, right - 6, 172) }}>
+      <svg width="{{ (right - 6)|g }}" height="172" viewBox="0 0 {{ (right - 6)|g }} 172" style="position:absolute;left:0;top:0"><path d="M18 72Q28 66 38 72{% for n in range(1, ((right - 62) // 20)|int + 1) %}T{{ 38 + n * 20 }} 72{% endfor %}" fill="none" stroke="{{ theme.water }}" stroke-width="2.5" stroke-linecap="round"/><circle cx="40" cy="120" r="23" fill="{{ theme.sky }}"/><path d="M30 130C30 118 50 124 50 110" fill="none" stroke="{{ theme.primary }}" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="2 6"/><circle cx="30" cy="130" r="4.5" fill="{{ theme.hill }}"/><circle cx="50" cy="110" r="4.5" fill="{{ theme.primary }}"/><g transform="translate({{ shift|g }} 0)"><circle cx="188" cy="120" r="23" fill="{{ theme.sunset }}"/><circle cx="188" cy="120" r="15" fill="{{ theme.paper }}" stroke="{{ theme.ink }}" stroke-width="2.5"/><path d="M188 111V120L196 124" fill="none" stroke="{{ theme.primary }}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+      <div class="fit name" style="left:20px;top:11px;width:{{ (right - 46)|g }}px;height:48px;font-size:34px;font-weight:900;line-height:48px">{{ s.name }}</div>
+      <div style="left:72px;top:87px;width:88px;height:18px;font-size:12px;font-weight:900;line-height:18px;color:{{ theme.muted }}">{{ distance_label }}</div>
+      <div class="num fit" style="left:72px;top:106px;width:{{ (90 + shift)|g }}px;height:42px;font-size:30px;line-height:42px">{% if s.known %}{{ s.km|units }}{% else %}--.-<span class="u">km</span>{% endif %}</div>
+      <div style="left:{{ (220 + shift)|g }}px;top:87px;width:126px;height:18px;font-size:12px;font-weight:900;line-height:18px;color:{{ theme.muted }}">{{ time_label }}</div>
+      <div class="num fit" style="left:{{ (220 + shift)|g }}px;top:106px;width:{{ (126 + shift)|g }}px;height:42px;font-size:30px;line-height:42px">{% if s.known %}{{ s.time|units }}{% else %}{{ s.time }}{% endif %}</div>
+    </div>
+  {% endfor %}
+  </div>
+</div>
+
+<div class="upcoming" style="left:{{ (mid + 17)|g }}px;top:376px;width:46px;height:46px;box-sizing:border-box;border:4px solid {{ theme.edge }};border-radius:50%;overflow:hidden;font-weight:900;line-height:38px;text-align:center;background:{{ theme.pale }};color:{{ theme.muted }};{{ shadow }};{{ box(4) }}">
+  <div class="strip" style="{{ strip(4) }}">
+  {% for s in screens %}
+    <div {{ item(loop.index0, 4, 38, 38) }}>{% if s.next %}<span style="font-size:{{ 23 if s.next.badge|length < 3 else 18 }}px">{{ s.next.badge }}</span>{% endif %}</div>
+  {% endfor %}
+  </div>
+</div>
+
+<div class="next" style="left:{{ x1|g }}px;top:364px;width:{{ right|g }}px;height:76px;box-sizing:border-box;border:2px solid {{ theme.edge }};border-radius:16px;overflow:hidden;background:color-mix(in srgb, {{ theme.paper }} 70%, transparent);color:{{ theme.muted }};{{ box(5) }}">
+  <div class="strip" style="{{ strip(5) }}">
+  {% for s in screens %}
+    <div {{ item(loop.index0, 5, right - 4, 72) }}>
+    {% if s.next %}
+      <div style="left:8px;top:8px;width:94px;height:56px;border-radius:10px;overflow:hidden;opacity:0.6">{{ picture(s.next.photo, 94, 56) }}</div>
+      <div class="fit" style="left:116px;top:9px;width:{{ (right - 128)|g }}px;height:28px;font-size:20px;font-weight:900;line-height:28px">{{ s.next.name }}</div>
+      <div style="left:116px;top:41px;width:{{ (right - 128)|g }}px;height:20px;font-size:13px;font-weight:700;line-height:20px">{{ unknown_km }}　{{ unknown_time }}</div>
+    {% endif %}
+    </div>
+  {% endfor %}
+  </div>
 </div>
 </div>
 

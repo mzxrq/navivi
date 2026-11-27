@@ -67,8 +67,9 @@ Code: `services/vdoprocessing/outro_themed.py`, look: `services/hudtheme/designs
 | No description | The screen shows the picture and the facts, with no description box |
 | On a screen | Photo (the theme's picture without one), description, badge as on the map pins, name, the distance and time of the leg arriving there (`--.-` when no leg does), and the next place |
 | Banner | The intro's place (kicker), title and subtitle |
-| Timing | First screen 2.5 s, others 1.5 s, 0.6 s scroll between them, then the logos over the same background |
-| Scroll | The next screen follows right behind. The down arrow and the line to it stay put, and fade as the last place arrives |
+| Timing | First screen 2.5 s, others 1.5 s, 0.8 s to roll on to the next, then the logos over the same background |
+| Roll | Like slot reels: every box stays put and its contents move up, with the next place's coming in from below and a small bounce. One box after another (photo, number, name and figures, description, next number, next card), 0.42 s each, 0.07 s apart. The number's color follows its pin |
+| Empty boxes | A box the place has nothing for (no description; no next place, with its route line) fades out and back. The down arrow and the line to it fade as the last place arrives |
 | Description | `outroDescription` on the waypoint (stop editor; the box shows only while the outro style is scroll). Its size never changes: the box grows from 3 lines up to 7 (the most that fits the screen), then the text is cut with "…" |
 | Title | Drawn into the clip. `99_outro.themed.json` beside the clip says so: no outro text item on the timeline |
 | Not shown | Trip summary, stop-by and closed-place lists (`outro_route_info` has no effect) |
