@@ -47,8 +47,8 @@ Made in this order: overview, finale, walking videos, attraction videos.
 |---|---|
 | Order | Intro, overview, then each walking video or piece followed by the attraction video of the place it walked to, finale, sub course, outro |
 | Clip length | The longer of the video and its voice + 0.5 s (the last frame is held) |
-| Dissolve: walk → attraction | 0.8 s (`attraction_fade_seconds`; 0 = hard cut) |
-| Dissolve: walk → walk | 0.8 s only at some joins, such as a return stop |
+| Walk ↔ attraction | Hard cut on the same picture: the leg ends on the attraction clip's first frame, the next opens on its last |
+| Dissolve: walk → walk | 0.8 s (`attraction_fade_seconds`; 0 = hard cut) only at some joins, such as a return stop |
 | Dissolve: into the outro | 1 s, only without a finale |
 | Everything else | Hard cut |
 
