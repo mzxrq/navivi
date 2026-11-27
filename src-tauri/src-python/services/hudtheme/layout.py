@@ -102,8 +102,8 @@ def place(entry: Entry, size: Tuple[float, float], frame: Tuple[float, float], u
 
 
 def read(project_dir) -> Optional[Dict]:
-    """The project's hud.json as {"theme", "layout"}; None (the classic look) when it is absent, unreadable or
-    names no theme."""
+    """The project's hud.json as {"theme", "layout"}, plus "scene" when it names a picture; None (the classic look)
+    when it is absent, unreadable or names no theme."""
     path = Path(project_dir) / FILE_NAME
     if not path.is_file():
         return None
@@ -120,7 +120,9 @@ def read(project_dir) -> Optional[Dict]:
         logger.warning("%s: no theme '%s' (have %s); using the classic look.", path, data["theme"],
                        ", ".join(model.theme_ids()))
         return None
-    return {"theme": data["theme"], "layout": data.get("layout") or {}}
+    scene = data.get("scene")
+    return {"theme": data["theme"], "layout": data.get("layout") or {},
+            **({"scene": scene} if isinstance(scene, str) else {})}
 
 
 def fingerprint(project_dir) -> Optional[str]:

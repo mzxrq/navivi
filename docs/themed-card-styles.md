@@ -100,6 +100,20 @@ Filters: `words` (break only between words), `units` (small units beside numbers
 
 The outro file is a whole animated page, 600 high: it is animated by CSS animations lasting `seconds` that follow `rolls` and `keyframes` (the video code pauses them all and sets their time). Each `class="desc"` text must sit in an element with `data-screen="N"` inside an element with `class="about"`: the video code grows the text from three lines up to seven and sets `--h-N` (the box's height for screen N) on `.about`. `body.bare` must hide everything but the background.
 
+## Your own picture
+
+The picture on the totals card and the outro comes with the theme. A project can show another one:
+
+```json
+{ "theme": "sea", "scene": "katsuragi" }
+```
+
+`katsuragi` is built in. For your own, put `<name>.svg` in `Documents\Navivi\Styles\scene\` and name it in
+`hud.json`; a file there wins over a built-in one of the same name. Draw on a 110 x 76 canvas: either bare SVG shapes,
+or a whole `<svg width="110" height="76" viewBox="0 0 110 76">`. The totals card rounds off the left side and covers
+everything right of about 95 with its panel. Light and dark projects show the same picture. A missing file gives the
+theme's own picture, with a warning in the render log.
+
 ## A new theme
 
 Copy a folder in `services/hudtheme/themes/`: `theme.json` (colors, optional `layout`), `scene.svg`,

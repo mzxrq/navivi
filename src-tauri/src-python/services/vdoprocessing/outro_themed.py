@@ -139,7 +139,7 @@ def outro_theme(project_dir: Path, settings: Dict, waypoints: List[Dict], style:
     if hud is None:
         return None
     theme_id = model.resolve_theme(hud["theme"], [str(w.get("routeMode") or "walking") for w in waypoints], 0.0)
-    return model.load_theme(theme_id, model.is_dark(settings)) if theme_id else None
+    return model.load_theme(theme_id, model.is_dark(settings), hud.get("scene")) if theme_id else None
 
 
 def _photo_uri(path: Optional[str], width: float, scale: float) -> str:

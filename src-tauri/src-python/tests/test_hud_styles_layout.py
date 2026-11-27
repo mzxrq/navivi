@@ -173,6 +173,34 @@ def test_editing_hud_json_or_a_style_file_changes_the_fingerprint(tmp_path, mine
     assert len({first, second, layout.fingerprint(tmp_path)}) == 3
 
 
+def test_hud_json_can_name_the_picture(tmp_path):
+    _hud(tmp_path, '{"theme": "sea", "scene": "katsuragi"}')
+
+    assert layout.project_hud(tmp_path, {}, "T")["scene"] == "katsuragi"
+
+
+@pytest.mark.parametrize("dark", [False, True])
+def test_a_named_picture_replaces_the_themes_own(mine, dark):
+    own = model.load_theme("sea", dark)["scene"]
+
+    assert "#D6301F" in model.load_theme("sea", dark, "katsuragi")["scene"]  # the built-in spider lilies
+    assert model.load_theme("sea", dark, "no-such")["scene"] == own
+    assert model.load_theme("sea", dark, "../sea")["scene"] == own
+    _style(mine, "scene", "katsuragi.svg", '<rect id="my-own"/>')
+    assert model.load_theme("sea", dark, "katsuragi")["scene"] == '<rect id="my-own"/>'
+
+
+def test_the_legs_and_the_outro_use_the_projects_picture(tmp_path):
+    from services.vdoprocessing import outro_themed
+    from services.vdoprocessing.pydeckrecorder.themed_leg import ThemedLegHud
+
+    _hud(tmp_path, '{"theme": "sea", "scene": "katsuragi"}')
+    leg = ThemedLegHud(layout.project_hud(tmp_path, {}, "T"), "sea", "walking", (1.0, 60), (0.0, 0))
+    outro = outro_themed.outro_theme(tmp_path, {}, [], "scroll")
+
+    assert "#D6301F" in leg.theme["scene"] and "#D6301F" in outro["scene"]
+
+
 def _panels(hud, **changes):
     from services.mapfetcher.graphicengine import GraphicsEngine
     from services.vdoprocessing.spatial_renderer.course_themed import themed_panels

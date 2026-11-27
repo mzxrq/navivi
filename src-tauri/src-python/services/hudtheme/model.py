@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 from services import tuning
+from services.hudtheme import styles
+from services.logger.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 THEMES_DIR = Path(__file__).parent / "themes"
 MOUNTAIN_CLIMB_M = 300.0
@@ -47,8 +51,24 @@ def pin_color(theme: Dict, glyph) -> str:
     return theme["pins"][kind]
 
 
-def load_theme(theme_id: str, dark: bool = False) -> Dict:
-    """A theme's colors and artwork; `dark` lays its "dark" colors over them (the project's light/dark setting)."""
+def _named_scene(name: Optional[str]) -> Optional[str]:
+    """The picture `<name>.svg` from a scene folder (the user's, then ours), or None."""
+    if not name:
+        return None
+    path = styles.find("scene", name)
+    try:
+        if path is not None:
+            return path.read_text(encoding="utf-8-sig")
+    except (OSError, ValueError) as error:
+        logger.warning("Picture %s cannot be read (%s); using the theme's own.", path, error)
+        return None
+    logger.warning("No picture '%s'; using the theme's own.", name)
+    return None
+
+
+def load_theme(theme_id: str, dark: bool = False, scene: Optional[str] = None) -> Dict:
+    """A theme's colors and artwork; `dark` lays its "dark" colors over them (the project's light/dark setting).
+    `scene` names a picture to show instead of the theme's own."""
     folder = THEMES_DIR / theme_id
     data = json.loads((folder / "theme.json").read_text(encoding="utf-8"))
     layout = data.get("layout") or {}
@@ -62,7 +82,8 @@ def load_theme(theme_id: str, dark: bool = False) -> Dict:
     return {
         "id": f"{theme_id}-dark" if dark else theme_id, "dark": dark, **data["colors"],
         "mode_colors": data["mode_colors"], "pins": pins, "layout": layout,
-        "scene": (folder / ("scene_dark.svg" if dark else "scene.svg")).read_text(encoding="utf-8"),
+        "scene": _named_scene(scene)
+        or (folder / ("scene_dark.svg" if dark else "scene.svg")).read_text(encoding="utf-8"),
         "pattern": (folder / "pattern.svg").read_text(encoding="utf-8"),
     }
 

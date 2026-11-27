@@ -66,7 +66,7 @@ class ThemedLegHud:
     ):
         """`leg` and `after`: (km, seconds) of this leg and of every later one. `stopby_glyphs`: what the map pin
         of each of the banner's stop-bys shows ("+n"), in banner order."""
-        self.theme = model.load_theme(theme_id, bool(hud.get("dark")))
+        self.theme = model.load_theme(theme_id, bool(hud.get("dark")), hud.get("scene"))
         self.entries = layout.merge(self.theme["layout"], hud.get("layout"))
         self.mode, self.leg, self.after, self.stopby_glyphs = mode, leg, after, list(stopby_glyphs)
         self.fingerprint = f"{hud.get('fingerprint')}-{','.join(self.stopby_glyphs)}"

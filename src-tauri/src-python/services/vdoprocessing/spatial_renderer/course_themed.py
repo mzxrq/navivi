@@ -63,7 +63,7 @@ class ThemedPanels:
         stops: Sequence[model.Stop], cum: Sequence[float], modes: Sequence[str], loop: bool,
         has_stopbys: bool, has_closed: bool,
     ):
-        theme = model.load_theme(theme_id, bool(hud.get("dark")))
+        theme = model.load_theme(theme_id, bool(hud.get("dark")), hud.get("scene"))
         entries = layout.merge(theme["layout"], hud.get("layout"))
         unit = h / layout.OVERVIEW_HEIGHT
         labels = video_text.current_labels()
