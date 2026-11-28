@@ -220,6 +220,20 @@ def test_a_themed_leg_frames_the_route_between_its_cards():
     assert under_top + 50 < min(ys) and max(ys) < over_bottom - 30  # a pin's height above, a name below
 
 
+@pytest.mark.parametrize("moved", [
+    {"next": {"anchor": "middle-center"}},  # a card in the middle claims no band
+    {"leg_rail": {"y": 400}},  # ...and one put far from its edge never takes the whole frame
+])
+def test_a_card_away_from_its_edge_does_not_squeeze_the_leg_away(moved):
+    from services.vdoprocessing.pydeckrecorder.themed_leg import ThemedLegHud
+
+    hud = ThemedLegHud({"theme": "sea", "layout": moved}, "sea", "walking", (1.0, 600), (0.0, 0))
+
+    top, bottom = hud.margins((1920, 1080), 186.0, 100.0)
+
+    assert top + bottom <= 1080 * 0.6
+
+
 def _panels(hud, **changes):
     from services.mapfetcher.graphicengine import GraphicsEngine
     from services.vdoprocessing.spatial_renderer.course_themed import themed_panels

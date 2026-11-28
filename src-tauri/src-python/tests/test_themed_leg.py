@@ -42,6 +42,17 @@ def test_a_legs_stop_by_numbers_come_from_the_map_not_from_counting():
     assert hud.stopby_glyphs == ["+4", "・"]
 
 
+def test_the_rail_traveller_moves_in_fine_steps_and_the_figures_in_coarse_ones():
+    hud = _hud()
+    hud.places, hud.labels = hud.places_of(BANNER, "加太港", ("S", "2"), set()), video_text.labels_for("ja")
+
+    def card(name, share):
+        return hud._card(name, share, 0.0, (0, 1)).html
+
+    assert card("leg_rail", 0.500) != card("leg_rail", 0.504)  # 4 px on a 1080 frame, not 10
+    assert card("remaining", 0.500) == card("remaining", 0.504)  # each new figure card costs render time
+
+
 def _prepared(hud, frame=(1280, 720)):
     pytest.importorskip("playwright")
     places = hud.places_of(BANNER, "加太港", ("S", "2"), set())

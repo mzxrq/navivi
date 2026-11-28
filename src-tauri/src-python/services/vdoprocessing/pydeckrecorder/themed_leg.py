@@ -15,11 +15,13 @@ from services import video_text
 from services.hudtheme import cards, layout, model, render
 
 CARDS = ("next", "leg_banner", "compass", "leg_rail", "remaining")
-_RAIL_STEPS = 100  # positions of the traveller along the rail
+_RAIL_STEPS = 300  # positions of the traveller along the rail (about 4 px apart: 100 looked jerky)
+_REMAINING_STEPS = 100  # ...and of the figures left, each one a picture to draw
 _COMPASS_STEP_DEG = 5
 _GAP_PX = 12  # artboard px kept between the rail and the remaining card
 _MIN_RAIL_SCALE = 0.4
 _PIN_ABOVE_PX, _NAME_BELOW_PX = 60.0, 40.0  # a map pin stands this far above its point, its name pill below
+_MAX_BAND = 0.3  # of the frame height: the most the cards at one edge keep the route out of
 # Artboard sizes the map's name pills keep clear of (the next-stop card grows with its name: allow for a long one).
 _ROOM = {"next": (480, 104), "leg_banner": (276, 76), "compass": (84, 114), "leg_rail": (636, 82),
          "remaining": (372, 76)}
@@ -117,7 +119,8 @@ class ThemedLegHud:
         if name == "compass":
             degrees = round(heading / _COMPASS_STEP_DEG) * _COMPASS_STEP_DEG
             return cards.compass_card(self.theme, degrees, self.labels, style=style)
-        step = round(min(1.0, max(0.0, share)) * _RAIL_STEPS) / _RAIL_STEPS
+        steps = _RAIL_STEPS if name == "leg_rail" else _REMAINING_STEPS
+        step = round(min(1.0, max(0.0, share)) * steps) / steps
         if name == "leg_rail":
             first = self.places[0].glyph if len(self.places) > 1 else ""
             return cards.leg_rail_card(self.theme, first or "S", self.places[-1].glyph or "E", step, self.vias,
@@ -130,12 +133,16 @@ class ThemedLegHud:
 
     def margins(self, frame: Tuple[int, int], top: float, bottom: float) -> Tuple[float, float]:
         """`top` and `bottom`, the camera's usual clear bands (video px), grown so the route and its pins stay out
-        from under the wide cards. The compass, narrow and at the side, does not count."""
-        for _, y0, _, y1 in self.room(frame, [name for name in CARDS if name != "compass"]):
-            if y0 < frame[1] / 2:
-                top = max(top, y1 + _PIN_ABOVE_PX)
-            else:
-                bottom = max(bottom, frame[1] - y0 + _NAME_BELOW_PX)
+        from under the wide cards. The compass, narrow and at the side, does not count, nor does a card hud.json puts
+        in the middle; one put far from its edge takes at most _MAX_BAND of the frame."""
+        most = frame[1] * _MAX_BAND
+        for name in CARDS:
+            edge = self.entries[name].anchor.split("-")[0]
+            for _, y0, _, y1 in self.room(frame, [name]) if name != "compass" else []:
+                if edge == "top":
+                    top = max(top, min(y1 + _PIN_ABOVE_PX, most))
+                elif edge == "bottom":
+                    bottom = max(bottom, min(frame[1] - y0 + _NAME_BELOW_PX, most))
         return top, bottom
 
     def room(self, frame: Tuple[int, int], names: Sequence[str] = CARDS) -> List[Tuple[float, float, float, float]]:

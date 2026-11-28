@@ -18,7 +18,7 @@ logger = setup_logger(__name__)
 
 FILE_NAME = "hud.json"
 # Bump when the themed look changes, so themed projects render again.
-RENDER_VERSION = 4  # 4: the next-stop card stays on the route past a closed place
+RENDER_VERSION = 5  # 5: the rail traveller moves in finer steps
 MIN_SCALE, MAX_SCALE = 0.5, 2.0
 _NOTICE_EDGE = (18 * 568 / 1080, 28 * 568 / 1080)  # where the app itself puts its banners
 BOTH_AXES = [f"{v}-{h}" for v in ("top", "middle", "bottom") for h in ("left", "center", "right")]
