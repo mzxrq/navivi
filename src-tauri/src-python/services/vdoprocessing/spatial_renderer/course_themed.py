@@ -64,6 +64,9 @@ class ThemedPanels:
         has_stopbys: bool, has_closed: bool,
     ):
         theme = model.load_theme(theme_id, bool(hud.get("dark")), hud.get("scene"))
+        # Pop-up cards, notices and map labels in the cards' own font (the usual one stays as the fallback).
+        graphics.FONT_CANDIDATES_REGULAR = [render.font_path("Bold"), *graphics.FONT_CANDIDATES_REGULAR]
+        graphics.FONT_CANDIDATES_BOLD = [render.font_path("Black"), *graphics.FONT_CANDIDATES_BOLD]
         entries = layout.merge(theme["layout"], hud.get("layout"))
         unit = h / layout.OVERVIEW_HEIGHT
         labels = video_text.current_labels()

@@ -1,4 +1,5 @@
-"""Letters the bundled LINE Seed JP font cannot draw, swapped for their plain base letter.
+"""Letters a bundled font cannot draw (LINE Seed JP, or the themed videos' Zen Maru Gothic), swapped for their
+plain base letter.
 
 [NOTE] [Font] PIL has no per-glyph fallback, so a missing letter is drawn as a box: LINE Seed JP lacks ō/Ō
 ("Jizō" came out "Jiz□"). Japanese is fully covered, so Japanese text never changes.
@@ -13,12 +14,13 @@ _FONTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "assets",
 
 @lru_cache(maxsize=1)
 def _covered() -> frozenset:
-    """Code points both LINE Seed JP weights have; empty (nothing swapped) when they can't be read."""
+    """Code points every font drawn with has; empty (nothing swapped) when they can't be read."""
     try:
         from fontTools.ttLib import TTFont
 
-        maps = [set(TTFont(os.path.join(_FONTS_DIR, f"LINESeedJP-{w}.ttf")).getBestCmap()) for w in ("Regular", "Bold")]
-        return frozenset(maps[0] & maps[1])
+        files = ("LINESeedJP-Regular", "LINESeedJP-Bold", "ZenMaruGothic-Bold", "ZenMaruGothic-Black")
+        return frozenset.intersection(
+            *(frozenset(TTFont(os.path.join(_FONTS_DIR, f"{name}.ttf")).getBestCmap()) for name in files))
     except Exception:
         return frozenset()
 

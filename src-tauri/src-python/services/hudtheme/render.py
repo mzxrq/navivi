@@ -53,6 +53,11 @@ _FIT_JS = """async () => {
 }"""
 
 
+def font_path(weight: str) -> str:
+    """The cards' font ("Bold" or "Black") as a file, for text drawn without the browser."""
+    return str(_FONT_DIR / f"ZenMaruGothic-{weight}.ttf")
+
+
 def _page_html() -> str:
     faces = "".join(
         f"@font-face {{ font-family: '{family}'; font-weight: {weight}; src: url('{_HOST}{name}'); }}"

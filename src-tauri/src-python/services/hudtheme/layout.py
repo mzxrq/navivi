@@ -18,7 +18,7 @@ logger = setup_logger(__name__)
 
 FILE_NAME = "hud.json"
 # Bump when the themed look changes, so themed projects render again.
-RENDER_VERSION = 6  # 6: the totals left on top of the walk, this leg's figures below
+RENDER_VERSION = 7  # 7: the overview's pop-up cards and notices in the cards' font
 MIN_SCALE, MAX_SCALE = 0.5, 2.0
 _NOTICE_EDGE = (18 * 568 / 1080, 28 * 568 / 1080)  # where the app itself puts its banners
 BOTH_AXES = [f"{v}-{h}" for v in ("top", "middle", "bottom") for h in ("left", "center", "right")]

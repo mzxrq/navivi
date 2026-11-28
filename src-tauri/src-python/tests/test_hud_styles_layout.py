@@ -310,6 +310,19 @@ def test_the_previous_places_number_is_in_a_round_circle(glyph):
     assert width == height and text <= 0  # round, and the number stays inside it
 
 
+def test_a_themed_overviews_popup_cards_and_notices_use_the_cards_font():
+    pytest.importorskip("playwright")
+    from services.mapfetcher.graphicengine import GraphicsEngine
+    from services.mapfetcher.graphicengine.glyphs import drawable
+
+    graphics = _panels({"theme": "sea", "title": "t"}).graphics
+
+    for candidates in (graphics.FONT_CANDIDATES_REGULAR, graphics.FONT_CANDIDATES_BOLD):
+        assert "ZenMaru" in graphics._card_font(candidates, 20).path
+    assert "ZenMaru" not in GraphicsEngine.FONT_CANDIDATES_BOLD[0]  # an unthemed video keeps its font
+    assert drawable("Jūzō") == "Juzo"  # neither font has every long vowel: no empty boxes
+
+
 def test_a_themed_overview_traces_with_the_themed_ferry():
     pytest.importorskip("playwright")
     panels = _panels({"theme": "sea", "title": "t"})
