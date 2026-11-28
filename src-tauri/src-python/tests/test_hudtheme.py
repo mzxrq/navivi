@@ -210,6 +210,14 @@ def test_every_theme_builds_every_card(theme_id):
     assert all(card.html for card in built)
 
 
+def test_a_picture_brings_its_own_pattern_and_outro_backdrop():
+    plain, katsuragi = model.load_theme("mine"), model.load_theme("mine", scene="katsuragi")
+
+    assert plain["backdrop"] == "" and "<svg" in katsuragi["backdrop"]
+    assert katsuragi["pattern"] != plain["pattern"] and "$id" in katsuragi["pattern"]
+    assert katsuragi["primary"] == plain["primary"]
+
+
 def test_your_palette_replaces_the_sea_colors():
     theme = model.load_theme("mine")
 

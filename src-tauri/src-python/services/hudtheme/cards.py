@@ -32,7 +32,7 @@ def _card(kind: str, style: str, theme: Dict, width: int, height: int, **data) -
         return Markup(f"<defs>{defs}</defs>" + "".join(
             f'<rect x="{a:g}" y="0" width="{b - a:g}" height="{tall}" fill="url(#{ident})"/>' for a, b in rects))
 
-    shared = {"theme": theme, "scene": Markup(theme["scene"]), "pattern": pattern,
+    shared = {"theme": theme, "scene": Markup(theme["scene"]), "backdrop": Markup(theme["backdrop"]), "pattern": pattern,
               "pin": lambda glyph: model.pin_color(theme, glyph), "width": width, "height": height}
     return Card(styles.render(kind, style, {**shared, **data}), width, height)
 

@@ -112,6 +112,11 @@ or a whole `<svg width="110" height="76" viewBox="0 0 110 76">`. The totals card
 everything right of about 95 with its panel. Light and dark projects show the same picture. A missing file gives the
 theme's own picture, with a warning in the render log.
 
+A picture name can bring two more drawings, both optional, under the same two folders as above:
+`pattern\<name>.svg` replaces the theme's pattern (same format as a theme's `pattern.svg`), and
+`backdrop\<name>.svg` replaces the scroll outro's sea background (one `<svg>` filling a frame 600 high, drawn for
+light projects). The theme's colors do not change. `katsuragi` has both.
+
 ## Names on the strip
 
 Each stretch of the strip is labelled with one of its stops. Give your own words, or `""` for none, by the numbers

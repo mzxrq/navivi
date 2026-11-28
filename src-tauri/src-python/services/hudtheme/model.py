@@ -66,9 +66,19 @@ def _named_scene(name: Optional[str]) -> Optional[str]:
     return None
 
 
+def _scene_art(kind: str, scene: Optional[str]) -> Optional[str]:
+    """The `kind` drawing that comes with the picture `scene`, or None: most pictures have none."""
+    path = styles.find(kind, scene) if scene else None
+    try:
+        return path.read_text(encoding="utf-8-sig") if path else None
+    except (OSError, ValueError) as error:
+        logger.warning("%s cannot be read (%s); using the usual one.", path, error)
+        return None
+
+
 def load_theme(theme_id: str, dark: bool = False, scene: Optional[str] = None) -> Dict:
     """A theme's colors and artwork; `dark` lays its "dark" colors over them (the project's light/dark setting).
-    `scene` names a picture to show instead of the theme's own."""
+    `scene` names a picture to show instead of the theme's own, with its pattern and outro backdrop if it has them."""
     folder = THEMES_DIR / theme_id
     data = json.loads((folder / "theme.json").read_text(encoding="utf-8"))
     layout = data.get("layout") or {}
@@ -84,7 +94,8 @@ def load_theme(theme_id: str, dark: bool = False, scene: Optional[str] = None) -
         "mode_colors": data["mode_colors"], "pins": pins, "layout": layout,
         "scene": _named_scene(scene)
         or (folder / ("scene_dark.svg" if dark else "scene.svg")).read_text(encoding="utf-8"),
-        "pattern": (folder / "pattern.svg").read_text(encoding="utf-8"),
+        "pattern": _scene_art("pattern", scene) or (folder / "pattern.svg").read_text(encoding="utf-8"),
+        "backdrop": _scene_art("backdrop", scene) or "",
     }
 
 

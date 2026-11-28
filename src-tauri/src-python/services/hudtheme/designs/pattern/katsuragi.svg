@@ -1,0 +1,1 @@
+<pattern id="$id" width="24" height="41.57" patternUnits="userSpaceOnUse" patternTransform="scale($scale)"><path d="M0 0H24M0 20.78H24M0 41.57H24M0 0L24 41.57M24 0L0 41.57M0 0L12 6.93L24 0M12 6.93V20.78M0 20.78L12 13.86L24 20.78M0 20.78L12 27.71L24 20.78M12 27.71V41.57M0 41.57L12 34.64L24 41.57" fill="none" stroke="$color" stroke-width="1"/></pattern>
