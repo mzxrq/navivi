@@ -107,6 +107,19 @@ def _fit_view_for_path(
     return center_lon, center_lat, zoom
 
 
+def _view_keeping_pin(view, lons, lats, pin, output_size, pitch: float = 0.0, **fit) -> Tuple[float, float, float]:
+    """`view` (lon, lat, zoom), unless the `pin` (lon, lat) of a stop outside the stretch would show half cut or
+    pressed against the frame's edge: then the view that takes it in with the stretch (`lons`, `lats`)."""
+    x, y = _project_lonlat_to_px(*pin, *view, output_size, pitch=pitch)
+    w, h = output_size
+    k = h / 1080.0  # a pin is 60 wide and stands 60 above its point, at 1080 lines
+    seen = -30 * k < x < w + 30 * k and 0 < y < h + 60 * k
+    if not seen or (60 * k <= x <= w - 60 * k and 120 * k <= y <= h - 60 * k):
+        return view
+    lon, lat, zoom = _fit_view_for_path([*lons, pin[0]], [*lats, pin[1]], output_size, pitch=pitch, **fit)
+    return lon, lat, min(zoom, view[2])
+
+
 # A stop-by farther than this from the route is left out of the camera frame: fitting it would shrink the walk.
 _FRAME_STOPBY_MAX_M = 500.0
 
@@ -114,12 +127,13 @@ _FRAME_STOPBY_MAX_M = 500.0
 def _framed_points(df_raw, lo: int, hi: int, landmarks) -> Tuple[List[float], List[float]]:
     """(lons, lats) of the path rows `lo:hi` plus every stop-by within _FRAME_STOPBY_MAX_M of the
     route whose nearest path row falls in that stretch, so a stop-by seen from the route is inside
-    the leg's camera frame too."""
+    the leg's camera frame too. Not one popped up at a stop ("pops_after"): the camera flies out to it there, and
+    keeping it in the walk's frame as well shrank the route."""
     part = df_raw.iloc[lo:hi]
     lons, lats = part["lon"].tolist(), part["lat"].tolist()
     for lm in (landmarks or []):
         lat, lon = lm.get("lat"), lm.get("lon")
-        if lat is None or lon is None:
+        if lat is None or lon is None or lm.get("pops_after") is not None:
             continue
         dlat = (df_raw["lat"] - lat) * 111_320.0
         dlon = (df_raw["lon"] - lon) * 111_320.0 * math.cos(math.radians(lat))

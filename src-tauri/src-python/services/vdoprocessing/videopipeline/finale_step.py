@@ -6,8 +6,8 @@ backwards). Nothing walks.
 It lands on the overview's own recap picture, drawn the same way that screen is: the route in the project's
 colour, each stop a pin, and every stop's card laid out by the overview's own layout (pin and card styles, and
 whether the photo shrinks, come from storyboards/finale.json). Three things carry the data in as it arrives - the
-route unspools backwards out of the close-up, each badge lands in turn as the line passes it, and the summary
-card's distance and time tick up to the real figures. Then the outro cuts in."""
+route unspools backwards out of the close-up, then each badge lands in turn from the first stop on, and the
+summary card's distance and time tick up to the real figures. Then the outro cuts in."""
 
 import csv
 import json
@@ -574,8 +574,8 @@ def _build_scene(
                                  card_style=storyboard.finale(settings).card_style)
     draw_pins = partial(_draw_stop_pins, engine, extent=final_extent, stops=stops,
                         pin_shape=storyboard.finale(settings).pin_shape)
-    # Revealed in the order the route itself unspools past them: the last stop first, back to the start.
-    recap_badges.sort(key=lambda b: -int(b.get("index", 0)))
+    # Revealed first stop first, in walking order (the user's choice), though the route unspools backwards.
+    recap_badges.sort(key=lambda b: int(b.get("index", 0)))
     return _Scene(fps, size, full, engine, card_render, maps, frames, lat, lon, recap_badges, hold_seconds, card_w,
                   card_h, draw_pins=draw_pins, hud=hud)
 

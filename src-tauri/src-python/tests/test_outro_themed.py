@@ -302,7 +302,7 @@ BOXES = ("photo", "now", "stats", "about", "upcoming", "next")
 
 
 def _at(page, t):
-    """Each box (and the route line and arrow) at animation time t: where it is, how visible, how far rolled."""
+    """Each box (and the route line) at animation time t: where it is, how visible, how far rolled."""
     page.evaluate(ot._SEEK_JS, t)
     return page.evaluate("""names => Object.fromEntries(names.map(name => {
         const e = document.querySelector('.' + name);
@@ -310,7 +310,7 @@ def _at(page, t):
         const r = e.getBoundingClientRect(), strip = e.querySelector('.strip');
         return [name, { top: r.top, height: r.height, opacity: +getComputedStyle(e).opacity,
                         roll: strip ? new DOMMatrix(getComputedStyle(strip).transform).m42 : 0 }];
-    }))""", [*BOXES, "route", "arrow"])
+    }))""", [*BOXES, "route"])
 
 
 def _shown(screens, times):
@@ -332,19 +332,72 @@ def test_the_boxes_stay_put_and_their_contents_roll_one_after_another(tmp_path):
     held, moving, second, last = _shown(
         [long, one[0], one[1]], (0.0, times[75 + 3], times[75 + 40], times[-1]))
 
-    for name in (*BOXES, "arrow"):
+    for name in BOXES:
         assert held[name]["top"] == moving[name]["top"] == second[name]["top"]
     assert [held[n]["roll"] for n in BOXES] == [0] * 6
     assert [second[n]["roll"] for n in BOXES] == pytest.approx([-210, -70, -210, -270, -60, -90])
-    assert moving["photo"]["roll"] < 0 and moving["next"]["roll"] == 0  # the next card has not started yet
+    assert moving["next"]["roll"] < 0 and moving["stats"]["roll"] == 0  # the next card makes way first
     assert (held["about"]["height"], second["about"]["height"]) == pytest.approx((234, 122))
-    assert [second[n]["opacity"] for n in ("upcoming", "next", "route", "arrow")] == [1] * 4
-    assert [last[n]["opacity"] for n in ("upcoming", "next", "route", "arrow")] == [0] * 4
+    assert [second[n]["opacity"] for n in ("upcoming", "next", "route")] == [1] * 3
+    assert [last[n]["opacity"] for n in ("upcoming", "next", "route")] == [0] * 3
 
 
-def test_a_single_screen_has_no_arrow(tmp_path):
+def test_the_next_card_never_lags_behind_the_card_above_it(tmp_path):
+    one = two_screens(tmp_path)
+    shown = _shown([one[0], one[1], one[0]], ot.frame_times(3, 30)[75:75 + 24])
+
+    for frame in shown:  # a lagging next card would show the place that is already arriving above it
+        main, preview = frame["stats"]["roll"] / -210, frame["next"]["roll"] / -90
+        assert preview >= min(main, 0.99) - 0.01, (main, preview)
+
+
+def test_the_first_place_says_start_instead_of_empty_figures(tmp_path):
+    html = ot.page_html(two_screens(tmp_path), mine(), {"title": "T", "kicker": ""}, (640, 360))
+
+    assert "--.-" not in html and html.count("スタート") == 1
+    stats = html.split('<div class="stats"')[1].split('<div class="upcoming"')[0]
+    assert stats.count("距離") == 1  # only the place a leg arrives at has figures
+
+
+def test_another_place_without_figures_shows_its_name_alone(tmp_path):
+    screens = two_screens(tmp_path)
+    closed = screens[1]._replace(badge="×", name="C", km=None, minutes=None)
+
+    html = ot.page_html([*screens, closed], mine(), {"title": "T", "kicker": ""}, (640, 360))
+
+    assert "--.-" not in html and html.count("スタート") == 1
+
+
+def test_the_next_card_gives_that_legs_distance_and_time(tmp_path):
+    html = ot.page_html(two_screens(tmp_path), mine(), {"title": "T", "kicker": ""}, (640, 360))
+    card = html.split('<div class="next"')[1].split('<div class="banner"')[0]
+    assert "2.0" in card and "20" in card and "--.-" not in card  # B is 2 km, 20 minutes on
+
+
+def test_the_storyboard_file_says_which_words_go_on_each_title_line():
+    from services.vdoprocessing import storyboard
+
+    words = {"kicker": "和歌山", "title": "葛城修験", "subtitle": "友ヶ島", "header_color": "x"}
+    board = storyboard.OutroBoard("outro", True, True, title_top="title", title_center="location", title_bottom="none")
+
+    assert ot.title_lines(words, board) == {**words, "kicker": "葛城修験", "title": "和歌山", "subtitle": ""}
+    assert ot.title_lines(words, storyboard.OutroBoard("outro", True, True)) == words
+    shipped = storyboard.outro()  # the user's to choose; only the words must be ones it knows
+    assert {shipped.title_top, shipped.title_center, shipped.title_bottom} <= {"location", "title", "subtitle", "none"}
+
+
+def test_the_outros_background_is_a_little_blurred(tmp_path):
+    html = ot.page_html(two_screens(tmp_path), mine(), {"title": "T", "kicker": ""}, (640, 360))
+    background = html.split("<svg", 1)[1].split(">", 1)[0]  # the first drawing on the page: the scenery
+    assert "blur(" in background and html.count("blur(") == 1  # the cards stay sharp
+
+
+def test_nothing_looks_like_a_button_to_scroll_with(tmp_path):
+    assert 'class="arrow"' not in ot.page_html(two_screens(tmp_path), mine(), {"title": "T", "kicker": ""}, (640, 360))
+
+
+def test_a_single_screen_has_no_next_place(tmp_path):
     screens = two_screens(tmp_path)[:1]
-    assert 'class="arrow"' not in ot.page_html(screens, mine(), {"title": "T", "kicker": ""}, (640, 360))
     only = _shown(screens, (0.0,))[0]
     assert [only[n]["opacity"] for n in ("upcoming", "next", "route")] == [0] * 3
 
@@ -370,7 +423,6 @@ def test_an_old_custom_style_gives_the_built_in_one(tmp_path, monkeypatch):
 def test_the_outro_storyboard_file_hides_stopbys_and_closed_places(project, monkeypatch, tmp_path):
     from services.vdoprocessing import storyboard
 
-    assert storyboard.outro().include_stopby_waypoint is True and storyboard.outro().include_closed_waypoint is True
     boards = tmp_path / "boards"
     boards.mkdir()
     (boards / "outro.json").write_text(

@@ -1,5 +1,5 @@
-{# Icon, distance and time (on the mode's colour) stand close together so each reads as one group, each in a
-   fixed column so the rows line up; two modes to a row. #}
+{# Icon, distance and time (on the mode's colour) stand close together so each reads as one group, centred in its
+   half; two modes to a row. A column's distances take the room of its longest, so its rows line up. #}
 {% from "parts/macros.html" import box with context %}
 {% set cell, row = 186, 32 %}
 <div class="card" style="width:{{ width }}px;height:{{ height }}px;border-radius:20px;background:{{ theme.paper }};color:{{ theme.ink }}">
@@ -11,9 +11,11 @@
 {% set y = 4 + row * (loop.index0 // 2) %}
 {% set mode = m.mode %}
 {% set walker = m.walker %}
-<svg data-part="icon" width="28" height="28" viewBox="5 13 58 58" style="left:{{ x + 7 }}px;top:{{ y + 2 }}px;width:28px">{% include "parts/medallion.svg" %}<circle cx="34" cy="42" r="27" fill="none" stroke="{{ m.color }}" stroke-width="4"/></svg>
-{# Distances end where the pills start; "safe" keeps a too-long one overflowing rightwards, so it is shrunk. #}
-<div class="num fit" data-part="distance" style="left:{{ x + 39 }}px;top:{{ y }}px;width:64px;height:{{ row }}px;line-height:{{ row }}px;font-size:17px;justify-content:safe flex-end">{{ m.distance|units }}</div>
-{% call box(x + 108, y + 5.5, 72, 21, "border-radius:11px;background:" ~ m.color ~ ";color:#fff;font-size:12px;font-weight:900;text-align:center", ' data-part="time" class="fit"') %}{{ m.time }}{% endcall %}
+{% set longest = modes[(loop.index0 % 2)::2]|map(attribute="distance")|map("length")|max %}
+{% set room = [56, 8 * longest - 4]|min %}{# "8.6 km" is about 40 wide at this size #}
+{% set left = x + (cell - 110 - room) / 2 %}{# 110: the icon, the pill and the two gaps #}
+<svg data-part="icon" width="28" height="28" viewBox="5 13 58 58" style="left:{{ left|g }}px;top:{{ y + 2 }}px;width:28px">{% include "parts/medallion.svg" %}<circle cx="34" cy="42" r="27" fill="none" stroke="{{ m.color }}" stroke-width="4"/></svg>
+<div class="num fit" data-part="distance" style="left:{{ (left + 33)|g }}px;top:{{ y }}px;width:{{ room }}px;height:{{ row }}px;line-height:{{ row }}px;font-size:17px">{{ m.distance|units }}</div>
+{% call box(left + 38 + room, y + 5.5, 72, 21, "border-radius:11px;background:" ~ m.color ~ ";color:#fff;font-size:12px;font-weight:900;text-align:center", ' data-part="time" class="fit"') %}{{ m.time }}{% endcall %}
 {% endfor %}
 </div>

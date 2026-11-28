@@ -67,8 +67,8 @@ LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
 LEG_CHAIN_FIT_VERSION = 1
 # Bumped when the camera move to a far stop-by changes (only legs with one re-render; v1: fly out and back,
-# v2: the leg's frame no longer stops at it).
-LEG_FAR_STOPBY_VERSION = 2
+# v2: the leg's frame no longer stops at it; v3: the walk's frame no longer widens to hold it).
+LEG_FAR_STOPBY_VERSION = 3
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.
@@ -228,17 +228,18 @@ def _leg_fingerprint_parts(
         parts["join"] = h([leg_kwargs.get("opening_view"), bool(leg_kwargs.get("end_view_path")), *prior])
     closed = [lm.get("label") for lm in leg_kwargs.get("landmarks") or [] if lm.get("inaccessible")]
     if closed:
-        parts["closed"] = h([closed, 3])  # a place turned Closed re-renders the legs that pass it (v3: fullscreen photo)
+        parts["closed"] = h([closed, 4])  # a place turned Closed re-renders the legs that pass it (v4: not in the banner)
     quiet = [lm.get("label") for lm in leg_kwargs.get("landmarks") or [] if lm.get("quiet")]
     if quiet:
         parts["quiet_stopby"] = h(quiet)  # a stop-by whose narration was emptied re-renders only the legs passing it
     # A connected or walked-past stop-by cuts the leg and the next piece opens on its photo and a camera move; only
     # those legs re-render when that opening changes (v3: a brief re-open and a shorter hop, which delayed the
-    # narration; v4: the camera moves only when the next stretch doesn't fit the frame; v5: a glide, no zoom-out hop).
+    # narration; v4: the camera moves only when the next stretch doesn't fit the frame; v5: a glide, no zoom-out hop; v6: the next-stop card stays on the stop-by; v7: the
+    # destination's pin is not left at the frame's edge).
     reopen = [lm.get("label") for lm in leg_kwargs.get("landmarks") or []
               if (lm.get("connect_to_route") and lm.get("popup_image")) or lm.get("walk_seconds") is not None]
     if reopen:
-        parts["stopby_reopen"] = h([reopen, 5])
+        parts["stopby_reopen"] = h([reopen, 7])
     if "leg_elevations" in leg_kwargs:
         # Heatmap legs also draw the elevation profile card: re-render only them when it changes.
         parts["kw.leg_elevations"] = h([leg_kwargs["leg_elevations"], LEG_ELEVATION_CARD_VERSION])
@@ -863,16 +864,15 @@ class RouteAnimator:
         next_leg = res_sequence[i + 1] if i + 1 < len(res_sequence) else {}
         # "zoom": legs open and close on their own (no slide, no carried card).
         slide = self.config.get("quiet_stop_transition", "slide") != "zoom"
-        # Return stops keep their own joins: the pair, or a stop with nothing to tell.
+        # A return pair opens on the leg before's last view even with sliding turned off.
         return_pair = bool(res_data.get("dest_is_return") and next_leg.get("start_is_return"))
-        slides_on = slide and _legs_join(res_data, next_leg) and (
-            photos.dest_quiet or not next_leg.get("start_is_return"))
+        slides_on = slide and _legs_join(res_data, next_leg)
         if return_pair or slides_on:
             leg_kwargs["end_view_path"] = str(self.out_dir / f"{leg_glob_prefix}endview.json")
-        # Marks a join the timeline cuts (the same frame on both sides, and between this leg's own pieces): only a
-        # return pair dissolves, to swap the route lines.
+        # Marks a join the timeline cuts (the same frame on both sides, and between this leg's own pieces): a
+        # dissolve over a moving camera showed two maps at once.
         no_fade = self.out_dir / f"{leg_glob_prefix}nofade"
-        if slide and (photos.dest_quiet or (slides_on and not return_pair)):
+        if slide and (photos.dest_quiet or slides_on):
             no_fade.touch()
         else:
             no_fade.unlink(missing_ok=True)
@@ -881,7 +881,7 @@ class RouteAnimator:
             if not next_leg:  # the last leg: the finale opens on this camera and card
                 leg_kwargs["end_view_path"] = str(self.out_dir / f"{leg_glob_prefix}endview.json")
         prev = res_sequence[i - 1] if i > 0 else {}
-        joined = slide and _legs_join(prev, res_data) and (start_quiet or not res_data.get("start_is_return"))
+        joined = slide and _legs_join(prev, res_data)
         if (res_data.get("start_is_return") or joined) and prev_end_view:
             try:
                 leg_kwargs["opening_view"] = json.loads(Path(prev_end_view).read_text(encoding="utf-8"))

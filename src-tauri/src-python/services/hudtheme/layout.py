@@ -18,7 +18,7 @@ logger = setup_logger(__name__)
 
 FILE_NAME = "hud.json"
 # Bump when the themed look changes, so themed projects render again.
-RENDER_VERSION = 1
+RENDER_VERSION = 7  # 7: the overview's pop-up cards and notices in the cards' font
 MIN_SCALE, MAX_SCALE = 0.5, 2.0
 _NOTICE_EDGE = (18 * 568 / 1080, 28 * 568 / 1080)  # where the app itself puts its banners
 BOTH_AXES = [f"{v}-{h}" for v in ("top", "middle", "bottom") for h in ("left", "center", "right")]
@@ -45,10 +45,10 @@ DEFAULTS: Dict[str, Entry] = {
     "notices": Entry("bottom-left", *_NOTICE_EDGE),
     # the walking legs
     "next": Entry("top-left", 16, 14),
-    "leg_banner": Entry("top-right", 16, 14),
+    "leg_banner": Entry("bottom-right", 16, 14),  # this leg's own figures
     "compass": Entry("top-right", 16, 100),
     "leg_rail": Entry("bottom-left", 16, 14),
-    "remaining": Entry("bottom-right", 16, 14),
+    "remaining": Entry("top-right", 16, 14),  # what is left of the whole route, with the picture
     # the attraction clips (on the walking legs' artboard)
     "place": Entry("top-left", 16, 14),
 }
@@ -102,8 +102,8 @@ def place(entry: Entry, size: Tuple[float, float], frame: Tuple[float, float], u
 
 
 def read(project_dir) -> Optional[Dict]:
-    """The project's hud.json as {"theme", "layout"}; None (the classic look) when it is absent, unreadable or
-    names no theme."""
+    """The project's hud.json as {"theme", "layout"}, plus "scene" (a picture) and "names" (the strip's labels) when
+    set; None (the classic look) when it is absent, unreadable or names no theme."""
     path = Path(project_dir) / FILE_NAME
     if not path.is_file():
         return None
@@ -120,7 +120,10 @@ def read(project_dir) -> Optional[Dict]:
         logger.warning("%s: no theme '%s' (have %s); using the classic look.", path, data["theme"],
                        ", ".join(model.theme_ids()))
         return None
-    return {"theme": data["theme"], "layout": data.get("layout") or {}}
+    scene, names = data.get("scene"), data.get("names")
+    return {"theme": data["theme"], "layout": data.get("layout") or {},
+            **({"scene": scene} if isinstance(scene, str) else {}),
+            **({"names": names} if isinstance(names, dict) else {})}
 
 
 def fingerprint(project_dir) -> Optional[str]:

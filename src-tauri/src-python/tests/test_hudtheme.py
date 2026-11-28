@@ -210,6 +210,14 @@ def test_every_theme_builds_every_card(theme_id):
     assert all(card.html for card in built)
 
 
+def test_a_picture_brings_its_own_pattern_and_outro_backdrop():
+    plain, katsuragi = model.load_theme("mine"), model.load_theme("mine", scene="katsuragi")
+
+    assert plain["backdrop"] == "" and "<svg" in katsuragi["backdrop"]
+    assert katsuragi["pattern"] != plain["pattern"] and "$id" in katsuragi["pattern"]
+    assert katsuragi["primary"] == plain["primary"]
+
+
 def test_your_palette_replaces_the_sea_colors():
     theme = model.load_theme("mine")
 
@@ -381,7 +389,7 @@ def test_no_card_keeps_a_white_surface_in_the_dark(theme_id):
         cards.mode_bar(theme, [("walking", 1.0, 60)], JA), cards.compass_card(theme, 47, JA),
     ]
     for card in built:
-        assert "background:#fff" not in card.html and "border:3px solid #fff;border-radius:41px" not in card.html
+        assert "background:#fff" not in card.html and "border:3px solid #fff;border-radius:24px" not in card.html
     assert 'r="20" fill="#fff"' not in built[5].html  # the walker's circle on the leg bar
 
 

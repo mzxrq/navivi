@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { cardOf, carryOverLooks, TextClip, TimelineData, toManifest } from "../../../src/features/editor/model";
+import {
+  cardOf, carryOverLooks, TextClip, TimelineData, timelineFromPipeline, toManifest,
+} from "../../../src/features/editor/model";
 
 const picture = { path: ".navivi/hud/place_1.png", x: -14, y: -18, width: 400, height: 190, text: "神社" };
 const item: TextClip = {
@@ -20,6 +22,15 @@ describe("themed place card", () => {
 
   it("goes with the item into timeline.json for the export", () => {
     const out = toManifest("p", timeline([item]));
+
+    expect(out.texts[0].picture).toEqual(picture);
+  });
+
+  it("is read from the render's own timeline.json", async () => {
+    const out = await timelineFromPipeline(
+      { video_tracks: [{ file_path: "a.mp4", clip_name: "04_attraction_00_a", texts: [item] }] },
+      async () => 6,
+    );
 
     expect(out.texts[0].picture).toEqual(picture);
   });

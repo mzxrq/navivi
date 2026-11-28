@@ -1,11 +1,17 @@
 import json
 from types import SimpleNamespace
 
+import pandas as pd
 import pytest
 
+from services import tuning
 from services.vdoprocessing.pydeckrecorder import pedestrian
-from services.vdoprocessing.pydeckrecorder.leg_camera import _recenter_view_for_target_px
-from services.vdoprocessing.pydeckrecorder.pedestrian import _joined_zoom, _opening_marker_px, _piece_glide
+from services.vdoprocessing.pydeckrecorder.leg_camera import (
+    _framed_points, _project_lonlat_to_px, _recenter_view_for_target_px,
+)
+from services.vdoprocessing.pydeckrecorder.pedestrian import (
+    _banner_window, _glide_seconds, _glide_view, _joined_zoom, _opening_marker_px, _piece_glide, _stops_passed,
+)
 from services.vdoprocessing.route2vdo import (
     RouteAnimator, _leg_fingerprint_parts, _LegReuse, _legs_join, leg_changed_parts,
 )
@@ -161,14 +167,47 @@ def test_slide_join_cuts_between_clips(tmp_path):
     assert not marker.exists()
 
 
-def test_return_stops_join_as_before(tmp_path):
+def test_a_return_pair_cuts_and_zooms_like_any_join(tmp_path):
     out, back = {**A, "dest_is_return": True}, {**B, "start_is_return": True}
     assert "end_view_path" in _joins(tmp_path, 0, [out, back])
-    assert not (tmp_path / "02_waypoint_02_nofade").exists()  # the dissolve that swaps the route lines
+    assert (tmp_path / "02_waypoint_02_nofade").exists()  # a dissolve showed two zooms on top of each other
     kwargs = _joins(tmp_path, 1, [out, back], prev_view=_view_file(tmp_path))
-    assert kwargs["opening_view"] == VIEW and "prior_trail" not in kwargs
-    assert "end_view_path" not in _joins(tmp_path, 0, [A, back])
-    assert "prior_trail" not in _joins(tmp_path, 1, [A, back], prev_view=_view_file(tmp_path))
+    assert kwargs["opening_view"] == VIEW and "prior_trail" in kwargs  # the old line fades as the camera moves
+
+
+def test_a_stop_by_the_camera_flies_to_does_not_widen_the_walks_frame():
+    path = pd.DataFrame({"lat": [34.0, 34.001], "lon": [135.0, 135.001]})
+    walked = {"lat": 34.002, "lon": 135.0}
+    flown_to = {"lat": 34.004, "lon": 135.0, "pops_after": ""}  # shown from the stop, before the walk
+
+    lons, lats = _framed_points(path, 0, 2, [walked, flown_to])
+
+    assert max(lats) == 34.002 and len(lons) == 3
+
+
+def test_the_next_card_stays_on_a_stop_by_until_the_walk_leaves_it():
+    reached = [100, 100, 180]  # a stop-by, one shown from the same spot, another further on
+
+    assert [_stops_passed(reached, frame) for frame in (99, 100, 101, 180, 181)] == [0, 0, 2, 2, 3]
+    assert _banner_window([1, 2, 3], 4, 0) == (0, 1)  # items 1, 2, 3 are the stop-bys; 4 the destination
+    assert _banner_window([1, 2, 3], 4, 1) == (1, 2)
+    assert _banner_window([1, 2, 3], 4, 3) == (3, 4)
+
+
+def test_a_bigger_zoom_out_takes_longer():
+    assert _glide_seconds(16.0, 16.0) == _glide_seconds(16.0, 15.0) == tuning.LEG_CONTINUE_GLIDE_SECONDS
+    assert _glide_seconds(17.0, 13.0) >= 2.0
+    assert _glide_seconds(17.5, 4.0) == tuning.LEG_GLIDE_MAX_SECONDS  # a walk into a flight: not 8 silent seconds
+
+
+def test_the_start_pin_stays_on_screen_while_the_camera_zooms_far_out():
+    size, pin = (1920, 1080), (135.008, 34.284)
+    start, end = (*pin, 17.5), (135.040, 34.283, 13.0)  # the ferry leg: the pin ends near the left edge
+    for i in range(61):
+        lon, lat, zoom = _glide_view(start, end, i / 60)
+        x, y = _project_lonlat_to_px(*pin, lon, lat, zoom, size)
+        assert 0 < x < size[0] and 0 < y < size[1], (i, x, y)
+    assert _glide_view(start, end, 0.0) == pytest.approx(start) and _glide_view(start, end, 1.0) == pytest.approx(end)
 
 
 def test_piece_glide_keeps_the_zoom_when_the_next_stretch_suits_it():

@@ -1,10 +1,11 @@
 {% from "parts/macros.html" import box with context %}
 {% set dx = width - 372 %}{# the leg banner is the same card with the picture's room taken off the left #}
 {% set label = "font-size:11px;font-weight:900;color:" ~ theme.gold %}
-{% macro number(left, size, text) -%}
-<div class="num fit" style="left:{{ left + dx }}px;top:27px;width:80px;height:40px;line-height:40px;font-size:{{ size }}px">{{ text|units }}</div>
+{% set size = 30 if most_km < 100 else 24 %}
+{% macro number(left, text, shown=true) -%}
+<div class="num fit same" style="left:{{ left + dx }}px;top:27px;width:80px;height:40px;line-height:40px;font-size:{{ size }}px{{ "" if shown else ";visibility:hidden" }}">{{ text|units(counting) }}</div>
 {%- endmacro %}
-<div class="card" style="width:{{ width }}px;height:76px;border:3px solid {{ theme.edge }};border-radius:{{ "16px" if leg else "41px 16px 16px 41px" }};color:#fff">
+<div class="card" style="width:{{ width }}px;height:76px;border:3px solid {{ theme.edge }};border-radius:{{ "16px" if leg else "24px 16px 16px 24px" }};color:#fff">
 {% if leg %}
 <svg width="{{ width }}" height="76" viewBox="0 0 {{ width }} 76"><rect width="{{ width }}" height="76" fill="{{ theme.panel }}"/></svg>
 {% else %}
@@ -12,9 +13,11 @@
 {% endif %}
 <svg width="32" height="32" viewBox="0 0 32 32" style="left:{{ 110 + dx }}px;top:22px"><circle cx="16" cy="16" r="16" fill="#fff"/><path d="M9 22C17 25 11 14 17 15S19 19 23 10" fill="none" stroke="{{ theme.line }}" stroke-width="2" stroke-linecap="round" stroke-dasharray="2 3.5"/><circle cx="8" cy="22" r="3.5" fill="{{ theme.start }}"/><circle cx="23.5" cy="9.5" r="3.5" fill="{{ theme.accent }}"/></svg>
 {% call box(148 + dx, 10, 82, 16, label, ' class="fit"') %}{{ distance_label }}{% endcall %}
-{{ number(148, 30 if distance_km < 100 else 24, distance) }}
+{{ number(148, distance) }}
 <div style="left:{{ 232 + dx }}px;top:16px;width:1px;height:44px;background:{{ theme.pattern_dark }}"></div>
 <svg width="32" height="32" viewBox="0 0 32 32" style="left:{{ 242 + dx }}px;top:22px"><circle cx="16" cy="16" r="16" fill="#fff"/><path d="M16 16V3.5A12.5 12.5 0 {{ clock_large }} 1 {{ clock_end }}Z" fill="{{ theme.clock }}"/><path d="M16 2V5M30 16H27M16 30V27M2 16H5" stroke="{{ theme.line }}" stroke-width="1.6" stroke-linecap="round"/><path d="M16 16V7M16 16L{{ clock_end }}" stroke="{{ theme.line }}" stroke-width="1.8" stroke-linecap="round"/></svg>
 {% call box(280 + dx, 10, 86, 16, label, ' class="fit"') %}{{ time_label }}{% endcall %}
-{{ number(280, 24, time) }}
+{{ number(280, time) }}
+{# Unseen: the size the figures start at, kept while they count down. #}
+{% if counting %}{{ number(148, most_distance, false) }}{{ number(280, most_time, false) }}{% endif %}
 </div>

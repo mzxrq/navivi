@@ -32,14 +32,12 @@ the project's own light/dark setting. Only `theme` is required.
 | `strip` | overview | `strip` | bottom-right |
 | `notices` | overview | (drawn by the app) | bottom-left |
 | `next` | leg | `next` | top-left |
-| `leg_banner` | leg | `totals` | top-right |
-| `compass` | leg | `compass` | top-right, under the banner |
+| `leg_banner` | leg | `totals` | bottom-right (this leg's distance and time) |
+| `compass` | leg | `compass` | top-right, under the totals |
 | `leg_rail` | leg | `leg_rail` | bottom-left |
-| `remaining` | leg | `totals` | bottom-right |
+| `remaining` | leg | `totals` | top-right (what is left of the route, with the picture) |
 | `outro` | outro | `outro` | the whole frame (no `hud.json` layout entry) |
 | `place` | attraction clip | `place` | top-left (600-high frame, like the legs) |
-
-A closed place being passed on a leg uses the `place` style folder.
 
 On attraction clips the `place` card replaces the plain place name, in the editor and the export, from the next
 render. Renaming the item in the editor shows the new words as plain text until the render after.
@@ -55,7 +53,7 @@ render. Renaming the item in the editor shows the new words as plain text until 
 | `style` | a style file's name without its extension |
 
 `notices` takes `show`, `anchor`, `x` and `y` only. A card never leaves the frame. The strip and the rail shrink
-when they would run into the banners or the remaining card. Overview stop badges and map name pills keep clear of
+when they would run into the banners or a figures card. Overview stop badges and map name pills keep clear of
 the cards wherever you put them. A theme can set its own defaults with a `"layout"` object in `theme.json`.
 
 A bad value is ignored with a warning in the render log; an unreadable file gives the classic look.
@@ -78,6 +76,11 @@ embed a `data:` URI). A file that fails falls back to the built-in style, with a
 - `class="fit"`: the text shrinks to its box. `class="card grow"` with a `flow` child: the card grows with its text.
 - `strip` must have `data-line="x0 x1 y"`: the line the video draws the progress and traveller on, in card px.
 - `compass` must keep the ids `hud-compass-pointer`, `hud-compass-letter`, `hud-compass-label`.
+- `leg_rail` moves smoothly when its `class="card"` element has `data-rail="x0 x1 y"` (where its line starts
+  and ends, and its height, in card px). The file is then drawn three times, by `layer`: `bar` (the whole card),
+  `walked` (the same size, nothing behind it, the walked line and whatever sits on it; the video cuts it off at
+  the traveller) and `walker` (the traveller alone, centred in a small card; the video slides it along). `share`
+  is 0 for all three. Without `data-rail` one picture is drawn per `share`, 300 steps to a leg.
 
 ### What a file can use
 
@@ -89,16 +92,44 @@ Filters: `words` (break only between words), `units` (small units beside numbers
 | Style folder | Variables |
 |---|---|
 | `title` | `title`, `loop`, `start`, `end`, `stamp` (loop / one way), `route` (the line under the title) |
-| `totals` | `distance`, `distance_km`, `time`, `distance_label`, `time_label`, `leg` (the compact banner), `clock_large`, `clock_end` |
+| `totals` | `distance`, `distance_km`, `time`, `distance_label`, `time_label`, `leg` (the compact banner), `clock_large`, `clock_end`, `counting` (what is left, counting down: use `units(counting)` so the digits keep their place), `most_km`, `most_distance`, `most_time` (what it started at) |
 | `modes` | `modes`: list of `mode`, `color`, `distance`, `time`, `walker` |
 | `strip` | `segments`: list of `mode`, `color`, `glyphs`, `place`, `start`, `end` (shares 0 to 1 of the line); `start`, `end` |
 | `next` | `glyph`, `name`, `heading`, `previous_label`, `previous_glyph`, `previous` |
 | `place` | `glyph`, `name` |
 | `compass` | `degrees`, `name` |
-| `leg_rail` | `from_glyph`, `to_glyph`, `share` (0 to 1), `vias`: list of (share, glyph), `color`, `icon` |
-| `outro` | `screens`: list of `badge`, `name`, `description`, `photo` (a data URI or ""), `known`, `km`, `time`, `next` (`badge`, `name`, `photo`, or none); `kicker`, `title`, `subtitle`; `distance_label`, `time_label`, `unknown_km`, `unknown_time`; `left` (photo column width), `rolls` (for each of six boxes, in rolling order: (percent, screen) at each end of every hold), `keyframes` (the same for the whole step), `seconds` |
+| `leg_rail` | `from_glyph`, `to_glyph`, `share` (0 to 1), `vias`: list of (share, glyph), `color`, `icon`, `layer` |
+| `outro` | `screens`: list of `badge`, `name`, `description`, `photo` (a data URI or ""), `known`, `km`, `time`, `next` (`badge`, `name`, `photo`, or none); `kicker`, `title`, `subtitle`; `distance_label`, `time_label`, `unknown_km`, `unknown_time`, `start_label` (shown on the first place, which no leg arrives at); `left` (photo column width), `rolls` (for each of six boxes, in rolling order: (percent, screen) at each end of every hold), `keyframes` (the same for the whole step), `seconds` |
 
 The outro file is a whole animated page, 600 high: it is animated by CSS animations lasting `seconds` that follow `rolls` and `keyframes` (the video code pauses them all and sets their time). Each `class="desc"` text must sit in an element with `data-screen="N"` inside an element with `class="about"`: the video code grows the text from three lines up to seven and sets `--h-N` (the box's height for screen N) on `.about`. `body.bare` must hide everything but the background.
+
+## Your own picture
+
+The picture on the totals card and the outro comes with the theme. A project can show another one:
+
+```json
+{ "theme": "sea", "scene": "katsuragi" }
+```
+
+`katsuragi` is built in. For your own, put `<name>.svg` in `Documents\Navivi\Styles\scene\` and name it in
+`hud.json`; a file there wins over a built-in one of the same name. Draw on a 110 x 76 canvas: either bare SVG shapes,
+or a whole `<svg width="110" height="76" viewBox="0 0 110 76">`. The totals card rounds off the left side and covers
+everything right of about 95 with its panel. Light and dark projects show the same picture. A missing file gives the
+theme's own picture, with a warning in the render log.
+
+A picture name can bring two more drawings, both optional, under the same two folders as above:
+`pattern\<name>.svg` replaces the theme's pattern (same format as a theme's `pattern.svg`), and
+`backdrop\<name>.svg` replaces the scroll outro's sea background (one `<svg>` filling a frame 600 high, drawn for
+light projects). The theme's colors do not change. `katsuragi` has both.
+
+## Names on the strip
+
+Each stretch of the strip is labelled with one of its stops. Give your own words, or `""` for none, by the numbers
+in its circle:
+
+```json
+{ "theme": "mine", "names": { "1-3": "", "4-11": "友ヶ島" } }
+```
 
 ## A new theme
 

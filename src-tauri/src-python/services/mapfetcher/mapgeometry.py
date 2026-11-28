@@ -525,9 +525,10 @@ class RouteGeometryProcessor:
                 continue
             # The first pass that comes about as close as the closest: a pier left from and returned to was matched
             # to its return, squeezing every stop in between onto the pier.
-            near = dist <= dist.min() + tuning.LOOP_ROUTE_MATCH_DEGREES
-            first = int(np.flatnonzero(near)[0])
-            end = first + (int(np.argmin(near[first:])) if not near[first:].all() else len(near) - first)
+            first = int(np.flatnonzero(dist <= dist.min() + tuning.LOOP_ROUTE_MATCH_DEGREES)[0])
+            # The pass ends only well clear of the spot: a street just short of it is still the way there.
+            away = np.flatnonzero(dist[first:] > dist.min() + 2 * tuning.LOOP_ROUTE_MATCH_DEGREES)
+            end = first + int(away[0]) if away.size else len(dist)
             local_idx = first + int(np.argmin(dist[first:end]))  # the closest point of that first pass
             if n == len(waypoints) - 1:
                 local_idx = int(np.argmin(dist))  # the trip ends at the final stop: its closest point, not an earlier pass

@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 from services import tuning
+from services.hudtheme import styles
+from services.logger.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 THEMES_DIR = Path(__file__).parent / "themes"
 MOUNTAIN_CLIMB_M = 300.0
@@ -47,8 +51,34 @@ def pin_color(theme: Dict, glyph) -> str:
     return theme["pins"][kind]
 
 
-def load_theme(theme_id: str, dark: bool = False) -> Dict:
-    """A theme's colors and artwork; `dark` lays its "dark" colors over them (the project's light/dark setting)."""
+def _named_scene(name: Optional[str]) -> Optional[str]:
+    """The picture `<name>.svg` from a scene folder (the user's, then ours), or None."""
+    if not name:
+        return None
+    path = styles.find("scene", name)
+    try:
+        if path is not None:
+            return path.read_text(encoding="utf-8-sig")
+    except (OSError, ValueError) as error:
+        logger.warning("Picture %s cannot be read (%s); using the theme's own.", path, error)
+        return None
+    logger.warning("No picture '%s'; using the theme's own.", name)
+    return None
+
+
+def _scene_art(kind: str, scene: Optional[str]) -> Optional[str]:
+    """The `kind` drawing that comes with the picture `scene`, or None: most pictures have none."""
+    path = styles.find(kind, scene) if scene else None
+    try:
+        return path.read_text(encoding="utf-8-sig") if path else None
+    except (OSError, ValueError) as error:
+        logger.warning("%s cannot be read (%s); using the usual one.", path, error)
+        return None
+
+
+def load_theme(theme_id: str, dark: bool = False, scene: Optional[str] = None) -> Dict:
+    """A theme's colors and artwork; `dark` lays its "dark" colors over them (the project's light/dark setting).
+    `scene` names a picture to show instead of the theme's own, with its pattern and outro backdrop if it has them."""
     folder = THEMES_DIR / theme_id
     data = json.loads((folder / "theme.json").read_text(encoding="utf-8"))
     layout = data.get("layout") or {}
@@ -62,8 +92,10 @@ def load_theme(theme_id: str, dark: bool = False) -> Dict:
     return {
         "id": f"{theme_id}-dark" if dark else theme_id, "dark": dark, **data["colors"],
         "mode_colors": data["mode_colors"], "pins": pins, "layout": layout,
-        "scene": (folder / ("scene_dark.svg" if dark else "scene.svg")).read_text(encoding="utf-8"),
-        "pattern": (folder / "pattern.svg").read_text(encoding="utf-8"),
+        "scene": _named_scene(scene)
+        or (folder / ("scene_dark.svg" if dark else "scene.svg")).read_text(encoding="utf-8"),
+        "pattern": _scene_art("pattern", scene) or (folder / "pattern.svg").read_text(encoding="utf-8"),
+        "backdrop": _scene_art("backdrop", scene) or "",
     }
 
 
@@ -124,6 +156,12 @@ def _place_name(names: Sequence[str]) -> str:
         return ""
     shared = os.path.commonprefix(list(names)).strip()
     return shared if len(names) > 1 and len(shared) >= 2 else names[0]
+
+
+def rename(segments: Sequence[Segment], names: Dict) -> List[Segment]:
+    """hud.json "names", stop numbers -> the name under them on the strip ("" for none); "1-3" means "1–3"."""
+    found = {str(k).replace("-", "–"): v for k, v in names.items() if isinstance(v, str)}
+    return [s._replace(place=found.get(s.glyphs, s.place)) for s in segments]
 
 
 def route_segments(cum: Sequence[float], modes: Sequence[str], stops: Sequence[Stop]) -> List[Segment]:

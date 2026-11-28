@@ -1,11 +1,11 @@
 {% from "parts/macros.html" import grow with context %}
 {% set badge %}
-<div style="left:16px;top:50%;margin-top:-28px;width:56px;height:56px;box-sizing:border-box;border:3px solid #fff;border-radius:50%;background:{{ pin(glyph) }};color:#fff;font-size:{{ 28 if glyph|length < 3 else 22 }}px;font-weight:900;line-height:50px;text-align:center">{{ glyph }}</div>
+<div style="left:16px;top:50%;margin-top:-28px;width:56px;height:56px;box-sizing:border-box;border:3px solid #fff;border-radius:50%;background:{{ pin(glyph) }};color:#fff;font-size:{{ 28 if glyph|length < 3 else 22 }}px;font-weight:900;line-height:46px;text-align:center">{{ glyph }}</div>
 {% endset %}
 {% call grow("next", 366, 104, 16, 61, 86, 430, 14, 12, badge) %}
 <div style="font-size:14px;font-weight:900;line-height:18px;color:{{ theme.gold }}">{{ heading }}</div>
 <div style="margin-top:4px;font-size:28px;font-weight:900;line-height:36px">{{ name|words }}</div>
 {% if previous %}
-<div style="margin-top:4px;font-size:12px;font-weight:700;line-height:16px;color:{{ theme.soft }}">{{ previous_label }}　{% if previous_glyph %}<span class="ring" style="background:{{ pin(previous_glyph) }}">{{ previous_glyph }}</span>{% endif %}{{ previous|words }}</div>
+<div style="margin-top:4px;font-size:12px;font-weight:700;line-height:16px;color:{{ theme.soft }}">{{ previous_label }}　{% if previous_glyph %}<span class="ring" style="background:{{ pin(previous_glyph) }}{% if previous_glyph|length > 2 %};font-size:8px{% endif %}">{{ previous_glyph }}</span>{% endif %}{{ previous|words }}</div>
 {% endif %}
 {% endcall %}

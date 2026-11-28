@@ -3,16 +3,13 @@
 {% from "parts/macros.html" import box, disc with context %}
 {% set x0, x1, y = 48, 398, 36 %}
 {% set spans = [] %}
-{% set water = [] %}
 {% for s in segments %}
-{% set span = [x0 + s.start * (x1 - x0), x0 + s.end * (x1 - x0)] %}
-{% set _ = spans.append(span) %}
-{% if s.mode != "walking" %}{% set _ = water.append(span) %}{% endif %}
+{% set _ = spans.append([x0 + s.start * (x1 - x0), x0 + s.end * (x1 - x0)]) %}
 {% endfor %}
 <div class="card" data-line="{{ x0 }} {{ x1 }} {{ y }}" style="width:447px;height:76px;border-radius:22px;color:{{ theme.ink }}">
 <svg width="447" height="76" viewBox="0 0 447 76">
 <rect width="447" height="76" fill="{{ theme.pale }}"/>
-{{ pattern("strip", true, water or [[151, 281]], 50) }}{# stops above the names #}
+{{ pattern("strip", true, [[0, 447]], 76) }}
 {% for s in segments %}
 {% set left, right = spans[loop.index0] %}
 {% set width = right - left %}
@@ -34,7 +31,7 @@
 {% set mid = (spans[segments.index(s)][0] + spans[segments.index(s)][1]) / 2 %}
 {% set wide = [26, 16 + 8 * s.glyphs|length]|max %}
 <div style="left:{{ (mid - wide / 2 - 2)|f1 }}px;top:23px;width:{{ wide }}px;height:22px;line-height:22px;border:2px solid #fff;border-radius:13px;background:{{ theme.pins.stop }};color:#fff;font-size:12px;font-weight:900;text-align:center">{{ s.glyphs }}</div>
-{% set _ = places.append([mid, s.place]) %}
+{% if s.place %}{% set _ = places.append([mid, s.place]) %}{% endif %}
 {% endfor %}
 {% set _ = places.append([412.0, end]) %}
 {# Each name gets half the way to its neighbours, so two can never run into each other. #}

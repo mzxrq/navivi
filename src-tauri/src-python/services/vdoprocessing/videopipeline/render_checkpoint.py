@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Optional
 
+from services import tuning
 from services.hudtheme import layout
 from services.projectfiles import NARRATION_CUES, meta_file
 from services.mapfetcher.maplanguage import map_style_inputs
@@ -161,6 +162,9 @@ def _checkpoint_parts(
     hud_part = layout.fingerprint(Path(project_config_path).parent)
     if hud_part:
         parts["route.hud"] = hud_part
+    if any(isinstance(w, dict) and w.get("routeMode") == "ferry" for w in config_data.get("waypoints") or []):
+        # The crossing's time is on the overview and the legs; absent without a ferry, so nothing else renders.
+        parts["route.speeds"] = _short_hash(tuning.REPORTED_MODE_SPEED_KMH["ferry"])
     _add_config_parts(parts, config_data)
     route_df = cleaned_route.get("route")
     if route_df is not None:
@@ -196,10 +200,12 @@ def _checkpoint_parts(
 # route.map_style: the video's map style or tile sharpness (absent, so unchanged, until a project sets one).
 # route.overview_voice: the overview's cue times and voice length (set by render_route_video).
 # route.map_language: the label/on-screen text language (absent for a config that never had one).
+# route.hud: hud.json, a style or theme file, or the themed look's version (absent for a project that is not themed).
+# route.speeds: the ferry's reported speed (absent for a route without a ferry).
 ROUTE_CHECKPOINT_PARTS = (
     "route.waypoints", "route.overview_flags", "route.photos", "route.markers", "route.map_style",
     "route.overview_voice", "route.map_language", "route.labels", "route.overview_version", "route.leg_version",
-    "route.leg_voice", "route.storyboard", "route.leg_storyboard",
+    "route.leg_voice", "route.storyboard", "route.leg_storyboard", "route.hud", "route.speeds",
 )
 
 

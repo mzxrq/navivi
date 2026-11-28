@@ -14,6 +14,13 @@ describe("legEstimate", () => {
     expect(legEstimate([[35, 139], [35, 139.00001]], "walking", null).minutes).toBe(1);
   });
 
+  it("takes a small ferry about 20 minutes over 7.65 km, as the Tomogashima boat does", () => {
+    const crossing = legEstimate([[35, 139], [35, 139.084]], "ferry", null);
+
+    expect(crossing.minutes).toBeGreaterThanOrEqual(19);
+    expect(crossing.minutes).toBeLessThanOrEqual(21);
+  });
+
   it("adds an hour per 600 m of climb to a walk, not to a boat", () => {
     const flat = legEstimate(line, "draw", null).minutes;
     expect(legEstimate(line, "draw", 600).minutes).toBe(flat + 60);

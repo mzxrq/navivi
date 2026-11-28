@@ -252,12 +252,20 @@ class _SpriteMixin:
         cv2 instead of PIL: a solid deckhouse block (slanted bow pennant,
         four square windows, a stacked two-tier funnel) floating above a
         separate, wider hull trapezoid, with a visible gap between the two
-        pieces."""
+        pieces.
+
+        A themed overview sets `ferry_art` (BGRA), shown instead at the same width."""
         cache = self._mode_icon_cache()
+        size = max(28, int(self.marker_radius * 4.6))
+        art = getattr(self, "ferry_art", None)
+        if art is not None:
+            if "ferry_art" not in cache:
+                height = max(1, round(art.shape[0] * size / art.shape[1]))
+                cache["ferry_art"] = cv2.resize(art, (size, height), interpolation=cv2.INTER_AREA)
+            return cache["ferry_art"]
         if "ferry_flat" in cache:
             return cache["ferry_flat"]
 
-        size = max(28, int(self.marker_radius * 4.6))
         canvas = np.zeros((size, size, 4), dtype=np.uint8)
         color = (*self.MODE_COLORS.get("ferry", self.marker_color), 255)
         white = (255, 255, 255, 255)

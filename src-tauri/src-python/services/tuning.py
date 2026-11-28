@@ -119,7 +119,7 @@ RESIDENTIAL_2D_FALLBACK_MODES: Tuple[str, ...] = ("airplane",)
 # ANIMATION_SPEED_KMH: the one on-screen pace of every mode (settings.animation_speeds_kmh overrides per mode).
 REPORTED_MODE_SPEED_KMH: Dict[str, float] = {
     "walking": 3.0,
-    "ferry": 35.0,  # regular passenger ferry, not a high-speed jet ferry
+    "ferry": 23.0,  # a small passenger ferry: Kada to Tomogashima, 7.65 km, takes about 20 minutes
     "car": 70.0,
     "driving": 70.0,
     "airplane": 500.0,
@@ -542,6 +542,10 @@ FULLSCREEN_SHRINK_SECONDS = 0.25
 LEG_PHOTO_FADE_SECONDS = 0.2
 # A leg that carries on from the one before: the camera moves from its last view into this one's in this long.
 LEG_CONTINUE_GLIDE_SECONDS = 1.0
+# ...longer for a big change of zoom (a walk into a ferry crossing), at this much per zoom level.
+LEG_GLIDE_SECONDS_PER_ZOOM = 0.6
+# ...but never longer than this: the narration waits for the camera, and a walk into a flight would take 8 s.
+LEG_GLIDE_MAX_SECONDS = 3.0
 # The leg before's line fades out over this share of that glide, at its end: kept longer it read as part of the
 # new leg, a line running from the departure pin to nowhere (2026-11-27).
 LEG_PRIOR_TRAIL_FADE_SHARE = 0.5

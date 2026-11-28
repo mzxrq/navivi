@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import math
 import string
-from typing import Dict, NamedTuple, Sequence, Tuple
+from typing import Dict, NamedTuple, Optional, Sequence, Tuple
 
 from markupsafe import Markup
 
@@ -32,7 +32,7 @@ def _card(kind: str, style: str, theme: Dict, width: int, height: int, **data) -
         return Markup(f"<defs>{defs}</defs>" + "".join(
             f'<rect x="{a:g}" y="0" width="{b - a:g}" height="{tall}" fill="url(#{ident})"/>' for a, b in rects))
 
-    shared = {"theme": theme, "scene": Markup(theme["scene"]), "pattern": pattern,
+    shared = {"theme": theme, "scene": Markup(theme["scene"]), "backdrop": Markup(theme["backdrop"]), "pattern": pattern,
               "pin": lambda glyph: model.pin_color(theme, glyph), "width": width, "height": height}
     return Card(styles.render(kind, style, {**shared, **data}), width, height)
 
@@ -49,19 +49,24 @@ def _mode_color(theme: Dict, mode: str) -> str:
 def title_card(theme: Dict, title: str, loop: bool, start: str, end: str, labels: Dict,
                style: str = styles.DEFAULT) -> Card:
     words = labels["themed_hud"]
-    return _card("title", style, theme, 326, 68, title=str(title or ""), loop=loop, start=str(start or ""),
+    return _card("title", style, theme, 260, 68, title=str(title or ""), loop=loop, start=str(start or ""),
                  end=str(end or ""), stamp=words["loop" if loop else "one_way"],
                  route=f'{words["base"]}　{start}' if loop else f"{start} → {end}")
 
 
 def totals_card(theme: Dict, distance_km: float, seconds: float, labels: Dict, remaining: bool = False,
-                leg: bool = False, style: str = styles.DEFAULT) -> Card:
+                leg: bool = False, style: str = styles.DEFAULT,
+                most: Optional[Tuple[float, float]] = None) -> Card:
     """The whole route's distance and time, or (on a leg) what is left of them. `leg`: the leg video's top-right
-    banner, this leg's own numbers, without the picture."""
+    banner, this leg's own numbers, without the picture. `most`: the (km, seconds) a counting-down card starts
+    at."""
     words, key = labels["themed_hud"], "leg" if leg else "remaining" if remaining else "total"
     angle = 2 * math.pi * min(seconds / 3600.0 / 12.0, 0.9999)  # the clock face's wedge
+    most_km, most_seconds = most or (distance_km, seconds)
     return _card("totals", style, theme, 276 if leg else 372, 76, leg=leg, distance_km=distance_km,
                  distance=_fmt_distance(distance_km), time=video_text.format_duration(labels, seconds),
+                 counting=remaining, most_km=most_km, most_distance=_fmt_distance(most_km),
+                 most_time=video_text.format_duration(labels, most_seconds),
                  distance_label=words[f"{key}_distance"], time_label=words[f"{key}_time"],
                  clock_large=int(angle > math.pi),
                  clock_end=f"{16 + 12.5 * math.sin(angle):.2f} {16 - 12.5 * math.cos(angle):.2f}")
@@ -91,11 +96,17 @@ def strip_card(theme: Dict, segments: Sequence[model.Segment], start: str, end: 
     return _card("strip", style, theme, 447, 76, segments=found, start=str(start or ""), end=str(end or ""))
 
 
+def ferry_card(theme: Dict, style: str = styles.DEFAULT) -> Card:
+    return _card("ferry", style, theme, 184, 100)
+
+
 def next_card(theme: Dict, glyph: str, name: str, previous_glyph: str, previous: str, labels: Dict,
               off_route: bool = False, style: str = styles.DEFAULT) -> Card:
     """The place coming up, its circle coloured as its map pin. A stop-by not connected to the route is
-    announced as an extra sight instead of the next stop."""
+    announced as an extra sight instead of the next stop. A stop-by's card does not name the place before."""
     words = labels["themed_hud"]
+    if str(glyph)[:1] in ("+", "・"):
+        previous_glyph = previous = ""
     return _card("next", style, theme, 366, 104, glyph=str(glyph), name=str(name or ""),
                  previous_glyph=str(previous_glyph or ""), previous=str(previous or ""),
                  heading=words["extra" if off_route else "next"], previous_label=words["previous"])
@@ -116,11 +127,14 @@ def compass_card(theme: Dict, heading: float, labels: Dict, style: str = styles.
 
 def leg_rail_card(theme: Dict, from_glyph: str, to_glyph: str, share: float,
                   vias: Sequence[Tuple[float, str]] = (), mode: str = "walking",
-                  style: str = styles.DEFAULT) -> Card:
-    """One leg: the stop left behind, the one ahead, the stop-bys between, and the traveller `share` of the way."""
+                  style: str = styles.DEFAULT, layer: str = "bar") -> Card:
+    """One leg: the stop left behind, the one ahead, the stop-bys between, and the traveller `share` of the way.
+    `layer`: a style with a data-rail line draws the "bar", the "walked" part of it and the "walker" apart, so the
+    video can move them without drawing them again."""
     mode = model.normalize_mode(mode)
     icon = _MODE_ICON_SVG.get(mode, _MODE_ICON_SVG["walking"]).replace("#111", theme["icon"])
-    return _card("leg_rail", style, theme, 636, 82, from_glyph=str(from_glyph), to_glyph=str(to_glyph),
+    width, height = (44, 44) if layer == "walker" else (636, 82)
+    return _card("leg_rail", style, theme, width, height, from_glyph=str(from_glyph), to_glyph=str(to_glyph),
                  share=min(1.0, max(0.0, share)), vias=[(s, str(g)) for s, g in vias],
-                 color=_mode_color(theme, mode),
+                 color=_mode_color(theme, mode), layer=layer,
                  icon=Markup(icon.replace("<svg ", '<svg width="24" height="24" ', 1)))

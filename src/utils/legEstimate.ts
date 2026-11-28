@@ -3,7 +3,7 @@ import { distanceMeters, type LatLon } from "./gpxTrack";
 
 // Mirrors services/tuning.py (REPORTED_MODE_SPEED_KMH, MODE_ALIASES, WALKING_ASCENT_M_PER_HOUR) and
 // route_brief.py (_leg_ascent_m, build_brief), so the sidebar and the narration quote the same minutes.
-const SPEED_KMH: Record<string, number> = { walking: 3, ferry: 35, car: 70, driving: 70, airplane: 500 };
+const SPEED_KMH: Record<string, number> = { walking: 3, ferry: 23, car: 70, driving: 70, airplane: 500 };
 const MODE_ALIAS: Record<string, string> = { direct: "walking", draw: "walking", curve: "airplane" };
 export const ASCENT_M_PER_HOUR = 600;
 

@@ -27,6 +27,9 @@ _FIT_JS = """async () => {
         const min = size * 0.55;
         while (el.scrollWidth > el.clientWidth && size > min) { size -= 0.5; el.style.fontSize = size + 'px'; }
     }
+    const same = [...document.querySelectorAll('.same')];  // all as small as the one shrunk most
+    const least = Math.min(...same.map(el => parseFloat(getComputedStyle(el).fontSize)));
+    for (const el of same) el.style.fontSize = least + 'px';
     for (const el of document.querySelectorAll('.flow div')) {  // the card grows, but a name stops at two lines
         let size = parseFloat(getComputedStyle(el).fontSize);
         const min = size * 0.7, two = 2 * parseFloat(getComputedStyle(el).lineHeight) + 1;
@@ -48,6 +51,11 @@ _FIT_JS = """async () => {
         }
     }
 }"""
+
+
+def font_path(weight: str) -> str:
+    """The cards' font ("Bold" or "Black") as a file, for text drawn without the browser."""
+    return str(_FONT_DIR / f"ZenMaruGothic-{weight}.ttf")
 
 
 def _page_html() -> str:

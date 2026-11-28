@@ -15,12 +15,15 @@ from PIL import Image, ImageOps
 from services import tuning, video_text
 from services.hudtheme import cards, layout, model, render, styles
 from services.localization.route_brief import clean_label, on_route
-from services.vdoprocessing import outrocard
+from services.vdoprocessing import outrocard, storyboard
 from services.vdoprocessing.route_inputs import same_place, stopby_labels
 
 
 _HEIGHT = 600  # the layout's height; video px = layout px * height / 600
-_BOXES = 6  # that roll, each starting after the one before (designs/outro)
+_BOXES = 6  # that roll, one after another (designs/outro)
+# Each box's turn: the next place's number and card (the last two) lead, so they never still show the place
+# that is arriving above them.
+_TURNS = (2, 3, 4, 5, 0, 1)
 _SEEK_JS = "t => document.getAnimations().forEach(a => { a.pause(); a.currentTime = t * 1000; })"
 # A description keeps its size: its box grows with it, from 3 lines to the 7 that still fit the screen.
 _GROW_JS = """() => {
@@ -139,7 +142,7 @@ def outro_theme(project_dir: Path, settings: Dict, waypoints: List[Dict], style:
     if hud is None:
         return None
     theme_id = model.resolve_theme(hud["theme"], [str(w.get("routeMode") or "walking") for w in waypoints], 0.0)
-    return model.load_theme(theme_id, model.is_dark(settings)) if theme_id else None
+    return model.load_theme(theme_id, model.is_dark(settings), hud.get("scene")) if theme_id else None
 
 
 def _photo_uri(path: Optional[str], width: float, scale: float) -> str:
@@ -172,15 +175,16 @@ def page_html(screens: List[Screen], theme: Dict, heading: Dict, size: Tuple[int
             "time": video_text.format_duration(labels, s.minutes * 60) if known else unknown_time,
         })
     for item, following in zip(shown, shown[1:] + [None]):
-        item["next"] = following and {key: following[key] for key in ("badge", "name", "photo")}
+        item["next"] = following and {key: following[key] for key in ("badge", "name", "photo", "known", "km", "time")}
     return cards._card(
         "outro", styles.DEFAULT, theme, width, _HEIGHT, screens=shown, left=left,
         kicker=heading.get("kicker") or "", title=heading.get("title") or "", subtitle=heading.get("subtitle") or "",
         distance_label=labels["distance_label"], time_label=labels["duration_fallback"],
         unknown_km=unknown_km, unknown_time=unknown_time,
         keyframes=scroll_keyframes(len(screens)), seconds=animation_seconds(len(screens)),
-        rolls=[scroll_keyframes(len(screens), box * tuning.OUTRO_THEMED_BOX_STAGGER_SECONDS,
-                                tuning.OUTRO_THEMED_BOX_ROLL_SECONDS) for box in range(_BOXES)],
+        start_label=labels["themed_hud"]["start"],
+        rolls=[scroll_keyframes(len(screens), turn * tuning.OUTRO_THEMED_BOX_STAGGER_SECONDS,
+                                tuning.OUTRO_THEMED_BOX_ROLL_SECONDS) for turn in _TURNS],
     ).html
 
 
@@ -236,6 +240,16 @@ def capture_backdrop(html: str, size: Tuple[int, int]) -> Image.Image:
             browser.close()
 
 
+def title_lines(heading: Dict, board: storyboard.OutroBoard) -> Dict:
+    """`heading` with the banner's lines in the storyboard's order: "location", "title", "subtitle" or "none" on
+    each of top (small), center (large) and bottom (small); any other word keeps that line's usual one."""
+    words = {"location": heading.get("kicker"), "title": heading.get("title"), "subtitle": heading.get("subtitle"),
+             "none": ""}
+    lines = (("kicker", board.title_top, "location"), ("title", board.title_center, "title"),
+             ("subtitle", board.title_bottom, "subtitle"))
+    return {**heading, **{line: words.get(chosen, words[usual]) for line, chosen, usual in lines}}
+
+
 def _with_logos(frames: Iterator[np.ndarray], end_card: np.ndarray, fps: int) -> Iterator[np.ndarray]:
     for frame in frames:
         yield frame
@@ -246,7 +260,7 @@ def write_themed_outro(
     output_path: Path, screens: List[Screen], theme: Dict, heading: Dict, size: Tuple[int, int], fps: int,
 ) -> bool:
     """The themed clip: every screen, then the logos over the same background."""
-    html = page_html(screens, theme, heading, size)
+    html = page_html(screens, theme, title_lines(heading, storyboard.outro()), size)
     ink = tuple(int(theme["ink"][i:i + 2], 16) for i in (1, 3, 5))
     end_card = outrocard._end_card(size, capture_backdrop(html, size), text_color=ink)
     captured = capture_frames(html, frame_times(len(screens), fps), size)
