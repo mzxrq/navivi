@@ -46,7 +46,7 @@ def _prepared(hud, frame=(1280, 720)):
     pytest.importorskip("playwright")
     places = hud.places_of(BANNER, "加太港", ("S", "2"), set())
     hud.prepare(frame, places, [(0.5, "+1")], [i / 10 for i in range(11)], [0.0, 91.0, 92.0],
-                [(0, 1), (1, 2)], ["閉鎖中の場所"])
+                [(0, 1), (1, 2)])
     return hud
 
 
@@ -54,15 +54,13 @@ def test_only_the_cards_that_changed_are_swapped(monkeypatch):
     monkeypatch.setattr(video_text, "current_labels", lambda: video_text.labels_for("ja"))
     hud = _prepared(_hud())
 
-    first = hud.items(0.0, 0.0, (0, 1), None)
-    same = hud.items(0.0, 1.0, (0, 1), None)  # one degree: the same compass picture
-    walked = hud.items(0.5, 91.0, (1, 2), None)
-    closed = hud.items(0.5, 91.0, (1, 2), "閉鎖中の場所")
+    first = hud.items(0.0, 0.0, (0, 1))
+    same = hud.items(0.0, 1.0, (0, 1))  # one degree: the same compass picture
+    walked = hud.items(0.5, 91.0, (1, 2))
 
     assert {i[0] for i in first} == set(CARDS) and same == []
     assert {i[0] for i in walked} == {"next", "compass", "leg_rail", "remaining"}
-    assert [i[0] for i in closed] == ["next"]
-    assert hud.items(1.0, 91.0, (1, 2), None)  # every state asked for during the walk was drawn beforehand
+    assert hud.items(1.0, 91.0, (1, 2))  # every state asked for during the walk was drawn beforehand
     boxes = {i[0]: (i[2], i[3], i[2] + i[4], i[3] + i[5]) for i in first}
     assert boxes["leg_rail"][2] <= boxes["remaining"][0]
     assert all(0 <= x0 and x1 <= 1280 and 0 <= y0 and y1 <= 720 for x0, y0, x1, y1 in boxes.values())
@@ -73,5 +71,5 @@ def test_hidden_cards_are_neither_drawn_nor_kept_clear_of():
 
     assert len(hud.room((1280, 720))) == len(CARDS) - 1
     _prepared(hud)
-    assert "compass" not in {i[0] for i in hud.items(0.0, 0.0, (0, 1), None)}
+    assert "compass" not in {i[0] for i in hud.items(0.0, 0.0, (0, 1))}
     assert hud.rail_top() is None  # not at the foot: nothing has to sit above it

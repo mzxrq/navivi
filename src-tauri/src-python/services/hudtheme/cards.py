@@ -91,11 +91,17 @@ def strip_card(theme: Dict, segments: Sequence[model.Segment], start: str, end: 
     return _card("strip", style, theme, 447, 76, segments=found, start=str(start or ""), end=str(end or ""))
 
 
+def ferry_card(theme: Dict, style: str = styles.DEFAULT) -> Card:
+    return _card("ferry", style, theme, 184, 100)
+
+
 def next_card(theme: Dict, glyph: str, name: str, previous_glyph: str, previous: str, labels: Dict,
               off_route: bool = False, style: str = styles.DEFAULT) -> Card:
     """The place coming up, its circle coloured as its map pin. A stop-by not connected to the route is
-    announced as an extra sight instead of the next stop."""
+    announced as an extra sight instead of the next stop. A stop-by's card does not name the place before."""
     words = labels["themed_hud"]
+    if str(glyph)[:1] in ("+", "・"):
+        previous_glyph = previous = ""
     return _card("next", style, theme, 366, 104, glyph=str(glyph), name=str(name or ""),
                  previous_glyph=str(previous_glyph or ""), previous=str(previous or ""),
                  heading=words["extra" if off_route else "next"], previous_label=words["previous"])

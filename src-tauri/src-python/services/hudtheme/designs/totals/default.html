@@ -5,7 +5,7 @@
 {% macro number(left, text) -%}
 <div class="num fit same" style="left:{{ left + dx }}px;top:27px;width:80px;height:40px;line-height:40px;font-size:{{ size }}px">{{ text|units }}</div>
 {%- endmacro %}
-<div class="card" style="width:{{ width }}px;height:76px;border:3px solid {{ theme.edge }};border-radius:{{ "16px" if leg else "41px 16px 16px 41px" }};color:#fff">
+<div class="card" style="width:{{ width }}px;height:76px;border:3px solid {{ theme.edge }};border-radius:{{ "16px" if leg else "24px 16px 16px 24px" }};color:#fff">
 {% if leg %}
 <svg width="{{ width }}" height="76" viewBox="0 0 {{ width }} 76"><rect width="{{ width }}" height="76" fill="{{ theme.panel }}"/></svg>
 {% else %}

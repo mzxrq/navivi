@@ -147,6 +147,12 @@ def _place_name(names: Sequence[str]) -> str:
     return shared if len(names) > 1 and len(shared) >= 2 else names[0]
 
 
+def rename(segments: Sequence[Segment], names: Dict) -> List[Segment]:
+    """hud.json "names", stop numbers -> the name under them on the strip ("" for none); "1-3" means "1–3"."""
+    found = {str(k).replace("-", "–"): v for k, v in names.items() if isinstance(v, str)}
+    return [s._replace(place=found.get(s.glyphs, s.place)) for s in segments]
+
+
 def route_segments(cum: Sequence[float], modes: Sequence[str], stops: Sequence[Stop]) -> List[Segment]:
     """The route as runs of one travel mode, each with its numbered stops. `cum` is the distance at each
     path point and `modes` that point's mode."""

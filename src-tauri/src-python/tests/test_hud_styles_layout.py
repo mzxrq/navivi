@@ -1,11 +1,13 @@
 """Themed cards as drop-in style files, and the hud.json layout."""
 
+import io
 import json
 import re
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from services import video_text
 from services.hudtheme import cards, layout, model, styles
@@ -201,6 +203,23 @@ def test_the_legs_and_the_outro_use_the_projects_picture(tmp_path):
     assert "#D6301F" in leg.theme["scene"] and "#D6301F" in outro["scene"]
 
 
+def test_a_themed_leg_frames_the_route_between_its_cards():
+    from services.vdoprocessing.pydeckrecorder.leg_camera import _fit_view_for_path, _project_lonlat_to_px
+    from services.vdoprocessing.pydeckrecorder.themed_leg import ThemedLegHud
+
+    size, lats = (1920, 1080), [34.27, 34.28]  # a leg that runs straight up the frame
+    hud = ThemedLegHud({"theme": "sea"}, "sea", "walking", (1.0, 600), (0.0, 0))
+
+    top, bottom = hud.margins(size, 186.0, 100.0)
+
+    lon, lat, zoom = _fit_view_for_path([135.0, 135.0], lats, size, 0.05, 0.0, bottom, top)
+    ys = [_project_lonlat_to_px(135.0, y, lon, lat, zoom, size)[1] for y in lats]
+    boxes = hud.room(size, ("next", "leg_banner", "leg_rail", "remaining"))
+    under_top = max(box[3] for box in boxes if box[1] < 540)
+    over_bottom = min(box[1] for box in boxes if box[1] >= 540)
+    assert under_top + 50 < min(ys) and max(ys) < over_bottom - 30  # a pin's height above, a name below
+
+
 def _panels(hud, **changes):
     from services.mapfetcher.graphicengine import GraphicsEngine
     from services.vdoprocessing.spatial_renderer.course_themed import themed_panels
@@ -213,6 +232,59 @@ def _panels(hud, **changes):
         stops=[(0.0, "S", "駅"), (40.0, "1", "神社"), (100.0, "E", "駅")],
         cum=list(np.linspace(1, 100, 100)), modes=["walking"] * 40 + ["ferry"] * 60)
     return themed_panels(GraphicsEngine(), hud, **{**arguments, **changes})
+
+
+def test_hud_json_renames_or_hides_the_strips_stretches(tmp_path):
+    segments = [model.Segment("walking", 0, 1, "1–3", "神社"), model.Segment("walking", 2, 3, "4–11", "桟橋"),
+                model.Segment("walking", 3, 4, "12", "港")]
+    _hud(tmp_path, json.dumps({"theme": "sea", "names": {"1-3": "", "4–11": "友ヶ島", "12": 5}}))
+
+    renamed = model.rename(segments, layout.read(tmp_path)["names"])
+
+    assert [s.place for s in renamed] == ["", "友ヶ島", "港"]
+    html = cards.strip_card(model.load_theme("sea"), renamed, "a", "b").html
+    assert html.count("data-two") == 4 and "神社" not in html and ">1–3</div>" in html  # S, two names, E
+
+
+@pytest.mark.parametrize("glyph, shown", [("2", True), ("+3", False), ("・", False)])
+def test_a_stop_by_card_leaves_out_the_previous_place(glyph, shown):
+    html = cards.next_card(model.load_theme("sea"), glyph, "神社", "+2", "常行寺", JA).html
+
+    assert ("常行寺" in html.replace("<wbr>", "")) is shown
+
+
+@pytest.mark.parametrize("build", [
+    lambda theme: cards.next_card(theme, "+3", "神社", "", "", JA),
+    lambda theme: cards.place_card(theme, "+3", "神社"),
+])
+def test_the_number_sits_in_the_middle_of_its_circle(build):
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from services.hudtheme import render
+
+    with sync_api.sync_playwright() as p:
+        browser = p.chromium.launch(headless=True, args=["--disable-gpu"])
+        page = render._new_page(browser, 8.0)
+        page.evaluate("html => { document.body.innerHTML = html; }", build(model.load_theme("sea")).html)
+        page.evaluate(render._FIT_JS)
+        circle = page.locator(".card > div[style*='border-radius:50%']")
+        shot = np.array(Image.open(io.BytesIO(circle.screenshot())).convert("RGB")).astype(int)
+        browser.close()
+
+    h, w = shot.shape[:2]
+    yy, xx = np.mgrid[0:h, 0:w]
+    inside = (xx - w / 2) ** 2 + (yy - h / 2) ** 2 < (w / 2 * 0.75) ** 2  # clear of the white ring
+    ys, _ = np.nonzero(inside & (shot > 215).all(axis=2))
+    assert abs((ys.min() + ys.max()) / 2 - h / 2) / 8 < 1  # card px
+
+
+def test_a_themed_overview_traces_with_the_themed_ferry():
+    pytest.importorskip("playwright")
+    panels = _panels({"theme": "sea", "title": "t"})
+
+    icon = panels.graphics.transport_icon_sprite(0, 0.0, "ferry", 60)
+
+    stripe = np.array([0x5E, 0x3F, 0xF4])  # BGR of the red stripe in designs/parts/ferry.svg
+    assert (np.abs(icon[..., :3].astype(int) - stripe).sum(axis=2) < 40).sum() > 20
 
 
 def test_a_project_without_a_hud_has_no_themed_panels():

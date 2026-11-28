@@ -1,7 +1,7 @@
 {% from "parts/macros.html" import grow with context %}
 {% set badge %}
 {% if glyph %}
-<div style="left:14px;top:50%;margin-top:-22px;width:44px;height:44px;box-sizing:border-box;border:3px solid #fff;border-radius:50%;background:{{ pin(glyph) }};color:#fff;font-size:{{ 22 if glyph|length < 3 else 17 }}px;font-weight:900;line-height:38px;text-align:center">{{ glyph }}</div>
+<div style="left:14px;top:50%;margin-top:-22px;width:44px;height:44px;box-sizing:border-box;border:3px solid #fff;border-radius:50%;background:{{ pin(glyph) }};color:#fff;font-size:{{ 22 if glyph|length < 3 else 17 }}px;font-weight:900;line-height:35px;text-align:center">{{ glyph }}</div>
 {% endif %}
 {% endset %}
 {% call grow("place", 220, 64, 16, 44, 70 if glyph else 22, 520, 13, 13, badge) %}

@@ -39,8 +39,6 @@ the project's own light/dark setting. Only `theme` is required.
 | `outro` | outro | `outro` | the whole frame (no `hud.json` layout entry) |
 | `place` | attraction clip | `place` | top-left (600-high frame, like the legs) |
 
-A closed place being passed on a leg uses the `place` style folder.
-
 On attraction clips the `place` card replaces the plain place name, in the editor and the export, from the next
 render. Renaming the item in the editor shows the new words as plain text until the render after.
 
@@ -113,6 +111,15 @@ The picture on the totals card and the outro comes with the theme. A project can
 or a whole `<svg width="110" height="76" viewBox="0 0 110 76">`. The totals card rounds off the left side and covers
 everything right of about 95 with its panel. Light and dark projects show the same picture. A missing file gives the
 theme's own picture, with a warning in the render log.
+
+## Names on the strip
+
+Each stretch of the strip is labelled with one of its stops. Give your own words, or `""` for none, by the numbers
+in its circle:
+
+```json
+{ "theme": "mine", "names": { "1-3": "", "4-11": "友ヶ島" } }
+```
 
 ## A new theme
 

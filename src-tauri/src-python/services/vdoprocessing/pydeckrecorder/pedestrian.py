@@ -64,6 +64,12 @@ def _piece_lead(start_cues, piece: int) -> float:
     return float(value or 0.0)
 
 
+def _leg_bands(themed: Optional[ThemedLegHud], output_size, bottom_reserve_px: float) -> Tuple[float, float]:
+    """(top, bottom) px a leg's camera keeps clear of the route: the HUD's cards, whichever design they are."""
+    bands = _LEG_TOP_MARGIN_PX, _leg_bottom_margin_px(bottom_reserve_px)
+    return themed.margins(output_size, *bands) if themed else bands
+
+
 def _segment_plan(df_raw, leg_dist_km, landmarks, total_seconds):
     """[(last raw point index, seconds)] for a leg cut at a stop-by, from each landmark's own `walk_seconds` (the
     last piece gets what is left of `total_seconds`). None when the leg has no cut, a landmark has no time, or the
@@ -191,6 +197,21 @@ def _joined_zoom(fit: float, prev: float) -> float:
     """The zoom of a leg that carries on from the one before: `prev` (a pure slide) while the leg fits at it and is
     not too small (within tuning.LEG_KEEP_ZOOM_SLACK of `fit`), else the leg's own `fit`."""
     return prev if fit - tuning.LEG_KEEP_ZOOM_SLACK <= prev <= fit else fit
+
+
+def _glide_seconds(from_zoom: float, to_zoom: float) -> float:
+    """How long a leg that carries on from the one before takes to move into its own framing."""
+    return max(tuning.LEG_CONTINUE_GLIDE_SECONDS, abs(to_zoom - from_zoom) * tuning.LEG_GLIDE_SECONDS_PER_ZOOM)
+
+
+def _glide_view(start, end, t: float) -> tuple:
+    """The (lon, lat, zoom) a share `t` of the way from view `start` to view `end`. The centre moves in step with
+    the map's scale, so a point seen in both stays on screen all the way: moved evenly, it left the frame while the
+    camera was still zoomed in."""
+    zoom = start[2] + (end[2] - start[2]) * t
+    a, b = 2.0 ** -start[2], 2.0 ** -end[2]
+    moved = (2.0 ** -zoom - a) / (b - a) if abs(b - a) > 1e-12 else t
+    return start[0] + (end[0] - start[0]) * moved, start[1] + (end[1] - start[1]) * moved, zoom
 
 
 def _piece_glide(start, fit, frames: int) -> list:
@@ -617,11 +638,12 @@ def render_residential_leg_pydeck(
         if fit_span_km <= max_span:
             leg_padding = padding
             break
+    top_px, bottom_px = _leg_bands(themed, output_size, bottom_reserve_px)
     locked_lon, locked_lat, locked_zoom = _fit_view_for_path(
         fit_lons, fit_lats, output_size,
         padding_frac=leg_padding, pitch=follow_pitch,
-        bottom_margin_px=_leg_bottom_margin_px(bottom_reserve_px),
-        top_margin_px=_LEG_TOP_MARGIN_PX,
+        bottom_margin_px=bottom_px,
+        top_margin_px=top_px,
     )
     # Capped so a very short leg doesn't zoom to an abstract block-level crop.
     locked_zoom = min(locked_zoom, tuning.LEG_FRAME_MAX_ZOOM)
@@ -1427,19 +1449,11 @@ async def _record_leg(
                             };
                             new ResizeObserver(fit).observe(neighbor);
                             // Only items a..b show (the arrow before item a stays hidden), then the font refits.
-                            // `closed` (a closed place's "×name") replaces the whole stretch while it is up.
-                            const only = document.createElement('span');
-                            only.className = 'place';
-                            only.style.display = 'none';
-                            chain.appendChild(only);
-                            window.__chainWindow = (a, b, closed) => {
+                            window.__chainWindow = (a, b) => {
                                 for (const el of chain.children) {
-                                    if (el === only) continue;
                                     const i = +el.dataset.i;
-                                    el.style.display = closed || i < a || i > b || (i === a && el.className === 'arrow') ? 'none' : '';
+                                    el.style.display = i < a || i > b || (i === a && el.className === 'arrow') ? 'none' : '';
                                 }
-                                only.textContent = closed || '';
-                                only.style.display = closed ? '' : 'none';
                                 fit();
                             };
                             if (document.fonts && document.fonts.ready) { await document.fonts.ready; }
@@ -1586,7 +1600,7 @@ async def _record_leg(
                 await page.evaluate(f"() => {{ {_needle_js(0)} }}")
 
                 # Themed HUD: every picture the walk can show is drawn now, then swapped in as the numbers change.
-                themed_now: Dict[str, Any] = {"index": 0, "window": (0, len(banner_items) - 1), "closed": None}
+                themed_now: Dict[str, Any] = {"index": 0, "window": (0, len(banner_items) - 1)}
                 if themed:
                     def _nearest(lat, lon) -> int:
                         return int(((smooth_df["lat"] - lat) ** 2 + (smooth_df["lon"] - lon) ** 2).to_numpy().argmin())
@@ -1609,7 +1623,6 @@ async def _record_leg(
                     await asyncio.to_thread(
                         themed.prepare, output_size, places,
                         [(shares[i], glyph) for i, glyph in zip(passed_at, via_glyphs)], shares, headings, windows,
-                        [str(lm["label"]) for lm in named if lm.get("inaccessible")],
                         bool(tuning.RESIDENTIAL_SHOW_COMPASS))
                     await themed.start(page)
 
@@ -1618,9 +1631,9 @@ async def _record_leg(
                     whole_m = float(remaining_km.iloc[0]) * 1000.0 if len(remaining_km) else 0.0
                     share = 1.0 if arrived else 1.0 - rem_m / whole_m if whole_m > 0 else 0.0
                     if arrived:
-                        themed_now.update(index=len(headings) - 1, closed=None, window=windows[-1])
+                        themed_now.update(index=len(headings) - 1, window=windows[-1])
                     heading = headings[max(0, min(themed_now["index"], len(headings) - 1))] if headings else 0.0
-                    await themed.show(page, share, heading, themed_now["window"], themed_now["closed"])
+                    await themed.show(page, share, heading, themed_now["window"])
                     top = themed.rail_top()
                     if elev is not None and top is not None:
                         await page.evaluate(
@@ -1645,7 +1658,8 @@ async def _record_leg(
                 # camera then STAYS at this locked view for the entire main
                 # loop below -- it never re-centers on the walker.
                 intro_seconds = (
-                    tuning.LEG_CONTINUE_GLIDE_SECONDS if prior_trail and opening_view else topdown_transition_seconds
+                    _glide_seconds(float(opening_view["zoom"]), locked_zoom)
+                    if prior_trail and opening_view else topdown_transition_seconds
                 )
                 intro_frames = max(0, int(intro_seconds * fps))
                 # Floored well above a country/region-scale zoom -- locked_zoom
@@ -1696,6 +1710,8 @@ async def _record_leg(
                     }}
                     """
                     await page.evaluate(warm_js)
+                    # The cards are up from the first frame: a cut from the leg before showed one frame without them.
+                    await _set_hud_card(rem_m0, rem_min0)
                     # 500ms wasn't reliably enough here -- the deck.gl
                     # canvas has ALSO just been sitting at its own INITIAL
                     # viewState (locked_zoom, a much tighter street-level
@@ -1793,11 +1809,11 @@ async def _record_leg(
 
                     for i in range(intro_frames):
                         t = _ease_in_out_cubic((i + 1) / intro_frames)
-                        zoom = from_view["zoom"] + (locked_zoom - from_view["zoom"]) * t
                         pitch = from_view["pitch"] + (follow_pitch - from_view["pitch"]) * t
                         bearing = 0.0
-                        lon = from_view["lon"] + (locked_lon - from_view["lon"]) * t
-                        lat = from_view["lat"] + (locked_lat - from_view["lat"]) * t
+                        lon, lat, zoom = _glide_view(
+                            (from_view["lon"], from_view["lat"], from_view["zoom"]),
+                            (locked_lon, locked_lat, locked_zoom), t)
                         js = f"""
                         if (window.deckgl) {{
                             const currentLayers = window.deckgl.props.layers || [];
@@ -1902,7 +1918,8 @@ async def _record_leg(
                 def _off_screen_at(lon, lat) -> bool:
                     x, y = _project_lonlat_to_px(lon, lat, locked_lon, locked_lat, locked_zoom, output_size, pitch=follow_pitch)
                     w, h = output_size
-                    return not (0.08 * w <= x <= 0.92 * w and _LEG_TOP_MARGIN_PX <= y <= h - _leg_bottom_margin_px(bottom_reserve_px))
+                    top, bottom = _leg_bands(themed, output_size, bottom_reserve_px)
+                    return not (0.08 * w <= x <= 0.92 * w and top <= y <= h - bottom)
 
                 def _off_screen(lm) -> bool:
                     return _off_screen_at(lm["lon"], lm["lat"])
@@ -1917,7 +1934,8 @@ async def _record_leg(
                         pts = [here] + [(lm["lon"], lm["lat"]) for lm in group if lm.get("lat") is not None]
                         view = _fit_view_for_path(
                             [p[0] for p in pts], [p[1] for p in pts], output_size, padding_frac=0.2, pitch=follow_pitch,
-                            bottom_margin_px=_leg_bottom_margin_px(bottom_reserve_px), top_margin_px=_LEG_TOP_MARGIN_PX,
+                            top_margin_px=_leg_bands(themed, output_size, bottom_reserve_px)[0],
+                            bottom_margin_px=_leg_bands(themed, output_size, bottom_reserve_px)[1],
                         )
                         view = (view[0], view[1], min(view[2], locked_zoom + 1.0))
                         await _ease_view((locked_lon, locked_lat, locked_zoom), view, tuning.STOPBY_CAMERA_MOVE_SECONDS)
@@ -2069,15 +2087,7 @@ async def _record_leg(
                     for s in stopby_chain:
                         near = int(((smooth_df["lat"] - s[2]) ** 2 + (smooth_df["lon"] - s[3]) ** 2).to_numpy().argmin())
                         banner_pass.append(max(near, banner_pass[-1] if banner_pass else 0))
-                # A closed place shows alone ("×name") from the frame the walker is nearest it, for as long as its
-                # card holds (see _quiet_card's hold_seconds): (first frame, last frame, text).
-                closed_spans: List[Tuple[int, int, str]] = []
-                for lm in (landmarks or []):
-                    if lm.get("inaccessible") and lm.get("label") and lm.get("lat") is not None and lm.get("lon") is not None:
-                        near = int(((smooth_df["lat"] - lm["lat"]) ** 2 + (smooth_df["lon"] - lm["lon"]) ** 2).to_numpy().argmin())
-                        hold = float(lm.get("freeze_seconds") or tuning.POPUP_MIN_DISPLAY_SECONDS)
-                        closed_spans.append((near, near + int(round(hold * fps)), f"×{lm['label']}"))
-                banner_stretch = {"key": (0, None)}
+                banner_stretch = {"passed": 0}
 
                 async def _draw_walker_frame(index: int):
                     """Draws/writes exactly one walking frame at `index` and
@@ -2120,19 +2130,14 @@ async def _record_leg(
                         dest_label, rem_m, arrive_threshold_m, mode=mode_hud["mode"], labels=hud_labels
                     )
                     stretch_js = ""
-                    if banner_pass or closed_spans:
+                    if banner_pass:
                         passed = bisect.bisect_right(banner_pass, index)
-                        closed_now = next((t for a, b, t in reversed(closed_spans) if a <= index <= b), None)
-                        if (passed, closed_now) != banner_stretch["key"]:
-                            banner_stretch["key"] = (passed, closed_now)
-                            first, last = 0, len(banner_items) - 1
-                            if banner_pass:
-                                first = banner_stop_items[passed - 1] if passed else 0
-                                last = banner_stop_items[passed] if passed < len(banner_stop_items) else last
-                            stretch_js = (
-                                f"if (window.__chainWindow) window.__chainWindow({first}, {last}, {json.dumps(closed_now)});"
-                            )
-                            themed_now.update(window=(first, last), closed=closed_now[1:] if closed_now else None)
+                        if passed != banner_stretch["passed"]:
+                            banner_stretch["passed"] = passed
+                            first = banner_stop_items[passed - 1] if passed else 0
+                            last = banner_stop_items[passed] if passed < len(banner_stop_items) else len(banner_items) - 1
+                            stretch_js = f"if (window.__chainWindow) window.__chainWindow({first}, {last});"
+                            themed_now.update(window=(first, last))
                     js = f"""
                     {stretch_js}
                     if (window.deckgl) {{
@@ -2267,8 +2272,8 @@ async def _record_leg(
                                 new_lon, new_lat, new_zoom = _fit_view_for_path(
                                     next_fit_lons, next_fit_lats, output_size,
                                     padding_frac=tuning.LEG_FRAME_PADDING, pitch=follow_pitch,
-                                    bottom_margin_px=_leg_bottom_margin_px(bottom_reserve_px),
-                                    top_margin_px=_LEG_TOP_MARGIN_PX,
+                                    bottom_margin_px=_leg_bands(themed, output_size, bottom_reserve_px)[1],
+                                    top_margin_px=_leg_bands(themed, output_size, bottom_reserve_px)[0],
                                 )
                                 # Lock max zoom to prevent zooming in too much on short segments
                                 new_zoom = min(new_zoom, tuning.LEG_FRAME_MAX_ZOOM)

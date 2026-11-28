@@ -18,7 +18,7 @@ logger = setup_logger(__name__)
 
 FILE_NAME = "hud.json"
 # Bump when the themed look changes, so themed projects render again.
-RENDER_VERSION = 1
+RENDER_VERSION = 4  # 4: the next-stop card stays on the route past a closed place
 MIN_SCALE, MAX_SCALE = 0.5, 2.0
 _NOTICE_EDGE = (18 * 568 / 1080, 28 * 568 / 1080)  # where the app itself puts its banners
 BOTH_AXES = [f"{v}-{h}" for v in ("top", "middle", "bottom") for h in ("left", "center", "right")]
@@ -102,8 +102,8 @@ def place(entry: Entry, size: Tuple[float, float], frame: Tuple[float, float], u
 
 
 def read(project_dir) -> Optional[Dict]:
-    """The project's hud.json as {"theme", "layout"}, plus "scene" when it names a picture; None (the classic look)
-    when it is absent, unreadable or names no theme."""
+    """The project's hud.json as {"theme", "layout"}, plus "scene" (a picture) and "names" (the strip's labels) when
+    set; None (the classic look) when it is absent, unreadable or names no theme."""
     path = Path(project_dir) / FILE_NAME
     if not path.is_file():
         return None
@@ -120,9 +120,10 @@ def read(project_dir) -> Optional[Dict]:
         logger.warning("%s: no theme '%s' (have %s); using the classic look.", path, data["theme"],
                        ", ".join(model.theme_ids()))
         return None
-    scene = data.get("scene")
+    scene, names = data.get("scene"), data.get("names")
     return {"theme": data["theme"], "layout": data.get("layout") or {},
-            **({"scene": scene} if isinstance(scene, str) else {})}
+            **({"scene": scene} if isinstance(scene, str) else {}),
+            **({"names": names} if isinstance(names, dict) else {})}
 
 
 def fingerprint(project_dir) -> Optional[str]:

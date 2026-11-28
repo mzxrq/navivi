@@ -19,6 +19,7 @@ _RAIL_STEPS = 100  # positions of the traveller along the rail
 _COMPASS_STEP_DEG = 5
 _GAP_PX = 12  # artboard px kept between the rail and the remaining card
 _MIN_RAIL_SCALE = 0.4
+_PIN_ABOVE_PX, _NAME_BELOW_PX = 60.0, 40.0  # a map pin stands this far above its point, its name pill below
 # Artboard sizes the map's name pills keep clear of (the next-stop card grows with its name: allow for a long one).
 _ROOM = {"next": (480, 104), "leg_banner": (276, 76), "compass": (84, 114), "leg_rail": (636, 82),
          "remaining": (372, 76)}
@@ -97,22 +98,20 @@ class ThemedLegHud:
             found = [Place(str(dest), str(badges[1] or ""))]
         return found
 
-    def _next(self, window: Tuple[int, int], closed: Optional[str]) -> cards.Card:
-        if closed:  # a closed place being passed: just its name behind the closed mark
-            return cards.place_card(self.theme, "×", closed)
+    def _next(self, window: Tuple[int, int]) -> cards.Card:
         first, last = (max(0, min(i, len(self.places) - 1)) for i in window)
         coming = self.places[last]
         before = self.places[first] if first != last else Place("", "")
         return cards.next_card(self.theme, coming.glyph, coming.name, before.glyph, before.name, self.labels,
                                off_route=coming.off_route, style=self.entries["next"].style)
 
-    def _card(self, name: str, share: float, heading: float, window, closed) -> Optional[cards.Card]:
+    def _card(self, name: str, share: float, heading: float, window) -> Optional[cards.Card]:
         """The card `name` with `share` of the leg walked."""
         style = self.entries[name].style
         if not self.entries[name].show or (name == "compass" and not self.compass):
             return None
         if name == "next":
-            return self._next(window, closed)
+            return self._next(window)
         if name == "leg_banner":
             return cards.totals_card(self.theme, *self.leg, self.labels, leg=True, style=style)
         if name == "compass":
@@ -129,11 +128,21 @@ class ThemedLegHud:
 
     # --- pictures and places -------------------------------------------------
 
-    def room(self, frame: Tuple[int, int]) -> List[Tuple[float, float, float, float]]:
+    def margins(self, frame: Tuple[int, int], top: float, bottom: float) -> Tuple[float, float]:
+        """`top` and `bottom`, the camera's usual clear bands (video px), grown so the route and its pins stay out
+        from under the wide cards. The compass, narrow and at the side, does not count."""
+        for _, y0, _, y1 in self.room(frame, [name for name in CARDS if name != "compass"]):
+            if y0 < frame[1] / 2:
+                top = max(top, y1 + _PIN_ABOVE_PX)
+            else:
+                bottom = max(bottom, frame[1] - y0 + _NAME_BELOW_PX)
+        return top, bottom
+
+    def room(self, frame: Tuple[int, int], names: Sequence[str] = CARDS) -> List[Tuple[float, float, float, float]]:
         """The boxes (video px) the map's name pills keep clear of."""
         unit = frame[1] / layout.LEG_HEIGHT
         out = []
-        for name in CARDS:
+        for name in names:
             entry = self.entries[name]
             if entry.show:
                 size = tuple(v * unit * entry.scale for v in _ROOM[name])
@@ -144,7 +153,7 @@ class ThemedLegHud:
     def prepare(
         self, frame: Tuple[int, int], places: List[Place], vias: Sequence[Tuple[float, str]],
         shares: Sequence[float], headings: Sequence[float], windows: Sequence[Tuple[int, int]],
-        closed: Sequence[str], compass: bool = True,
+        compass: bool = True,
     ) -> None:
         """Draws every picture the walk can show, in one browser pass per size. Blocking: call it off the
         event loop."""
@@ -161,15 +170,13 @@ class ThemedLegHud:
 
         usual = windows[0]
         for share in list(shares) + [0.0, 1.0]:
-            add("leg_rail", share, 0.0, usual, None)
-            add("remaining", share, 0.0, usual, None)
+            add("leg_rail", share, 0.0, usual)
+            add("remaining", share, 0.0, usual)
         for heading in headings or [0.0]:
-            add("compass", 0.0, heading, usual, None)
-        add("leg_banner", 0.0, 0.0, usual, None)
+            add("compass", 0.0, heading, usual)
+        add("leg_banner", 0.0, 0.0, usual)
         for window in windows:
-            add("next", 0.0, 0.0, window, None)
-        for name in closed:
-            add("next", 0.0, 0.0, usual, name)
+            add("next", 0.0, 0.0, window)
         for name, found in wanted.items():
             scale = self.unit * self.entries[name].scale
             new = [card for html, card in found.items() if html not in self._pictures]
@@ -181,11 +188,11 @@ class ThemedLegHud:
                     "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii"),
                     picture.width - pad, picture.height - pad)
 
-    def items(self, share: float, heading: float, window: Tuple[int, int], closed: Optional[str]) -> List[List]:
+    def items(self, share: float, heading: float, window: Tuple[int, int]) -> List[List]:
         """[name, src, left, top, width, height, pad] of every card whose picture or place changed."""
         placed = {}
         for name in CARDS:
-            card = self._card(name, share, heading, window, closed)
+            card = self._card(name, share, heading, window)
             if card is None:
                 continue
             picture, entry = self._pictures[card.html], self.entries[name]
@@ -217,7 +224,7 @@ class ThemedLegHud:
         """Hides the classic HUD."""
         await page.add_style_tag(content=_HIDE_CLASSIC)
 
-    async def show(self, page, share: float, heading: float, window, closed) -> None:
-        items = self.items(share, heading, window, closed)
+    async def show(self, page, share: float, heading: float, window) -> None:
+        items = self.items(share, heading, window)
         if items:
             await page.evaluate(_SHOW_JS, items)

@@ -90,7 +90,7 @@ class ThemedPanels:
         reach = (min(b[0] for b in banners), min(b[1] for b in banners), max(b[2] for b in banners),
                  max(b[3] for b in banners)) if banners else None
 
-        self.segments = model.route_segments(cum, modes, stops)
+        self.segments = model.rename(model.route_segments(cum, modes, stops), hud.get("names") or {})
         start = stops[0][2] if stops else ""
         end = start if loop else stops[-1][2] if stops else ""
         title = str(hud.get("title") or "")
@@ -114,6 +114,9 @@ class ThemedPanels:
         if self.segments:
             want("strip", lambda s: cards.strip_card(theme, self.segments, start, end, style=s))
         self.cards = _render(wanted, w, h, unit)
+        if any(s.mode == "ferry" for s in self.segments):  # the trace and the strip carry the themed ferry
+            art = render.render_cards([cards.ferry_card(theme)], 1.0)[0]
+            graphics.ferry_art = np.array(art.crop(art.getbbox()))[:, :, [2, 1, 0, 3]]
 
         strip, gap = self.cards.get("strip"), _BANNER_GAP_PX * unit
         if strip is not None and reach is not None and _overlaps(strip.box, reach, gap):
