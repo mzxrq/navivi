@@ -385,7 +385,7 @@ export const saveProjectData = async (
   const metaDir = await join(projectDir, fileSystem.metaFolder);
   if (!(await exists(metaDir))) await mkdir(metaDir, { recursive: true });
   const manifestPath = await join(metaDir, "asset_manifest.json");
-  await writeTextFile(manifestPath, JSON.stringify(manifest, null, 2));
+  await writeFileSafely(manifestPath, JSON.stringify(manifest, null, 2));
 
   const activeKeys = new Set<string>();
 
@@ -407,7 +407,7 @@ export const saveProjectData = async (
   await db.routeCache.replace(row.id, cleanCache);
   // Python reads the exported file (narration_step.py).
   const routeCachePath = await join(metaDir, "routecache.json");
-  await writeTextFile(routeCachePath, JSON.stringify(cleanCache));
+  await writeFileSafely(routeCachePath, JSON.stringify(cleanCache));
 
   return { projectDir, projId, projName, nvvPath: null as string | null, thumbnailPath: thumbnailPath && !isAbsolutePath(thumbnailPath) ? await join(projectDir, thumbnailPath) : thumbnailPath };
 };
@@ -457,7 +457,7 @@ export async function duplicateProjectFolder(sourceDir: string, name: string): P
   config.project_id = id;
   config.project_name = name;
   if (config.settings) config.settings = stripApiKeys(config.settings);
-  await writeTextFile(await join(destDir, fileSystem.configFile), JSON.stringify(config, null, 2));
+  await writeFileSafely(await join(destDir, fileSystem.configFile), JSON.stringify(config, null, 2));
   return destDir;
 }
 
@@ -894,7 +894,7 @@ export async function saveRouteCache(projectDir: string, cacheData: Record<strin
   try {
     const metaDir = await join(projectDir, fileSystem.metaFolder);
     if (!(await exists(metaDir))) await mkdir(metaDir, { recursive: true });
-    await writeTextFile(await join(metaDir, "routecache.json"), JSON.stringify(cacheData));
+    await writeFileSafely(await join(metaDir, "routecache.json"), JSON.stringify(cacheData));
     return true;
   } catch (error) {
     console.error("Failed to save route cache:", error);

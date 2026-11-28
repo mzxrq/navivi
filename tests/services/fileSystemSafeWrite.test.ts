@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const disk_ = vi.hoisted(() => ({ disk: new Map<string, string>(), failRenames: 0 }));
 vi.mock("@tauri-apps/plugin-fs", () => ({
+  exists: async () => true,
   writeTextFile: async (p: string, text: string) => void disk_.disk.set(p, text),
   rename: async (from: string, to: string) => {
     if (disk_.failRenames-- > 0) throw new Error("file in use");
@@ -15,7 +16,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(), convertFileSrc: (p: st
 vi.mock("@lingui/core", () => ({ i18n: { locale: "en" } }));
 vi.mock("../../src/services/db", () => ({ db: {} }));
 
-import { writeFileSafely } from "../../src/services/fileSystem";
+import { saveRouteCache, writeFileSafely } from "../../src/services/fileSystem";
 
 describe("writeFileSafely", () => {
   beforeEach(() => {
@@ -28,6 +29,13 @@ describe("writeFileSafely", () => {
     await writeFileSafely("t.json", "new");
     expect(disk_.disk.get("t.json")).toBe("new");
     expect(disk_.disk.has("t.json.tmp")).toBe(false);
+  });
+
+  it("keeps the old route cache when the new one cannot be swapped in", async () => {
+    disk_.disk.set("p/.navivi/routecache.json", "old");
+    disk_.failRenames = 5;
+    expect(await saveRouteCache("p", {})).toBe(false);
+    expect(disk_.disk.get("p/.navivi/routecache.json")).toBe("old");
   });
 
   it("retries a rename the system refuses for a moment", async () => {
