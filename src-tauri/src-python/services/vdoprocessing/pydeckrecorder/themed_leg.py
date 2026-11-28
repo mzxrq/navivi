@@ -85,7 +85,8 @@ class ThemedLegHud:
         self.theme = model.load_theme(theme_id, bool(hud.get("dark")), hud.get("scene"))
         self.entries = layout.merge(self.theme["layout"], hud.get("layout"))
         self.mode, self.leg, self.after, self.stopby_glyphs = mode, leg, after, list(stopby_glyphs)
-        self.fingerprint = f"{hud.get('fingerprint')}-{','.join(self.stopby_glyphs)}"
+        figures = ",".join(f"{km:.2f}/{round(seconds / 60)}" for km, seconds in (leg, after))
+        self.fingerprint = f"{hud.get('fingerprint')}-{','.join(self.stopby_glyphs)}-{figures}"
         self.labels: Dict = {}
         self.places: List[Place] = []
         self.vias: List[Tuple[float, str]] = []

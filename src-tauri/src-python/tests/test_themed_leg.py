@@ -157,6 +157,35 @@ def test_the_walks_totals_sit_on_top_and_this_legs_figures_below():
     assert entries["compass"].anchor == "top-right" and entries["compass"].y > entries["remaining"].y + 76
 
 
+def test_a_themed_leg_renders_again_when_the_figures_on_its_cards_change():
+    config = {"layout": {}, "fingerprint": "abc"}
+    made = lambda after: ThemedLegHud(config, "sea", "walking", (2.0, 1800), after).fingerprint
+
+    assert made((8.0, 7200)) != made((8.0, 7600))  # a later leg takes longer: this one's time left changes
+    assert made((8.0, 7200)) == made((8.0001, 7200.3))
+
+
+def test_a_ferry_route_renders_again_when_the_ferry_speed_changes(tmp_path, monkeypatch):
+    import json
+
+    from services import tuning
+    from services.vdoprocessing.videopipeline.render_checkpoint import _checkpoint_parts, _route_changes
+
+    def parts(mode):
+        config = tmp_path / "job_config.json"
+        config.write_text(json.dumps({"waypoints": [{"routeMode": mode}]}), encoding="utf-8")
+        return _checkpoint_parts(str(config), {}, None, None), str(config)
+
+    new, path = parts("ferry")
+    monkeypatch.setitem(tuning.REPORTED_MODE_SPEED_KMH, "ferry", 99.0)
+    old, _ = parts("ferry")
+
+    assert "route.speeds" in _route_changes(old, "k", "k2", new, path)
+    del old["route.speeds"]  # a render from before this was recorded
+    assert "route.speeds" in _route_changes(old, "k", "k2", new, path)
+    assert "route.speeds" not in parts("walking")[0]
+
+
 def test_a_themed_look_change_renders_the_route_again():
     from services.vdoprocessing.videopipeline.render_checkpoint import _route_changes
 

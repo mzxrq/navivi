@@ -119,7 +119,7 @@ RESIDENTIAL_2D_FALLBACK_MODES: Tuple[str, ...] = ("airplane",)
 # ANIMATION_SPEED_KMH: the one on-screen pace of every mode (settings.animation_speeds_kmh overrides per mode).
 REPORTED_MODE_SPEED_KMH: Dict[str, float] = {
     "walking": 3.0,
-    "ferry": 35.0,  # regular passenger ferry, not a high-speed jet ferry
+    "ferry": 23.0,  # a small passenger ferry: Kada to Tomogashima, 7.65 km, takes about 20 minutes
     "car": 70.0,
     "driving": 70.0,
     "airplane": 500.0,
