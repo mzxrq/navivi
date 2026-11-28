@@ -544,6 +544,8 @@ LEG_PHOTO_FADE_SECONDS = 0.2
 LEG_CONTINUE_GLIDE_SECONDS = 1.0
 # ...longer for a big change of zoom (a walk into a ferry crossing), at this much per zoom level.
 LEG_GLIDE_SECONDS_PER_ZOOM = 0.6
+# ...but never longer than this: the narration waits for the camera, and a walk into a flight would take 8 s.
+LEG_GLIDE_MAX_SECONDS = 3.0
 # The leg before's line fades out over this share of that glide, at its end: kept longer it read as part of the
 # new leg, a line running from the departure pin to nowhere (2026-11-27).
 LEG_PRIOR_TRAIL_FADE_SHARE = 0.5

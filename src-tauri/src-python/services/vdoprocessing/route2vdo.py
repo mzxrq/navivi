@@ -67,8 +67,8 @@ LEG_ELEVATION_CARD_VERSION = 2
 # Bumped when the top-left stop chain's layout changes (only legs that show one re-render).
 LEG_CHAIN_FIT_VERSION = 1
 # Bumped when the camera move to a far stop-by changes (only legs with one re-render; v1: fly out and back,
-# v2: the leg's frame no longer stops at it).
-LEG_FAR_STOPBY_VERSION = 2
+# v2: the leg's frame no longer stops at it; v3: the walk's frame no longer widens to hold it).
+LEG_FAR_STOPBY_VERSION = 3
 # A leg is reused unless its waypoints' route inputs (see route_inputs.py) or
 # the render version changed, or its files are missing. Not "latlon": the app
 # can save a different line for the same waypoints.

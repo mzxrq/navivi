@@ -114,12 +114,13 @@ _FRAME_STOPBY_MAX_M = 500.0
 def _framed_points(df_raw, lo: int, hi: int, landmarks) -> Tuple[List[float], List[float]]:
     """(lons, lats) of the path rows `lo:hi` plus every stop-by within _FRAME_STOPBY_MAX_M of the
     route whose nearest path row falls in that stretch, so a stop-by seen from the route is inside
-    the leg's camera frame too."""
+    the leg's camera frame too. Not one popped up at a stop ("pops_after"): the camera flies out to it there, and
+    keeping it in the walk's frame as well shrank the route."""
     part = df_raw.iloc[lo:hi]
     lons, lats = part["lon"].tolist(), part["lat"].tolist()
     for lm in (landmarks or []):
         lat, lon = lm.get("lat"), lm.get("lon")
-        if lat is None or lon is None:
+        if lat is None or lon is None or lm.get("pops_after") is not None:
             continue
         dlat = (df_raw["lat"] - lat) * 111_320.0
         dlon = (df_raw["lon"] - lon) * 111_320.0 * math.cos(math.radians(lat))

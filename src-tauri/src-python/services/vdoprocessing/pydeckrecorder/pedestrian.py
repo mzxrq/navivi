@@ -201,7 +201,8 @@ def _joined_zoom(fit: float, prev: float) -> float:
 
 def _glide_seconds(from_zoom: float, to_zoom: float) -> float:
     """How long a leg that carries on from the one before takes to move into its own framing."""
-    return max(tuning.LEG_CONTINUE_GLIDE_SECONDS, abs(to_zoom - from_zoom) * tuning.LEG_GLIDE_SECONDS_PER_ZOOM)
+    wanted = abs(to_zoom - from_zoom) * tuning.LEG_GLIDE_SECONDS_PER_ZOOM
+    return min(tuning.LEG_GLIDE_MAX_SECONDS, max(tuning.LEG_CONTINUE_GLIDE_SECONDS, wanted))
 
 
 def _glide_view(start, end, t: float) -> tuple:
@@ -2361,6 +2362,11 @@ async def _record_leg(
                         continue
 
                     index += 1
+
+                # A voice-timed photo shows only while the walk is going: say which ones the walk ended before.
+                for lm in timed_views:
+                    logger.warning("{view} photo '%s' is due %.1f s into the voice, after the walker arrives; not "
+                                   "shown. Move its {view} earlier.", lm.get("label") or "", lm["show_seconds"])
 
                 # Freeze-frame on arrival: holds the final (arrived) frame
                 # -- destination banner + marker already on screen -- for a

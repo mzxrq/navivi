@@ -1,11 +1,14 @@
 import json
 from types import SimpleNamespace
 
+import pandas as pd
 import pytest
 
 from services import tuning
 from services.vdoprocessing.pydeckrecorder import pedestrian
-from services.vdoprocessing.pydeckrecorder.leg_camera import _project_lonlat_to_px, _recenter_view_for_target_px
+from services.vdoprocessing.pydeckrecorder.leg_camera import (
+    _framed_points, _project_lonlat_to_px, _recenter_view_for_target_px,
+)
 from services.vdoprocessing.pydeckrecorder.pedestrian import (
     _glide_seconds, _glide_view, _joined_zoom, _opening_marker_px, _piece_glide,
 )
@@ -172,9 +175,20 @@ def test_a_return_pair_cuts_and_zooms_like_any_join(tmp_path):
     assert kwargs["opening_view"] == VIEW and "prior_trail" in kwargs  # the old line fades as the camera moves
 
 
+def test_a_stop_by_the_camera_flies_to_does_not_widen_the_walks_frame():
+    path = pd.DataFrame({"lat": [34.0, 34.001], "lon": [135.0, 135.001]})
+    walked = {"lat": 34.002, "lon": 135.0}
+    flown_to = {"lat": 34.004, "lon": 135.0, "pops_after": ""}  # shown from the stop, before the walk
+
+    lons, lats = _framed_points(path, 0, 2, [walked, flown_to])
+
+    assert max(lats) == 34.002 and len(lons) == 3
+
+
 def test_a_bigger_zoom_out_takes_longer():
     assert _glide_seconds(16.0, 16.0) == _glide_seconds(16.0, 15.0) == tuning.LEG_CONTINUE_GLIDE_SECONDS
     assert _glide_seconds(17.0, 13.0) >= 2.0
+    assert _glide_seconds(17.5, 4.0) == tuning.LEG_GLIDE_MAX_SECONDS  # a walk into a flight: not 8 silent seconds
 
 
 def test_the_start_pin_stays_on_screen_while_the_camera_zooms_far_out():
