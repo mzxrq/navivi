@@ -73,7 +73,7 @@ def test_only_the_cards_that_changed_are_swapped(monkeypatch):
     assert {i[0] for i in walked} == {"next", "compass", "leg_rail", "remaining"}
     assert hud.items(1.0, 91.0, (1, 2))  # every state asked for during the walk was drawn beforehand
     boxes = {i[0]: (i[2], i[3], i[2] + i[4], i[3] + i[5]) for i in first}
-    assert boxes["leg_rail"][2] <= boxes["remaining"][0]
+    assert boxes["leg_rail"][2] <= boxes["leg_banner"][0]
     assert all(0 <= x0 and x1 <= 1280 and 0 <= y0 and y1 <= 720 for x0, y0, x1, y1 in boxes.values())
 
 
@@ -84,3 +84,19 @@ def test_hidden_cards_are_neither_drawn_nor_kept_clear_of():
     _prepared(hud)
     assert "compass" not in {i[0] for i in hud.items(0.0, 0.0, (0, 1))}
     assert hud.rail_top() is None  # not at the foot: nothing has to sit above it
+
+
+def test_the_walks_totals_sit_on_top_and_this_legs_figures_below():
+    entries = _hud().entries
+
+    assert entries["remaining"].anchor == "top-right" and entries["leg_banner"].anchor == "bottom-right"
+    assert entries["compass"].anchor == "top-right" and entries["compass"].y > entries["remaining"].y + 76
+
+
+def test_a_themed_look_change_renders_the_route_again():
+    from services.vdoprocessing.videopipeline.render_checkpoint import _route_changes
+
+    old = {"route.waypoints": "w", "route.hud": "before"}
+
+    assert "route.hud" in _route_changes(old, "k", "k2", {**old, "route.hud": "after"}, "missing.json")
+    assert "route.hud" not in _route_changes(old, "k", "k2", dict(old), "missing.json")

@@ -18,7 +18,7 @@ logger = setup_logger(__name__)
 
 FILE_NAME = "hud.json"
 # Bump when the themed look changes, so themed projects render again.
-RENDER_VERSION = 5  # 5: the rail traveller moves in finer steps
+RENDER_VERSION = 6  # 6: the totals left on top of the walk, this leg's figures below
 MIN_SCALE, MAX_SCALE = 0.5, 2.0
 _NOTICE_EDGE = (18 * 568 / 1080, 28 * 568 / 1080)  # where the app itself puts its banners
 BOTH_AXES = [f"{v}-{h}" for v in ("top", "middle", "bottom") for h in ("left", "center", "right")]
@@ -45,10 +45,10 @@ DEFAULTS: Dict[str, Entry] = {
     "notices": Entry("bottom-left", *_NOTICE_EDGE),
     # the walking legs
     "next": Entry("top-left", 16, 14),
-    "leg_banner": Entry("top-right", 16, 14),
+    "leg_banner": Entry("bottom-right", 16, 14),  # this leg's own figures
     "compass": Entry("top-right", 16, 100),
     "leg_rail": Entry("bottom-left", 16, 14),
-    "remaining": Entry("bottom-right", 16, 14),
+    "remaining": Entry("top-right", 16, 14),  # what is left of the whole route, with the picture
     # the attraction clips (on the walking legs' artboard)
     "place": Entry("top-left", 16, 14),
 }

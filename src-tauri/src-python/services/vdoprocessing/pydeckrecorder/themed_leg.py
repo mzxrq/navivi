@@ -205,10 +205,12 @@ class ThemedLegHud:
             picture, entry = self._pictures[card.html], self.entries[name]
             scale = self.unit * entry.scale
             width, height = picture.width, picture.height
-            if name == "leg_rail" and "remaining" in self.entries and self.entries["remaining"].show:
-                # The rail gives way to the remaining card when they share the foot of a narrow frame.
-                other = self.entries["remaining"]
-                ow, oh = (v * self.unit * other.scale for v in _ROOM["remaining"])
+            for beside in ("leg_banner", "remaining") if name == "leg_rail" else ():
+                # The rail gives way to a figures card when they share the foot of a narrow frame.
+                other = self.entries[beside]
+                if not other.show:
+                    continue
+                ow, oh = (v * self.unit * other.scale for v in _ROOM[beside])
                 ox, oy = layout.place(other, (ow, oh), self.frame, self.unit)
                 x, y = layout.place(entry, (width, height), self.frame, self.unit)
                 gap = _GAP_PX * self.unit

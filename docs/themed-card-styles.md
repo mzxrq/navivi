@@ -32,10 +32,10 @@ the project's own light/dark setting. Only `theme` is required.
 | `strip` | overview | `strip` | bottom-right |
 | `notices` | overview | (drawn by the app) | bottom-left |
 | `next` | leg | `next` | top-left |
-| `leg_banner` | leg | `totals` | top-right |
-| `compass` | leg | `compass` | top-right, under the banner |
+| `leg_banner` | leg | `totals` | bottom-right (this leg's distance and time) |
+| `compass` | leg | `compass` | top-right, under the totals |
 | `leg_rail` | leg | `leg_rail` | bottom-left |
-| `remaining` | leg | `totals` | bottom-right |
+| `remaining` | leg | `totals` | top-right (what is left of the route, with the picture) |
 | `outro` | outro | `outro` | the whole frame (no `hud.json` layout entry) |
 | `place` | attraction clip | `place` | top-left (600-high frame, like the legs) |
 
@@ -53,7 +53,7 @@ render. Renaming the item in the editor shows the new words as plain text until 
 | `style` | a style file's name without its extension |
 
 `notices` takes `show`, `anchor`, `x` and `y` only. A card never leaves the frame. The strip and the rail shrink
-when they would run into the banners or the remaining card. Overview stop badges and map name pills keep clear of
+when they would run into the banners or a figures card. Overview stop badges and map name pills keep clear of
 the cards wherever you put them. A theme can set its own defaults with a `"layout"` object in `theme.json`.
 
 A bad value is ignored with a warning in the render log; an unreadable file gives the classic look.

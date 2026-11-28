@@ -196,10 +196,11 @@ def _checkpoint_parts(
 # route.map_style: the video's map style or tile sharpness (absent, so unchanged, until a project sets one).
 # route.overview_voice: the overview's cue times and voice length (set by render_route_video).
 # route.map_language: the label/on-screen text language (absent for a config that never had one).
+# route.hud: hud.json, a style or theme file, or the themed look's version (absent for a project that is not themed).
 ROUTE_CHECKPOINT_PARTS = (
     "route.waypoints", "route.overview_flags", "route.photos", "route.markers", "route.map_style",
     "route.overview_voice", "route.map_language", "route.labels", "route.overview_version", "route.leg_version",
-    "route.leg_voice", "route.storyboard", "route.leg_storyboard",
+    "route.leg_voice", "route.storyboard", "route.leg_storyboard", "route.hud",
 )
 
 
