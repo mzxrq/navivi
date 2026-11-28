@@ -199,6 +199,18 @@ def _joined_zoom(fit: float, prev: float) -> float:
     return prev if fit - tuning.LEG_KEEP_ZOOM_SLACK <= prev <= fit else fit
 
 
+def _stops_passed(banner_pass: List[int], index: int) -> int:
+    """How many stop-bys the walk has left behind at frame `index`; `banner_pass`: the frame that reaches each. On
+    that frame (and while its photo holds the walk there) the next-stop card still names it."""
+    return bisect.bisect_left(banner_pass, index)
+
+
+def _banner_window(stop_items: List[int], last_item: int, passed: int) -> Tuple[int, int]:
+    """(first, last) banner item shown with `passed` stop-bys left behind; `stop_items`: the stop-bys' items."""
+    first = stop_items[passed - 1] if passed else 0
+    return first, stop_items[passed] if passed < len(stop_items) else last_item
+
+
 def _glide_seconds(from_zoom: float, to_zoom: float) -> float:
     """How long a leg that carries on from the one before takes to move into its own framing."""
     wanted = abs(to_zoom - from_zoom) * tuning.LEG_GLIDE_SECONDS_PER_ZOOM
@@ -1925,6 +1937,19 @@ async def _record_leg(
                 def _off_screen(lm) -> bool:
                     return _off_screen_at(lm["lon"], lm["lat"])
 
+                async def _banner_to(label) -> None:
+                    """The next-stop card turns to the stop-by popping up without a walk to it (a place the card does
+                    not list, a closed one, changes nothing)."""
+                    k = next((n for n, i in enumerate(banner_stop_items) if banner_items[i][0] == label), None)
+                    if k is None:
+                        return
+                    first, last = _banner_window(banner_stop_items, len(banner_items) - 1, k)
+                    banner_stretch["passed"] = k
+                    themed_now.update(window=(first, last))
+                    await page.evaluate(f"() => {{ if (window.__chainWindow) window.__chainWindow({first}, {last}); }}")
+                    if themed:
+                        await _show_themed(float(remaining_km.iloc[themed_now["index"]]) * 1000.0, False)
+
                 async def _play_followers(after: str, tag) -> None:
                     group = [lm for lm in followers if lm.get("pops_after") == after]
                     view = (locked_lon, locked_lat, locked_zoom)
@@ -1943,6 +1968,7 @@ async def _record_leg(
                     for k, lm in enumerate(group):
                         wait_s = float(lm.get("wait_seconds") or 0.0)
                         cuts_before = frame_state["cuts"]
+                        await _banner_to(lm.get("label"))
                         await _play_stopby_photo_pause(
                             page, _write_frame, _cut_to_new_clip, fps, html_dir, port,
                             lm, *view, output_size, f"{tag}_{k}",
@@ -2132,11 +2158,10 @@ async def _record_leg(
                     )
                     stretch_js = ""
                     if banner_pass:
-                        passed = bisect.bisect_right(banner_pass, index)
+                        passed = _stops_passed(banner_pass, index)
                         if passed != banner_stretch["passed"]:
                             banner_stretch["passed"] = passed
-                            first = banner_stop_items[passed - 1] if passed else 0
-                            last = banner_stop_items[passed] if passed < len(banner_stop_items) else len(banner_items) - 1
+                            first, last = _banner_window(banner_stop_items, len(banner_items) - 1, passed)
                             stretch_js = f"if (window.__chainWindow) window.__chainWindow({first}, {last});"
                             themed_now.update(window=(first, last))
                     js = f"""

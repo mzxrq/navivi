@@ -234,11 +234,11 @@ def _leg_fingerprint_parts(
         parts["quiet_stopby"] = h(quiet)  # a stop-by whose narration was emptied re-renders only the legs passing it
     # A connected or walked-past stop-by cuts the leg and the next piece opens on its photo and a camera move; only
     # those legs re-render when that opening changes (v3: a brief re-open and a shorter hop, which delayed the
-    # narration; v4: the camera moves only when the next stretch doesn't fit the frame; v5: a glide, no zoom-out hop).
+    # narration; v4: the camera moves only when the next stretch doesn't fit the frame; v5: a glide, no zoom-out hop; v6: the next-stop card stays on the stop-by).
     reopen = [lm.get("label") for lm in leg_kwargs.get("landmarks") or []
               if (lm.get("connect_to_route") and lm.get("popup_image")) or lm.get("walk_seconds") is not None]
     if reopen:
-        parts["stopby_reopen"] = h([reopen, 5])
+        parts["stopby_reopen"] = h([reopen, 6])
     if "leg_elevations" in leg_kwargs:
         # Heatmap legs also draw the elevation profile card: re-render only them when it changes.
         parts["kw.leg_elevations"] = h([leg_kwargs["leg_elevations"], LEG_ELEVATION_CARD_VERSION])

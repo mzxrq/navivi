@@ -10,7 +10,7 @@ from services.vdoprocessing.pydeckrecorder.leg_camera import (
     _framed_points, _project_lonlat_to_px, _recenter_view_for_target_px,
 )
 from services.vdoprocessing.pydeckrecorder.pedestrian import (
-    _glide_seconds, _glide_view, _joined_zoom, _opening_marker_px, _piece_glide,
+    _banner_window, _glide_seconds, _glide_view, _joined_zoom, _opening_marker_px, _piece_glide, _stops_passed,
 )
 from services.vdoprocessing.route2vdo import (
     RouteAnimator, _leg_fingerprint_parts, _LegReuse, _legs_join, leg_changed_parts,
@@ -183,6 +183,15 @@ def test_a_stop_by_the_camera_flies_to_does_not_widen_the_walks_frame():
     lons, lats = _framed_points(path, 0, 2, [walked, flown_to])
 
     assert max(lats) == 34.002 and len(lons) == 3
+
+
+def test_the_next_card_stays_on_a_stop_by_until_the_walk_leaves_it():
+    reached = [100, 100, 180]  # a stop-by, one shown from the same spot, another further on
+
+    assert [_stops_passed(reached, frame) for frame in (99, 100, 101, 180, 181)] == [0, 0, 2, 2, 3]
+    assert _banner_window([1, 2, 3], 4, 0) == (0, 1)  # items 1, 2, 3 are the stop-bys; 4 the destination
+    assert _banner_window([1, 2, 3], 4, 1) == (1, 2)
+    assert _banner_window([1, 2, 3], 4, 3) == (3, 4)
 
 
 def test_a_bigger_zoom_out_takes_longer():
