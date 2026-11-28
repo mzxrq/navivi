@@ -167,6 +167,18 @@ def test_a_stop_passed_twice_matches_its_first_pass():
     assert RouteGeometryProcessor.build_waypoint_index(df, wps) == [0, 2, 4, 5]
 
 
+def test_a_stop_reached_after_a_near_miss_matches_where_it_is_reached():
+    import pandas as pd
+    from services.mapfetcher.mapgeometry import RouteGeometryProcessor
+
+    # 加太春日神社: the street 27 m north of the shrine, a step to 34 m, then round the corner and in
+    path = [(34.275700, 135.075000), (34.275313, 135.074844), (34.275376, 135.074670), (34.275429, 135.074519),
+            (34.275216, 135.074428), (34.275134, 135.074612), (34.274938, 135.074486)]
+    df = pd.DataFrame(path, columns=["latitude", "longitude"])
+    wps = [{"lat": lat, "lng": lng} for lat, lng in (path[0], path[5], path[6])]
+    assert RouteGeometryProcessor.build_waypoint_index(df, wps) == [0, 5, 6]
+
+
 def test_the_final_stop_is_on_the_routes_last_point():
     import pandas as pd
     from services.mapfetcher.mapgeometry import RouteGeometryProcessor
