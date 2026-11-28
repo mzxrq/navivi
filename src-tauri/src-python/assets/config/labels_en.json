@@ -1,5 +1,5 @@
 {
-  "themed_hud": {"leg_distance": "Leg distance", "leg_time": "Leg time", "extra": "Extra sight","loop": "Loop","one_way": "One way", "base": "Start & end", "next": "Next", "previous": "Previous", "total_distance": "Distance", "total_time": "Time", "remaining_distance": "Distance left", "remaining_time": "Time left"},
+  "themed_hud": {"start": "Start", "leg_distance": "Leg distance", "leg_time": "Leg time", "extra": "Extra sight","loop": "Loop","one_way": "One way", "base": "Start & end", "next": "Next", "previous": "Previous", "total_distance": "Distance", "total_time": "Time", "remaining_distance": "Distance left", "remaining_time": "Time left"},
   "compass_points": ["N", "NE", "E", "SE", "S", "SW", "W", "NW"],
   "mode_name": {
     "walking": "Walk",

@@ -20,7 +20,10 @@ from services.vdoprocessing.route_inputs import same_place, stopby_labels
 
 
 _HEIGHT = 600  # the layout's height; video px = layout px * height / 600
-_BOXES = 6  # that roll, each starting after the one before (designs/outro)
+_BOXES = 6  # that roll, one after another (designs/outro)
+# Each box's turn: the next place's number and card (the last two) lead, so they never still show the place
+# that is arriving above them.
+_TURNS = (2, 3, 4, 5, 0, 1)
 _SEEK_JS = "t => document.getAnimations().forEach(a => { a.pause(); a.currentTime = t * 1000; })"
 # A description keeps its size: its box grows with it, from 3 lines to the 7 that still fit the screen.
 _GROW_JS = """() => {
@@ -179,8 +182,9 @@ def page_html(screens: List[Screen], theme: Dict, heading: Dict, size: Tuple[int
         distance_label=labels["distance_label"], time_label=labels["duration_fallback"],
         unknown_km=unknown_km, unknown_time=unknown_time,
         keyframes=scroll_keyframes(len(screens)), seconds=animation_seconds(len(screens)),
-        rolls=[scroll_keyframes(len(screens), box * tuning.OUTRO_THEMED_BOX_STAGGER_SECONDS,
-                                tuning.OUTRO_THEMED_BOX_ROLL_SECONDS) for box in range(_BOXES)],
+        start_label=labels["themed_hud"]["start"],
+        rolls=[scroll_keyframes(len(screens), turn * tuning.OUTRO_THEMED_BOX_STAGGER_SECONDS,
+                                tuning.OUTRO_THEMED_BOX_ROLL_SECONDS) for turn in _TURNS],
     ).html
 
 

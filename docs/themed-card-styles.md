@@ -99,7 +99,7 @@ Filters: `words` (break only between words), `units` (small units beside numbers
 | `place` | `glyph`, `name` |
 | `compass` | `degrees`, `name` |
 | `leg_rail` | `from_glyph`, `to_glyph`, `share` (0 to 1), `vias`: list of (share, glyph), `color`, `icon`, `layer` |
-| `outro` | `screens`: list of `badge`, `name`, `description`, `photo` (a data URI or ""), `known`, `km`, `time`, `next` (`badge`, `name`, `photo`, or none); `kicker`, `title`, `subtitle`; `distance_label`, `time_label`, `unknown_km`, `unknown_time`; `left` (photo column width), `rolls` (for each of six boxes, in rolling order: (percent, screen) at each end of every hold), `keyframes` (the same for the whole step), `seconds` |
+| `outro` | `screens`: list of `badge`, `name`, `description`, `photo` (a data URI or ""), `known`, `km`, `time`, `next` (`badge`, `name`, `photo`, or none); `kicker`, `title`, `subtitle`; `distance_label`, `time_label`, `unknown_km`, `unknown_time`, `start_label` (shown on the first place, which no leg arrives at); `left` (photo column width), `rolls` (for each of six boxes, in rolling order: (percent, screen) at each end of every hold), `keyframes` (the same for the whole step), `seconds` |
 
 The outro file is a whole animated page, 600 high: it is animated by CSS animations lasting `seconds` that follow `rolls` and `keyframes` (the video code pauses them all and sets their time). Each `class="desc"` text must sit in an element with `data-screen="N"` inside an element with `class="about"`: the video code grows the text from three lines up to seven and sets `--h-N` (the box's height for screen N) on `.about`. `body.bare` must hide everything but the background.
 

@@ -16,7 +16,7 @@ M-8 {{ y }}Q8 {{ y - crest }} 24 {{ y }}{% for n in range(1, ((width + 64) // 32
 {% endif %}
 {%- endmacro %}
 {% set shadow = "box-shadow:0 6px 18px rgba(0,0,0,0.2)" %}
-{# one slot per box, in the order they roll: photo, number, name and figures, description, next number, next card #}
+{# one slot per box: photo, number, name and figures, description, next number, next card (the last two roll first) #}
 {% set steps = [210, 70, 210, 270, 60, 90] %}{# one place's roll; the gap keeps the bounce off the next one #}
 <style>
 {% for step in steps %}
@@ -35,12 +35,12 @@ M-8 {{ y }}Q8 {{ y - crest }} 24 {{ y }}{% for n in range(1, ((width + 64) // 32
 }
 {% endfor %}
 {% if screens|length > 1 %}
-{# the arrow and the line down to it leave as the last place arrives #}
+{# the line leading on leaves as the last place arrives #}
 @keyframes outro-more { 0%, {{ keyframes[-3][0] }}% { opacity: 1; } {{ keyframes[-2][0] }}%, 100% { opacity: 0; } }
-.card .arrow, .card .trail { animation: outro-more {{ seconds }}s linear both paused; }
+.card .trail { animation: outro-more {{ seconds }}s linear both paused; }
 {% endif %}
 body.bare .banner { visibility: hidden; }
-body.bare .boxes, body.bare .arrow, body.bare .trail { display: none; }
+body.bare .boxes, body.bare .trail { display: none; }
 </style>
 {% macro box(slot) -%}
 animation:outro-box-{{ slot }} {{ seconds }}s ease-in-out both paused
@@ -122,12 +122,16 @@ class="item" data-screen="{{ index }}" style="left:0;top:{{ index * steps[slot] 
   <div class="strip" style="{{ strip(2) }}">
   {% for s in screens %}
     <div {{ item(loop.index0, 2, right - 6, 172) }}>
-      <svg width="{{ (right - 6)|g }}" height="172" viewBox="0 0 {{ (right - 6)|g }} 172" style="position:absolute;left:0;top:0"><path d="M18 72Q28 66 38 72{% for n in range(1, ((right - 62) // 20)|int + 1) %}T{{ 38 + n * 20 }} 72{% endfor %}" fill="none" stroke="{{ theme.hill if backdrop else theme.water }}" stroke-width="2.5" stroke-linecap="round"/><circle cx="40" cy="120" r="23" fill="{{ theme.sky }}"/><path d="M30 130C30 118 50 124 50 110" fill="none" stroke="{{ theme.primary }}" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="2 6"/><circle cx="30" cy="130" r="4.5" fill="{{ theme.hill }}"/><circle cx="50" cy="110" r="4.5" fill="{{ theme.primary }}"/><g transform="translate({{ shift|g }} 0)"><circle cx="188" cy="120" r="23" fill="{{ theme.sunset }}"/><circle cx="188" cy="120" r="15" fill="{{ theme.paper }}" stroke="{{ theme.ink }}" stroke-width="2.5"/><path d="M188 111V120L196 124" fill="none" stroke="{{ theme.primary }}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g></svg>
+      <svg width="{{ (right - 6)|g }}" height="172" viewBox="0 0 {{ (right - 6)|g }} 172" style="position:absolute;left:0;top:0"><path d="M18 72Q28 66 38 72{% for n in range(1, ((right - 62) // 20)|int + 1) %}T{{ 38 + n * 20 }} 72{% endfor %}" fill="none" stroke="{{ theme.hill if backdrop else theme.water }}" stroke-width="2.5" stroke-linecap="round"/>{% if s.known %}<circle cx="40" cy="120" r="23" fill="{{ theme.sky }}"/><path d="M30 130C30 118 50 124 50 110" fill="none" stroke="{{ theme.primary }}" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="2 6"/><circle cx="30" cy="130" r="4.5" fill="{{ theme.hill }}"/><circle cx="50" cy="110" r="4.5" fill="{{ theme.primary }}"/><g transform="translate({{ shift|g }} 0)"><circle cx="188" cy="120" r="23" fill="{{ theme.sunset }}"/><circle cx="188" cy="120" r="15" fill="{{ theme.paper }}" stroke="{{ theme.ink }}" stroke-width="2.5"/><path d="M188 111V120L196 124" fill="none" stroke="{{ theme.primary }}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>{% endif %}</svg>
       <div class="fit name" style="left:20px;top:11px;width:{{ (right - 46)|g }}px;height:48px;font-size:34px;font-weight:900;line-height:48px">{{ s.name }}</div>
+      {% if s.known %}
       <div style="left:72px;top:87px;width:88px;height:18px;font-size:12px;font-weight:900;line-height:18px;color:{{ theme.muted }}">{{ distance_label }}</div>
-      <div class="num fit" style="left:72px;top:106px;width:{{ (90 + shift)|g }}px;height:42px;font-size:30px;line-height:42px">{% if s.known %}{{ s.km|units }}{% else %}--.-<span class="u">km</span>{% endif %}</div>
+      <div class="num fit" style="left:72px;top:106px;width:{{ (90 + shift)|g }}px;height:42px;font-size:30px;line-height:42px">{{ s.km|units }}</div>
       <div style="left:{{ (220 + shift)|g }}px;top:87px;width:126px;height:18px;font-size:12px;font-weight:900;line-height:18px;color:{{ theme.muted }}">{{ time_label }}</div>
-      <div class="num fit" style="left:{{ (220 + shift)|g }}px;top:106px;width:{{ (126 + shift)|g }}px;height:42px;font-size:30px;line-height:42px">{% if s.known %}{{ s.time|units }}{% else %}{{ s.time }}{% endif %}</div>
+      <div class="num fit" style="left:{{ (220 + shift)|g }}px;top:106px;width:{{ (126 + shift)|g }}px;height:42px;font-size:30px;line-height:42px">{{ s.time|units }}</div>
+      {% elif loop.first %}
+      <div class="fit" style="left:20px;top:96px;width:{{ (right - 46)|g }}px;height:44px;font-size:30px;font-weight:900;line-height:44px;color:{{ theme.primary }}">{{ start_label }}</div>
+      {% endif %}
     </div>
   {% endfor %}
   </div>
@@ -148,7 +152,7 @@ class="item" data-screen="{{ index }}" style="left:0;top:{{ index * steps[slot] 
     {% if s.next %}
       <div style="left:8px;top:8px;width:94px;height:56px;border-radius:10px;overflow:hidden;opacity:0.6">{{ picture(s.next.photo, 94, 56) }}</div>
       <div class="fit" style="left:116px;top:9px;width:{{ (right - 128)|g }}px;height:28px;font-size:20px;font-weight:900;line-height:28px">{{ s.next.name }}</div>
-      <div style="left:116px;top:41px;width:{{ (right - 128)|g }}px;height:20px;font-size:13px;font-weight:700;line-height:20px">{% if s.next.known %}{{ s.next.km }}　{{ s.next.time }}{% else %}{{ unknown_km }}　{{ unknown_time }}{% endif %}</div>
+      <div style="left:116px;top:41px;width:{{ (right - 128)|g }}px;height:20px;font-size:13px;font-weight:700;line-height:20px">{% if s.next.known %}{{ s.next.km }}　{{ s.next.time }}{% endif %}</div>
     {% endif %}
     </div>
   {% endfor %}
@@ -159,12 +163,6 @@ class="item" data-screen="{{ index }}" style="left:0;top:{{ index * steps[slot] 
 {# the place, the title and the subtitle, centred together in the banner #}
 {% set first = (110 - (20 if kicker else 0) - 46 - (24 if subtitle else 0)) // 2 %}
 {% set title_top = first + (20 if kicker else 0) %}
-{% if screens|length > 1 %}
-<div class="arrow" style="left:{{ (mid + 38)|g }}px;top:548px;margin-left:-18px;width:40px;height:40px;border-radius:50%;background:{{ theme.paper }};{{ shadow }}">
-    <svg width="24" height="24" viewBox="0 0 24 24" style="position:absolute;left:8px;top:8px"><path d="M6 9.5L12 15.5L18 9.5" fill="none" stroke="{{ theme.ink }}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-</div>
-{% endif %}
-
 <div class="banner" style="left:{{ (ox + 150)|g }}px;top:10px;width:500px;height:116px;box-sizing:border-box;border:3px solid {{ theme.edge }};border-radius:18px;background:{{ theme.panel }};overflow:hidden;color:#fff;{{ shadow }}">
   <svg width="494" height="110" viewBox="0 0 494 110" style="position:absolute;left:0;top:0">{{ pattern("outro-banner", false, [[0, 74], [420, 494]], 110) }}<rect x="4" y="4" width="486" height="102" rx="12" fill="none" stroke="{{ theme.gold }}" stroke-width="1"/></svg>
   {% if kicker %}
