@@ -101,10 +101,14 @@ def finale(settings: Optional[Dict[str, Any]] = None) -> FinaleBoard:
 @dataclass(frozen=True)
 class OutroBoard:
     """storyboards/outro.json, for the themed scroll outro: include_stopby_waypoint / include_closed_waypoint,
-    whether stop-bys (and stops skipped in video export) / closed places get a screen."""
+    whether stop-bys (and stops skipped in video export) / closed places get a screen; title_top / title_center /
+    title_bottom, what each line of the title banner says (outro_themed.title_lines)."""
     name: str
     include_stopby_waypoint: bool
     include_closed_waypoint: bool
+    title_top: str = "location"
+    title_center: str = "title"
+    title_bottom: str = "subtitle"
 
 
 @dataclass(frozen=True)
@@ -126,7 +130,8 @@ def leg() -> LegBoard:
 
 
 def outro() -> OutroBoard:
-    data: Dict[str, Any] = {"name": "outro", "include_stopby_waypoint": True, "include_closed_waypoint": True}
+    data: Dict[str, Any] = {"name": "outro", "include_stopby_waypoint": True, "include_closed_waypoint": True,
+                            "title_top": "location", "title_center": "title", "title_bottom": "subtitle"}
     found = json.loads((_DIR / "outro.json").read_text(encoding="utf-8"))
     data.update({k: v for k, v in found.items() if k in data and type(v) is type(data[k])})
     return OutroBoard(**data)

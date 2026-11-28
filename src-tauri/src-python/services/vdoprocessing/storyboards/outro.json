@@ -1,5 +1,8 @@
 {
   "name": "outro",
-  "include_stopby_waypoint": true,
-  "include_closed_waypoint": true
+  "include_stopby_waypoint": false,
+  "include_closed_waypoint": false,
+  "title_top": "location",
+  "title_center": "subtitle",
+  "title_bottom": "title"
 }
