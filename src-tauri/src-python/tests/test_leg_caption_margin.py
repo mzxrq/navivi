@@ -8,6 +8,7 @@ from services.vdoprocessing.pydeckrecorder.leg_camera import (
     _fit_view_for_path,
     _leg_bottom_margin_px,
     _project_lonlat_to_px,
+    _view_keeping_pin,
 )
 from services.vdoprocessing.vdoexporter import subtitle_band_px
 
@@ -49,3 +50,24 @@ def test_default_margin_unchanged(name):
     assert _fit_view_for_path(lons, lats, SIZE, padding_frac=0.15) == _fit_view_for_path(
         lons, lats, SIZE, padding_frac=0.15, bottom_margin_px=100.0
     )
+
+
+@pytest.mark.parametrize("pin_y, kept_whole", [
+    (60, True),     # the pin stands at the very top edge: the frame takes it in
+    (-900, False),  # far off the frame: not part of this stretch
+    (500, False),   # well inside already
+])
+def test_a_destination_pin_is_never_left_at_the_edge(pin_y, kept_whole):
+    lons, lats = [135.170, 135.172, 135.176], [34.2400, 34.2410, 34.2420]  # the stretch walked first
+    margins = {"bottom_margin_px": 250.0, "top_margin_px": 300.0}
+    view = _fit_view_for_path(lons, lats, SIZE, **margins)
+    y = lambda lat: _project_lonlat_to_px(135.173, lat, *view, SIZE)[1]
+    pin = (135.173, 34.242 + 0.001 * (pin_y - y(34.242)) / (y(34.243) - y(34.242)))
+    assert y(pin[1]) == pytest.approx(pin_y, abs=2)  # the case is the one meant
+
+    shown = _view_keeping_pin(view, lons, lats, pin, SIZE, **margins)
+
+    if kept_whole:
+        assert _project_lonlat_to_px(*pin, *shown, SIZE)[1] >= 299 and shown[2] <= view[2]
+    else:
+        assert shown == view

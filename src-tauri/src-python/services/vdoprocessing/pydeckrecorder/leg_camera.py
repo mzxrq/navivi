@@ -107,6 +107,19 @@ def _fit_view_for_path(
     return center_lon, center_lat, zoom
 
 
+def _view_keeping_pin(view, lons, lats, pin, output_size, pitch: float = 0.0, **fit) -> Tuple[float, float, float]:
+    """`view` (lon, lat, zoom), unless the `pin` (lon, lat) of a stop outside the stretch would show half cut or
+    pressed against the frame's edge: then the view that takes it in with the stretch (`lons`, `lats`)."""
+    x, y = _project_lonlat_to_px(*pin, *view, output_size, pitch=pitch)
+    w, h = output_size
+    k = h / 1080.0  # a pin is 60 wide and stands 60 above its point, at 1080 lines
+    seen = -30 * k < x < w + 30 * k and 0 < y < h + 60 * k
+    if not seen or (60 * k <= x <= w - 60 * k and 120 * k <= y <= h - 60 * k):
+        return view
+    lon, lat, zoom = _fit_view_for_path([*lons, pin[0]], [*lats, pin[1]], output_size, pitch=pitch, **fit)
+    return lon, lat, min(zoom, view[2])
+
+
 # A stop-by farther than this from the route is left out of the camera frame: fitting it would shrink the walk.
 _FRAME_STOPBY_MAX_M = 500.0
 

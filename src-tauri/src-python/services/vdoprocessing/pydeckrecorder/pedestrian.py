@@ -40,7 +40,7 @@ from .frame_sink import FrameSink
 from .elevation import leg_segment_colors, profile_card, quantize, usable_heights
 from .routedata import interpolate_route_data, patch_pydeck_html
 from .leg_camera import (
-    _LEG_TOP_MARGIN_PX, _ease_in_out_cubic, _fit_view_for_path, _framed_points, _leg_bottom_margin_px,
+    _LEG_TOP_MARGIN_PX, _ease_in_out_cubic, _fit_view_for_path, _framed_points, _leg_bottom_margin_px, _view_keeping_pin,
     _clear_card_spot, _project_lonlat_to_px, _recenter_view_for_target_px,
 )
 from .leg_hud import (
@@ -663,6 +663,13 @@ def render_residential_leg_pydeck(
     if prior_trail and opening_view:
         # The walk goes on from the leg before: keep its zoom where that still suits this leg, so the camera only slides.
         locked_zoom = _joined_zoom(locked_zoom, float(opening_view["zoom"]))
+    # A frame of the walk up to a stop-by, or one keeping the last leg's zoom, can press the destination's pin
+    # against the edge.
+    locked_lon, locked_lat, locked_zoom = _view_keeping_pin(
+        (locked_lon, locked_lat, locked_zoom), fit_lons, fit_lats,
+        (df_raw["lon"].iloc[-1], df_raw["lat"].iloc[-1]), output_size, pitch=follow_pitch,
+        padding_frac=leg_padding, bottom_margin_px=bottom_px, top_margin_px=top_px,
+    )
 
     # The real map scale in this framing (deck.gl: 512 px tiles), so name tags are placed off the line as drawn.
     label_mpp = 40075016.686 * math.cos(math.radians(locked_lat)) / (512 * 2 ** locked_zoom)
@@ -2303,6 +2310,12 @@ async def _record_leg(
                                 )
                                 # Lock max zoom to prevent zooming in too much on short segments
                                 new_zoom = min(new_zoom, tuning.LEG_FRAME_MAX_ZOOM)
+                                new_lon, new_lat, new_zoom = _view_keeping_pin(
+                                    (new_lon, new_lat, new_zoom), next_fit_lons, next_fit_lats, (dest_lon, dest_lat),
+                                    output_size, pitch=follow_pitch, padding_frac=tuning.LEG_FRAME_PADDING,
+                                    bottom_margin_px=_leg_bands(themed, output_size, bottom_reserve_px)[1],
+                                    top_margin_px=_leg_bands(themed, output_size, bottom_reserve_px)[0],
+                                )
                                 
                                 hop_frames = max(1, int(tuning.STOPBY_PIECE_HOP_SECONDS * fps))
                                 views = _piece_glide(
