@@ -1392,10 +1392,14 @@ class VideoExporter:
                        "-map", "[v]", "-map", "0:a?"]
         else:
             inputs, filters = [], ["-vf", sub_filter]
+        # The joined clips differ in their colour tags, and ffmpeg restarts its filters at each change: a card's
+        # one-frame picture is then gone for the rest of the video.
+        keep_filters = ["-reinit_filter", "0"] if pictures else []
 
         cmd = [
             ffmpeg_cmd,
             "-y", *tuning.ffmpeg_log_args(),
+            *keep_filters,
             "-i",
             str(video_path),
             *inputs,

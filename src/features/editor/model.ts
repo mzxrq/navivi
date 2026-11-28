@@ -679,6 +679,7 @@ export async function timelineFromPipeline(
           ...(typeof x.wipe_out === "number" ? { wipe_out: x.wipe_out } : {}),
           ...(x.burned_in === true ? { burned_in: true } : {}),
           ...(x.kind ? { kind: x.kind } : {}),
+          ...(x.picture ? { picture: x.picture } : {}),
         });
     }
   }

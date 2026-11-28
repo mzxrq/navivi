@@ -100,15 +100,60 @@ def test_a_renamed_item_is_drawn_as_text_again(tmp_path):
     assert [c["start"] for c in cards] == [0.5] and texts == [renamed, lost]
 
 
-def test_the_export_lays_the_card_over_the_picture_for_its_time_only(tmp_path):
+def _ffmpeg():
     from services.tts.ttsengine import FFmpegManager
-    from services.vdoprocessing.vdoexporter import VideoExporter, write_caption_ass
 
     try:
         ffmpeg = FFmpegManager.resolve_ffmpeg_bin()
         subprocess.run([ffmpeg, "-version"], capture_output=True, check=True)
     except (OSError, RuntimeError, subprocess.CalledProcessError):
         pytest.skip("no ffmpeg")
+    return ffmpeg
+
+
+def _red_card(path):
+    cv2.imwrite(str(path), np.dstack([np.zeros((50, 100, 2), np.uint8), np.full((50, 100), 255, np.uint8),
+                                      np.full((50, 100), 255, np.uint8)]))  # opaque
+
+
+def _pixel(video, frame_no, x, y):
+    cap = cv2.VideoCapture(str(video))
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
+    ok, frame = cap.read()
+    cap.release()
+    assert ok
+    return frame[y, x].astype(int)
+
+
+def test_cards_stay_when_the_joined_clips_are_tagged_with_different_colours(tmp_path):
+    """Clips from different makers carry different colour tags; ffmpeg restarts its filters where they change."""
+    from services.vdoprocessing.vdoexporter import VideoExporter, write_caption_ass
+
+    ffmpeg = _ffmpeg()
+    parts = []
+    for name, tags in (("a", []), ("b", ["-color_range", "tv", "-colorspace", "bt470bg"]), ("c", [])):
+        parts.append(tmp_path / f"{name}.mp4")
+        subprocess.run([ffmpeg, "-y", "-f", "lavfi", "-i", "color=gray:s=960x540:d=1:r=10", "-pix_fmt", "yuv420p",
+                        "-c:v", "libx264", *tags, str(parts[-1])], capture_output=True, check=True)
+    (tmp_path / "list.txt").write_text("".join(f"file '{p.name}'\n" for p in parts), encoding="utf-8")
+    video, out, card = tmp_path / "in.mp4", tmp_path / "out.mp4", tmp_path / "card.png"
+    subprocess.run([ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(tmp_path / "list.txt"), "-c", "copy",
+                    str(video)], capture_output=True, check=True)
+    _red_card(card)
+    items = [{**_text("神社", "神社", str(card)), "start": second + 0.2, "end": second + 0.8} for second in range(3)]
+    ass = write_caption_ass([], None, (960, 540), tmp_path / "subs.ass", texts=[])
+
+    VideoExporter.burn_subtitles(str(video), str(ass), str(out), pictures=items)
+
+    for frame_no in (5, 15, 25):
+        blue, green, red = _pixel(out, frame_no, 25, 22)
+        assert red > 180 and green < 80, frame_no
+
+
+def test_the_export_lays_the_card_over_the_picture_for_its_time_only(tmp_path):
+    from services.vdoprocessing.vdoexporter import VideoExporter, write_caption_ass
+
+    ffmpeg = _ffmpeg()
     video, out, card = tmp_path / "in.mp4", tmp_path / "out.mp4", tmp_path / "card.png"
     # Half of 1080p: the card's 1080-high numbers must be halved too.
     subprocess.run([ffmpeg, "-y", "-f", "lavfi", "-i", "color=gray:s=960x540:d=2:r=10", "-pix_fmt", "yuv420p",
