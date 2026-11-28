@@ -1,9 +1,22 @@
-{# One leg: the stop left behind, the one ahead, the stop-bys between, and the traveller `share` of the way. #}
+{# One leg: the stop left behind, the one ahead, the stop-bys between and the traveller. Drawn as three layers the
+   video moves itself (data-rail: where the line starts and ends, and its height): the "bar", the "walked" line
+   with the discs on it, cut off at the traveller, and the "walker", one picture of the circle and its figure. #}
 {% from "parts/macros.html" import disc with context %}
 {% set x0, x1, y = 50.0, 586.0, 41.0 %}
-{% set at = x0 + (x1 - x0) * share %}
-<div class="card" style="width:636px;height:82px;border-radius:26px;color:{{ theme.ink }}">
-<svg width="636" height="82" viewBox="0 0 636 82"><rect width="636" height="82" fill="{{ theme.pale }}"/>{{ pattern("leg", true, [[0, 636]], 82) }}<path d="M{{ x0|g }} {{ y|g }}H{{ x1|g }}" stroke="{{ color }}" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 11"/><path d="M{{ x0|g }} {{ y|g }}H{{ at|f1 }}" stroke="{{ color }}" stroke-width="7" stroke-linecap="round"/>
+{% set rail = "%g %g %g"|format(x0, x1, y) %}
+{% set line = "M" ~ (x0|g) ~ " " ~ (y|g) ~ "H" ~ (x1|g) %}
+{% if layer == "walker" %}
+<div class="card" data-rail="{{ rail }}" style="width:44px;height:44px;box-shadow:none">
+<svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="{{ theme.label }}" stroke="{{ color }}" stroke-width="3"/><g transform="translate(10 10)">{{ icon }}</g></svg>
+</div>
+{% else %}
+<div class="card" data-rail="{{ rail }}" style="width:636px;height:82px;border-radius:26px;color:{{ theme.ink }}{{ ";box-shadow:none" if layer == "walked" }}">
+<svg width="636" height="82" viewBox="0 0 636 82">
+{% if layer == "walked" %}
+<path d="{{ line }}" stroke="{{ color }}" stroke-width="7" stroke-linecap="round"/>
+{% else %}
+<rect width="636" height="82" fill="{{ theme.pale }}"/>{{ pattern("leg", true, [[0, 636]], 82) }}<path d="{{ line }}" stroke="{{ color }}" stroke-width="5" stroke-linecap="round" stroke-dasharray="1 11"/>
+{% endif %}
 {{ disc(30, y, 17, from_glyph, 16) }}{{ disc(606, y, 17, to_glyph, 16) }}
 {# Stop-bys a few metres apart would cover each other: each stands at least a disc's width past the one before. #}
 {% set marks = [x0] %}
@@ -12,6 +25,6 @@
 {% set _ = marks.append(px) %}
 {{ disc(px, y, 12, glyph, 11) }}
 {% endfor %}
-<circle cx="{{ at|f1 }}" cy="{{ y|g }}" r="20" fill="{{ theme.label }}" stroke="{{ color }}" stroke-width="3"/></svg>
-<div style="left:{{ (at - 12)|f1 }}px;top:29px;width:24px;height:24px;line-height:0">{{ icon }}</div>
+</svg>
 </div>
+{% endif %}

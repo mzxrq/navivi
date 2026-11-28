@@ -76,6 +76,11 @@ embed a `data:` URI). A file that fails falls back to the built-in style, with a
 - `class="fit"`: the text shrinks to its box. `class="card grow"` with a `flow` child: the card grows with its text.
 - `strip` must have `data-line="x0 x1 y"`: the line the video draws the progress and traveller on, in card px.
 - `compass` must keep the ids `hud-compass-pointer`, `hud-compass-letter`, `hud-compass-label`.
+- `leg_rail` moves smoothly when its `class="card"` element has `data-rail="x0 x1 y"` (where its line starts
+  and ends, and its height, in card px). The file is then drawn three times, by `layer`: `bar` (the whole card),
+  `walked` (the same size, nothing behind it, the walked line and whatever sits on it; the video cuts it off at
+  the traveller) and `walker` (the traveller alone, centred in a small card; the video slides it along). `share`
+  is 0 for all three. Without `data-rail` one picture is drawn per `share`, 300 steps to a leg.
 
 ### What a file can use
 
@@ -87,13 +92,13 @@ Filters: `words` (break only between words), `units` (small units beside numbers
 | Style folder | Variables |
 |---|---|
 | `title` | `title`, `loop`, `start`, `end`, `stamp` (loop / one way), `route` (the line under the title) |
-| `totals` | `distance`, `distance_km`, `time`, `distance_label`, `time_label`, `leg` (the compact banner), `clock_large`, `clock_end` |
+| `totals` | `distance`, `distance_km`, `time`, `distance_label`, `time_label`, `leg` (the compact banner), `clock_large`, `clock_end`, `counting` (what is left, counting down: use `units(counting)` so the digits keep their place), `most_km`, `most_distance`, `most_time` (what it started at) |
 | `modes` | `modes`: list of `mode`, `color`, `distance`, `time`, `walker` |
 | `strip` | `segments`: list of `mode`, `color`, `glyphs`, `place`, `start`, `end` (shares 0 to 1 of the line); `start`, `end` |
 | `next` | `glyph`, `name`, `heading`, `previous_label`, `previous_glyph`, `previous` |
 | `place` | `glyph`, `name` |
 | `compass` | `degrees`, `name` |
-| `leg_rail` | `from_glyph`, `to_glyph`, `share` (0 to 1), `vias`: list of (share, glyph), `color`, `icon` |
+| `leg_rail` | `from_glyph`, `to_glyph`, `share` (0 to 1), `vias`: list of (share, glyph), `color`, `icon`, `layer` |
 | `outro` | `screens`: list of `badge`, `name`, `description`, `photo` (a data URI or ""), `known`, `km`, `time`, `next` (`badge`, `name`, `photo`, or none); `kicker`, `title`, `subtitle`; `distance_label`, `time_label`, `unknown_km`, `unknown_time`; `left` (photo column width), `rolls` (for each of six boxes, in rolling order: (percent, screen) at each end of every hold), `keyframes` (the same for the whole step), `seconds` |
 
 The outro file is a whole animated page, 600 high: it is animated by CSS animations lasting `seconds` that follow `rolls` and `keyframes` (the video code pauses them all and sets their time). Each `class="desc"` text must sit in an element with `data-screen="N"` inside an element with `class="about"`: the video code grows the text from three lines up to seven and sets `--h-N` (the box's height for screen N) on `.about`. `body.bare` must hide everything but the background.

@@ -64,11 +64,18 @@ def _words(text) -> Markup:
     return Markup("<wbr>").join(phrases(str(text or "")))
 
 
-def _units(text: str) -> Markup:
-    """"3時間23分" with everything that is not a number set small."""
+def _units(text: str, steady: bool = False) -> Markup:
+    """"3時間23分" with everything that is not a number set small. `steady`: every digit gets the same room, as the
+    font's own are not equally wide and a counting figure would push the words around it back and forth."""
     parts = re.findall(r"[\d.,]+|[^\d.,]+", str(text))
+
+    def number(part: str) -> Markup:
+        if not steady:
+            return escape(part)
+        return Markup("").join(Markup('<span class="d">{}</span>').format(c) if c.isdigit() else c for c in part)
+
     return Markup("").join(
-        escape(p) if p[0] in "0123456789.,"
+        number(p) if p[0] in "0123456789.,"
         else (Markup('<span class="u">{}</span>').format(p.strip()) if p.strip() else "")
         for p in parts)
 

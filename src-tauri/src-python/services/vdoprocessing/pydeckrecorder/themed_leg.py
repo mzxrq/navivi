@@ -9,14 +9,17 @@ from __future__ import annotations
 
 import base64
 import io
+import re
 from typing import Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 from services import video_text
 from services.hudtheme import cards, layout, model, render
 
 CARDS = ("next", "leg_banner", "compass", "leg_rail", "remaining")
-_RAIL_STEPS = 300  # positions of the traveller along the rail (about 4 px apart: 100 looked jerky)
-_REMAINING_STEPS = 100  # ...and of the figures left, each one a picture to draw
+_RAIL_LAYERS = ("walked", "walker")  # pictures of their own, moved over the bar every frame
+_RAIL_LINE = re.compile(r'data-rail="\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*"')  # "x0 x1 y", card px
+_RAIL_STEPS = 300  # positions on a rail style without layers, each one a picture to draw
+_REMAINING_STEPS = 100  # ...and of the figures left
 _COMPASS_STEP_DEG = 5
 _GAP_PX = 12  # artboard px kept between the rail and the remaining card
 _MIN_RAIL_SCALE = 0.4
@@ -29,7 +32,7 @@ _HIDE_CLASSIC = ("#hud-banner, #hud-chain, #hud-stopcount, #hud-card, #hud-card-
                  "{ display: none !important; }")
 
 _SHOW_JS = """async (items) => {
-    await Promise.all(items.map(async ([name, src, left, top, width, height, pad]) => {
+    await Promise.all(items.map(async ([name, src, left, top, width, height, pad, cut]) => {
         const id = 'hud-t-' + name;  // "hud-": photo cards keep off it (stopby_pause.screen_props)
         let box = document.getElementById(id);
         if (!box) {
@@ -38,15 +41,25 @@ _SHOW_JS = """async (items) => {
             box.appendChild(document.createElement('img'));
             document.body.appendChild(box);
         }
-        Object.assign(box.style, { position: 'fixed', zIndex: 1000, left: left + 'px', top: top + 'px',
-                                   width: width + 'px', height: height + 'px' });
+        // The traveller is moved by transform: left and top would land it on whole pixels, in visible steps.
+        const moved = name === 'leg_rail_walker';
+        Object.assign(box.style, { position: 'fixed', zIndex: 1000, left: moved ? '0px' : left + 'px',
+                                   top: moved ? '0px' : top + 'px', width: width + 'px', height: height + 'px' });
+        if (moved) Object.assign(box.style, { willChange: 'transform', transform: `translate(${left}px, ${top}px)` });
+        if (cut !== undefined) box.style.clipPath = `inset(0px ${cut}px 0px 0px)`;
         const img = box.firstChild;
         Object.assign(img.style, { position: 'absolute', left: -pad + 'px', top: -pad + 'px',
                                    width: (width + 2 * pad) + 'px', height: (height + 2 * pad) + 'px' });
-        img.src = src;
-        try { await img.decode(); } catch (e) {}
+        if (img.getAttribute('src') !== src) {
+            img.src = src;
+            try { await img.decode(); } catch (e) {}
+        }
     }));
 }"""
+
+
+def _step(share: float, steps: int) -> float:
+    return round(min(1.0, max(0.0, share)) * steps) / steps
 
 
 class Place(NamedTuple):
@@ -81,6 +94,8 @@ class ThemedLegHud:
         self.compass = True
         self._pictures: Dict[str, _Picture] = {}  # by card html
         self._shown: Dict[str, Tuple] = {}
+        self._rail: Optional[Tuple[float, ...]] = None  # a layered rail's line; None: drawn step by step
+        self._layers: Dict[str, cards.Card] = {}
 
     # --- what each card says -------------------------------------------------
 
@@ -119,15 +134,17 @@ class ThemedLegHud:
         if name == "compass":
             degrees = round(heading / _COMPASS_STEP_DEG) * _COMPASS_STEP_DEG
             return cards.compass_card(self.theme, degrees, self.labels, style=style)
-        steps = _RAIL_STEPS if name == "leg_rail" else _REMAINING_STEPS
-        step = round(min(1.0, max(0.0, share)) * steps) / steps
         if name == "leg_rail":
-            first = self.places[0].glyph if len(self.places) > 1 else ""
-            return cards.leg_rail_card(self.theme, first or "S", self.places[-1].glyph or "E", step, self.vias,
-                                       self.mode, style=style)
-        left = 1.0 - step
+            return self._rail_card("bar", 0.0 if self._rail else _step(share, _RAIL_STEPS))
+        left = 1.0 - _step(share, _REMAINING_STEPS)
         return cards.totals_card(self.theme, left * self.leg[0] + self.after[0],
-                                 left * self.leg[1] + self.after[1], self.labels, remaining=True, style=style)
+                                 left * self.leg[1] + self.after[1], self.labels, remaining=True, style=style,
+                                 most=(self.leg[0] + self.after[0], self.leg[1] + self.after[1]))
+
+    def _rail_card(self, layer: str, share: float = 0.0) -> cards.Card:
+        first = self.places[0].glyph if len(self.places) > 1 else ""
+        return cards.leg_rail_card(self.theme, first or "S", self.places[-1].glyph or "E", share, self.vias,
+                                   self.mode, style=self.entries["leg_rail"].style, layer=layer)
 
     # --- pictures and places -------------------------------------------------
 
@@ -168,6 +185,12 @@ class ThemedLegHud:
         self.frame, self.unit = frame, frame[1] / layout.LEG_HEIGHT
         self.places, self.vias, self.compass = places, list(vias), compass
         self._shown = {}
+        self._rail, self._layers = None, {}
+        if self.entries["leg_rail"].show:
+            line = _RAIL_LINE.search(self._rail_card("bar").html)
+            if line:
+                self._rail = tuple(float(v) for v in line.groups())
+                self._layers = {layer: self._rail_card(layer) for layer in _RAIL_LAYERS}
         wanted: Dict[str, Dict[str, cards.Card]] = {name: {} for name in CARDS}
 
         def add(name, *state) -> None:
@@ -184,6 +207,8 @@ class ThemedLegHud:
         add("leg_banner", 0.0, 0.0, usual)
         for window in windows:
             add("next", 0.0, 0.0, window)
+        for card in self._layers.values():
+            wanted["leg_rail"][card.html] = card
         for name, found in wanted.items():
             scale = self.unit * self.entries[name].scale
             new = [card for html, card in found.items() if html not in self._pictures]
@@ -196,7 +221,8 @@ class ThemedLegHud:
                     picture.width - pad, picture.height - pad)
 
     def items(self, share: float, heading: float, window: Tuple[int, int]) -> List[List]:
-        """[name, src, left, top, width, height, pad] of every card whose picture or place changed."""
+        """[name, src, left, top, width, height, pad] of every card whose picture or place changed; the rail's
+        walked layer adds how much of its right side is cut off."""
         placed = {}
         for name in CARDS:
             card = self._card(name, share, heading, window)
@@ -220,6 +246,17 @@ class ThemedLegHud:
             x, y = layout.place(entry, (width, height), self.frame, self.unit)
             placed[name] = [name, picture.src, round(x, 1), round(y, 1), round(width, 1), round(height, 1),
                             round(render.PAD * scale, 1)]
+            if name == "leg_rail" and self._rail:
+                x0, x1, line_y = self._rail
+                at = (x0 + (x1 - x0) * min(1.0, max(0.0, share))) * scale
+                walked, walker = (self._pictures[self._layers[layer].html] for layer in _RAIL_LAYERS)
+                shrunk = scale / (self.unit * entry.scale)
+                own = (walker.width * shrunk, walker.height * shrunk)
+                placed["leg_rail_walked"] = ["leg_rail_walked", walked.src, *placed[name][2:], round(width - at, 2)]
+                placed["leg_rail_walker"] = [
+                    "leg_rail_walker", walker.src, round(x + at - own[0] / 2, 2),
+                    round(y + line_y * scale - own[1] / 2, 2), round(own[0], 1), round(own[1], 1),
+                    placed[name][6]]
         changed = [item for name, item in placed.items() if self._shown.get(name) != tuple(item)]
         self._shown.update({item[0]: tuple(item) for item in changed})
         return changed
