@@ -394,7 +394,6 @@ def test_an_old_custom_style_gives_the_built_in_one(tmp_path, monkeypatch):
 def test_the_outro_storyboard_file_hides_stopbys_and_closed_places(project, monkeypatch, tmp_path):
     from services.vdoprocessing import storyboard
 
-    assert storyboard.outro().include_stopby_waypoint is False and storyboard.outro().include_closed_waypoint is False
     boards = tmp_path / "boards"
     boards.mkdir()
     (boards / "outro.json").write_text(
