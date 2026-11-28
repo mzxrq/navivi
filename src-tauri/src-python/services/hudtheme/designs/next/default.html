@@ -6,6 +6,6 @@
 <div style="font-size:14px;font-weight:900;line-height:18px;color:{{ theme.gold }}">{{ heading }}</div>
 <div style="margin-top:4px;font-size:28px;font-weight:900;line-height:36px">{{ name|words }}</div>
 {% if previous %}
-<div style="margin-top:4px;font-size:12px;font-weight:700;line-height:16px;color:{{ theme.soft }}">{{ previous_label }}　{% if previous_glyph %}<span class="ring" style="background:{{ pin(previous_glyph) }}">{{ previous_glyph }}</span>{% endif %}{{ previous|words }}</div>
+<div style="margin-top:4px;font-size:12px;font-weight:700;line-height:16px;color:{{ theme.soft }}">{{ previous_label }}　{% if previous_glyph %}<span class="ring" style="background:{{ pin(previous_glyph) }}{% if previous_glyph|length > 2 %};font-size:8px{% endif %}">{{ previous_glyph }}</span>{% endif %}{{ previous|words }}</div>
 {% endif %}
 {% endcall %}

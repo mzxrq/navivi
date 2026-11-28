@@ -291,6 +291,25 @@ def test_the_number_sits_in_the_middle_of_its_circle(build):
     assert abs((ys.min() + ys.max()) / 2 - h / 2) / 8 < 1  # card px
 
 
+@pytest.mark.parametrize("glyph", ["5", "+4", "+12"])
+def test_the_previous_places_number_is_in_a_round_circle(glyph):
+    sync_api = pytest.importorskip("playwright.sync_api")
+    from services.hudtheme import render
+
+    card = cards.next_card(model.load_theme("sea"), "1", "神社", glyph, "称念寺", JA)
+
+    with sync_api.sync_playwright() as p:
+        browser = p.chromium.launch(headless=True, args=["--disable-gpu"])
+        page = render._new_page(browser, 1.0)
+        page.evaluate("html => { document.body.innerHTML = html; }", card.html)
+        page.evaluate(render._FIT_JS)
+        width, height, text = page.eval_on_selector(
+            ".ring", "el => [el.offsetWidth, el.offsetHeight, el.scrollWidth - el.clientWidth]")
+        browser.close()
+
+    assert width == height and text <= 0  # round, and the number stays inside it
+
+
 def test_a_themed_overview_traces_with_the_themed_ferry():
     pytest.importorskip("playwright")
     panels = _panels({"theme": "sea", "title": "t"})
